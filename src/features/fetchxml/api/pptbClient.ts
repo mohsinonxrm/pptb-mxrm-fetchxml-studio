@@ -65,6 +65,7 @@ declare global {
 
 import { debugLog } from "../../../shared/utils/debug";
 import { responseHasFormattedValues } from "./formattedValues";
+import { metadataCache } from "../state/cache";
 
 export interface EntityMetadata {
 	LogicalName: string;
@@ -733,7 +734,7 @@ export async function getPublishers(): Promise<Publisher[]> {
 
 	try {
 		const query =
-			"publishers?$select=publisherid,friendlyname,uniquename,customizationprefix&$orderby=friendlyname asc";
+			"publishers?$select=publisherid,friendlyname,uniquename,customizationprefix&$filter=isreadonly eq false&$orderby=friendlyname asc";
 		debugLog("publisherAPI", `📡 GET Publishers: ${query}`);
 
 		const result = await window.dataverseAPI!.queryData(query);
@@ -762,8 +763,9 @@ export async function getSolutionsByPublishers(publisherIds: string[]): Promise<
 
 	try {
 		const SELECT =
-			"$select=solutionid,friendlyname,uniquename,solutionpackageversion,_publisherid_value";
+			"$select=solutionid,friendlyname,uniquename,solutionpackageversion,_publisherid_value,isvisible,ismanaged";
 		const HAS_ENTITIES = "solution_solutioncomponent/any(c: c/componenttype eq 1)";
+		const IS_VISIBLE = "isvisible eq true";
 
 		// Chunk publisher IDs to avoid URL length limits
 		const chunkSize = 10;
@@ -775,7 +777,7 @@ export async function getSolutionsByPublishers(publisherIds: string[]): Promise<
 		const allSolutions = await Promise.all(
 			chunks.map(async (chunk) => {
 				const publisherFilter = chunk.map((id) => `_publisherid_value eq ${id}`).join(" or ");
-				const query = `solutions?${SELECT}&$filter=(${publisherFilter}) and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
+				const query = `solutions?${SELECT}&$filter=(${publisherFilter}) and ${IS_VISIBLE} and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
 
 				debugLog("solutionAPI", `📡 GET Solutions for publishers: ${chunk.length} IDs`);
 				const result = await window.dataverseAPI!.queryData(query);
@@ -894,6 +896,73 @@ export async function getSolutionComponents(solutionIds: string[]): Promise<Solu
 		console.error("getSolutionComponents: API call failed:", error);
 		throw error;
 	}
+}
+
+/**
+ * Get ALL EntityDefinitions that are valid for Advanced Find
+ * This is called once on startup and cached globally for the session
+ */
+export async function getAllAdvancedFindEntities(): Promise<EntityMetadata[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	// Check cache first
+	const cached = metadataCache.getAllEntityMetadata();
+	if (cached) {
+		console.log('[API] getAllAdvancedFindEntities - Cache hit:', cached.length, 'entities');
+		return cached;
+	}
+
+	// Check for in-flight promise
+	const inFlight = metadataCache.getAllEntityMetadataPromise();
+	if (inFlight) {
+		console.log('[API] getAllAdvancedFindEntities - Returning in-flight promise');
+		return inFlight;
+	}
+
+	console.log('[API] getAllAdvancedFindEntities - Fetching all AF-valid entities');
+	
+	try {
+		const promise = getAllEntities(true);
+		metadataCache.setAllEntityMetadataPromise(promise);
+		
+		const entities = await promise;
+		console.log('[API] getAllAdvancedFindEntities - Fetched:', entities.length, 'entities');
+		
+		metadataCache.setAllEntityMetadata(entities);
+		metadataCache.clearAllEntityMetadataPromise();
+		
+		return entities;
+	} catch (error) {
+		metadataCache.clearAllEntityMetadataPromise();
+		console.error('[API] getAllAdvancedFindEntities - Failed:', error);
+		throw error;
+	}
+}
+
+/**
+ * Filter global entity metadata cache by entity logical names
+ * Returns entities from cache (instant, no API call)
+ */
+export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetadata[] {
+	const allEntities = metadataCache.getAllEntityMetadata();
+	if (!allEntities) {
+		console.warn('[API] filterCachedEntitiesByNames - Global cache not available, returning empty');
+		return [];
+	}
+	
+	const nameSet = new Set(logicalNames);
+	const filtered = allEntities.filter((entity: EntityMetadata) => nameSet.has(entity.LogicalName));
+	
+	console.log('[API] filterCachedEntitiesByNames - Filtered:', {
+		requestedCount: logicalNames.length,
+		requestedNames: logicalNames,
+		filteredCount: filtered.length,
+		filteredNames: filtered.map((e: EntityMetadata) => e.LogicalName),
+	});
+	
+	return filtered;
 }
 
 /**

@@ -200,8 +200,43 @@ export function EntitySelector({
 		publisherFilter.selectedPublisherIds,
 	]);
 
-	const onPublisherSelect: ComboboxProps["onOptionSelect"] = (_e, data) => {
-		publisherFilter.updateSelectedPublishers(data.selectedOptions);
+	const onPublisherSelect: ComboboxProps["onOptionSelect"] = async (_e, data) => {
+		const newPublisherIds = data.selectedOptions;
+
+		// Check if this change would invalidate the current entity
+		if (selectedEntity && publisherFilter.selectedPublisherIds.length > 0) {
+			// If deselecting publishers, check if entity would still be available
+			const isDeselecting = newPublisherIds.length < publisherFilter.selectedPublisherIds.length;
+
+			if (isDeselecting) {
+				// Find which publishers are being removed
+				const removedPublisherIds = publisherFilter.selectedPublisherIds.filter(
+					(id) => !newPublisherIds.includes(id)
+				);
+
+				// Find solutions under removed publishers
+				const removedPublisherSolutionIds = publisherFilter.solutions
+					.filter((sol) => sol._publisherid_value && removedPublisherIds.includes(sol._publisherid_value))
+					.map((sol) => sol.solutionid);
+
+				// Check if any of the currently selected solutions are from removed publishers
+				const wouldLoseSolutions = publisherFilter.selectedSolutionIds.some((solId) =>
+					removedPublisherSolutionIds.includes(solId)
+				);
+
+				// If we'd lose solutions that might contain the entity, show confirmation
+				if (wouldLoseSolutions) {
+					setPendingPublisherIds(newPublisherIds);
+					setConfirmDialogType('publisher');
+					setShowConfirmDialog(true);
+					setPublisherQuery("");
+					return;
+				}
+			}
+		}
+
+		// No validation needed, proceed with update
+		publisherFilter.updateSelectedPublishers(newPublisherIds);
 		setPublisherQuery("");
 	};
 
@@ -257,6 +292,7 @@ export function EntitySelector({
 					// We need to check if entity exists in remaining solutions after removal
 					// For now, show confirmation dialog and let validation happen after
 					setPendingSolutionIds(newSolutionIds);
+					setConfirmDialogType('solution');
 					setShowConfirmDialog(true);
 					setSolutionQuery("");
 					return;
@@ -273,6 +309,13 @@ export function EntitySelector({
 		setSolutionQuery("");
 	};
 
+	const handleConfirmPublisherChange = () => {
+		// User confirmed - proceed with publisher change, cascades to solutions and entity
+		publisherFilter.updateSelectedPublishers(pendingPublisherIds);
+		setShowConfirmDialog(false);
+		setPendingPublisherIds([]);
+	};
+
 	const handleConfirmSolutionChange = () => {
 		// User confirmed - proceed with solution change, entity will auto-clear via useEffect
 		if (fullFilterMode) {
@@ -284,9 +327,10 @@ export function EntitySelector({
 		setPendingSolutionIds([]);
 	};
 
-	const handleCancelSolutionChange = () => {
+	const handleCancelChange = () => {
 		// User cancelled - just close dialog, keep current selection
 		setShowConfirmDialog(false);
+		setPendingPublisherIds([]);
 		setPendingSolutionIds([]);
 	};
 
@@ -304,7 +348,14 @@ export function EntitySelector({
 	// Validate entity when available entities change (solution selection changes)
 	useEffect(() => {
 		// Only validate if we have a selected entity
-		if (!selectedEntity || availableEntities.length === 0) return;
+		if (!selectedEntity) return;
+
+		// If available entities is empty, clear entity and tree
+		if (availableEntities.length === 0) {
+			onEntityChange(""); // Clear entity selection
+			onNewQuery(); // Reset fetch tree
+			return;
+		}
 
 		// Check if selected entity is still available
 		const isEntityStillAvailable = availableEntities.some(
@@ -320,6 +371,8 @@ export function EntitySelector({
 
 	// Entity search query with filteringhanges that would invalidate entity
 	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+	const [confirmDialogType, setConfirmDialogType] = useState<'publisher' | 'solution'>('solution');
+	const [pendingPublisherIds, setPendingPublisherIds] = useState<string[]>([]);
 	const [pendingSolutionIds, setPendingSolutionIds] = useState<string[]>([]);
 
 	// Entity search query with filtering
@@ -633,27 +686,36 @@ export function EntitySelector({
 				</Button>
 			</div>
 
-			{/* Confirmation Dialog for Solution Change */}
+			{/* Confirmation Dialog for Publisher/Solution Change */}
 			<Dialog
 				open={showConfirmDialog}
-				onOpenChange={(_, data) => !data.open && handleCancelSolutionChange()}
+				onOpenChange={(_, data) => !data.open && handleCancelChange()}
 			>
 				<DialogSurface>
 					<DialogBody>
-						<DialogTitle>Confirm Solution Change</DialogTitle>
+						<DialogTitle>
+							{confirmDialogType === 'publisher' ? 'Confirm Publisher Change' : 'Confirm Solution Change'}
+						</DialogTitle>
 						<DialogContent>
 							<p>
-								Removing solutions will reset the FetchXML tree and entity selection as
-								<strong> {selectedEntity}</strong> may no longer be available in the remaining
-								selected solutions.
+								{confirmDialogType === 'publisher'
+									? 'Removing publishers will also remove their associated solutions, which may reset the FetchXML tree and entity selection as'
+									: 'Removing solutions will reset the FetchXML tree and entity selection as'}
+								<strong> {selectedEntity}</strong> may no longer be available
+								{confirmDialogType === 'publisher'
+									? ' in the remaining publishers.'
+									: ' in the remaining selected solutions.'}
 							</p>
 							<p>This action cannot be undone. Do you want to proceed?</p>
 						</DialogContent>
 						<DialogActions>
-							<Button appearance="primary" onClick={handleConfirmSolutionChange}>
-								Yes, Update Solutions
+							<Button 
+								appearance="primary" 
+								onClick={confirmDialogType === 'publisher' ? handleConfirmPublisherChange : handleConfirmSolutionChange}
+							>
+								{confirmDialogType === 'publisher' ? 'Yes, Update Publishers' : 'Yes, Update Solutions'}
 							</Button>
-							<Button appearance="secondary" onClick={handleCancelSolutionChange}>
+							<Button appearance="secondary" onClick={handleCancelChange}>
 								Cancel
 							</Button>
 						</DialogActions>

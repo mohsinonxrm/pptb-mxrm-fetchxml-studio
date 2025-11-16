@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
 	getAllSolutionsWithEntities,
 	getSolutionComponents,
-	getAdvancedFindEntitiesByNames,
+	filterCachedEntitiesByNames,
 	type Solution,
 	type EntityMetadata,
 } from "../../features/fetchxml/api/pptbClient";
@@ -94,7 +94,7 @@ export function useSolutionFilter() {
 
 				console.log("[useSolutionFilter] Loading entities for solutions:", selectedSolutionIds);
 
-				// Get solution components (entities only)
+				// Get solution components (entities only) - cached per solution
 				const components = await getSolutionComponents(selectedSolutionIds);
 				console.log("[useSolutionFilter] Solution components received:", {
 					solutionIds: selectedSolutionIds,
@@ -112,9 +112,9 @@ export function useSolutionFilter() {
 					names: logicalNames,
 				});
 
-				// Get EntityDefinitions (AF-valid only)
-				const data = await getAdvancedFindEntitiesByNames(logicalNames);
-				console.log("[useSolutionFilter] Entity metadata received:", {
+				// Filter from global cached metadata (instant, no API call)
+				const data = filterCachedEntitiesByNames(logicalNames);
+				console.log("[useSolutionFilter] Filtered entities from cache:", {
 					count: data.length,
 					entities: data.map((e) => e.LogicalName),
 				});

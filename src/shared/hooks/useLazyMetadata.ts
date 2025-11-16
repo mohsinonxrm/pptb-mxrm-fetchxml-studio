@@ -9,6 +9,7 @@ import type {
 	RelationshipMetadata,
 } from "../../features/fetchxml/api/pptbClient";
 import * as metadataLoader from "../../features/fetchxml/api/dataverseMetadata";
+import { metadataCache } from "../../features/fetchxml/state/cache";
 
 interface UseLazyMetadataResult {
 	// Loaders
@@ -38,6 +39,15 @@ export function useLazyMetadata(): UseLazyMetadataResult {
 		setIsLoading(true);
 		setError(null);
 		try {
+			// Check global cache first (preloaded by useAccessMode)
+			if (advancedFindOnly) {
+				const cached = metadataCache.getAllEntityMetadata();
+				if (cached) {
+					console.log('[useLazyMetadata] Using preloaded entity metadata:', cached.length, 'entities');
+					return cached;
+				}
+			}
+			
 			const entities = await metadataLoader.loadAllEntities(advancedFindOnly);
 			return entities;
 		} catch (err) {

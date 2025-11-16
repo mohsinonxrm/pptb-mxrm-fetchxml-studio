@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
 	getPublishersWithSolutions,
 	getSolutionComponents,
-	getAdvancedFindEntitiesByNames,
+	filterCachedEntitiesByNames,
 	type Solution,
 	type EntityMetadata,
 	type PublisherWithSolutions,
@@ -83,6 +83,8 @@ export function usePublisherFilter() {
 	useEffect(() => {
 		if (!selectedPublisherIds.length) {
 			setSolutions([]);
+			// Clear selected solutions when all publishers are deselected
+			setSelectedSolutionIds([]);
 			return;
 		}
 
@@ -94,7 +96,20 @@ export function usePublisherFilter() {
 
 		setSolutions(filteredSolutions);
 
-		// DO NOT clear solution selections - let them persist
+		// Validate selected solutions - keep only those still in filtered list
+		setSelectedSolutionIds((currentSelected) => {
+			if (currentSelected.length === 0) return currentSelected;
+			
+			const availableSolutionIds = new Set(filteredSolutions.map((s) => s.solutionid));
+			const validSolutionIds = currentSelected.filter((id) => availableSolutionIds.has(id));
+			
+			// Only update if the list changed (prevent unnecessary re-renders)
+			if (validSolutionIds.length === currentSelected.length) {
+				return currentSelected;
+			}
+			
+			return validSolutionIds;
+		});
 	}, [selectedPublisherIds, publishersWithSolutions]);
 
 	// Load entities when solutions are selected
@@ -122,7 +137,7 @@ export function usePublisherFilter() {
 
 				console.log("[usePublisherFilter] Loading entities for solutions:", selectedSolutionIds);
 
-				// Get solution components (entities only)
+				// Get solution components (entities only) - cached per solution
 				const components = await getSolutionComponents(selectedSolutionIds);
 				console.log("[usePublisherFilter] Solution components received:", {
 					solutionIds: selectedSolutionIds,
@@ -140,9 +155,9 @@ export function usePublisherFilter() {
 					names: logicalNames,
 				});
 
-				// Get EntityDefinitions (AF-valid only)
-				const data = await getAdvancedFindEntitiesByNames(logicalNames);
-				console.log("[usePublisherFilter] Entity metadata received:", {
+				// Filter from global cached metadata (instant, no API call)
+				const data = filterCachedEntitiesByNames(logicalNames);
+				console.log("[usePublisherFilter] Filtered entities from cache:", {
 					count: data.length,
 					entities: data.map((e) => e.LogicalName),
 				});

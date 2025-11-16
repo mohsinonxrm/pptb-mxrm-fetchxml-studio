@@ -31,10 +31,12 @@ interface CacheEntry<T> {
 class MetadataCache {
 	private entities: Map<string, CacheEntry<CachedEntityData>> = new Map();
 	private allEntitiesCache: CacheEntry<EntityMetadata[]> | null = null;
+	private allEntityMetadataCache: CacheEntry<EntityMetadata[]> | null = null; // Global AF-valid entities
 	private publishersCache: CacheEntry<Publisher[]> | null = null;
 	private publishersWithSolutionsCache: CacheEntry<PublisherWithSolutions[]> | null = null;
 	private solutionsCache: Map<string, CacheEntry<Solution[]>> = new Map(); // keyed by sorted publisher IDs
 	private filteredEntitiesCache: Map<string, CacheEntry<EntityMetadata[]>> = new Map(); // keyed by sorted solution IDs
+	private solutionComponentsCache: Map<string, CacheEntry<string[]>> = new Map(); // Entity names per solution ID
 
 	// Cache TTL: 5 minutes
 	private readonly TTL = 5 * 60 * 1000;
@@ -102,6 +104,53 @@ class MetadataCache {
 	clearAllEntitiesPromise(): void {
 		if (this.allEntitiesCache) {
 			this.allEntitiesCache.promise = undefined;
+		}
+	}
+
+	/**
+	 * Get global entity metadata cache (all AF-valid entities)
+	 */
+	getAllEntityMetadata(): EntityMetadata[] | undefined {
+		if (!this.allEntityMetadataCache || this.isStale(this.allEntityMetadataCache.timestamp)) {
+			return undefined;
+		}
+		return this.allEntityMetadataCache.data;
+	}
+
+	/**
+	 * Set global entity metadata cache
+	 */
+	setAllEntityMetadata(entities: EntityMetadata[]): void {
+		this.allEntityMetadataCache = {
+			data: entities,
+			timestamp: Date.now(),
+		};
+		console.log('[Cache] Global entity metadata cached:', entities.length, 'entities');
+	}
+
+	/**
+	 * Get in-flight promise for global entity metadata
+	 */
+	getAllEntityMetadataPromise(): Promise<EntityMetadata[]> | undefined {
+		return this.allEntityMetadataCache?.promise;
+	}
+
+	/**
+	 * Set in-flight promise for global entity metadata
+	 */
+	setAllEntityMetadataPromise(promise: Promise<EntityMetadata[]>): void {
+		if (!this.allEntityMetadataCache) {
+			this.allEntityMetadataCache = { timestamp: Date.now() };
+		}
+		this.allEntityMetadataCache.promise = promise;
+	}
+
+	/**
+	 * Clear in-flight promise for global entity metadata
+	 */
+	clearAllEntityMetadataPromise(): void {
+		if (this.allEntityMetadataCache) {
+			this.allEntityMetadataCache.promise = undefined;
 		}
 	}
 
@@ -312,6 +361,28 @@ class MetadataCache {
 			data: entities,
 			timestamp: Date.now(),
 		});
+	}
+
+	/**
+	 * Get solution components (entity names) from cache by solution ID
+	 */
+	getSolutionComponents(solutionId: string): string[] | undefined {
+		const entry = this.solutionComponentsCache.get(solutionId);
+		if (!entry || this.isStale(entry.timestamp)) {
+			return undefined;
+		}
+		return entry.data;
+	}
+
+	/**
+	 * Set solution components (entity names) in cache by solution ID
+	 */
+	setSolutionComponents(solutionId: string, entityNames: string[]): void {
+		this.solutionComponentsCache.set(solutionId, {
+			data: entityNames,
+			timestamp: Date.now(),
+		});
+		console.log('[Cache] Solution components cached:', { solutionId, entityCount: entityNames.length });
 	}
 }
 
