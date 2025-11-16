@@ -11,6 +11,9 @@ const DEBUG_FLAGS = {
 	propertiesPanel: false, // Properties panel parent entity resolution
 	metadataAPI: true, // Metadata API calls and responses
 	fetchXmlAPI: true, // FetchXML query execution and results
+	publisherAPI: true, // Publisher API calls
+	solutionAPI: true, // Solution API calls
+	solutionComponentAPI: true, // Solution component API calls
 } as const;
 
 type DebugCategory = keyof typeof DEBUG_FLAGS;

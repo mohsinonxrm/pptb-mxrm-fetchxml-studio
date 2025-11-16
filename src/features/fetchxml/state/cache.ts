@@ -3,7 +3,14 @@
  * Prevents duplicate API calls for the same entity
  */
 
-import type { EntityMetadata, AttributeMetadata, RelationshipMetadata } from "../api/pptbClient";
+import type {
+	EntityMetadata,
+	AttributeMetadata,
+	RelationshipMetadata,
+	Publisher,
+	Solution,
+	PublisherWithSolutions,
+} from "../api/pptbClient";
 
 interface CachedEntityData {
 	metadata?: EntityMetadata;
@@ -24,6 +31,10 @@ interface CacheEntry<T> {
 class MetadataCache {
 	private entities: Map<string, CacheEntry<CachedEntityData>> = new Map();
 	private allEntitiesCache: CacheEntry<EntityMetadata[]> | null = null;
+	private publishersCache: CacheEntry<Publisher[]> | null = null;
+	private publishersWithSolutionsCache: CacheEntry<PublisherWithSolutions[]> | null = null;
+	private solutionsCache: Map<string, CacheEntry<Solution[]>> = new Map(); // keyed by sorted publisher IDs
+	private filteredEntitiesCache: Map<string, CacheEntry<EntityMetadata[]>> = new Map(); // keyed by sorted solution IDs
 
 	// Cache TTL: 5 minutes
 	private readonly TTL = 5 * 60 * 1000;
@@ -202,6 +213,9 @@ class MetadataCache {
 	clear(): void {
 		this.entities.clear();
 		this.allEntitiesCache = null;
+		this.publishersCache = null;
+		this.solutionsCache.clear();
+		this.filteredEntitiesCache.clear();
 	}
 
 	/**
@@ -209,6 +223,95 @@ class MetadataCache {
 	 */
 	clearEntity(logicalName: string): void {
 		this.entities.delete(logicalName);
+	}
+
+	/**
+	 * Get publishers from cache
+	 */
+	getPublishers(): Publisher[] | undefined {
+		if (!this.publishersCache || this.isStale(this.publishersCache.timestamp)) {
+			return undefined;
+		}
+		return this.publishersCache.data;
+	}
+
+	/**
+	 * Set publishers in cache
+	 */
+	setPublishers(publishers: Publisher[]): void {
+		this.publishersCache = {
+			data: publishers,
+			timestamp: Date.now(),
+		};
+	}
+
+	/**
+	 * Get publishers with solutions from cache (combined response)
+	 */
+	getPublishersWithSolutions(): PublisherWithSolutions[] | undefined {
+		if (
+			!this.publishersWithSolutionsCache ||
+			this.isStale(this.publishersWithSolutionsCache.timestamp)
+		) {
+			return undefined;
+		}
+		return this.publishersWithSolutionsCache.data;
+	}
+
+	/**
+	 * Set publishers with solutions in cache (combined response)
+	 */
+	setPublishersWithSolutions(publishersWithSolutions: PublisherWithSolutions[]): void {
+		this.publishersWithSolutionsCache = {
+			data: publishersWithSolutions,
+			timestamp: Date.now(),
+		};
+	}
+
+	/**
+	 * Get solutions from cache by publisher IDs
+	 */
+	getSolutions(publisherIds: string[]): Solution[] | undefined {
+		const key = publisherIds.sort().join(",");
+		const entry = this.solutionsCache.get(key);
+		if (!entry || this.isStale(entry.timestamp)) {
+			return undefined;
+		}
+		return entry.data;
+	}
+
+	/**
+	 * Set solutions in cache by publisher IDs
+	 */
+	setSolutions(publisherIds: string[], solutions: Solution[]): void {
+		const key = publisherIds.sort().join(",");
+		this.solutionsCache.set(key, {
+			data: solutions,
+			timestamp: Date.now(),
+		});
+	}
+
+	/**
+	 * Get filtered entities from cache by solution IDs
+	 */
+	getFilteredEntities(solutionIds: string[]): EntityMetadata[] | undefined {
+		const key = solutionIds.sort().join(",");
+		const entry = this.filteredEntitiesCache.get(key);
+		if (!entry || this.isStale(entry.timestamp)) {
+			return undefined;
+		}
+		return entry.data;
+	}
+
+	/**
+	 * Set filtered entities in cache by solution IDs
+	 */
+	setFilteredEntities(solutionIds: string[], entities: EntityMetadata[]): void {
+		const key = solutionIds.sort().join(",");
+		this.filteredEntitiesCache.set(key, {
+			data: entities,
+			timestamp: Date.now(),
+		});
 	}
 }
 

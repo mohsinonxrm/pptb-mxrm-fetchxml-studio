@@ -141,6 +141,64 @@ export interface FetchXmlResult {
 	pagingCookie?: string;
 }
 
+export interface WhoAmIResponse {
+	UserId: string;
+	BusinessUnitId: string;
+	OrganizationId: string;
+}
+
+export interface PrivilegeCheckResponse {
+	RolePrivileges: Array<{
+		Depth: "Basic" | "Local" | "Deep" | "Global";
+		PrivilegeId: string;
+		BusinessUnitId: string;
+		PrivilegeName: string;
+	}>;
+}
+
+export interface Publisher {
+	publisherid: string;
+	friendlyname: string;
+	uniquename: string;
+	customizationprefix: string;
+}
+
+export interface Solution {
+	solutionid: string;
+	friendlyname: string;
+	uniquename: string;
+	solutionpackageversion?: string;
+	version?: string;
+	isvisible?: boolean;
+	ismanaged?: boolean;
+	_publisherid_value?: string;
+}
+
+export interface PublisherWithSolutions {
+	publisher: Publisher;
+	solutions: Solution[];
+}
+
+export interface SolutionComponent {
+	msdyn_name: string; // Entity logical name
+	msdyn_displayname?: string;
+	msdyn_logicalcollectionname?: string;
+	msdyn_solutionid: string;
+	msdyn_componenttype: number;
+}
+
+export interface AccessSummary {
+	userId: string;
+	canReadPublisher: boolean;
+	canReadSolution: boolean;
+	canReadCustomization: boolean;
+	fullFilterMode: boolean; // all 3 privileges
+	solutionsOnlyMode: boolean; // customization + solution, no publisher
+	publishersOnlyMode: boolean; // customization + publisher, no solution
+	metadataOnlyMode: boolean; // customization only
+	noAccessMode: boolean; // no customization privilege
+}
+
 /**
  * Check if PPTB Dataverse API is available
  */
@@ -489,14 +547,14 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 	console.log("🔍 Raw FetchXML Response:", result);
 	console.log("🔍 Sample Record (first):", result.value[0]);
 	console.log("🔍 All Record Keys:", result.value[0] ? Object.keys(result.value[0]) : []);
-	
+
 	// Check if formatted values are included
 	const hasFormatted = responseHasFormattedValues(result.value);
 	console.log(`🔍 Response includes formatted values: ${hasFormatted}`);
-	
+
 	if (hasFormatted) {
 		console.log("✅ Formatted values detected! Example formatted keys:");
-		const formattedKeys = Object.keys(result.value[0] || {}).filter(k => k.includes("@OData"));
+		const formattedKeys = Object.keys(result.value[0] || {}).filter((k) => k.includes("@OData"));
 		console.log(formattedKeys.slice(0, 5));
 	} else {
 		console.warn("⚠️ NO FORMATTED VALUES DETECTED");
@@ -505,18 +563,21 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 		console.warn("");
 		console.warn("🔧 In dataverseManager.ts (around line 405), change:");
 		console.warn('   FROM: Prefer: "return=representation"');
-		console.warn('   TO:   Prefer: "return=representation, odata.include-annotations=\\"OData.Community.Display.V1.FormattedValue\\""');
+		console.warn(
+			'   TO:   Prefer: "return=representation, odata.include-annotations=\\"OData.Community.Display.V1.FormattedValue\\""'
+		);
 		console.warn("");
 		console.warn("📖 Microsoft Learn reference:");
-		console.warn("   https://learn.microsoft.com/en-us/power-apps/developer/data-platform/fetchxml/select-columns?tabs=webapi#formatted-values");
+		console.warn(
+			"   https://learn.microsoft.com/en-us/power-apps/developer/data-platform/fetchxml/select-columns?tabs=webapi#formatted-values"
+		);
 		console.warn("");
-		console.warn("💡 This will enable rich display: labels for picklists, names for lookups, formatted dates, etc.");
+		console.warn(
+			"💡 This will enable rich display: labels for picklists, names for lookups, formatted dates, etc."
+		);
 	}
 
-	debugLog(
-		"fetchXmlAPI",
-		`✅ FetchXML query executed: ${result.value.length} records retrieved`
-	);
+	debugLog("fetchXmlAPI", `✅ FetchXML query executed: ${result.value.length} records retrieved`);
 
 	return {
 		records: result.value,
@@ -530,11 +591,7 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 /**
  * Call WhoAmI to get current user context
  */
-export async function whoAmI(): Promise<{
-	UserId: string;
-	BusinessUnitId: string;
-	OrganizationId: string;
-} | null> {
+export async function whoAmI(): Promise<WhoAmIResponse | null> {
 	if (!isDataverseAvailable()) {
 		console.warn("PPTB Dataverse API not available");
 		return null;
@@ -545,14 +602,368 @@ export async function whoAmI(): Promise<{
 		const result = (await window.dataverseAPI!.execute({
 			operationName: "WhoAmI",
 			operationType: "function",
-		})) as {
-			UserId: string;
-			BusinessUnitId: string;
-			OrganizationId: string;
-		};
+		})) as WhoAmIResponse;
 		return result;
 	} catch (error) {
 		console.error("WhoAmI failed:", error);
 		return null;
+	}
+}
+
+/**
+ * Check if user has a specific privilege using RetrieveUserPrivilegeByPrivilegeName
+ */
+export async function checkPrivilegeByName(
+	userId: string,
+	privilegeName: string
+): Promise<boolean> {
+	if (!isDataverseAvailable()) {
+		return false;
+	}
+
+	try {
+		const query = `systemusers(${userId})/Microsoft.Dynamics.CRM.RetrieveUserPrivilegeByPrivilegeName(PrivilegeName='${privilegeName}')`;
+		const result = await window.dataverseAPI!.queryData(query);
+
+		// Log raw response for debugging
+		console.log(`🔍 checkPrivilegeByName(${privilegeName}) raw response:`, result);
+
+		// RetrieveUserPrivilegeByPrivilegeName returns the response directly, not wrapped in .value
+		const response = result as unknown as PrivilegeCheckResponse;
+
+		const hasPrivilege = !!response?.RolePrivileges?.length;
+		console.log(
+			`✅ checkPrivilegeByName(${privilegeName}): ${hasPrivilege ? "GRANTED" : "DENIED"}`
+		);
+
+		return hasPrivilege;
+	} catch (error) {
+		console.error(`checkPrivilegeByName(${privilegeName}) failed:`, error);
+		return false;
+	}
+}
+
+/**
+ * Get access summary with privilege checks and mode determination
+ */
+export async function getAccessSummary(): Promise<AccessSummary | null> {
+	const user = await whoAmI();
+	if (!user) {
+		return null;
+	}
+
+	const [canReadPublisher, canReadSolution, canReadCustomization] = await Promise.all([
+		checkPrivilegeByName(user.UserId, "prvReadPublisher"),
+		checkPrivilegeByName(user.UserId, "prvReadSolution"),
+		checkPrivilegeByName(user.UserId, "prvReadCustomization"),
+	]);
+
+	return {
+		userId: user.UserId,
+		canReadPublisher,
+		canReadSolution,
+		canReadCustomization,
+		fullFilterMode: canReadCustomization && canReadSolution && canReadPublisher,
+		solutionsOnlyMode: canReadCustomization && canReadSolution && !canReadPublisher,
+		publishersOnlyMode: canReadCustomization && canReadPublisher && !canReadSolution,
+		metadataOnlyMode: canReadCustomization && !canReadSolution && !canReadPublisher,
+		noAccessMode: !canReadCustomization,
+	};
+}
+
+/**
+ * Get publishers with their solutions in one call (Full Filter mode optimization)
+ * Uses $expand to retrieve publishers and qualifying solutions together
+ * Filters: isreadonly eq false (custom publishers only), isvisible eq true (visible solutions only)
+ */
+export async function getPublishersWithSolutions(): Promise<PublisherWithSolutions[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	try {
+		const query =
+			"publishers" +
+			"?$select=publisherid,friendlyname,uniquename,customizationprefix" +
+			"&$filter=isreadonly eq false and publisher_solution/any(s: s/isvisible eq true and s/solution_solutioncomponent/any(c: c/componenttype eq 1))" +
+			"&$expand=publisher_solution($select=solutionid,friendlyname,isvisible,ismanaged,uniquename,version;$filter=isvisible eq true and solution_solutioncomponent/any(c: c/componenttype eq 1))" +
+			"&$orderby=friendlyname asc";
+
+		debugLog("publisherAPI", `📡 GET Publishers with Solutions (expanded): ${query}`);
+
+		const result = await window.dataverseAPI!.queryData(query);
+		const publisherData = result.value as unknown as Array<
+			Publisher & { publisher_solution: Solution[] }
+		>;
+
+		const publishersWithSolutions: PublisherWithSolutions[] = publisherData.map((p) => ({
+			publisher: {
+				publisherid: p.publisherid,
+				friendlyname: p.friendlyname,
+				uniquename: p.uniquename,
+				customizationprefix: p.customizationprefix,
+			},
+			solutions: p.publisher_solution || [],
+		}));
+
+		debugLog(
+			"publisherAPI",
+			`✅ Publishers with Solutions retrieved: ${
+				publishersWithSolutions.length
+			} publishers, ${publishersWithSolutions.reduce(
+				(sum, p) => sum + p.solutions.length,
+				0
+			)} total solutions`
+		);
+
+		return publishersWithSolutions;
+	} catch (error) {
+		console.error("getPublishersWithSolutions: API call failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get all publishers
+ */
+export async function getPublishers(): Promise<Publisher[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	try {
+		const query =
+			"publishers?$select=publisherid,friendlyname,uniquename,customizationprefix&$orderby=friendlyname asc";
+		debugLog("publisherAPI", `📡 GET Publishers: ${query}`);
+
+		const result = await window.dataverseAPI!.queryData(query);
+		const publishers = result.value as unknown as Publisher[];
+
+		debugLog("publisherAPI", `✅ Publishers retrieved: ${publishers.length}`);
+		return publishers;
+	} catch (error) {
+		console.error("getPublishers: API call failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get solutions filtered by publisher IDs
+ * Only returns solutions that contain entities (componenttype=1)
+ */
+export async function getSolutionsByPublishers(publisherIds: string[]): Promise<Solution[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	if (!publisherIds.length) {
+		return [];
+	}
+
+	try {
+		const SELECT =
+			"$select=solutionid,friendlyname,uniquename,solutionpackageversion,_publisherid_value";
+		const HAS_ENTITIES = "solution_solutioncomponent/any(c: c/componenttype eq 1)";
+
+		// Chunk publisher IDs to avoid URL length limits
+		const chunkSize = 10;
+		const chunks: string[][] = [];
+		for (let i = 0; i < publisherIds.length; i += chunkSize) {
+			chunks.push(publisherIds.slice(i, i + chunkSize));
+		}
+
+		const allSolutions = await Promise.all(
+			chunks.map(async (chunk) => {
+				const publisherFilter = chunk.map((id) => `_publisherid_value eq ${id}`).join(" or ");
+				const query = `solutions?${SELECT}&$filter=(${publisherFilter}) and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
+
+				debugLog("solutionAPI", `📡 GET Solutions for publishers: ${chunk.length} IDs`);
+				const result = await window.dataverseAPI!.queryData(query);
+				return result.value as unknown as Solution[];
+			})
+		);
+
+		// Flatten and dedupe
+		const solutionMap = new Map<string, Solution>();
+		allSolutions.flat().forEach((s) => solutionMap.set(s.solutionid, s));
+		const solutions = Array.from(solutionMap.values());
+
+		debugLog("solutionAPI", `✅ Solutions retrieved: ${solutions.length}`);
+		return solutions;
+	} catch (error) {
+		console.error("getSolutionsByPublishers: API call failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get all solutions that contain entities (no publisher filter)
+ * Filters: isvisible eq true (visible solutions only)
+ */
+export async function getAllSolutionsWithEntities(): Promise<Solution[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	try {
+		const SELECT =
+			"$select=solutionid,friendlyname,uniquename,version,_publisherid_value,isvisible,ismanaged";
+		const HAS_ENTITIES = "solution_solutioncomponent/any(c: c/componenttype eq 1)";
+		const IS_VISIBLE = "isvisible eq true";
+		const query = `solutions?${SELECT}&$filter=${IS_VISIBLE} and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
+
+		debugLog("solutionAPI", `📡 GET All Solutions with entities (visible only)`);
+		const result = await window.dataverseAPI!.queryData(query);
+		const solutions = result.value as unknown as Solution[];
+
+		debugLog("solutionAPI", `✅ Solutions retrieved: ${solutions.length}`);
+		return solutions;
+	} catch (error) {
+		console.error("getAllSolutionsWithEntities: API call failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get solution components (entities only) for given solution IDs
+ * NOTE: Virtual entity msdyn_solutioncomponentsummaries doesn't support OR filters properly,
+ * so we query each solution individually and combine results
+ */
+export async function getSolutionComponents(solutionIds: string[]): Promise<SolutionComponent[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	if (!solutionIds.length) {
+		return [];
+	}
+
+	try {
+		const SELECT =
+			"$select=msdyn_name,msdyn_displayname,msdyn_logicalcollectionname,msdyn_solutionid,msdyn_componenttype";
+		const COMPONENT_TYPE_ENTITY = 1;
+
+		console.log("[API] getSolutionComponents - Querying solutions individually:", solutionIds);
+
+		// Query each solution individually (virtual entity doesn't support OR filters properly)
+		const allComponents = await Promise.all(
+			solutionIds.map(async (solutionId) => {
+				const query = `msdyn_solutioncomponentsummaries?${SELECT}&$filter=msdyn_componenttype eq ${COMPONENT_TYPE_ENTITY} and msdyn_solutionid eq '${solutionId}'`;
+
+				console.log("[API] getSolutionComponents - Query for solution:", { solutionId, query });
+				debugLog("solutionComponentAPI", `📡 GET Solution components for solution: ${solutionId}`);
+				const result = await window.dataverseAPI!.queryData(query);
+				console.log("[API] getSolutionComponents - Result for solution:", {
+					solutionId,
+					componentCount: result.value.length,
+					components: result.value,
+				});
+				return result.value as unknown as SolutionComponent[];
+			})
+		);
+
+		// Flatten and deduplicate by msdyn_name
+		const componentMap = new Map<string, SolutionComponent>();
+		allComponents.flat().forEach((component) => {
+			if (component.msdyn_name && !componentMap.has(component.msdyn_name)) {
+				componentMap.set(component.msdyn_name, component);
+			}
+		});
+
+		const components = Array.from(componentMap.values());
+
+		// Sort by display name
+		components.sort((a, b) => {
+			const nameA = a.msdyn_displayname || a.msdyn_name || "";
+			const nameB = b.msdyn_displayname || b.msdyn_name || "";
+			return nameA.localeCompare(nameB);
+		});
+
+		console.log("[API] getSolutionComponents - Combined results:", {
+			totalSolutions: solutionIds.length,
+			uniqueComponents: components.length,
+			componentNames: components.map((c) => c.msdyn_name),
+		});
+
+		debugLog(
+			"solutionComponentAPI",
+			`✅ Components retrieved: ${components.length} unique entities`
+		);
+		return components;
+	} catch (error) {
+		console.error("getSolutionComponents: API call failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get EntityDefinitions filtered by logical names and IsValidForAdvancedFind
+ */
+export async function getAdvancedFindEntitiesByNames(
+	logicalNames: string[]
+): Promise<EntityMetadata[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	if (!logicalNames.length) {
+		console.log(
+			"[API] getAdvancedFindEntitiesByNames - Empty logical names, returning all AF entities"
+		);
+		// Return all AF-valid entities
+		return getAllEntities(true);
+	}
+
+	console.log("[API] getAdvancedFindEntitiesByNames - Input:", {
+		count: logicalNames.length,
+		names: logicalNames,
+	});
+
+	try {
+		const SELECT =
+			"$select=LogicalName,SchemaName,DisplayName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute,IsValidForAdvancedFind,MetadataId,ObjectTypeCode";
+
+		// Chunk logical names to avoid URL length limits
+		const chunkSize = 15;
+		const chunks: string[][] = [];
+		for (let i = 0; i < logicalNames.length; i += chunkSize) {
+			chunks.push(logicalNames.slice(i, i + chunkSize));
+		}
+
+		const allEntities = await Promise.all(
+			chunks.map(async (chunk) => {
+				const nameFilter = chunk.map((name) => `LogicalName eq '${name}'`).join(" or ");
+				const query = `EntityDefinitions?${SELECT}&$filter=IsValidForAdvancedFind eq true and (${nameFilter})`;
+
+				console.log("[API] getAdvancedFindEntitiesByNames - Query:", query);
+				debugLog("metadataAPI", `📡 GET Entities by names: ${chunk.length} names`);
+				const result = await window.dataverseAPI!.queryData(query);
+				const entities = result.value as unknown as EntityMetadata[];
+				console.log("[API] getAdvancedFindEntitiesByNames - Result:", {
+					requestedNames: chunk,
+					returnedCount: entities.length,
+					returnedEntities: entities.map((e) => e.LogicalName),
+				});
+				return entities;
+			})
+		);
+
+		// Flatten and dedupe
+		const entityMap = new Map<string, EntityMetadata>();
+		allEntities.flat().forEach((e) => entityMap.set(e.LogicalName, e));
+		const entities = Array.from(entityMap.values());
+
+		// Sort by display name
+		entities.sort((a, b) => {
+			const nameA = a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
+			const nameB = b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
+			return nameA.localeCompare(nameB);
+		});
+
+		debugLog("metadataAPI", `✅ Entities retrieved: ${entities.length}`);
+		return entities;
+	} catch (error) {
+		console.error("getAdvancedFindEntitiesByNames: API call failed:", error);
+		throw error;
 	}
 }
