@@ -216,7 +216,9 @@ export function EntitySelector({
 
 				// Find solutions under removed publishers
 				const removedPublisherSolutionIds = publisherFilter.solutions
-					.filter((sol) => sol._publisherid_value && removedPublisherIds.includes(sol._publisherid_value))
+					.filter(
+						(sol) => sol._publisherid_value && removedPublisherIds.includes(sol._publisherid_value)
+					)
 					.map((sol) => sol.solutionid);
 
 				// Check if any of the currently selected solutions are from removed publishers
@@ -227,7 +229,7 @@ export function EntitySelector({
 				// If we'd lose solutions that might contain the entity, show confirmation
 				if (wouldLoseSolutions) {
 					setPendingPublisherIds(newPublisherIds);
-					setConfirmDialogType('publisher');
+					setConfirmDialogType("publisher");
 					setShowConfirmDialog(true);
 					setPublisherQuery("");
 					return;
@@ -292,7 +294,7 @@ export function EntitySelector({
 					// We need to check if entity exists in remaining solutions after removal
 					// For now, show confirmation dialog and let validation happen after
 					setPendingSolutionIds(newSolutionIds);
-					setConfirmDialogType('solution');
+					setConfirmDialogType("solution");
 					setShowConfirmDialog(true);
 					setSolutionQuery("");
 					return;
@@ -371,7 +373,7 @@ export function EntitySelector({
 
 	// Entity search query with filteringhanges that would invalidate entity
 	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-	const [confirmDialogType, setConfirmDialogType] = useState<'publisher' | 'solution'>('solution');
+	const [confirmDialogType, setConfirmDialogType] = useState<"publisher" | "solution">("solution");
 	const [pendingPublisherIds, setPendingPublisherIds] = useState<string[]>([]);
 	const [pendingSolutionIds, setPendingSolutionIds] = useState<string[]>([]);
 
@@ -694,26 +696,34 @@ export function EntitySelector({
 				<DialogSurface>
 					<DialogBody>
 						<DialogTitle>
-							{confirmDialogType === 'publisher' ? 'Confirm Publisher Change' : 'Confirm Solution Change'}
+							{confirmDialogType === "publisher"
+								? "Confirm Publisher Change"
+								: "Confirm Solution Change"}
 						</DialogTitle>
 						<DialogContent>
 							<p>
-								{confirmDialogType === 'publisher'
-									? 'Removing publishers will also remove their associated solutions, which may reset the FetchXML tree and entity selection as'
-									: 'Removing solutions will reset the FetchXML tree and entity selection as'}
+								{confirmDialogType === "publisher"
+									? "Removing publishers will also remove their associated solutions, which may reset the FetchXML tree and entity selection as"
+									: "Removing solutions will reset the FetchXML tree and entity selection as"}
 								<strong> {selectedEntity}</strong> may no longer be available
-								{confirmDialogType === 'publisher'
-									? ' in the remaining publishers.'
-									: ' in the remaining selected solutions.'}
+								{confirmDialogType === "publisher"
+									? " in the remaining publishers."
+									: " in the remaining selected solutions."}
 							</p>
 							<p>This action cannot be undone. Do you want to proceed?</p>
 						</DialogContent>
 						<DialogActions>
-							<Button 
-								appearance="primary" 
-								onClick={confirmDialogType === 'publisher' ? handleConfirmPublisherChange : handleConfirmSolutionChange}
+							<Button
+								appearance="primary"
+								onClick={
+									confirmDialogType === "publisher"
+										? handleConfirmPublisherChange
+										: handleConfirmSolutionChange
+								}
 							>
-								{confirmDialogType === 'publisher' ? 'Yes, Update Publishers' : 'Yes, Update Solutions'}
+								{confirmDialogType === "publisher"
+									? "Yes, Update Publishers"
+									: "Yes, Update Solutions"}
 							</Button>
 							<Button appearance="secondary" onClick={handleCancelChange}>
 								Cancel

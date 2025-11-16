@@ -43,11 +43,15 @@ export function useLazyMetadata(): UseLazyMetadataResult {
 			if (advancedFindOnly) {
 				const cached = metadataCache.getAllEntityMetadata();
 				if (cached) {
-					console.log('[useLazyMetadata] Using preloaded entity metadata:', cached.length, 'entities');
+					console.log(
+						"[useLazyMetadata] Using preloaded entity metadata:",
+						cached.length,
+						"entities"
+					);
 					return cached;
 				}
 			}
-			
+
 			const entities = await metadataLoader.loadAllEntities(advancedFindOnly);
 			return entities;
 		} catch (err) {

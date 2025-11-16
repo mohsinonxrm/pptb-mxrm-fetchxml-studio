@@ -125,7 +125,7 @@ class MetadataCache {
 			data: entities,
 			timestamp: Date.now(),
 		};
-		console.log('[Cache] Global entity metadata cached:', entities.length, 'entities');
+		console.log("[Cache] Global entity metadata cached:", entities.length, "entities");
 	}
 
 	/**
@@ -382,7 +382,10 @@ class MetadataCache {
 			data: entityNames,
 			timestamp: Date.now(),
 		});
-		console.log('[Cache] Solution components cached:', { solutionId, entityCount: entityNames.length });
+		console.log("[Cache] Solution components cached:", {
+			solutionId,
+			entityCount: entityNames.length,
+		});
 	}
 }
 

@@ -5,10 +5,10 @@
  */
 
 import { useState, useEffect } from "react";
-import { 
-	getAccessSummary, 
+import {
+	getAccessSummary,
 	getAllAdvancedFindEntities,
-	type AccessSummary 
+	type AccessSummary,
 } from "../../features/fetchxml/api/pptbClient";
 
 export function useAccessMode() {
@@ -28,16 +28,20 @@ export function useAccessMode() {
 
 				if (mounted) {
 					setAccessSummary(summary);
-					
+
 					// Preload all entity metadata if user has customization access
 					if (summary && !summary.noAccessMode) {
-						console.log('[useAccessMode] Preloading all entity metadata...');
+						console.log("[useAccessMode] Preloading all entity metadata...");
 						getAllAdvancedFindEntities()
-							.then(entities => {
-								console.log('[useAccessMode] Entity metadata preloaded:', entities.length, 'entities');
+							.then((entities) => {
+								console.log(
+									"[useAccessMode] Entity metadata preloaded:",
+									entities.length,
+									"entities"
+								);
 							})
-							.catch(err => {
-								console.error('[useAccessMode] Failed to preload entity metadata:', err);
+							.catch((err) => {
+								console.error("[useAccessMode] Failed to preload entity metadata:", err);
 							});
 					}
 				}

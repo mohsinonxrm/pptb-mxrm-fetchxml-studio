@@ -910,33 +910,33 @@ export async function getAllAdvancedFindEntities(): Promise<EntityMetadata[]> {
 	// Check cache first
 	const cached = metadataCache.getAllEntityMetadata();
 	if (cached) {
-		console.log('[API] getAllAdvancedFindEntities - Cache hit:', cached.length, 'entities');
+		console.log("[API] getAllAdvancedFindEntities - Cache hit:", cached.length, "entities");
 		return cached;
 	}
 
 	// Check for in-flight promise
 	const inFlight = metadataCache.getAllEntityMetadataPromise();
 	if (inFlight) {
-		console.log('[API] getAllAdvancedFindEntities - Returning in-flight promise');
+		console.log("[API] getAllAdvancedFindEntities - Returning in-flight promise");
 		return inFlight;
 	}
 
-	console.log('[API] getAllAdvancedFindEntities - Fetching all AF-valid entities');
-	
+	console.log("[API] getAllAdvancedFindEntities - Fetching all AF-valid entities");
+
 	try {
 		const promise = getAllEntities(true);
 		metadataCache.setAllEntityMetadataPromise(promise);
-		
+
 		const entities = await promise;
-		console.log('[API] getAllAdvancedFindEntities - Fetched:', entities.length, 'entities');
-		
+		console.log("[API] getAllAdvancedFindEntities - Fetched:", entities.length, "entities");
+
 		metadataCache.setAllEntityMetadata(entities);
 		metadataCache.clearAllEntityMetadataPromise();
-		
+
 		return entities;
 	} catch (error) {
 		metadataCache.clearAllEntityMetadataPromise();
-		console.error('[API] getAllAdvancedFindEntities - Failed:', error);
+		console.error("[API] getAllAdvancedFindEntities - Failed:", error);
 		throw error;
 	}
 }
@@ -948,20 +948,20 @@ export async function getAllAdvancedFindEntities(): Promise<EntityMetadata[]> {
 export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetadata[] {
 	const allEntities = metadataCache.getAllEntityMetadata();
 	if (!allEntities) {
-		console.warn('[API] filterCachedEntitiesByNames - Global cache not available, returning empty');
+		console.warn("[API] filterCachedEntitiesByNames - Global cache not available, returning empty");
 		return [];
 	}
-	
+
 	const nameSet = new Set(logicalNames);
 	const filtered = allEntities.filter((entity: EntityMetadata) => nameSet.has(entity.LogicalName));
-	
-	console.log('[API] filterCachedEntitiesByNames - Filtered:', {
+
+	console.log("[API] filterCachedEntitiesByNames - Filtered:", {
 		requestedCount: logicalNames.length,
 		requestedNames: logicalNames,
 		filteredCount: filtered.length,
 		filteredNames: filtered.map((e: EntityMetadata) => e.LogicalName),
 	});
-	
+
 	return filtered;
 }
 

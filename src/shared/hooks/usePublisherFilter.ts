@@ -99,15 +99,15 @@ export function usePublisherFilter() {
 		// Validate selected solutions - keep only those still in filtered list
 		setSelectedSolutionIds((currentSelected) => {
 			if (currentSelected.length === 0) return currentSelected;
-			
+
 			const availableSolutionIds = new Set(filteredSolutions.map((s) => s.solutionid));
 			const validSolutionIds = currentSelected.filter((id) => availableSolutionIds.has(id));
-			
+
 			// Only update if the list changed (prevent unnecessary re-renders)
 			if (validSolutionIds.length === currentSelected.length) {
 				return currentSelected;
 			}
-			
+
 			return validSolutionIds;
 		});
 	}, [selectedPublisherIds, publishersWithSolutions]);
