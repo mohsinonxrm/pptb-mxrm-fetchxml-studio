@@ -18,6 +18,7 @@ const useStyles = makeStyles({
 		fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
 		fontSize: "13px",
 		lineHeight: "1.5",
+		minHeight: 0, // Important for flex child
 	},
 	copyButton: {
 		position: "absolute",

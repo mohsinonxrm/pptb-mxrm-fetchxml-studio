@@ -81,6 +81,19 @@ function generateEntity(entity: EntityNode, indent: number): string[] {
 		lines.push(...generateAllAttributes(entity.allAttributes, indent + 1));
 	}
 
+	// CRITICAL: Always include the primary ID attribute for row selection to work
+	// The primary ID is {entityname}id (e.g., accountid, contactid)
+	const primaryIdAttrName = `${entity.name}id`;
+	const hasPrimaryId =
+		entity.attributes.some((attr) => attr.name === primaryIdAttrName) ||
+		entity.allAttributes?.enabled;
+
+	if (!hasPrimaryId) {
+		// Inject primary ID attribute at the beginning
+		const primaryIdSpaces = "  ".repeat(indent + 1);
+		lines.push(`${primaryIdSpaces}<attribute name="${primaryIdAttrName}" />`);
+	}
+
 	// Attributes
 	entity.attributes.forEach((attr) => {
 		lines.push(...generateAttribute(attr, indent + 1));

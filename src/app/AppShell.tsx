@@ -11,12 +11,14 @@ import {
 	tokens,
 } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
+import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
 import { executeFetchXml, whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
+import type { AttributeMetadata } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 
@@ -158,10 +160,14 @@ export function AppShell() {
 function AppContent() {
 	const styles = useStyles();
 	const builder = useBuilder();
+	const { loadAttributes } = useLazyMetadata();
 
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
 	const [isExecuting, setIsExecuting] = useState(false);
+	const [attributeMetadata, setAttributeMetadata] = useState<Map<string, AttributeMetadata>>(
+		new Map()
+	);
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -260,6 +266,28 @@ function AppContent() {
 		console.log("===================================================");
 	}, []);
 
+	// Load attribute metadata when entity changes
+	useEffect(() => {
+		const entityName = builder.fetchQuery?.entity?.name;
+		if (!entityName) {
+			setAttributeMetadata(new Map());
+			return;
+		}
+
+		loadAttributes(entityName)
+			.then((attributes) => {
+				const map = new Map<string, AttributeMetadata>();
+				attributes.forEach((attr) => {
+					map.set(attr.LogicalName, attr);
+				});
+				setAttributeMetadata(map);
+			})
+			.catch((error) => {
+				console.error("Failed to load attribute metadata:", error);
+				setAttributeMetadata(new Map());
+			});
+	}, [builder.fetchQuery?.entity?.name, loadAttributes]);
+
 	// Generate FetchXML from builder state
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 
@@ -270,7 +298,10 @@ function AppContent() {
 		setQueryResult(null);
 
 		try {
+			// Measure execution time
+			const startTime = performance.now();
 			const result = await executeFetchXml(fetchXml);
+			const executionTimeMs = Math.round(performance.now() - startTime);
 
 			// Convert FetchXmlResult to QueryResult format for DataGrid
 			const columns: string[] = result.records.length > 0 ? Object.keys(result.records[0]) : [];
@@ -289,6 +320,7 @@ function AppContent() {
 				moreRecords: result.moreRecords,
 				pagingCookie: result.pagingCookie,
 				entityLogicalName, // NEW: for CommandBar actions
+				executionTimeMs, // NEW: for timing display
 			});
 		} catch (error) {
 			console.error("Failed to execute FetchXML:", error);
@@ -312,30 +344,29 @@ function AppContent() {
 			<div className={styles.leftPane} data-left-pane style={{ width: `${leftPaneWidth}px` }}>
 				{/* Top: Tree View */}
 				<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
-						<EntitySelector
-							selectedEntity={builder.fetchQuery?.entity.name || null}
-							onEntityChange={builder.setEntity}
-							onNewQuery={builder.newQuery}
+					<EntitySelector
+						selectedEntity={builder.fetchQuery?.entity.name || null}
+						onEntityChange={builder.setEntity}
+						onNewQuery={builder.newQuery}
+					/>
+					{builder.fetchQuery ? (
+						<TreeView
+							fetchQuery={builder.fetchQuery}
+							selectedNodeId={builder.selectedNodeId}
+							onNodeSelect={builder.selectNode}
+							onAddAttribute={builder.addAttribute}
+							onAddAllAttributes={builder.addAllAttributes}
+							onAddOrder={builder.addOrder}
+							onAddFilter={builder.addFilter}
+							onAddSubfilter={builder.addSubfilter}
+							onAddCondition={builder.addCondition}
+							onAddLinkEntity={builder.addLinkEntity}
+							onRemoveNode={builder.removeNode}
 						/>
-						{builder.fetchQuery ? (
-							<TreeView
-								fetchQuery={builder.fetchQuery}
-								selectedNodeId={builder.selectedNodeId}
-								onNodeSelect={builder.selectNode}
-								onAddAttribute={builder.addAttribute}
-								onAddAllAttributes={builder.addAllAttributes}
-								onAddOrder={builder.addOrder}
-								onAddFilter={builder.addFilter}
-								onAddSubfilter={builder.addSubfilter}
-								onAddCondition={builder.addCondition}
-								onAddLinkEntity={builder.addLinkEntity}
-								onRemoveNode={builder.removeNode}
-							/>
-						) : (
-							<div className={styles.placeholder}>Select an entity to begin</div>
-						)}
-					</div>
-
+					) : (
+						<div className={styles.placeholder}>Select an entity to begin</div>
+					)}
+				</div>
 				{/* Resize Handle */}
 				<div
 					className={styles.horizontalResizeHandle}
@@ -347,21 +378,21 @@ function AppContent() {
 						<span>•</span>
 						<span>•</span>
 					</span>
-				</div>					{/* Bottom: Properties Panel */}
-					<div className={styles.leftPaneBottom} style={{ height: `${100 - topHeight}%` }}>
-						<div className={styles.toolbar}>
-							<span style={{ fontWeight: 600 }}>Properties</span>
-						</div>
-						<div className={styles.propertiesContent}>
-							<PropertiesPanel
-								selectedNode={builder.selectedNode}
-								fetchQuery={builder.fetchQuery}
-								onNodeUpdate={builder.updateNode}
-							/>
-						</div>
+				</div>{" "}
+				{/* Bottom: Properties Panel */}
+				<div className={styles.leftPaneBottom} style={{ height: `${100 - topHeight}%` }}>
+					<div className={styles.toolbar}>
+						<span style={{ fontWeight: 600 }}>Properties</span>
+					</div>
+					<div className={styles.propertiesContent}>
+						<PropertiesPanel
+							selectedNode={builder.selectedNode}
+							fetchQuery={builder.fetchQuery}
+							onNodeUpdate={builder.updateNode}
+						/>
 					</div>
 				</div>
-
+			</div>
 			{/* Vertical Resize Handle */}
 			<div
 				className={styles.verticalResizeHandle}
@@ -373,16 +404,19 @@ function AppContent() {
 					<span>•</span>
 					<span>•</span>
 				</span>
-			</div>				{/* Right Pane */}
-				<div className={styles.rightPane}>
-					<PreviewTabs
-						xml={fetchXml}
-						result={queryResult}
-						isExecuting={isExecuting}
-						onExecute={handleExecute}
-						onExport={handleExport}
-					/>
-				</div>
+			</div>{" "}
+			{/* Right Pane */}
+			<div className={styles.rightPane}>
+				<PreviewTabs
+					xml={fetchXml}
+					result={queryResult}
+					isExecuting={isExecuting}
+					onExecute={handleExecute}
+					onExport={handleExport}
+					attributeMetadata={attributeMetadata}
+					fetchQuery={builder.fetchQuery}
+				/>
 			</div>
+		</div>
 	);
 }

@@ -1,9 +1,10 @@
 /**
  * Rich cell renderers for different attribute types in DataGrid
  * Renders values using appropriate Fluent UI v9 components
+ * Prefers formatted values from OData annotations when available
  */
 
-import { Switch, Badge, Label, makeStyles, tokens } from "@fluentui/react-components";
+import { Switch, Badge, Label, SkeletonItem, makeStyles, tokens } from "@fluentui/react-components";
 import type { AttributeMetadata } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
@@ -40,40 +41,64 @@ const useStyles = makeStyles({
 
 /**
  * Render a boolean/two-option value as a read-only Switch
+ * Uses formatted value from OData annotations if available
  */
 export function BooleanCellRenderer({
 	value,
+	formattedValue,
 	attribute,
 }: {
 	value: unknown;
+	formattedValue?: unknown;
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
 	const boolValue = Boolean(value);
 
-	// Get labels from metadata if available
-	const trueLabel = attribute?.OptionSet?.TrueOption?.Label?.UserLocalizedLabel?.Label || "Yes";
-	const falseLabel = attribute?.OptionSet?.FalseOption?.Label?.UserLocalizedLabel?.Label || "No";
+	// Prefer formatted value, otherwise use metadata labels
+	const displayValue =
+		formattedValue ||
+		(boolValue
+			? attribute?.OptionSet?.TrueOption?.Label?.UserLocalizedLabel?.Label || "Yes"
+			: attribute?.OptionSet?.FalseOption?.Label?.UserLocalizedLabel?.Label || "No");
 
 	return (
 		<div className={styles.booleanCell}>
 			<Switch checked={boolValue} disabled />
-			<Label size="small">{boolValue ? trueLabel : falseLabel}</Label>
+			<Label size="small">{String(displayValue)}</Label>
 		</div>
 	);
 }
 
 /**
  * Render a picklist/state/status value as a Badge
+ * Uses formatted value from OData annotations if available
  */
 export function PicklistCellRenderer({
 	value,
+	formattedValue,
 	attribute,
 }: {
 	value: unknown;
+	formattedValue?: unknown;
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
+
+	// Prefer formatted value
+	if (formattedValue) {
+		const appearance =
+			attribute?.AttributeType === "State" || attribute?.AttributeType === "Status"
+				? "filled"
+				: "tint";
+		return (
+			<div className={styles.picklistCell}>
+				<Badge appearance={appearance}>{String(formattedValue)}</Badge>
+			</div>
+		);
+	}
+
+	// Fallback to raw value with metadata lookup
 	const numValue = typeof value === "number" ? value : parseInt(String(value), 10);
 
 	if (isNaN(numValue)) {
@@ -86,7 +111,9 @@ export function PicklistCellRenderer({
 
 	// Use different badge colors for different states
 	const appearance =
-		attribute?.AttributeType === "State" ? (numValue === 0 ? "filled" : "outline") : "tint";
+		attribute?.AttributeType === "State" || attribute?.AttributeType === "Status"
+			? "filled"
+			: "tint";
 
 	return (
 		<div className={styles.picklistCell}>
@@ -97,10 +124,23 @@ export function PicklistCellRenderer({
 
 /**
  * Render a lookup/customer/owner value
+ * Uses formatted value from OData annotations (preferred)
  */
-export function LookupCellRenderer({ value }: { value: unknown }) {
+export function LookupCellRenderer({
+	value,
+	formattedValue,
+}: {
+	value: unknown;
+	formattedValue?: unknown;
+}) {
 	const styles = useStyles();
 
+	// Prefer formatted value (just the name string)
+	if (formattedValue) {
+		return <span className={styles.lookupName}>{String(formattedValue)}</span>;
+	}
+
+	// Fallback to raw value (structured object)
 	if (!value || typeof value !== "object") {
 		return <span>—</span>;
 	}
@@ -119,16 +159,25 @@ export function LookupCellRenderer({ value }: { value: unknown }) {
 
 /**
  * Render a numeric value (integer, decimal, money)
+ * Uses formatted value from OData annotations if available
  */
 export function NumberCellRenderer({
 	value,
+	formattedValue,
 	attribute,
 }: {
 	value: unknown;
+	formattedValue?: unknown;
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
 
+	// Prefer formatted value (already includes currency symbol, etc.)
+	if (formattedValue) {
+		return <span className={styles.numberCell}>{String(formattedValue)}</span>;
+	}
+
+	// Fallback to manual formatting
 	if (value === null || value === undefined || value === "") {
 		return <span>—</span>;
 	}
@@ -168,16 +217,25 @@ export function NumberCellRenderer({
 
 /**
  * Render a date/time value
+ * Uses formatted value from OData annotations if available
  */
 export function DateTimeCellRenderer({
 	value,
+	formattedValue,
 	attribute,
 }: {
 	value: unknown;
+	formattedValue?: unknown;
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
 
+	// Prefer formatted value
+	if (formattedValue) {
+		return <span className={styles.dateCell}>{String(formattedValue)}</span>;
+	}
+
+	// Fallback to manual formatting
 	if (!value) {
 		return <span>—</span>;
 	}
@@ -220,21 +278,40 @@ export function DateTimeCellRenderer({
 
 /**
  * Default text renderer for strings and other types
+ * Uses formatted value from OData annotations if available
  */
-export function TextCellRenderer({ value }: { value: unknown }) {
-	if (value === null || value === undefined || value === "") {
+export function TextCellRenderer({
+	value,
+	formattedValue,
+}: {
+	value: unknown;
+	formattedValue?: unknown;
+}) {
+	// Prefer formatted value
+	const displayValue = formattedValue ?? value;
+
+	if (displayValue === null || displayValue === undefined || displayValue === "") {
 		return <span>—</span>;
 	}
 
-	return <span>{String(value)}</span>;
+	return <span>{String(displayValue)}</span>;
+}
+
+/**
+ * Loading skeleton for virtualized cells
+ */
+export function LoadingCellRenderer() {
+	return <SkeletonItem />;
 }
 
 /**
  * Get the appropriate cell renderer for an attribute type
+ * Now accepts formatted value from OData annotations
  */
 export function getCellRenderer(
 	attributeType: string | undefined,
 	value: unknown,
+	formattedValue: unknown | undefined,
 	attribute?: AttributeMetadata
 ) {
 	if (value === null || value === undefined) {
@@ -243,29 +320,37 @@ export function getCellRenderer(
 
 	switch (attributeType) {
 		case "Boolean":
-			return <BooleanCellRenderer value={value} attribute={attribute} />;
+			return (
+				<BooleanCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+			);
 
 		case "Picklist":
 		case "State":
 		case "Status":
-			return <PicklistCellRenderer value={value} attribute={attribute} />;
+			return (
+				<PicklistCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+			);
 
 		case "Lookup":
 		case "Customer":
 		case "Owner":
-			return <LookupCellRenderer value={value} />;
+			return <LookupCellRenderer value={value} formattedValue={formattedValue} />;
 
 		case "Integer":
 		case "BigInt":
 		case "Decimal":
 		case "Double":
 		case "Money":
-			return <NumberCellRenderer value={value} attribute={attribute} />;
+			return (
+				<NumberCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+			);
 
 		case "DateTime":
-			return <DateTimeCellRenderer value={value} attribute={attribute} />;
+			return (
+				<DateTimeCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+			);
 
 		default:
-			return <TextCellRenderer value={value} />;
+			return <TextCellRenderer value={value} formattedValue={formattedValue} />;
 	}
 }

@@ -14,9 +14,12 @@ import {
 	ProgressBar,
 	tokens,
 } from "@fluentui/react-components";
-import { Play24Regular, ArrowDownload24Regular } from "@fluentui/react-icons";
+import { Play24Regular } from "@fluentui/react-icons";
 import { XmlTextArea } from "./XmlTextArea";
 import { ResultsGrid, type QueryResult } from "./ResultsGrid";
+import { ResultsCommandBar } from "./ResultsCommandBar";
+import type { AttributeMetadata } from "../../api/pptbClient";
+import type { FetchNode } from "../../model/nodes";
 
 const useStyles = makeStyles({
 	container: {
@@ -42,14 +45,51 @@ const useStyles = makeStyles({
 	tabContent: {
 		flex: 1,
 		overflow: "hidden",
-		padding: "8px",
-		backgroundColor: tokens.colorNeutralBackground1,
+		padding: "6px",
+		backgroundColor: tokens.colorNeutralBackground3, // Neutral canvas background
 	},
-	contentWrapper: {
-		height: "100%",
-		overflow: "hidden",
+	// Shared surface card styling (floating cards with shadow)
+	surfaceCard: {
+		borderRadius: tokens.borderRadiusMedium,
+		boxShadow: tokens.shadow16,
+		backgroundColor: tokens.colorNeutralBackground1,
 		border: `1px solid ${tokens.colorNeutralStroke2}`,
-		borderRadius: "4px",
+	},
+	// Toolbar card styling
+	toolbarCard: {
+		borderRadius: tokens.borderRadiusMedium,
+		boxShadow: tokens.shadow16,
+		backgroundColor: tokens.colorNeutralBackground1,
+		border: `1px solid ${tokens.colorNeutralStroke2}`,
+		padding: "4px 8px",
+	},
+	// Grid card styling
+	gridCard: {
+		borderRadius: tokens.borderRadiusMedium,
+		boxShadow: tokens.shadow16,
+		backgroundColor: tokens.colorNeutralBackground1,
+		border: `1px solid ${tokens.colorNeutralStroke2}`,
+		display: "flex",
+		flexDirection: "column",
+		minHeight: "240px",
+		minWidth: "480px",
+		overflow: "hidden",
+	},
+	// Code card for FetchXML tab
+	codeCard: {
+		borderRadius: tokens.borderRadiusMedium,
+		boxShadow: tokens.shadow16,
+		backgroundColor: tokens.colorNeutralBackground1,
+		border: `1px solid ${tokens.colorNeutralStroke2}`,
+		height: "100%",
+		display: "flex",
+		flexDirection: "column",
+	},
+	// Results tab layout grid
+	resultsLayout: {
+		display: "grid",
+		gridTemplateRows: "auto 8px 1fr",
+		height: "100%",
 	},
 });
 
@@ -59,11 +99,22 @@ interface PreviewTabsProps {
 	isExecuting?: boolean;
 	onExecute?: () => void;
 	onExport?: () => void;
+	attributeMetadata?: Map<string, AttributeMetadata>;
+	fetchQuery?: FetchNode | null;
 }
 
-export function PreviewTabs({ xml, result, isExecuting, onExecute, onExport }: PreviewTabsProps) {
+export function PreviewTabs({
+	xml,
+	result,
+	isExecuting,
+	onExecute,
+	onExport,
+	attributeMetadata,
+	fetchQuery,
+}: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
+	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
 		setSelectedTab(data.value as "xml" | "results");
@@ -91,11 +142,6 @@ export function PreviewTabs({ xml, result, isExecuting, onExecute, onExport }: P
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
-					{selectedTab === "results" && result && result.rows.length > 0 && (
-						<Button appearance="subtle" icon={<ArrowDownload24Regular />} onClick={onExport}>
-							Export
-						</Button>
-					)}
 				</Toolbar>
 			</div>
 			{isExecuting && (
@@ -104,10 +150,37 @@ export function PreviewTabs({ xml, result, isExecuting, onExecute, onExport }: P
 				</div>
 			)}
 			<div className={styles.tabContent}>
-				<div className={styles.contentWrapper}>
-					{selectedTab === "xml" && <XmlTextArea xml={xml} />}
-					{selectedTab === "results" && <ResultsGrid result={result} isLoading={isExecuting} />}
-				</div>
+				{selectedTab === "xml" && (
+					<div className={styles.codeCard}>
+						<XmlTextArea xml={xml} />
+					</div>
+				)}
+				{selectedTab === "results" && (
+					<div className={styles.resultsLayout}>
+						<div className={styles.toolbarCard}>
+							<ResultsCommandBar
+								selectedCount={toolbarSelectedCount}
+								onOpen={() => console.log("Open not yet implemented")}
+								onCopyUrl={() => console.log("Copy URL not yet implemented")}
+								onActivate={() => console.log("Activate not yet implemented")}
+								onDeactivate={() => console.log("Deactivate not yet implemented")}
+								onDelete={() => console.log("Delete not yet implemented")}
+								onExport={onExport || (() => console.log("Export not yet implemented"))}
+								entityName={result?.entityLogicalName}
+							/>
+						</div>
+						<div /> {/* 8px spacer */}
+						<div className={styles.gridCard}>
+							<ResultsGrid
+								result={result}
+								isLoading={isExecuting}
+								attributeMetadata={attributeMetadata}
+								fetchQuery={fetchQuery}
+								onSelectedCountChange={setToolbarSelectedCount}
+							/>
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);

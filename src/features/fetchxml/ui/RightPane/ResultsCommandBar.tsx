@@ -4,13 +4,7 @@
  */
 
 import { useMemo } from "react";
-import {
-	Toolbar,
-	ToolbarButton,
-	ToolbarDivider,
-	makeStyles,
-	tokens,
-} from "@fluentui/react-components";
+import { Toolbar, ToolbarButton, ToolbarDivider, makeStyles } from "@fluentui/react-components";
 import {
 	Open20Regular,
 	Link20Regular,
@@ -22,9 +16,7 @@ import {
 
 const useStyles = makeStyles({
 	toolbar: {
-		backgroundColor: tokens.colorNeutralBackground1,
-		padding: "4px 8px",
-		minHeight: "40px",
+		padding: "0",
 	},
 });
 
@@ -70,7 +62,7 @@ export function ResultsCommandBar({
 	}, [entityName]);
 
 	return (
-		<Toolbar className={styles.toolbar} aria-label="Record actions">
+		<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
 			<ToolbarButton
 				appearance="subtle"
 				icon={<Open20Regular />}
