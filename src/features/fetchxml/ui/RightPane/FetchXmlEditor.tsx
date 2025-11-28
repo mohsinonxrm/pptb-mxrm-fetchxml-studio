@@ -4,8 +4,9 @@
 
 import { useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
-import { Button, makeStyles, Tooltip } from "@fluentui/react-components";
+import { Button, makeStyles, Tooltip, Spinner, tokens } from "@fluentui/react-components";
 import { Copy24Regular } from "@fluentui/react-icons";
+import { useTheme } from "../../../../shared/contexts/ThemeContext";
 
 const useStyles = makeStyles({
 	container: {
@@ -24,15 +25,22 @@ const useStyles = makeStyles({
 		right: "8px",
 		zIndex: 10,
 	},
+	loadingContainer: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		height: "100%",
+		backgroundColor: tokens.colorNeutralBackground1,
+	},
 });
 
 interface FetchXmlEditorProps {
 	xml: string;
-	isDark: boolean;
 }
 
-export function FetchXmlEditor({ xml, isDark }: FetchXmlEditorProps) {
+export function FetchXmlEditor({ xml }: FetchXmlEditorProps) {
 	const styles = useStyles();
+	const { isDark } = useTheme();
 	const editorRef = useRef<{ getAction: (id: string) => { run: () => void } | null } | null>(null);
 
 	const handleCopy = async () => {
@@ -67,6 +75,11 @@ export function FetchXmlEditor({ xml, isDark }: FetchXmlEditorProps) {
 					language="xml"
 					theme={isDark ? "vs-dark" : "vs"}
 					value={xml}
+					loading={
+						<div className={styles.loadingContainer}>
+							<Spinner size="medium" label="Loading editor..." />
+						</div>
+					}
 					options={{
 						readOnly: true,
 						minimap: { enabled: false },

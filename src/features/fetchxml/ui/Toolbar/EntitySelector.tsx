@@ -23,7 +23,9 @@ import {
 	DialogActions,
 	type ComboboxProps,
 } from "@fluentui/react-components";
-import { Add20Regular, LockClosed20Regular } from "@fluentui/react-icons";
+import { Add20Regular, LockClosed20Regular, ArrowUpload20Regular } from "@fluentui/react-icons";
+import { LoadFetchXmlDialog } from "./LoadFetchXmlDialog";
+import type { ParseResult } from "../../model/fetchxmlParser";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import { usePublisherFilter } from "../../../../shared/hooks/usePublisherFilter";
 import { useSolutionFilter } from "../../../../shared/hooks/useSolutionFilter";
@@ -89,12 +91,14 @@ interface EntitySelectorProps {
 	selectedEntity: string | null;
 	onEntityChange: (entityLogicalName: string) => void;
 	onNewQuery: () => void;
+	onLoadFetchXml: (xmlString: string) => ParseResult;
 }
 
 export function EntitySelector({
 	selectedEntity,
 	onEntityChange,
 	onNewQuery,
+	onLoadFetchXml,
 }: EntitySelectorProps) {
 	const styles = useStyles();
 	const publisherComboId = useId("publisher-combobox");
@@ -376,6 +380,9 @@ export function EntitySelector({
 	const [confirmDialogType, setConfirmDialogType] = useState<"publisher" | "solution">("solution");
 	const [pendingPublisherIds, setPendingPublisherIds] = useState<string[]>([]);
 	const [pendingSolutionIds, setPendingSolutionIds] = useState<string[]>([]);
+
+	// Load FetchXML dialog state
+	const [showLoadFetchXmlDialog, setShowLoadFetchXmlDialog] = useState(false);
 
 	// Entity search query with filtering
 	const [entityQuery, setEntityQuery] = useState<string>("");
@@ -679,6 +686,14 @@ export function EntitySelector({
 					{entityError && <div className={styles.errorText}>{entityError}</div>}
 				</div>
 				<Button
+					appearance="secondary"
+					icon={<ArrowUpload20Regular />}
+					onClick={() => setShowLoadFetchXmlDialog(true)}
+					title="Load FetchXML from text"
+				>
+					Load
+				</Button>
+				<Button
 					appearance="primary"
 					icon={<Add20Regular />}
 					onClick={onNewQuery}
@@ -687,6 +702,13 @@ export function EntitySelector({
 					New
 				</Button>
 			</div>
+
+			{/* Load FetchXML Dialog */}
+			<LoadFetchXmlDialog
+				open={showLoadFetchXmlDialog}
+				onClose={() => setShowLoadFetchXmlDialog(false)}
+				onLoad={onLoadFetchXml}
+			/>
 
 			{/* Confirmation Dialog for Publisher/Solution Change */}
 			<Dialog

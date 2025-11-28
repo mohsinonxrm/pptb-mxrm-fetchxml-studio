@@ -107,7 +107,7 @@ export interface ConditionNode {
 	type: "condition";
 	attribute: string; // logical attribute name
 	operator: OperatorType;
-	value?: string | number | boolean | string[] | null;
+	value?: string | number | boolean | (string | number)[] | null; // arrays for in/not-in operators
 	aggregate?: "sum" | "count" | "countcolumn" | "min" | "max" | "avg"; // for aggregate filtering
 	entityname?: string; // for link-entity filters, references the entity/link alias
 	valueof?: string; // for cross-table column comparisons (references another attribute)

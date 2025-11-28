@@ -29,8 +29,8 @@ interface MultiValuePickerProps {
 	entityLogicalName: string;
 	attributeLogicalName: string;
 	attribute: AttributeMetadata;
-	value?: string[] | number[]; // Array of values
-	onChange: (value: string[] | number[] | undefined) => void;
+	value?: (string | number)[]; // Array of values (mixed types supported from parser)
+	onChange: (value: (string | number)[] | undefined) => void;
 	placeholder?: string;
 }
 

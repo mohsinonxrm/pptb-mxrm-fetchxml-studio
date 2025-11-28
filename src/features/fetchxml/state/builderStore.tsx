@@ -15,6 +15,7 @@ import type {
 	LinkEntityNode,
 	NodeId,
 } from "../model/nodes";
+import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
 
 // Temporary ID generator
 let idCounter = 0;
@@ -49,7 +50,8 @@ type BuilderAction =
 	| { type: "ADD_LINK_ENTITY"; parentId: NodeId }
 	| { type: "REMOVE_NODE"; nodeId: NodeId }
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
-	| { type: "NEW_QUERY" };
+	| { type: "NEW_QUERY" }
+	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
@@ -201,6 +203,16 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 	switch (action.type) {
 		case "NEW_QUERY":
 			return initialState;
+
+		case "LOAD_FETCHXML": {
+			// Load a pre-parsed FetchNode tree (from parser or view)
+			const fetchNode = action.fetchNode;
+			return {
+				fetchQuery: fetchNode,
+				selectedNodeId: fetchNode.entity.id,
+				selectedNode: fetchNode.entity,
+			};
+		}
 
 		case "SET_ENTITY": {
 			const entityNode: EntityNode = {
@@ -561,6 +573,7 @@ interface BuilderContextValue extends BuilderState {
 	removeNode: (nodeId: NodeId) => void;
 	updateNode: (nodeId: NodeId, updates: Record<string, unknown>) => void;
 	newQuery: () => void;
+	loadFetchXml: (xmlString: string) => ParseResult;
 }
 
 const BuilderContext = createContext<BuilderContextValue | null>(null);
@@ -583,6 +596,13 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		updateNode: (nodeId: NodeId, updates: Record<string, unknown>) =>
 			dispatch({ type: "UPDATE_NODE", nodeId, updates }),
 		newQuery: () => dispatch({ type: "NEW_QUERY" }),
+		loadFetchXml: (xmlString: string): ParseResult => {
+			const result = parseFetchXml(xmlString);
+			if (result.success && result.fetchNode) {
+				dispatch({ type: "LOAD_FETCHXML", fetchNode: result.fetchNode });
+			}
+			return result;
+		},
 	};
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

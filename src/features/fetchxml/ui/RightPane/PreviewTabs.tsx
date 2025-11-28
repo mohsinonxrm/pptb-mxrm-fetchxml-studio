@@ -15,7 +15,7 @@ import {
 	tokens,
 } from "@fluentui/react-components";
 import { Play24Regular } from "@fluentui/react-icons";
-import { XmlTextArea } from "./XmlTextArea";
+import { FetchXmlEditor } from "./FetchXmlEditor";
 import { ResultsGrid, type QueryResult } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { AttributeMetadata } from "../../api/pptbClient";
@@ -152,7 +152,7 @@ export function PreviewTabs({
 			<div className={styles.tabContent}>
 				{selectedTab === "xml" && (
 					<div className={styles.codeCard}>
-						<XmlTextArea xml={xml} />
+						<FetchXmlEditor xml={xml} />
 					</div>
 				)}
 				{selectedTab === "results" && (

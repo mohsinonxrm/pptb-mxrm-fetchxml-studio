@@ -17,6 +17,7 @@ import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
+import { ThemeProvider } from "../shared/contexts/ThemeContext";
 import { executeFetchXml, whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
 import type { AttributeMetadata } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
@@ -150,9 +151,11 @@ export function AppShell() {
 
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
-			<BuilderProvider>
-				<AppContent />
-			</BuilderProvider>
+			<ThemeProvider isDark={isDark}>
+				<BuilderProvider>
+					<AppContent />
+				</BuilderProvider>
+			</ThemeProvider>
 		</FluentProvider>
 	);
 }
@@ -348,6 +351,7 @@ function AppContent() {
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
+						onLoadFetchXml={builder.loadFetchXml}
 					/>
 					{builder.fetchQuery ? (
 						<TreeView
