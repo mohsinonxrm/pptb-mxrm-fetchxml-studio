@@ -20,6 +20,7 @@ import { ResultsGrid, type QueryResult } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import type { FetchNode } from "../../model/nodes";
+import type { ParseResult } from "../../model/fetchxmlParser";
 
 const useStyles = makeStyles({
 	container: {
@@ -99,6 +100,7 @@ interface PreviewTabsProps {
 	isExecuting?: boolean;
 	onExecute?: () => void;
 	onExport?: () => void;
+	onParseToTree?: (xmlString: string) => ParseResult;
 	attributeMetadata?: Map<string, AttributeMetadata>;
 	fetchQuery?: FetchNode | null;
 }
@@ -109,6 +111,7 @@ export function PreviewTabs({
 	isExecuting,
 	onExecute,
 	onExport,
+	onParseToTree,
 	attributeMetadata,
 	fetchQuery,
 }: PreviewTabsProps) {
@@ -152,7 +155,7 @@ export function PreviewTabs({
 			<div className={styles.tabContent}>
 				{selectedTab === "xml" && (
 					<div className={styles.codeCard}>
-						<FetchXmlEditor xml={xml} />
+						<FetchXmlEditor xml={xml} onParseToTree={onParseToTree} />
 					</div>
 				)}
 				{selectedTab === "results" && (

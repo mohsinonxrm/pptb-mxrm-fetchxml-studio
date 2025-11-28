@@ -351,7 +351,6 @@ function AppContent() {
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
-						onLoadFetchXml={builder.loadFetchXml}
 					/>
 					{builder.fetchQuery ? (
 						<TreeView
@@ -417,6 +416,7 @@ function AppContent() {
 					isExecuting={isExecuting}
 					onExecute={handleExecute}
 					onExport={handleExport}
+					onParseToTree={builder.loadFetchXml}
 					attributeMetadata={attributeMetadata}
 					fetchQuery={builder.fetchQuery}
 				/>
