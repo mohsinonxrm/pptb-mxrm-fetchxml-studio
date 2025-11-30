@@ -38,6 +38,7 @@ import {
 	collectLinkEntityReferences,
 	isConditionInRootEntityFilter,
 } from "../../../../model/treeUtils";
+import { ValueOfPicker } from "./ValueOfPicker";
 
 const useStyles = makeStyles({
 	container: {
@@ -120,10 +121,7 @@ export function ConditionEditor({
 	const [selectedAttribute, setSelectedAttribute] = useState<AttributeMetadata | null>(null);
 
 	// Collect available link-entity references for entityname picker
-	const linkEntityReferences = useMemo(
-		() => collectLinkEntityReferences(fetchQuery),
-		[fetchQuery]
-	);
+	const linkEntityReferences = useMemo(() => collectLinkEntityReferences(fetchQuery), [fetchQuery]);
 
 	// Check if this condition is in the root entity's filter (where entityname is applicable)
 	const isInRootFilter = useMemo(
@@ -136,9 +134,7 @@ export function ConditionEditor({
 	const effectiveEntityName = useMemo(() => {
 		if (node.entityname && isInRootFilter) {
 			// Find the link-entity reference and get its entity name
-			const ref = linkEntityReferences.find(
-				(r) => r.identifier === node.entityname
-			);
+			const ref = linkEntityReferences.find((r) => r.identifier === node.entityname);
 			if (ref) {
 				return ref.entityName;
 			}
@@ -319,7 +315,10 @@ export function ConditionEditor({
 										onChange={(val) => onUpdate({ value: val })}
 										placeholder="Enter values (comma-separated)"
 									/>
-									<Tooltip content="Enter multiple values separated by commas." relationship="description">
+									<Tooltip
+										content="Enter multiple values separated by commas."
+										relationship="description"
+									>
 										<Info16Regular className={styles.tooltipIcon} />
 									</Tooltip>
 								</div>
@@ -339,7 +338,10 @@ export function ConditionEditor({
 										placeholder1="Start value"
 										placeholder2="End value"
 									/>
-									<Tooltip content="Enter start and end values for the range." relationship="description">
+									<Tooltip
+										content="Enter start and end values for the range."
+										relationship="description"
+									>
 										<Info16Regular className={styles.tooltipIcon} />
 									</Tooltip>
 								</div>
@@ -372,35 +374,16 @@ export function ConditionEditor({
 									</Tooltip>
 								</div>
 
-									{node.valueof !== undefined ? (
-									/* Compare to column mode - show attribute picker for valueof */
-									<Field label="Compare To Column">
-										<div className={styles.fieldWithTooltip}>
-											<AttributePicker
-												entityLogicalName={effectiveEntityName}
-												value={node.valueof || ""}
-												onChange={(logicalName) =>
-													onUpdate({ valueof: logicalName || undefined })
-												}
-												placeholder="Select column to compare"
-												filterByTypes={
-													compatibleTypesForValueof.length > 0
-														? compatibleTypesForValueof
-														: undefined
-												}
-											/>
-											<Tooltip
-												content={
-													compatibleTypesForValueof.length > 0
-														? `Select a column of compatible type (${compatibleTypesForValueof.join(", ")}) to compare against.`
-														: "Select another column from the same entity to compare against."
-												}
-												relationship="description"
-											>
-												<Info16Regular className={styles.tooltipIcon} />
-											</Tooltip>
-										</div>
-									</Field>
+								{node.valueof !== undefined ? (
+									/* Compare to column mode - show entity selector + attribute picker */
+									<ValueOfPicker
+										fetchQuery={fetchQuery}
+										rootEntityName={fetchQuery?.entity?.name || ""}
+										effectiveEntityName={effectiveEntityName}
+										valueof={node.valueof || ""}
+										compatibleTypes={compatibleTypesForValueof}
+										onChange={(valueof) => onUpdate({ valueof: valueof || undefined })}
+									/>
 								) : (
 									/* Literal value mode - show type-specific pickers */
 									<Field label="Value">

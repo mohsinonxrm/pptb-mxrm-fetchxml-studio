@@ -141,7 +141,7 @@ export function findParentEntityForNode(
 		}
 
 		// Check in nested link-entities
-		const currentName = entity.type === "link-entity" ? (entity.alias || entity.name) : entity.name;
+		const currentName = entity.type === "link-entity" ? entity.alias || entity.name : entity.name;
 		for (const link of entity.links) {
 			if (link.id === targetId) return parentName;
 			const result = findInEntity(link, targetId, currentName);
@@ -151,11 +151,7 @@ export function findParentEntityForNode(
 		return null;
 	}
 
-	function findInFilter(
-		filter: FilterNode,
-		targetId: NodeId,
-		parentName: string
-	): string | null {
+	function findInFilter(filter: FilterNode, targetId: NodeId, parentName: string): string | null {
 		if (filter.id === targetId) return parentName;
 
 		for (const condition of filter.conditions) {
