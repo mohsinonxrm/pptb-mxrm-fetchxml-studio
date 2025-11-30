@@ -18,8 +18,14 @@ import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
-import { executeFetchXml, whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
-import type { AttributeMetadata } from "../features/fetchxml/api/pptbClient";
+import {
+	executeFetchXml,
+	executeSystemView,
+	executePersonalView,
+	whoAmI,
+	isDataverseAvailable,
+} from "../features/fetchxml/api/pptbClient";
+import type { AttributeMetadata, LoadedViewInfo } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 
@@ -303,7 +309,40 @@ function AppContent() {
 		try {
 			// Measure execution time
 			const startTime = performance.now();
-			const result = await executeFetchXml(fetchXml);
+
+			// Determine execution method based on loaded view state
+			let result;
+			const loadedView = builder.loadedView;
+
+			if (loadedView) {
+				// We have a loaded view - check if it's still unmodified
+				// by comparing current generated fetchXml with the original
+				const isUnmodified =
+					fetchXml.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
+
+				if (isUnmodified) {
+					// Execute using optimized view query (savedQuery/userQuery)
+					console.log(
+						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
+							loadedView.type === "system" ? "savedQuery" : "userQuery"
+						}=${loadedView.id}`
+					);
+
+					if (loadedView.type === "system") {
+						result = await executeSystemView(loadedView.entitySetName, loadedView.id);
+					} else {
+						result = await executePersonalView(loadedView.entitySetName, loadedView.id);
+					}
+				} else {
+					// View was modified - fall back to fetchXml execution
+					console.log(`📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`);
+					result = await executeFetchXml(fetchXml);
+				}
+			} else {
+				// No loaded view - use standard fetchXml execution
+				result = await executeFetchXml(fetchXml);
+			}
+
 			const executionTimeMs = Math.round(performance.now() - startTime);
 
 			// Convert FetchXmlResult to QueryResult format for DataGrid
@@ -351,6 +390,15 @@ function AppContent() {
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
+						onViewLoad={(viewInfo: LoadedViewInfo) => {
+							// Load the view's FetchXML into the tree while preserving view info
+							builder.loadView(viewInfo.originalFetchXml, {
+								id: viewInfo.id,
+								type: viewInfo.type,
+								entitySetName: viewInfo.entitySetName,
+								name: viewInfo.name,
+							});
+						}}
 					/>
 					{builder.fetchQuery ? (
 						<TreeView

@@ -32,10 +32,29 @@ type SelectedNode =
 	| LinkEntityNode
 	| null;
 
+/**
+ * Information about a loaded view for execution optimization
+ * Used to determine if the view can be executed via savedQuery/userQuery
+ */
+interface LoadedViewState {
+	/** View ID (savedqueryid or userqueryid) */
+	id: string;
+	/** View type for determining execution method */
+	type: "system" | "personal";
+	/** Original FetchXML from the view - used for comparison */
+	originalFetchXml: string;
+	/** Entity set name for the execution URL */
+	entitySetName: string;
+	/** View name for display purposes */
+	name: string;
+}
+
 interface BuilderState {
 	fetchQuery: FetchNode | null;
 	selectedNodeId: NodeId | null;
 	selectedNode: SelectedNode;
+	/** Loaded view info - null if query was not loaded from a view or has been modified */
+	loadedView: LoadedViewState | null;
 }
 
 type BuilderAction =
@@ -51,12 +70,15 @@ type BuilderAction =
 	| { type: "REMOVE_NODE"; nodeId: NodeId }
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
 	| { type: "NEW_QUERY" }
-	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode };
+	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode }
+	| { type: "LOAD_VIEW"; fetchNode: FetchNode; viewInfo: LoadedViewState }
+	| { type: "CLEAR_LOADED_VIEW" };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
 	selectedNodeId: null,
 	selectedNode: null,
+	loadedView: null,
 };
 
 // Helper to find node by ID in the tree
@@ -205,12 +227,34 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return initialState;
 
 		case "LOAD_FETCHXML": {
-			// Load a pre-parsed FetchNode tree (from parser or view)
+			// Load a pre-parsed FetchNode tree (from parser or editor)
+			// This clears loadedView since it's a manual load, not from a saved view
 			const fetchNode = action.fetchNode;
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
+				loadedView: null, // Clear view info - this was manual edit
+			};
+		}
+
+		case "LOAD_VIEW": {
+			// Load a pre-parsed FetchNode tree from a saved view
+			// Preserves view info for execution optimization
+			const fetchNode = action.fetchNode;
+			return {
+				fetchQuery: fetchNode,
+				selectedNodeId: fetchNode.entity.id,
+				selectedNode: fetchNode.entity,
+				loadedView: action.viewInfo, // Track the loaded view
+			};
+		}
+
+		case "CLEAR_LOADED_VIEW": {
+			// Called when FetchXML is edited in the editor
+			return {
+				...state,
+				loadedView: null,
 			};
 		}
 
@@ -236,6 +280,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: entityNode.id,
 				selectedNode: entityNode,
+				loadedView: null, // Clear view info - entity changed
 			};
 		}
 
@@ -279,6 +324,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newAttribute.id,
 				selectedNode: newAttribute,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -312,6 +358,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newAllAttributes.id,
 				selectedNode: newAllAttributes,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -346,6 +393,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newOrder.id,
 				selectedNode: newOrder,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -381,6 +429,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newFilter.id,
 				selectedNode: newFilter,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -416,6 +465,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newSubfilter.id,
 				selectedNode: newSubfilter,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -450,6 +500,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newCondition.id,
 				selectedNode: newCondition,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -490,6 +541,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newLinkEntity.id,
 				selectedNode: newLinkEntity,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -509,6 +561,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newSelectedId,
 				selectedNode: newSelectedNode,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
@@ -552,12 +605,21 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				fetchQuery: updatedFetch,
 				selectedNode: newSelectedNode,
+				loadedView: null, // Clear view info - query modified
 			};
 		}
 
 		default:
 			return state;
 	}
+}
+
+/** View info for load operations */
+interface ViewLoadInfo {
+	id: string;
+	type: "system" | "personal";
+	entitySetName: string;
+	name: string;
 }
 
 interface BuilderContextValue extends BuilderState {
@@ -574,6 +636,10 @@ interface BuilderContextValue extends BuilderState {
 	updateNode: (nodeId: NodeId, updates: Record<string, unknown>) => void;
 	newQuery: () => void;
 	loadFetchXml: (xmlString: string) => ParseResult;
+	/** Load a view's FetchXML while preserving view info for execution optimization */
+	loadView: (xmlString: string, viewInfo: ViewLoadInfo) => ParseResult;
+	/** Clear the loaded view info (called when FetchXML is manually edited) */
+	clearLoadedView: () => void;
 }
 
 const BuilderContext = createContext<BuilderContextValue | null>(null);
@@ -603,6 +669,24 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			}
 			return result;
 		},
+		loadView: (xmlString: string, viewInfo: ViewLoadInfo): ParseResult => {
+			const result = parseFetchXml(xmlString);
+			if (result.success && result.fetchNode) {
+				dispatch({
+					type: "LOAD_VIEW",
+					fetchNode: result.fetchNode,
+					viewInfo: {
+						id: viewInfo.id,
+						type: viewInfo.type,
+						originalFetchXml: xmlString,
+						entitySetName: viewInfo.entitySetName,
+						name: viewInfo.name,
+					},
+				});
+			}
+			return result;
+		},
+		clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
 	};
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

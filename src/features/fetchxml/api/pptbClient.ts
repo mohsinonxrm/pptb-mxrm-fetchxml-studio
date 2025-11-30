@@ -590,6 +590,68 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 }
 
 /**
+ * Execute a System View (savedquery) by its ID
+ * Uses the optimized ?savedQuery={id} parameter instead of fetching and executing fetchXml
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/saved-queries#use-a-saved-query-in-fetchxml
+ */
+export async function executeSystemView(
+	entitySetName: string,
+	savedQueryId: string
+): Promise<FetchXmlResult> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("fetchXmlAPI", `📡 Executing System View: ${savedQueryId} on ${entitySetName}`);
+
+	// Use queryData with savedQuery parameter (OData query, not FetchXML)
+	// GET [Organization URI]/api/data/v9.2/{entitySetName}?savedQuery={savedQueryId}
+	const query = `${entitySetName}?savedQuery=${savedQueryId}`;
+	const result = await window.dataverseAPI!.queryData(query);
+
+	debugLog("fetchXmlAPI", `✅ System View executed: ${result.value.length} records retrieved`);
+
+	return {
+		records: result.value,
+		// savedQuery execution doesn't return paging metadata in the same way
+		totalRecordCount: undefined,
+		moreRecords: undefined,
+		pagingCookie: undefined,
+	};
+}
+
+/**
+ * Execute a Personal View (userquery) by its ID
+ * Uses the optimized ?userQuery={id} parameter instead of fetching and executing fetchXml
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/saved-queries#use-a-saved-query-in-fetchxml
+ */
+export async function executePersonalView(
+	entitySetName: string,
+	userQueryId: string
+): Promise<FetchXmlResult> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("fetchXmlAPI", `📡 Executing Personal View: ${userQueryId} on ${entitySetName}`);
+
+	// Use queryData with userQuery parameter (OData query, not FetchXML)
+	// GET [Organization URI]/api/data/v9.2/{entitySetName}?userQuery={userQueryId}
+	const query = `${entitySetName}?userQuery=${userQueryId}`;
+	const result = await window.dataverseAPI!.queryData(query);
+
+	debugLog("fetchXmlAPI", `✅ Personal View executed: ${result.value.length} records retrieved`);
+
+	return {
+		records: result.value,
+		// userQuery execution doesn't return paging metadata in the same way
+		totalRecordCount: undefined,
+		moreRecords: undefined,
+		pagingCookie: undefined,
+	};
+}
+
+/**
  * Call WhoAmI to get current user context
  */
 export async function whoAmI(): Promise<WhoAmIResponse | null> {
@@ -1035,4 +1097,266 @@ export async function getAdvancedFindEntitiesByNames(
 		console.error("getAdvancedFindEntitiesByNames: API call failed:", error);
 		throw error;
 	}
+}
+
+// =============================================================================
+// Saved View / User Query APIs
+// =============================================================================
+
+/**
+ * Represents a saved view (System View or Personal View)
+ */
+export interface SavedView {
+	id: string;
+	name: string;
+	fetchxml: string;
+	layoutxml?: string;
+	type: "system" | "personal";
+	description?: string;
+	isDefault?: boolean;
+}
+
+/**
+ * Information about a loaded view for execution optimization
+ * Used to determine if the view can be executed via savedQuery/userQuery
+ * or if it needs to fall back to fetchXmlQuery execution
+ */
+export interface LoadedViewInfo {
+	/** View ID (savedqueryid or userqueryid) */
+	id: string;
+	/** View type for determining execution method */
+	type: "system" | "personal";
+	/** Original FetchXML from the view - used for comparison */
+	originalFetchXml: string;
+	/** Entity set name for the execution URL */
+	entitySetName: string;
+	/** View name for display purposes */
+	name: string;
+}
+
+/**
+ * Parsed layout column from LayoutXML
+ */
+export interface LayoutColumn {
+	name: string;
+	width: number;
+	disableSorting?: boolean;
+	/** For link-entity columns, the alias prefix (e.g., "accountprimarycontactidcontactcontactid") */
+	linkEntityAlias?: string;
+	/** The actual attribute name without alias prefix */
+	attributeName: string;
+}
+
+/**
+ * Parsed LayoutXML structure
+ */
+export interface ParsedLayoutXml {
+	gridName: string;
+	objectTypeCode: number;
+	jumpAttribute?: string;
+	primaryIdAttribute: string;
+	columns: LayoutColumn[];
+}
+
+/**
+ * Parse LayoutXML into a structured format for DataGrid column configuration
+ * @param layoutXml The raw LayoutXML string from savedquery/userquery
+ * @returns Parsed layout structure or null if parsing fails
+ */
+export function parseLayoutXml(layoutXml: string): ParsedLayoutXml | null {
+	if (!layoutXml) return null;
+
+	try {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(layoutXml, "text/xml");
+
+		const gridElement = doc.querySelector("grid");
+		if (!gridElement) return null;
+
+		const rowElement = doc.querySelector("row");
+		if (!rowElement) return null;
+
+		const columns: LayoutColumn[] = [];
+		const cellElements = doc.querySelectorAll("row > cell");
+
+		cellElements.forEach((cell) => {
+			const name = cell.getAttribute("name") || "";
+			const width = parseInt(cell.getAttribute("width") || "100", 10);
+			const disableSorting = cell.getAttribute("disableSorting") === "1";
+
+			// Check if this is a link-entity column (contains a dot)
+			let linkEntityAlias: string | undefined;
+			let attributeName = name;
+
+			if (name.includes(".")) {
+				const parts = name.split(".");
+				linkEntityAlias = parts[0];
+				attributeName = parts[1];
+			}
+
+			columns.push({
+				name,
+				width,
+				disableSorting: disableSorting || undefined,
+				linkEntityAlias,
+				attributeName,
+			});
+		});
+
+		return {
+			gridName: gridElement.getAttribute("name") || "resultset",
+			objectTypeCode: parseInt(gridElement.getAttribute("object") || "0", 10),
+			jumpAttribute: gridElement.getAttribute("jump") || undefined,
+			primaryIdAttribute: rowElement.getAttribute("id") || "",
+			columns,
+		};
+	} catch (error) {
+		console.error("parseLayoutXml: Failed to parse LayoutXML:", error);
+		return null;
+	}
+}
+
+/**
+ * Generate LayoutXML from column configuration
+ * Used when saving a customized view
+ * @param columns The column configuration
+ * @param objectTypeCode The entity's object type code
+ * @param primaryIdAttribute The entity's primary ID attribute (e.g., "accountid")
+ * @param jumpAttribute Optional attribute for the "jump" field
+ */
+export function generateLayoutXml(
+	columns: LayoutColumn[],
+	objectTypeCode: number,
+	primaryIdAttribute: string,
+	jumpAttribute?: string
+): string {
+	const cellsXml = columns
+		.map((col) => {
+			let cellAttrs = `name="${col.name}" width="${col.width}"`;
+			if (col.disableSorting) {
+				cellAttrs += ` disableSorting="1"`;
+			}
+			return `<cell ${cellAttrs} />`;
+		})
+		.join("");
+
+	const jumpAttr = jumpAttribute ? ` jump="${jumpAttribute}"` : "";
+
+	return (
+		`<grid name="resultset" object="${objectTypeCode}"${jumpAttr} select="1" icon="1" preview="1">` +
+		`<row name="result" id="${primaryIdAttribute}">${cellsXml}</row></grid>`
+	);
+}
+
+/**
+ * Get System Views (savedquery) for an entity
+ * Only returns public views (querytype = 0) that are active and not hidden
+ * @param entityLogicalName The logical name of the entity (e.g., "account")
+ */
+export async function getSystemViews(entityLogicalName: string): Promise<SavedView[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 GET System Views for '${entityLogicalName}'`);
+
+	try {
+		// Query savedquery entity using queryData for full OData support
+		// returnedtypecode: Entity logical name as string
+		// querytype = 0: Public views (not lookup views, quickfind, etc.)
+		// componentstate = 0: Published (not unpublished/deleted)
+		// statecode = 0: Active views only
+		const query =
+			`savedqueries?$select=savedqueryid,name,fetchxml,layoutxml,isdefault` +
+			`&$filter=(returnedtypecode eq '${entityLogicalName}' and querytype eq 0 and componentstate eq 0 and statecode eq 0)` +
+			`&$orderby=isdefault desc,name asc`;
+
+		debugLog("viewAPI", `Query: ${query}`);
+
+		const result = await window.dataverseAPI!.queryData(query);
+
+		const views: SavedView[] = (result.value || []).map((record) => ({
+			id: record.savedqueryid as string,
+			name: record.name as string,
+			fetchxml: record.fetchxml as string,
+			layoutxml: record.layoutxml as string | undefined,
+			type: "system" as const,
+			isDefault: record.isdefault as boolean | undefined,
+		}));
+
+		debugLog(
+			"viewAPI",
+			`✅ System Views retrieved for '${entityLogicalName}': ${views.length} views`
+		);
+
+		return views;
+	} catch (error) {
+		console.error(`getSystemViews: Failed to get system views for '${entityLogicalName}':`, error);
+		throw error;
+	}
+}
+
+/**
+ * Get Personal Views (userquery) for an entity
+ * Returns views owned by the current user or their teams
+ * @param entityLogicalName The logical name of the entity (e.g., "account")
+ */
+export async function getPersonalViews(entityLogicalName: string): Promise<SavedView[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 GET Personal Views for '${entityLogicalName}'`);
+
+	try {
+		// Query userquery entity using queryData for full OData support
+		// returnedtypecode: Entity logical name as string
+		// statecode = 0: Active views only
+		// querytype = 0: Saved views (not quick find)
+		// EqualUserOrUserTeams: Views owned by current user or their teams
+		const query =
+			`userqueries?$select=userqueryid,name,fetchxml,layoutxml` +
+			`&$filter=(statecode eq 0 and querytype eq 0 and returnedtypecode eq '${entityLogicalName}' and Microsoft.Dynamics.CRM.EqualUserOrUserTeams(PropertyName='ownerid'))` +
+			`&$orderby=name asc`;
+
+		debugLog("viewAPI", `Query: ${query}`);
+
+		const result = await window.dataverseAPI!.queryData(query);
+
+		const views: SavedView[] = (result.value || []).map((record) => ({
+			id: record.userqueryid as string,
+			name: record.name as string,
+			fetchxml: record.fetchxml as string,
+			layoutxml: record.layoutxml as string | undefined,
+			type: "personal" as const,
+		}));
+
+		debugLog(
+			"viewAPI",
+			`✅ Personal Views retrieved for '${entityLogicalName}': ${views.length} views`
+		);
+
+		return views;
+	} catch (error) {
+		console.error(
+			`getPersonalViews: Failed to get personal views for '${entityLogicalName}':`,
+			error
+		);
+		throw error;
+	}
+}
+
+/**
+ * Get all views (System + Personal) for an entity
+ * @param entityLogicalName The logical name of the entity
+ */
+export async function getAllViews(
+	entityLogicalName: string
+): Promise<{ systemViews: SavedView[]; personalViews: SavedView[] }> {
+	const [systemViews, personalViews] = await Promise.all([
+		getSystemViews(entityLogicalName),
+		getPersonalViews(entityLogicalName),
+	]);
+
+	return { systemViews, personalViews };
 }

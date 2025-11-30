@@ -3,7 +3,7 @@
  * Adapts UI based on user privileges (Full Filter / Solutions-Only / Publishers-Only / Metadata-Only / No Access modes)
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
 	Combobox,
 	Option,
@@ -28,7 +28,8 @@ import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import { usePublisherFilter } from "../../../../shared/hooks/usePublisherFilter";
 import { useSolutionFilter } from "../../../../shared/hooks/useSolutionFilter";
 import { useLazyMetadata } from "../../../../shared/hooks/useLazyMetadata";
-import type { EntityMetadata } from "../../api/pptbClient";
+import { LoadViewPicker } from "./LoadViewPicker";
+import type { EntityMetadata, LoadedViewInfo } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	container: {
@@ -83,18 +84,26 @@ const useStyles = makeStyles({
 		fontSize: "14px",
 		textAlign: "center",
 	},
+	viewPickerRow: {
+		display: "flex",
+		gap: "12px",
+		alignItems: "flex-end",
+	},
 });
 
 interface EntitySelectorProps {
 	selectedEntity: string | null;
 	onEntityChange: (entityLogicalName: string) => void;
 	onNewQuery: () => void;
+	/** Callback when a saved view should be loaded - provides full view info for execution optimization */
+	onViewLoad?: (viewInfo: LoadedViewInfo) => void;
 }
 
 export function EntitySelector({
 	selectedEntity,
 	onEntityChange,
 	onNewQuery,
+	onViewLoad,
 }: EntitySelectorProps) {
 	const styles = useStyles();
 	const publisherComboId = useId("publisher-combobox");
@@ -165,6 +174,22 @@ export function EntitySelector({
 		publisherFilter.selectedSolutionIds,
 		solutionFilter.selectedSolutionIds,
 	]);
+
+	// Get full entity metadata for the selected entity (needed for LoadViewPicker)
+	const selectedEntityMetadata = useMemo(() => {
+		if (!selectedEntity) return null;
+		return availableEntities.find((e) => e.LogicalName === selectedEntity) || null;
+	}, [selectedEntity, availableEntities]);
+
+	// Handle view selection from LoadViewPicker
+	const handleViewSelect = useCallback(
+		(viewInfo: LoadedViewInfo) => {
+			if (onViewLoad) {
+				onViewLoad(viewInfo);
+			}
+		},
+		[onViewLoad]
+	);
 
 	// Publisher multiselect with filtering
 	const [publisherQuery, setPublisherQuery] = useState("");
@@ -687,6 +712,16 @@ export function EntitySelector({
 					New
 				</Button>
 			</div>
+
+			{/* Load View Picker - only show when entity is selected */}
+			{selectedEntityMetadata && onViewLoad && (
+				<div className={styles.viewPickerRow}>
+					<LoadViewPicker
+						selectedEntityMetadata={selectedEntityMetadata}
+						onViewSelect={handleViewSelect}
+					/>
+				</div>
+			)}
 
 			{/* Confirmation Dialog for Publisher/Solution Change */}
 			<Dialog

@@ -14,6 +14,7 @@ const DEBUG_FLAGS = {
 	publisherAPI: true, // Publisher API calls
 	solutionAPI: true, // Solution API calls
 	solutionComponentAPI: true, // Solution component API calls
+	viewAPI: true, // View (savedquery/userquery) API calls
 } as const;
 
 type DebugCategory = keyof typeof DEBUG_FLAGS;
