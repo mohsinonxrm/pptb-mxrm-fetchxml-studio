@@ -458,6 +458,7 @@ function parseFilter(filterElement: Element, warnings: ParseWarning[]): FilterNo
 		conjunction: type === "or" ? "or" : "and",
 		conditions: [],
 		subfilters: [],
+		links: [],
 	};
 
 	const hint = filterElement.getAttribute("hint");
@@ -477,13 +478,8 @@ function parseFilter(filterElement: Element, warnings: ParseWarning[]): FilterNo
 				filter.subfilters.push(parseFilter(child, warnings));
 				break;
 			case "link-entity":
-				// Future: Support link-entity inside filter for any/not any/all/not all
-				// For now, add warning
-				warnings.push({
-					message:
-						"Link-entity inside filter (for any/not any/all/not all) is not yet supported in the builder",
-					element: "link-entity",
-				});
+				// Parse link-entity inside filter (for any/not any/all/not all)
+				filter.links.push(parseLinkEntity(child, warnings));
 				break;
 			default:
 				warnings.push({

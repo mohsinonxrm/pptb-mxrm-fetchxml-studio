@@ -178,6 +178,11 @@ function generateFilter(filter: FilterNode, indent: number): string[] {
 		lines.push(...generateFilter(subfilter, indent + 1));
 	});
 
+	// Link-entities inside filter (for any/not any/all/not all)
+	filter.links?.forEach((link) => {
+		lines.push(...generateLinkEntity(link, indent + 1));
+	});
+
 	lines.push(`${spaces}</filter>`);
 
 	return lines;

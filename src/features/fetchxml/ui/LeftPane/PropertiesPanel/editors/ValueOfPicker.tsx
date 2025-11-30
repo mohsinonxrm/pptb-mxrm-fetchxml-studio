@@ -5,14 +5,7 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import {
-	Field,
-	Dropdown,
-	Option,
-	Tooltip,
-	makeStyles,
-	tokens,
-} from "@fluentui/react-components";
+import { Field, Dropdown, Option, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
 import { Info16Regular } from "@fluentui/react-icons";
 import type { FetchNode } from "../../../../model/nodes";
 import { collectLinkEntityReferences } from "../../../../model/treeUtils";
@@ -83,10 +76,7 @@ export function ValueOfPicker({
 	const styles = useStyles();
 
 	// Collect all available entities (root + link-entities)
-	const linkEntityReferences = useMemo(
-		() => collectLinkEntityReferences(fetchQuery),
-		[fetchQuery]
-	);
+	const linkEntityReferences = useMemo(() => collectLinkEntityReferences(fetchQuery), [fetchQuery]);
 
 	// Build entity options: root entity + all link-entities
 	const entityOptions = useMemo(() => {
@@ -152,8 +142,7 @@ export function ValueOfPicker({
 				<div className={styles.fieldWithTooltip}>
 					<Dropdown
 						value={
-							entityOptions.find((o) => o.value === selectedAlias)?.label ||
-							"Select entity..."
+							entityOptions.find((o) => o.value === selectedAlias)?.label || "Select entity..."
 						}
 						selectedOptions={[selectedAlias]}
 						onOptionSelect={handleEntityChange}
@@ -181,18 +170,16 @@ export function ValueOfPicker({
 						entityLogicalName={selectedEntityName}
 						value={parsed.attribute}
 						onChange={handleAttributeChange}
-						placeholder={
-							selectedEntityName
-								? "Select column to compare"
-								: "Select an entity first"
-						}
+						placeholder={selectedEntityName ? "Select column to compare" : "Select an entity first"}
 						disabled={!selectedEntityName}
 						filterByTypes={compatibleTypes.length > 0 ? compatibleTypes : undefined}
 					/>
 					<Tooltip
 						content={
 							compatibleTypes.length > 0
-								? `Select a column of compatible type (${compatibleTypes.join(", ")}) to compare against.`
+								? `Select a column of compatible type (${compatibleTypes.join(
+										", "
+								  )}) to compare against.`
 								: "Select another column to compare against."
 						}
 						relationship="description"

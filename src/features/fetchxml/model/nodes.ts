@@ -97,6 +97,7 @@ export interface FilterNode {
 	hint?: "union"; // optimization hint for multi-table filters
 	conditions: ConditionNode[];
 	subfilters: FilterNode[]; // nested filters
+	links: LinkEntityNode[]; // link-entities inside filter (for any/not any/all/not all)
 }
 
 /**

@@ -439,6 +439,9 @@ export function TreeView({
 									<MenuList>
 										<MenuItem onClick={() => onAddCondition(filter.id)}>Condition</MenuItem>
 										<MenuItem onClick={() => onAddSubfilter(filter.id)}>Sub-Filter</MenuItem>
+										<MenuItem onClick={() => onAddLinkEntity(filter.id)}>
+											Link-Entity (any/not any/all)
+										</MenuItem>
 									</MenuList>
 								</MenuPopover>
 							</Menu>
@@ -462,6 +465,7 @@ export function TreeView({
 				<Tree>
 					{filter.conditions.map((cond) => renderConditionNode(cond))}
 					{filter.subfilters.map((subfilter) => renderFilterNode(subfilter))}
+					{filter.links?.map((link) => renderLinkEntityNode(link))}
 				</Tree>
 			</TreeItem>
 		);

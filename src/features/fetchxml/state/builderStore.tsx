@@ -413,6 +413,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				conjunction: "and",
 				conditions: [],
 				subfilters: [],
+				links: [],
 			};
 
 			// Update the tree immutably
@@ -449,6 +450,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				conjunction: "and",
 				conditions: [],
 				subfilters: [],
+				links: [],
 			};
 
 			// Update the tree immutably
@@ -507,20 +509,24 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 		case "ADD_LINK_ENTITY": {
 			if (!state.fetchQuery) return state;
 
-			// Find parent node (entity or link-entity)
+			// Find parent node (entity, link-entity, or filter)
 			const parent = findNodeById(state.fetchQuery, action.parentId);
-			if (!parent || (parent.type !== "entity" && parent.type !== "link-entity")) {
+			if (
+				!parent ||
+				(parent.type !== "entity" && parent.type !== "link-entity" && parent.type !== "filter")
+			) {
 				return state;
 			}
 
 			// Create new link-entity node
+			// For filter parents, use "any" link type by default (common use case)
 			const newLinkEntity: LinkEntityNode = {
 				id: generateId(),
 				type: "link-entity",
 				name: "new_entity",
 				from: "id_field",
 				to: "parent_id_field",
-				linkType: "inner",
+				linkType: parent.type === "filter" ? "any" : "inner",
 				attributes: [],
 				orders: [],
 				filters: [],
@@ -529,11 +535,20 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 
 			// Update the tree immutably
 			const updatedFetch = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
-				const n = node as EntityNode | LinkEntityNode;
-				return {
-					...n,
-					links: [...n.links, newLinkEntity],
-				};
+				const typedNode = node as EntityNode | LinkEntityNode | FilterNode;
+				if (typedNode.type === "filter") {
+					const n = typedNode as FilterNode;
+					return {
+						...n,
+						links: [...(n.links || []), newLinkEntity],
+					};
+				} else {
+					const n = typedNode as EntityNode | LinkEntityNode;
+					return {
+						...n,
+						links: [...n.links, newLinkEntity],
+					};
+				}
 			});
 
 			return {
