@@ -14,6 +14,8 @@ interface AttributePickerProps {
 	onChange: (logicalName: string) => void;
 	placeholder?: string;
 	disabled?: boolean;
+	/** Filter to only show attributes of these types */
+	filterByTypes?: string[];
 }
 
 export function AttributePicker({
@@ -22,6 +24,7 @@ export function AttributePicker({
 	onChange,
 	placeholder = "Select or type attribute name",
 	disabled = false,
+	filterByTypes,
 }: AttributePickerProps) {
 	const comboId = useId("attribute-combobox");
 	const [attributes, setAttributes] = useState<AttributeMetadata[]>([]);
@@ -41,7 +44,14 @@ export function AttributePicker({
 
 		loadEntityAttributes(entityLogicalName)
 			.then((attrs: AttributeMetadata[]) => {
-				setAttributes(attrs);
+				// Apply type filtering if specified
+				let filteredAttrs = attrs;
+				if (filterByTypes && filterByTypes.length > 0) {
+					filteredAttrs = attrs.filter((a) =>
+						filterByTypes.includes(a.AttributeType || "")
+					);
+				}
+				setAttributes(filteredAttrs);
 				setLoading(false);
 			})
 			.catch((err: unknown) => {
@@ -49,7 +59,7 @@ export function AttributePicker({
 				setError("Failed to load attributes");
 				setLoading(false);
 			});
-	}, [entityLogicalName]);
+	}, [entityLogicalName, filterByTypes]);
 
 	// Sync query with value when value changes or attributes load
 	useEffect(() => {

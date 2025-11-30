@@ -11,6 +11,7 @@ import {
 	Option,
 	Label,
 	Tooltip,
+	Switch,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
@@ -59,6 +60,12 @@ const useStyles = makeStyles({
 		color: tokens.colorNeutralForeground3,
 		cursor: "help",
 	},
+	compareToggle: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+		marginBottom: tokens.spacingVerticalXS,
+	},
 });
 
 interface ConditionEditorProps {
@@ -67,6 +74,35 @@ interface ConditionEditorProps {
 	onUpdate: (updates: Record<string, unknown>) => void;
 	isAggregateQuery?: boolean;
 	fetchQuery?: FetchNode | null;
+}
+
+/**
+ * Returns attribute types that are compatible for valueof comparisons.
+ * Generally, you can compare types that have the same underlying storage or are logically comparable.
+ */
+function getCompatibleTypesForValueof(attributeType: string | undefined): string[] {
+	if (!attributeType) return [];
+
+	// Define type compatibility groups
+	const numericTypes = ["Integer", "BigInt", "Decimal", "Double", "Money"];
+	const dateTimeTypes = ["DateTime"];
+	const stringTypes = ["String", "Memo"];
+	const lookupTypes = ["Lookup", "Customer", "Owner"];
+	const optionSetTypes = ["Picklist", "State", "Status"];
+	const booleanTypes = ["Boolean"];
+	const uniqueIdTypes = ["Uniqueidentifier"];
+
+	// Return compatible types based on the source attribute type
+	if (numericTypes.includes(attributeType)) return numericTypes;
+	if (dateTimeTypes.includes(attributeType)) return dateTimeTypes;
+	if (stringTypes.includes(attributeType)) return stringTypes;
+	if (lookupTypes.includes(attributeType)) return lookupTypes;
+	if (optionSetTypes.includes(attributeType)) return optionSetTypes;
+	if (booleanTypes.includes(attributeType)) return booleanTypes;
+	if (uniqueIdTypes.includes(attributeType)) return uniqueIdTypes;
+
+	// For unknown types, return empty (show all)
+	return [];
 }
 
 export function ConditionEditor({
@@ -109,6 +145,12 @@ export function ConditionEditor({
 		}
 		return entityName;
 	}, [node.entityname, isInRootFilter, linkEntityReferences, entityName]);
+
+	// Get compatible attribute types for valueof comparison
+	const compatibleTypesForValueof = useMemo(
+		() => getCompatibleTypesForValueof(selectedAttribute?.AttributeType),
+		[selectedAttribute?.AttributeType]
+	);
 
 	// Load attribute metadata when attribute changes to get its type
 	useEffect(() => {
@@ -264,113 +306,190 @@ export function ConditionEditor({
 					</div>
 				</Field>
 				{requiresValue && (
-					<Field label="Value">
-						<div className={styles.fieldWithTooltip}>
-							{/* Multi-value operators (in, not-in, contain-values) */}
-							{requiresMultipleValues && selectedAttribute ? (
-								<MultiValuePicker
-									entityLogicalName={effectiveEntityName}
-									attributeLogicalName={node.attribute}
-									attribute={selectedAttribute}
-									value={Array.isArray(node.value) ? node.value : undefined}
-									onChange={(val) => onUpdate({ value: val })}
-									placeholder="Enter values (comma-separated)"
-								/>
-							) : /* Dual-value operators (between, not-between, fiscal-period-and-year) */
-							requiresTwoValues && selectedAttribute ? (
-								<BetweenInputPicker
-									attribute={selectedAttribute}
-									value={
-										Array.isArray(node.value) && node.value.length === 2
-											? [node.value[0], node.value[1]]
-											: [undefined, undefined]
-									}
-									onChange={(val) => onUpdate({ value: val })}
-									placeholder1="Start value"
-									placeholder2="End value"
-								/>
-							) : /* Single-value operators - type-specific pickers */
-							selectedAttribute?.AttributeType === "Picklist" ||
-							  selectedAttribute?.AttributeType === "State" ||
-							  selectedAttribute?.AttributeType === "Status" ? (
-								<OptionSetValuePicker
-									entityLogicalName={effectiveEntityName}
-									attributeLogicalName={node.attribute}
-									value={typeof node.value === "number" ? node.value : undefined}
-									onChange={(val) => onUpdate({ value: val })}
-									placeholder="Select a value"
-								/>
-							) : selectedAttribute?.AttributeType === "Boolean" ? (
-								<BooleanValuePicker
-									entityLogicalName={effectiveEntityName}
-									attributeLogicalName={node.attribute}
-									value={
-										typeof node.value === "boolean"
-											? node.value
-											: typeof node.value === "string"
-											? node.value === "true" || node.value === "1"
-											: undefined
-									}
-									onChange={(val) => onUpdate({ value: val })}
-									placeholder="Select true or false"
-								/>
-							) : selectedAttribute?.AttributeType === "Integer" ||
-							  selectedAttribute?.AttributeType === "BigInt" ||
-							  selectedAttribute?.AttributeType === "Decimal" ||
-							  selectedAttribute?.AttributeType === "Double" ? (
-								<NumericInputPicker
-									attribute={selectedAttribute}
-									value={typeof node.value === "number" ? node.value : undefined}
-									onChange={(val) => onUpdate({ value: val })}
-									placeholder="Enter a number"
-								/>
-							) : selectedAttribute?.AttributeType === "DateTime" ? (
-								<DateTimeInputPicker
-									attribute={selectedAttribute}
-									value={
-										typeof node.value === "string"
-											? node.value
-											: node.value instanceof Date
-											? node.value
-											: undefined
-									}
-									onChange={(val) => onUpdate({ value: val?.toISOString() })}
-									placeholder="Select a date"
-								/>
-							) : (
-								<Input
-									value={
-										typeof node.value === "string" || typeof node.value === "number"
-											? String(node.value)
-											: ""
-									}
-									onChange={handleTextChange("value")}
-									placeholder="Filter value"
-								/>
-							)}
-							<Tooltip
-								content={
-									selectedAttribute?.AttributeType === "Picklist" ||
-									selectedAttribute?.AttributeType === "State" ||
-									selectedAttribute?.AttributeType === "Status"
-										? "Select a value from the available options."
-										: selectedAttribute?.AttributeType === "Boolean"
-										? "Select true or false."
-										: selectedAttribute?.AttributeType === "Integer" ||
-										  selectedAttribute?.AttributeType === "BigInt" ||
-										  selectedAttribute?.AttributeType === "Decimal" ||
-										  selectedAttribute?.AttributeType === "Double"
-										? "Enter a numeric value. Min/max constraints from metadata apply."
-										: selectedAttribute?.AttributeType === "DateTime"
-										? "Select a date and optionally a time."
-										: "Value to compare against. For 'in' operator, use comma-separated values. For 'between', use two values separated by 'and'."
-								}
-								relationship="description"
-							>
-								<Info16Regular className={styles.tooltipIcon} />
-							</Tooltip>
-						</div>
-					</Field>
+					<>
+						{/* Multi-value operators don't support valueof */}
+						{requiresMultipleValues && selectedAttribute ? (
+							<Field label="Values">
+								<div className={styles.fieldWithTooltip}>
+									<MultiValuePicker
+										entityLogicalName={effectiveEntityName}
+										attributeLogicalName={node.attribute}
+										attribute={selectedAttribute}
+										value={Array.isArray(node.value) ? node.value : undefined}
+										onChange={(val) => onUpdate({ value: val })}
+										placeholder="Enter values (comma-separated)"
+									/>
+									<Tooltip content="Enter multiple values separated by commas." relationship="description">
+										<Info16Regular className={styles.tooltipIcon} />
+									</Tooltip>
+								</div>
+							</Field>
+						) : /* Dual-value operators don't support valueof */
+						requiresTwoValues && selectedAttribute ? (
+							<Field label="Value Range">
+								<div className={styles.fieldWithTooltip}>
+									<BetweenInputPicker
+										attribute={selectedAttribute}
+										value={
+											Array.isArray(node.value) && node.value.length === 2
+												? [node.value[0], node.value[1]]
+												: [undefined, undefined]
+										}
+										onChange={(val) => onUpdate({ value: val })}
+										placeholder1="Start value"
+										placeholder2="End value"
+									/>
+									<Tooltip content="Enter start and end values for the range." relationship="description">
+										<Info16Regular className={styles.tooltipIcon} />
+									</Tooltip>
+								</div>
+							</Field>
+						) : (
+							/* Single-value operators support valueof comparison */
+							<>
+								{/* Toggle between literal value and compare to column */}
+								<div className={styles.compareToggle}>
+									<Switch
+										checked={node.valueof !== undefined}
+										onChange={(_ev, data) => {
+											if (data.checked) {
+												// Switching to compare mode - clear value, set valueof to empty
+												onUpdate({ value: undefined, valueof: "" });
+											} else {
+												// Switching to literal mode - clear valueof
+												onUpdate({ valueof: undefined, value: undefined });
+											}
+										}}
+									/>
+									<Label size="small">
+										{node.valueof !== undefined ? "Compare to column" : "Literal value"}
+									</Label>
+									<Tooltip
+										content="Toggle between comparing to a literal value or another column's value (same row)."
+										relationship="description"
+									>
+										<Info16Regular className={styles.tooltipIcon} />
+									</Tooltip>
+								</div>
+
+									{node.valueof !== undefined ? (
+									/* Compare to column mode - show attribute picker for valueof */
+									<Field label="Compare To Column">
+										<div className={styles.fieldWithTooltip}>
+											<AttributePicker
+												entityLogicalName={effectiveEntityName}
+												value={node.valueof || ""}
+												onChange={(logicalName) =>
+													onUpdate({ valueof: logicalName || undefined })
+												}
+												placeholder="Select column to compare"
+												filterByTypes={
+													compatibleTypesForValueof.length > 0
+														? compatibleTypesForValueof
+														: undefined
+												}
+											/>
+											<Tooltip
+												content={
+													compatibleTypesForValueof.length > 0
+														? `Select a column of compatible type (${compatibleTypesForValueof.join(", ")}) to compare against.`
+														: "Select another column from the same entity to compare against."
+												}
+												relationship="description"
+											>
+												<Info16Regular className={styles.tooltipIcon} />
+											</Tooltip>
+										</div>
+									</Field>
+								) : (
+									/* Literal value mode - show type-specific pickers */
+									<Field label="Value">
+										<div className={styles.fieldWithTooltip}>
+											{selectedAttribute?.AttributeType === "Picklist" ||
+											selectedAttribute?.AttributeType === "State" ||
+											selectedAttribute?.AttributeType === "Status" ? (
+												<OptionSetValuePicker
+													entityLogicalName={effectiveEntityName}
+													attributeLogicalName={node.attribute}
+													value={typeof node.value === "number" ? node.value : undefined}
+													onChange={(val) => onUpdate({ value: val })}
+													placeholder="Select a value"
+												/>
+											) : selectedAttribute?.AttributeType === "Boolean" ? (
+												<BooleanValuePicker
+													entityLogicalName={effectiveEntityName}
+													attributeLogicalName={node.attribute}
+													value={
+														typeof node.value === "boolean"
+															? node.value
+															: typeof node.value === "string"
+															? node.value === "true" || node.value === "1"
+															: undefined
+													}
+													onChange={(val) => onUpdate({ value: val })}
+													placeholder="Select true or false"
+												/>
+											) : selectedAttribute?.AttributeType === "Integer" ||
+											  selectedAttribute?.AttributeType === "BigInt" ||
+											  selectedAttribute?.AttributeType === "Decimal" ||
+											  selectedAttribute?.AttributeType === "Double" ? (
+												<NumericInputPicker
+													attribute={selectedAttribute}
+													value={typeof node.value === "number" ? node.value : undefined}
+													onChange={(val) => onUpdate({ value: val })}
+													placeholder="Enter a number"
+												/>
+											) : selectedAttribute?.AttributeType === "DateTime" ? (
+												<DateTimeInputPicker
+													attribute={selectedAttribute}
+													value={
+														typeof node.value === "string"
+															? node.value
+															: node.value instanceof Date
+															? node.value
+															: undefined
+													}
+													onChange={(val) => onUpdate({ value: val?.toISOString() })}
+													placeholder="Select a date"
+												/>
+											) : (
+												<Input
+													value={
+														typeof node.value === "string" || typeof node.value === "number"
+															? String(node.value)
+															: ""
+													}
+													onChange={handleTextChange("value")}
+													placeholder="Filter value"
+												/>
+											)}
+											<Tooltip
+												content={
+													selectedAttribute?.AttributeType === "Picklist" ||
+													selectedAttribute?.AttributeType === "State" ||
+													selectedAttribute?.AttributeType === "Status"
+														? "Select a value from the available options."
+														: selectedAttribute?.AttributeType === "Boolean"
+														? "Select true or false."
+														: selectedAttribute?.AttributeType === "Integer" ||
+														  selectedAttribute?.AttributeType === "BigInt" ||
+														  selectedAttribute?.AttributeType === "Decimal" ||
+														  selectedAttribute?.AttributeType === "Double"
+														? "Enter a numeric value."
+														: selectedAttribute?.AttributeType === "DateTime"
+														? "Select a date and optionally a time."
+														: "Value to compare against."
+												}
+												relationship="description"
+											>
+												<Info16Regular className={styles.tooltipIcon} />
+											</Tooltip>
+										</div>
+									</Field>
+								)}
+							</>
+						)}
+					</>
 				)}
 			</div>
 
@@ -437,25 +556,6 @@ export function ConditionEditor({
 						</div>
 					</Field>
 				)}
-
-				<Field
-					label="Value Of (optional)"
-					hint="Compare to another attribute instead of a literal value."
-				>
-					<div className={styles.fieldWithTooltip}>
-						<Input
-							value={node.valueof ?? ""}
-							onChange={handleTextChange("valueof")}
-							placeholder="e.g., modifiedon"
-						/>
-						<Tooltip
-							content="Compare this attribute to another attribute's value (cross-column comparison)."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
 			</div>
 		</div>
 	);
