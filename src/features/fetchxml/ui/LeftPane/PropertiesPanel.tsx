@@ -200,6 +200,7 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 						entityName={findParentEntity(selectedNode.id) ?? ""}
 						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
 						isAggregateQuery={fetchQuery?.options.aggregate ?? false}
+						fetchQuery={fetchQuery}
 					/>
 				);
 

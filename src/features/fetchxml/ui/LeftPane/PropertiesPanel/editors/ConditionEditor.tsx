@@ -3,7 +3,7 @@
  * Controls filter criteria: attribute, operator, value
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
 	Field,
 	Input,
@@ -15,7 +15,7 @@ import {
 	tokens,
 } from "@fluentui/react-components";
 import { Info16Regular } from "@fluentui/react-icons";
-import type { ConditionNode } from "../../../../model/nodes";
+import type { ConditionNode, FetchNode } from "../../../../model/nodes";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
 import { OptionSetValuePicker } from "../../../../../../shared/components/OptionSetValuePicker";
 import { BooleanValuePicker } from "../../../../../../shared/components/BooleanValuePicker";
@@ -33,6 +33,10 @@ import {
 	loadAttributeDetailedMetadata,
 } from "../../../../api/dataverseMetadata";
 import type { AttributeMetadata } from "../../../../api/pptbClient";
+import {
+	collectLinkEntityReferences,
+	isConditionInRootEntityFilter,
+} from "../../../../model/treeUtils";
 
 const useStyles = makeStyles({
 	container: {
@@ -62,6 +66,7 @@ interface ConditionEditorProps {
 	entityName: string;
 	onUpdate: (updates: Record<string, unknown>) => void;
 	isAggregateQuery?: boolean;
+	fetchQuery?: FetchNode | null;
 }
 
 export function ConditionEditor({
@@ -69,6 +74,7 @@ export function ConditionEditor({
 	entityName,
 	onUpdate,
 	isAggregateQuery = false,
+	fetchQuery = null,
 }: ConditionEditorProps) {
 	const styles = useStyles();
 
@@ -77,9 +83,36 @@ export function ConditionEditor({
 	// State for selected attribute metadata
 	const [selectedAttribute, setSelectedAttribute] = useState<AttributeMetadata | null>(null);
 
+	// Collect available link-entity references for entityname picker
+	const linkEntityReferences = useMemo(
+		() => collectLinkEntityReferences(fetchQuery),
+		[fetchQuery]
+	);
+
+	// Check if this condition is in the root entity's filter (where entityname is applicable)
+	const isInRootFilter = useMemo(
+		() => isConditionInRootEntityFilter(fetchQuery, node.id),
+		[fetchQuery, node.id]
+	);
+
+	// Determine the effective entity name for attribute loading
+	// If entityname is set, use the linked entity's name; otherwise use the parent entity
+	const effectiveEntityName = useMemo(() => {
+		if (node.entityname && isInRootFilter) {
+			// Find the link-entity reference and get its entity name
+			const ref = linkEntityReferences.find(
+				(r) => r.identifier === node.entityname
+			);
+			if (ref) {
+				return ref.entityName;
+			}
+		}
+		return entityName;
+	}, [node.entityname, isInRootFilter, linkEntityReferences, entityName]);
+
 	// Load attribute metadata when attribute changes to get its type
 	useEffect(() => {
-		if (!node.attribute || !entityName) {
+		if (!node.attribute || !effectiveEntityName) {
 			// No attribute selected - show all operators
 			setAvailableOperators(getOperatorsForAttributeType(undefined));
 			setSelectedAttribute(null);
@@ -87,7 +120,7 @@ export function ConditionEditor({
 		}
 
 		// Load entity attributes to find the selected attribute's type
-		loadEntityAttributes(entityName)
+		loadEntityAttributes(effectiveEntityName)
 			.then(async (attributes: AttributeMetadata[]) => {
 				const attr = attributes.find((a) => a.LogicalName === node.attribute);
 				const type = attr?.AttributeType;
@@ -146,7 +179,7 @@ export function ConditionEditor({
 				setAvailableOperators(getOperatorsForAttributeType(undefined));
 				setSelectedAttribute(null);
 			});
-	}, [node.attribute, entityName]);
+	}, [node.attribute, effectiveEntityName]);
 
 	const handleTextChange = (field: string) => (_: unknown, data: { value: string }) => {
 		onUpdate({ [field]: data.value || undefined });
@@ -165,6 +198,16 @@ export function ConditionEditor({
 		}
 	};
 
+	const handleEntityNameChange = (identifier: string | undefined) => {
+		// When entityname changes, also clear attribute, operator, and value
+		// since the attribute must come from the selected entity
+		onUpdate({
+			entityname: identifier || undefined,
+			attribute: undefined,
+			operator: undefined,
+			value: undefined,
+		});
+	};
 	// Check if the current operator requires a value (using the smart function)
 	const requiresValue = operatorRequiresValue(node.operator);
 
@@ -181,13 +224,17 @@ export function ConditionEditor({
 				<Field label="Attribute Name" required>
 					<div className={styles.fieldWithTooltip}>
 						<AttributePicker
-							entityLogicalName={entityName}
+							entityLogicalName={effectiveEntityName}
 							value={node.attribute}
 							onChange={handleAttributeChange}
 							placeholder="Select or type attribute name"
 						/>
 						<Tooltip
-							content="Logical name of the attribute to filter on. Must exist in the parent entity or link-entity."
+							content={
+								node.entityname
+									? `Logical name of the attribute from the linked entity "${node.entityname}".`
+									: "Logical name of the attribute to filter on. Must exist in the parent entity."
+							}
 							relationship="description"
 						>
 							<Info16Regular className={styles.tooltipIcon} />
@@ -222,7 +269,7 @@ export function ConditionEditor({
 							{/* Multi-value operators (in, not-in, contain-values) */}
 							{requiresMultipleValues && selectedAttribute ? (
 								<MultiValuePicker
-									entityLogicalName={entityName}
+									entityLogicalName={effectiveEntityName}
 									attributeLogicalName={node.attribute}
 									attribute={selectedAttribute}
 									value={Array.isArray(node.value) ? node.value : undefined}
@@ -247,7 +294,7 @@ export function ConditionEditor({
 							  selectedAttribute?.AttributeType === "State" ||
 							  selectedAttribute?.AttributeType === "Status" ? (
 								<OptionSetValuePicker
-									entityLogicalName={entityName}
+									entityLogicalName={effectiveEntityName}
 									attributeLogicalName={node.attribute}
 									value={typeof node.value === "number" ? node.value : undefined}
 									onChange={(val) => onUpdate({ value: val })}
@@ -255,7 +302,7 @@ export function ConditionEditor({
 								/>
 							) : selectedAttribute?.AttributeType === "Boolean" ? (
 								<BooleanValuePicker
-									entityLogicalName={entityName}
+									entityLogicalName={effectiveEntityName}
 									attributeLogicalName={node.attribute}
 									value={
 										typeof node.value === "boolean"
@@ -331,16 +378,38 @@ export function ConditionEditor({
 			<div className={styles.section}>
 				<Label weight="semibold">Advanced</Label>
 
-				<Field
-					label="Entity Name (optional)"
-					hint="Only needed for link-entity conditions. Use the link alias."
-				>
-					<Input
-						value={node.entityname ?? ""}
-						onChange={handleTextChange("entityname")}
-						placeholder="e.g., contact_link"
-					/>
-				</Field>
+				{/* Entity Name - only show for conditions in root entity filters where there are link-entities */}
+				{isInRootFilter && linkEntityReferences.length > 0 && (
+					<Field
+						label="Entity Name (optional)"
+						hint="Filter on a column from a linked entity (outer join scenario)."
+					>
+						<div className={styles.fieldWithTooltip}>
+							<Dropdown
+								value={node.entityname ?? ""}
+								selectedOptions={node.entityname ? [node.entityname] : []}
+								onOptionSelect={(_ev, data) => {
+									const value = data.optionValue;
+									handleEntityNameChange(value === "" ? undefined : value);
+								}}
+								placeholder="Select linked entity..."
+							>
+								<Option value="">None (current entity)</Option>
+								{linkEntityReferences.map((ref) => (
+									<Option key={ref.identifier} value={ref.identifier}>
+										{ref.displayLabel}
+									</Option>
+								))}
+							</Dropdown>
+							<Tooltip
+								content="When filtering on an outer-joined link-entity, specify which entity's column to filter. Use the alias if defined, otherwise the entity name."
+								relationship="description"
+							>
+								<Info16Regular className={styles.tooltipIcon} />
+							</Tooltip>
+						</div>
+					</Field>
+				)}
 
 				{isAggregateQuery && (
 					<Field label="Aggregate Function (optional)">
