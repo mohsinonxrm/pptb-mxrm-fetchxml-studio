@@ -78,32 +78,16 @@ interface ConditionEditorProps {
 }
 
 /**
- * Returns attribute types that are compatible for valueof comparisons.
- * Generally, you can compare types that have the same underlying storage or are logically comparable.
+ * Returns the exact attribute type for valueof comparisons.
+ * Strict matching: source and target attributes must have the same type.
+ * e.g., Money can only compare to Money, Integer to Integer, etc.
  */
 function getCompatibleTypesForValueof(attributeType: string | undefined): string[] {
 	if (!attributeType) return [];
 
-	// Define type compatibility groups
-	const numericTypes = ["Integer", "BigInt", "Decimal", "Double", "Money"];
-	const dateTimeTypes = ["DateTime"];
-	const stringTypes = ["String", "Memo"];
-	const lookupTypes = ["Lookup", "Customer", "Owner"];
-	const optionSetTypes = ["Picklist", "State", "Status"];
-	const booleanTypes = ["Boolean"];
-	const uniqueIdTypes = ["Uniqueidentifier"];
-
-	// Return compatible types based on the source attribute type
-	if (numericTypes.includes(attributeType)) return numericTypes;
-	if (dateTimeTypes.includes(attributeType)) return dateTimeTypes;
-	if (stringTypes.includes(attributeType)) return stringTypes;
-	if (lookupTypes.includes(attributeType)) return lookupTypes;
-	if (optionSetTypes.includes(attributeType)) return optionSetTypes;
-	if (booleanTypes.includes(attributeType)) return booleanTypes;
-	if (uniqueIdTypes.includes(attributeType)) return uniqueIdTypes;
-
-	// For unknown types, return empty (show all)
-	return [];
+	// Strict type matching - return only the exact same type
+	// This ensures Money compares to Money, Integer to Integer, etc.
+	return [attributeType];
 }
 
 export function ConditionEditor({
@@ -382,7 +366,11 @@ export function ConditionEditor({
 										effectiveEntityName={effectiveEntityName}
 										valueof={node.valueof || ""}
 										compatibleTypes={compatibleTypesForValueof}
-										onChange={(valueof) => onUpdate({ valueof: valueof || undefined })}
+										onChange={(valueof) => {
+											// Keep valueof as empty string (not undefined) when entity changes
+											// to prevent the switch from reverting to literal mode
+											onUpdate({ valueof: valueof ?? undefined });
+										}}
 									/>
 								) : (
 									/* Literal value mode - show type-specific pickers */

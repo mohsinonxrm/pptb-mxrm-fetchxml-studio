@@ -126,8 +126,9 @@ export function ValueOfPicker({
 	const handleEntityChange = (_ev: unknown, data: { optionValue?: string }) => {
 		const newAlias = data.optionValue ?? "";
 		setSelectedAlias(newAlias);
-		// Clear the attribute when entity changes
-		onChange(undefined);
+		// Clear the attribute when entity changes, but keep valueof defined (empty string)
+		// to prevent the switch from reverting to literal mode
+		onChange("");
 	};
 
 	const handleAttributeChange = (logicalName: string) => {
