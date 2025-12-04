@@ -4,7 +4,19 @@
  */
 
 import { useMemo, useState, useCallback } from "react";
-import { Toolbar, ToolbarButton, ToolbarDivider, makeStyles } from "@fluentui/react-components";
+import {
+	Toolbar,
+	ToolbarButton,
+	ToolbarDivider,
+	makeStyles,
+	Menu,
+	MenuTrigger,
+	MenuPopover,
+	MenuList,
+	MenuItem,
+	Input,
+	tokens,
+} from "@fluentui/react-components";
 import {
 	Open20Regular,
 	Link20Regular,
@@ -13,13 +25,24 @@ import {
 	Delete20Regular,
 	ArrowExport20Regular,
 	ColumnTriple20Regular,
+	Add20Regular,
+	Search20Regular,
 } from "@fluentui/react-icons";
 import { ColumnConfigDialog } from "./ColumnConfigDialog";
 import type { LayoutColumn } from "../../model/layoutxml";
+import type { AttributeMetadata } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	toolbar: {
 		padding: "0",
+	},
+	menuSearch: {
+		padding: "8px",
+		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+	},
+	menuList: {
+		maxHeight: "300px",
+		overflowY: "auto",
 	},
 });
 
@@ -34,6 +57,12 @@ export interface CommandBarProps {
 	entityName?: string;
 	columns?: LayoutColumn[];
 	onReorderColumns?: (columns: LayoutColumn[]) => void;
+	/** Available attributes from metadata for adding columns */
+	availableAttributes?: AttributeMetadata[];
+	/** Currently selected attributes in the query */
+	selectedAttributes?: string[];
+	/** Callback when user wants to add a column */
+	onAddColumn?: (attributeName: string) => void;
 }
 
 export function ResultsCommandBar({
@@ -47,11 +76,15 @@ export function ResultsCommandBar({
 	entityName,
 	columns,
 	onReorderColumns,
+	availableAttributes,
+	selectedAttributes,
+	onAddColumn,
 }: CommandBarProps) {
 	const styles = useStyles();
 	const hasSelection = selectedCount > 0;
 	const singleSelection = selectedCount === 1;
 	const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+	const [addColumnSearch, setAddColumnSearch] = useState("");
 
 	const handleColumnsClick = useCallback(() => {
 		setColumnDialogOpen(true);
@@ -67,6 +100,37 @@ export function ResultsCommandBar({
 			setColumnDialogOpen(false);
 		},
 		[onReorderColumns]
+	);
+
+	// Filter attributes that aren't already in the query
+	const addableAttributes = useMemo(() => {
+		if (!availableAttributes) return [];
+		const selectedSet = new Set(selectedAttributes || []);
+		return availableAttributes
+			.filter((attr) => !selectedSet.has(attr.LogicalName))
+			.filter((attr) => {
+				// Filter by search term
+				if (!addColumnSearch) return true;
+				const searchLower = addColumnSearch.toLowerCase();
+				const displayName = attr.DisplayName?.UserLocalizedLabel?.Label || "";
+				return (
+					attr.LogicalName.toLowerCase().includes(searchLower) ||
+					displayName.toLowerCase().includes(searchLower)
+				);
+			})
+			.sort((a, b) => {
+				const aName = a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
+				const bName = b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
+				return aName.localeCompare(bName);
+			});
+	}, [availableAttributes, selectedAttributes, addColumnSearch]);
+
+	const handleAddColumnSelect = useCallback(
+		(attributeName: string) => {
+			onAddColumn?.(attributeName);
+			setAddColumnSearch("");
+		},
+		[onAddColumn]
 	);
 
 	// Determine if entity supports statecode/statuscode (most common pattern)
@@ -168,6 +232,48 @@ export function ResultsCommandBar({
 						Columns
 					</ToolbarButton>
 				</>
+			)}
+
+			{availableAttributes && availableAttributes.length > 0 && onAddColumn && (
+				<Menu>
+					<MenuTrigger disableButtonEnhancement>
+						<ToolbarButton appearance="subtle" icon={<Add20Regular />} aria-label="Add column">
+							Add Column
+						</ToolbarButton>
+					</MenuTrigger>
+					<MenuPopover>
+						<div className={styles.menuSearch}>
+							<Input
+								contentBefore={<Search20Regular />}
+								placeholder="Search attributes..."
+								value={addColumnSearch}
+								onChange={(_e, data) => setAddColumnSearch(data.value)}
+								size="small"
+							/>
+						</div>
+						<MenuList className={styles.menuList}>
+							{addableAttributes.length === 0 ? (
+								<MenuItem disabled>
+									{addColumnSearch ? "No matching attributes" : "All attributes already added"}
+								</MenuItem>
+							) : (
+								addableAttributes.slice(0, 50).map((attr) => (
+									<MenuItem
+										key={attr.LogicalName}
+										onClick={() => handleAddColumnSelect(attr.LogicalName)}
+									>
+										{attr.DisplayName?.UserLocalizedLabel?.Label || attr.LogicalName}
+									</MenuItem>
+								))
+							)}
+							{addableAttributes.length > 50 && (
+								<MenuItem disabled>
+									...and {addableAttributes.length - 50} more (use search)
+								</MenuItem>
+							)}
+						</MenuList>
+					</MenuPopover>
+				</Menu>
 			)}
 
 			{columns && columns.length > 0 && (

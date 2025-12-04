@@ -110,6 +110,8 @@ interface PreviewTabsProps {
 	onColumnResize?: (columnName: string, width: number) => void;
 	/** Callback when columns are reordered */
 	onReorderColumns?: (columns: LayoutXmlConfig["columns"]) => void;
+	/** Callback when user wants to add a column from available attributes */
+	onAddColumn?: (attributeName: string) => void;
 }
 
 export function PreviewTabs({
@@ -124,6 +126,7 @@ export function PreviewTabs({
 	columnConfig,
 	onColumnResize,
 	onReorderColumns,
+	onAddColumn,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -182,6 +185,11 @@ export function PreviewTabs({
 								entityName={result?.entityLogicalName}
 								columns={columnConfig?.columns}
 								onReorderColumns={onReorderColumns}
+								availableAttributes={
+									attributeMetadata ? Array.from(attributeMetadata.values()) : undefined
+								}
+								selectedAttributes={fetchQuery?.entity.attributes.map((a) => a.name)}
+								onAddColumn={onAddColumn}
 							/>
 						</div>
 						<div /> {/* 8px spacer */}

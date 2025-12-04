@@ -73,6 +73,7 @@ type BuilderAction =
 	| { type: "SET_ENTITY"; entityName: string }
 	| { type: "SELECT_NODE"; nodeId: NodeId }
 	| { type: "ADD_ATTRIBUTE"; parentId: NodeId }
+	| { type: "ADD_ATTRIBUTE_BY_NAME"; parentId: NodeId; attributeName: string }
 	| { type: "ADD_ALL_ATTRIBUTES"; parentId: NodeId }
 	| { type: "ADD_ORDER"; parentId: NodeId }
 	| { type: "ADD_FILTER"; parentId: NodeId }
@@ -365,6 +366,54 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNodeId: newAttribute.id,
 				selectedNode: newAttribute,
+				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // New attribute added - layout needs update
+			};
+		}
+
+		case "ADD_ATTRIBUTE_BY_NAME": {
+			if (!state.fetchQuery) return state;
+
+			// Find parent node (entity or link-entity)
+			const parent = findNodeById(state.fetchQuery, action.parentId);
+			if (!parent || (parent.type !== "entity" && parent.type !== "link-entity")) {
+				return state;
+			}
+
+			// Check if attribute already exists
+			const existingAttr = (parent as EntityNode | LinkEntityNode).attributes.find(
+				(a) => a.name === action.attributeName
+			);
+			if (existingAttr) {
+				// Attribute already exists, just select it
+				return {
+					...state,
+					selectedNodeId: existingAttr.id,
+					selectedNode: existingAttr,
+				};
+			}
+
+			// Create new attribute node with the specified name
+			const newAttrByName: AttributeNode = {
+				id: generateId(),
+				type: "attribute",
+				name: action.attributeName,
+			};
+
+			// Update the tree immutably
+			const updatedFetchByName = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
+				const n = node as EntityNode | LinkEntityNode;
+				return {
+					...n,
+					attributes: [...n.attributes, newAttrByName],
+				};
+			});
+
+			return {
+				...state,
+				fetchQuery: updatedFetchByName,
+				selectedNodeId: newAttrByName.id,
+				selectedNode: newAttrByName,
 				loadedView: null, // Clear view info - query modified
 				layoutNeedsSync: true, // New attribute added - layout needs update
 			};
@@ -734,6 +783,8 @@ interface BuilderContextValue extends BuilderState {
 	setEntity: (entityName: string) => void;
 	selectNode: (nodeId: NodeId) => void;
 	addAttribute: (parentId: NodeId) => void;
+	/** Add a specific attribute by name to an entity or link-entity */
+	addAttributeByName: (parentId: NodeId, attributeName: string) => void;
 	addAllAttributes: (parentId: NodeId) => void;
 	addOrder: (parentId: NodeId) => void;
 	addFilter: (parentId: NodeId) => void;
@@ -768,6 +819,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
 		selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
 		addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
+		addAttributeByName: (parentId: NodeId, attributeName: string) =>
+			dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),
 		addAllAttributes: (parentId: NodeId) => dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
 		addOrder: (parentId: NodeId) => dispatch({ type: "ADD_ORDER", parentId }),
 		addFilter: (parentId: NodeId) => dispatch({ type: "ADD_FILTER", parentId }),

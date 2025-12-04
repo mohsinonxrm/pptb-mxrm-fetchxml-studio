@@ -27,6 +27,7 @@ import {
 } from "../features/fetchxml/api/pptbClient";
 import type { AttributeMetadata, LoadedViewInfo } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
+import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
@@ -303,6 +304,24 @@ function AppContent() {
 		setQueryResult(null);
 	}, [builder.fetchQuery?.entity?.id]);
 
+	// Sync layout with FetchXML when needed (e.g., after adding/removing attributes)
+	// Also sync when columnConfig is null but there are attributes (ensures columns button works)
+	useEffect(() => {
+		const hasAttributes = (builder.fetchQuery?.entity?.attributes?.length ?? 0) > 0;
+		const needsSync = builder.layoutNeedsSync || (hasAttributes && !builder.columnConfig);
+
+		if (needsSync && builder.fetchQuery) {
+			// Build attribute type map from metadata for better column widths
+			const attributeTypeMap = new Map<string, string>();
+			if (attributeMetadata) {
+				attributeMetadata.forEach((attr, name) => {
+					attributeTypeMap.set(name, attr.AttributeType || "");
+				});
+			}
+			builder.syncLayoutWithFetchXml(attributeTypeMap);
+		}
+	}, [builder.layoutNeedsSync, builder.fetchQuery, builder.columnConfig, attributeMetadata]);
+
 	// Generate FetchXML from builder state
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 
@@ -352,7 +371,57 @@ function AppContent() {
 			const executionTimeMs = Math.round(performance.now() - startTime);
 
 			// Convert FetchXmlResult to QueryResult format for DataGrid
-			const columns: string[] = result.records.length > 0 ? Object.keys(result.records[0]) : [];
+			// IMPORTANT: Derive columns from FetchXML query, not from result data
+			// Dataverse doesn't return keys for null/empty values, so we'd miss columns
+			// if we relied only on Object.keys(result.records[0])
+			let columns: string[];
+
+			// Start with columns from the result data (these have actual values)
+			const resultKeys = result.records.length > 0 ? Object.keys(result.records[0]) : [];
+			const resultKeySet = new Set(resultKeys.filter((k) => !k.includes("@")));
+
+			if (builder.fetchQuery) {
+				// Get columns from FetchXML - this includes all requested attributes
+				const fetchXmlColumns = collectAttributesFromFetchXml(builder.fetchQuery);
+				const fetchXmlColumnNames = fetchXmlColumns.map((col) => col.name);
+
+				// Build the final column list, handling lookup field naming conventions
+				// FetchXML uses: primarycontactid
+				// Dataverse returns: _primarycontactid_value
+				const columnSet = new Set<string>();
+				columns = [];
+
+				for (const colName of fetchXmlColumnNames) {
+					// Check if this column exists in result keys directly
+					if (resultKeySet.has(colName)) {
+						columns.push(colName);
+						columnSet.add(colName);
+					}
+					// Check if it's a lookup field (Dataverse returns _xxx_value for lookups)
+					else if (resultKeySet.has(`_${colName}_value`)) {
+						// Use the Dataverse naming convention for lookup fields
+						columns.push(`_${colName}_value`);
+						columnSet.add(`_${colName}_value`);
+						columnSet.add(colName); // Mark original name as handled too
+					}
+					// Column requested but not in results (null for all records)
+					else {
+						columns.push(colName);
+						columnSet.add(colName);
+					}
+				}
+
+				// Add any result columns not already handled (e.g., extra columns from view)
+				for (const key of resultKeys) {
+					if (!columnSet.has(key) && !key.includes("@")) {
+						columns.push(key);
+						columnSet.add(key);
+					}
+				}
+			} else {
+				// Fallback: use result keys if no FetchXML query available
+				columns = resultKeys.filter((k) => !k.includes("@"));
+			}
 
 			const rows = result.records.map((record) => ({
 				...record,
@@ -487,6 +556,12 @@ function AppContent() {
 								...builder.columnConfig,
 								columns,
 							});
+						}
+					}}
+					onAddColumn={(attributeName) => {
+						// Add the attribute to the root entity
+						if (builder.fetchQuery?.entity.id) {
+							builder.addAttributeByName(builder.fetchQuery.entity.id, attributeName);
 						}
 					}}
 				/>
