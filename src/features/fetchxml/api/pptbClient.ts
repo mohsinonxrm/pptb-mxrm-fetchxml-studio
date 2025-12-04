@@ -1132,6 +1132,8 @@ export interface LoadedViewInfo {
 	entitySetName: string;
 	/** View name for display purposes */
 	name: string;
+	/** Optional LayoutXML for column configuration */
+	layoutxml?: string;
 }
 
 /**

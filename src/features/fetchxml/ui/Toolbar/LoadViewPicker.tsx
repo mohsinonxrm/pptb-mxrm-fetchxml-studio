@@ -174,6 +174,7 @@ export function LoadViewPicker({
 					originalFetchXml: view.fetchxml,
 					entitySetName: selectedEntityMetadata.EntitySetName,
 					name: view.name,
+					layoutxml: view.layoutxml, // Include layoutxml for column configuration
 				};
 				onViewSelect(viewInfo);
 				debugLog("viewAPI", `Selected view: ${view.name} (${view.type}) - ID: ${view.id}`);

@@ -398,12 +398,17 @@ function AppContent() {
 						onNewQuery={builder.newQuery}
 						onViewLoad={(viewInfo: LoadedViewInfo) => {
 							// Load the view's FetchXML into the tree while preserving view info
-							builder.loadView(viewInfo.originalFetchXml, {
-								id: viewInfo.id,
-								type: viewInfo.type,
-								entitySetName: viewInfo.entitySetName,
-								name: viewInfo.name,
-							});
+							// Pass layoutxml for column configuration if available
+							builder.loadView(
+								viewInfo.originalFetchXml,
+								{
+									id: viewInfo.id,
+									type: viewInfo.type,
+									entitySetName: viewInfo.entitySetName,
+									name: viewInfo.name,
+								},
+								viewInfo.layoutxml
+							);
 						}}
 					/>
 					{builder.fetchQuery ? (
