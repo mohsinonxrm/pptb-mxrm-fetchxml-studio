@@ -28,6 +28,7 @@ import type { AttributeMetadata } from "../../api/pptbClient";
 import { getCellRenderer } from "./DataGridCellRenderers";
 import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUtils";
 import type { FetchNode, AttributeNode } from "../../model/nodes";
+import type { LayoutXmlConfig } from "../../model/layoutxml";
 
 const ROW_HEIGHT = 42;
 
@@ -107,6 +108,10 @@ interface ResultsGridProps {
 	attributeMetadata?: Map<string, AttributeMetadata>;
 	fetchQuery?: FetchNode | null; // For extracting aliases
 	onSelectedCountChange?: (count: number) => void;
+	/** Column layout configuration for order and widths */
+	columnConfig?: LayoutXmlConfig | null;
+	/** Callback when a column is resized */
+	onColumnResize?: (columnName: string, newWidth: number) => void;
 }
 
 export function ResultsGrid({
@@ -115,6 +120,8 @@ export function ResultsGrid({
 	attributeMetadata,
 	fetchQuery,
 	onSelectedCountChange,
+	columnConfig,
+	onColumnResize: _onColumnResize, // Will be used in Phase E2 for resize persistence
 }: ResultsGridProps) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
@@ -300,7 +307,7 @@ export function ResultsGrid({
 	}, [fetchQuery]);
 
 	// Memoize column definitions with display names and formatted values
-	// Memoize column definitions with display names and formatted values
+	// Uses columnConfig for ordering and widths when available
 	const columns = useMemo(() => {
 		if (!result || result.columns.length === 0) return [];
 
@@ -319,6 +326,22 @@ export function ResultsGrid({
 				// For aliased or regular columns, check directly
 				return requestedAttributes.has(col);
 			});
+		}
+
+		// If columnConfig is provided, use it to order the columns
+		if (columnConfig && columnConfig.columns.length > 0) {
+			const configOrder = columnConfig.columns.map((c) => c.name);
+			const configSet = new Set(configOrder);
+
+			// Sort displayable columns by config order, append any not in config at end
+			displayableColumns = [
+				...displayableColumns
+					.filter((col) => configSet.has(col))
+					.sort((a, b) => {
+						return configOrder.indexOf(a) - configOrder.indexOf(b);
+					}),
+				...displayableColumns.filter((col) => !configSet.has(col)),
+			];
 		}
 
 		return displayableColumns.map((col) => {
@@ -370,7 +393,7 @@ export function ResultsGrid({
 				},
 			});
 		});
-	}, [result, attributeMetadata, aliasMap, fetchQuery, requestedAttributes]);
+	}, [result, attributeMetadata, aliasMap, fetchQuery, requestedAttributes, columnConfig]);
 
 	// Selection handlers
 	const handleSelectionChange = useCallback(
@@ -400,6 +423,38 @@ export function ResultsGrid({
 		),
 		[styles.row]
 	);
+
+	// Build column sizing options from columnConfig or defaults
+	const columnSizingOptions = useMemo(() => {
+		const options: Record<string, { minWidth: number; defaultWidth: number; idealWidth?: number }> =
+			{};
+
+		// Create a map of column widths from config
+		const configWidths = new Map<string, number>();
+		if (columnConfig) {
+			for (const col of columnConfig.columns) {
+				configWidths.set(col.name, col.width);
+			}
+		}
+
+		// Set sizing for each column
+		for (const col of columns) {
+			const columnId = String(col.columnId);
+			const configWidth = configWidths.get(columnId);
+			const width = configWidth ?? 150; // Default to 150 if not in config
+			options[columnId] = {
+				minWidth: 80,
+				defaultWidth: width,
+				idealWidth: width,
+			};
+		}
+
+		return options;
+	}, [columns, columnConfig]);
+
+	// Handle column resize - we'll use the native resize event from the grid
+	// Note: The contrib DataGrid doesn't expose onColumnResize in resizableColumnsOptions
+	// We'll track resize through a ref and effect instead if needed in E2
 
 	if (isLoading) {
 		return <div className={styles.emptyState}>Loading results...</div>;
@@ -433,12 +488,7 @@ export function ResultsGrid({
 						sortable
 						resizableColumns
 						resizableColumnsOptions={{ autoFitColumns: false }}
-						columnSizingOptions={{
-							...columns.reduce((acc, col) => {
-								acc[col.columnId] = { minWidth: 150, defaultWidth: 200 };
-								return acc;
-							}, {} as Record<string, { minWidth: number; defaultWidth: number }>),
-						}}
+						columnSizingOptions={columnSizingOptions}
 						selectionMode="multiselect"
 						selectedItems={selectedItems}
 						onSelectionChange={handleSelectionChange}

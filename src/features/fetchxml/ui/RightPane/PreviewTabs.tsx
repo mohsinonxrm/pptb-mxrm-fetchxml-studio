@@ -21,6 +21,7 @@ import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import type { FetchNode } from "../../model/nodes";
 import type { ParseResult } from "../../model/fetchxmlParser";
+import type { LayoutXmlConfig } from "../../model/layoutxml";
 
 const useStyles = makeStyles({
 	container: {
@@ -103,6 +104,10 @@ interface PreviewTabsProps {
 	onParseToTree?: (xmlString: string) => ParseResult;
 	attributeMetadata?: Map<string, AttributeMetadata>;
 	fetchQuery?: FetchNode | null;
+	/** Column layout configuration for ordering and sizing */
+	columnConfig?: LayoutXmlConfig | null;
+	/** Callback when column width changes */
+	onColumnResize?: (columnName: string, width: number) => void;
 }
 
 export function PreviewTabs({
@@ -114,6 +119,8 @@ export function PreviewTabs({
 	onParseToTree,
 	attributeMetadata,
 	fetchQuery,
+	columnConfig,
+	onColumnResize,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -180,6 +187,8 @@ export function PreviewTabs({
 								attributeMetadata={attributeMetadata}
 								fetchQuery={fetchQuery}
 								onSelectedCountChange={setToolbarSelectedCount}
+								columnConfig={columnConfig}
+								onColumnResize={onColumnResize}
 							/>
 						</div>
 					</div>

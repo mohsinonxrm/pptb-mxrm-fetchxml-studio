@@ -15,6 +15,14 @@ import type {
 	LinkEntityNode,
 	NodeId,
 } from "../model/nodes";
+import type { LayoutXmlConfig } from "../model/layoutxml";
+import {
+	generateLayoutFromFetchXml,
+	mergeLayoutWithFetchXml,
+	updateColumnWidth as updateLayoutColumnWidth,
+	reorderColumns as reorderLayoutColumns,
+	parseLayoutXml,
+} from "../model/layoutxml";
 import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
 
 // Temporary ID generator
@@ -55,6 +63,10 @@ interface BuilderState {
 	selectedNode: SelectedNode;
 	/** Loaded view info - null if query was not loaded from a view or has been modified */
 	loadedView: LoadedViewState | null;
+	/** Column layout configuration - generated from FetchXML or loaded from view */
+	columnConfig: LayoutXmlConfig | null;
+	/** Track if layout needs regeneration due to FetchXML changes */
+	layoutNeedsSync: boolean;
 }
 
 type BuilderAction =
@@ -71,14 +83,20 @@ type BuilderAction =
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
 	| { type: "NEW_QUERY" }
 	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode }
-	| { type: "LOAD_VIEW"; fetchNode: FetchNode; viewInfo: LoadedViewState }
-	| { type: "CLEAR_LOADED_VIEW" };
+	| { type: "LOAD_VIEW"; fetchNode: FetchNode; viewInfo: LoadedViewState; layoutXml?: string }
+	| { type: "CLEAR_LOADED_VIEW" }
+	| { type: "SET_COLUMN_CONFIG"; config: LayoutXmlConfig }
+	| { type: "UPDATE_COLUMN_WIDTH"; columnName: string; width: number }
+	| { type: "REORDER_COLUMNS"; fromIndex: number; toIndex: number }
+	| { type: "SYNC_LAYOUT_WITH_FETCHXML"; attributeTypeMap?: Map<string, string> };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
 	selectedNodeId: null,
 	selectedNode: null,
 	loadedView: null,
+	columnConfig: null,
+	layoutNeedsSync: false,
 };
 
 // Helper to find node by ID in the tree
@@ -230,11 +248,15 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// Load a pre-parsed FetchNode tree (from parser or editor)
 			// This clears loadedView since it's a manual load, not from a saved view
 			const fetchNode = action.fetchNode;
+			// Generate initial layout from the FetchXML
+			const newConfig = generateLayoutFromFetchXml(fetchNode);
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
 				loadedView: null, // Clear view info - this was manual edit
+				columnConfig: newConfig,
+				layoutNeedsSync: false,
 			};
 		}
 
@@ -242,11 +264,27 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// Load a pre-parsed FetchNode tree from a saved view
 			// Preserves view info for execution optimization
 			const fetchNode = action.fetchNode;
+
+			// If layoutXml is provided, parse it; otherwise generate from FetchXML
+			let newConfig: LayoutXmlConfig;
+			if (action.layoutXml) {
+				try {
+					newConfig = parseLayoutXml(action.layoutXml);
+				} catch (e) {
+					console.warn("Failed to parse view layoutxml, generating from FetchXML:", e);
+					newConfig = generateLayoutFromFetchXml(fetchNode);
+				}
+			} else {
+				newConfig = generateLayoutFromFetchXml(fetchNode);
+			}
+
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
 				loadedView: action.viewInfo, // Track the loaded view
+				columnConfig: newConfig,
+				layoutNeedsSync: false,
 			};
 		}
 
@@ -255,6 +293,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return {
 				...state,
 				loadedView: null,
+				layoutNeedsSync: true, // May need to regenerate layout
 			};
 		}
 
@@ -281,6 +320,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNodeId: entityNode.id,
 				selectedNode: entityNode,
 				loadedView: null, // Clear view info - entity changed
+				columnConfig: null, // Reset layout - no attributes yet
+				layoutNeedsSync: false,
 			};
 		}
 
@@ -325,6 +366,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNodeId: newAttribute.id,
 				selectedNode: newAttribute,
 				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // New attribute added - layout needs update
 			};
 		}
 
@@ -359,6 +401,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNodeId: newAllAttributes.id,
 				selectedNode: newAllAttributes,
 				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // All attributes changes layout
 			};
 		}
 
@@ -557,6 +600,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNodeId: newLinkEntity.id,
 				selectedNode: newLinkEntity,
 				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // Link-entity may add columns
 			};
 		}
 
@@ -577,6 +621,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNodeId: newSelectedId,
 				selectedNode: newSelectedNode,
 				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // Removed node may affect columns
 			};
 		}
 
@@ -621,6 +666,54 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: updatedFetch,
 				selectedNode: newSelectedNode,
 				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // Layout may need to sync with FetchXML changes
+			};
+		}
+
+		case "SET_COLUMN_CONFIG": {
+			return {
+				...state,
+				columnConfig: action.config,
+				layoutNeedsSync: false,
+			};
+		}
+
+		case "UPDATE_COLUMN_WIDTH": {
+			if (!state.columnConfig) return state;
+			return {
+				...state,
+				columnConfig: updateLayoutColumnWidth(state.columnConfig, action.columnName, action.width),
+			};
+		}
+
+		case "REORDER_COLUMNS": {
+			if (!state.columnConfig) return state;
+			return {
+				...state,
+				columnConfig: reorderLayoutColumns(state.columnConfig, action.fromIndex, action.toIndex),
+			};
+		}
+
+		case "SYNC_LAYOUT_WITH_FETCHXML": {
+			if (!state.fetchQuery) return state;
+
+			let newConfig: LayoutXmlConfig;
+			if (state.columnConfig) {
+				// Merge existing config with FetchXML changes (preserves widths/order where possible)
+				newConfig = mergeLayoutWithFetchXml(
+					state.columnConfig,
+					state.fetchQuery,
+					action.attributeTypeMap
+				);
+			} else {
+				// Generate new config from FetchXML
+				newConfig = generateLayoutFromFetchXml(state.fetchQuery, action.attributeTypeMap);
+			}
+
+			return {
+				...state,
+				columnConfig: newConfig,
+				layoutNeedsSync: false,
 			};
 		}
 
@@ -652,9 +745,17 @@ interface BuilderContextValue extends BuilderState {
 	newQuery: () => void;
 	loadFetchXml: (xmlString: string) => ParseResult;
 	/** Load a view's FetchXML while preserving view info for execution optimization */
-	loadView: (xmlString: string, viewInfo: ViewLoadInfo) => ParseResult;
+	loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string) => ParseResult;
 	/** Clear the loaded view info (called when FetchXML is manually edited) */
 	clearLoadedView: () => void;
+	/** Set the column configuration (from parsed layoutxml or generated) */
+	setColumnConfig: (config: LayoutXmlConfig) => void;
+	/** Update a single column's width */
+	updateColumnWidth: (columnName: string, width: number) => void;
+	/** Reorder columns by moving one from fromIndex to toIndex */
+	reorderColumns: (fromIndex: number, toIndex: number) => void;
+	/** Sync layout with current FetchXML (regenerate/merge as needed) */
+	syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>) => void;
 }
 
 const BuilderContext = createContext<BuilderContextValue | null>(null);
@@ -684,7 +785,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			}
 			return result;
 		},
-		loadView: (xmlString: string, viewInfo: ViewLoadInfo): ParseResult => {
+		loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string): ParseResult => {
 			const result = parseFetchXml(xmlString);
 			if (result.success && result.fetchNode) {
 				dispatch({
@@ -697,11 +798,19 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 						entitySetName: viewInfo.entitySetName,
 						name: viewInfo.name,
 					},
+					layoutXml,
 				});
 			}
 			return result;
 		},
 		clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
+		setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
+		updateColumnWidth: (columnName: string, width: number) =>
+			dispatch({ type: "UPDATE_COLUMN_WIDTH", columnName, width }),
+		reorderColumns: (fromIndex: number, toIndex: number) =>
+			dispatch({ type: "REORDER_COLUMNS", fromIndex, toIndex }),
+		syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>) =>
+			dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap }),
 	};
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

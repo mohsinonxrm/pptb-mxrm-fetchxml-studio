@@ -467,6 +467,8 @@ function AppContent() {
 					onParseToTree={builder.loadFetchXml}
 					attributeMetadata={attributeMetadata}
 					fetchQuery={builder.fetchQuery}
+					columnConfig={builder.columnConfig}
+					onColumnResize={builder.updateColumnWidth}
 				/>
 			</div>
 		</div>
