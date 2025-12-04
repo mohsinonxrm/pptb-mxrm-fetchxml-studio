@@ -108,6 +108,8 @@ interface PreviewTabsProps {
 	columnConfig?: LayoutXmlConfig | null;
 	/** Callback when column width changes */
 	onColumnResize?: (columnName: string, width: number) => void;
+	/** Callback when columns are reordered */
+	onReorderColumns?: (columns: LayoutXmlConfig["columns"]) => void;
 }
 
 export function PreviewTabs({
@@ -121,6 +123,7 @@ export function PreviewTabs({
 	fetchQuery,
 	columnConfig,
 	onColumnResize,
+	onReorderColumns,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -177,6 +180,8 @@ export function PreviewTabs({
 								onDelete={() => console.log("Delete not yet implemented")}
 								onExport={onExport || (() => console.log("Export not yet implemented"))}
 								entityName={result?.entityLogicalName}
+								columns={columnConfig?.columns}
+								onReorderColumns={onReorderColumns}
 							/>
 						</div>
 						<div /> {/* 8px spacer */}

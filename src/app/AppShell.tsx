@@ -469,6 +469,15 @@ function AppContent() {
 					fetchQuery={builder.fetchQuery}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
+					onReorderColumns={(columns) => {
+						// Set the column config with new order
+						if (builder.columnConfig) {
+							builder.setColumnConfig({
+								...builder.columnConfig,
+								columns,
+							});
+						}
+					}}
 				/>
 			</div>
 		</div>

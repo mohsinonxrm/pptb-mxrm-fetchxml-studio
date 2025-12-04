@@ -121,7 +121,7 @@ export function ResultsGrid({
 	fetchQuery,
 	onSelectedCountChange,
 	columnConfig,
-	onColumnResize: _onColumnResize, // Will be used in Phase E2 for resize persistence
+	onColumnResize,
 }: ResultsGridProps) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
@@ -452,9 +452,18 @@ export function ResultsGrid({
 		return options;
 	}, [columns, columnConfig]);
 
-	// Handle column resize - we'll use the native resize event from the grid
-	// Note: The contrib DataGrid doesn't expose onColumnResize in resizableColumnsOptions
-	// We'll track resize through a ref and effect instead if needed in E2
+	// Handle column resize callback
+	const handleColumnResize = useCallback(
+		(
+			_e: KeyboardEvent | TouchEvent | MouseEvent | undefined,
+			data: { columnId: string | number; width: number }
+		) => {
+			if (onColumnResize) {
+				onColumnResize(String(data.columnId), data.width);
+			}
+		},
+		[onColumnResize]
+	);
 
 	if (isLoading) {
 		return <div className={styles.emptyState}>Loading results...</div>;
@@ -489,6 +498,7 @@ export function ResultsGrid({
 						resizableColumns
 						resizableColumnsOptions={{ autoFitColumns: false }}
 						columnSizingOptions={columnSizingOptions}
+						onColumnResize={handleColumnResize}
 						selectionMode="multiselect"
 						selectedItems={selectedItems}
 						onSelectionChange={handleSelectionChange}

@@ -3,7 +3,7 @@
  * Similar to Power Apps Model Driven Apps view command bar
  */
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Toolbar, ToolbarButton, ToolbarDivider, makeStyles } from "@fluentui/react-components";
 import {
 	Open20Regular,
@@ -12,7 +12,10 @@ import {
 	DismissCircle20Regular,
 	Delete20Regular,
 	ArrowExport20Regular,
+	ColumnTriple20Regular,
 } from "@fluentui/react-icons";
+import { ColumnConfigDialog } from "./ColumnConfigDialog";
+import type { LayoutColumn } from "../../model/layoutxml";
 
 const useStyles = makeStyles({
 	toolbar: {
@@ -29,6 +32,8 @@ export interface CommandBarProps {
 	onDelete?: () => void;
 	onExport?: () => void;
 	entityName?: string;
+	columns?: LayoutColumn[];
+	onReorderColumns?: (columns: LayoutColumn[]) => void;
 }
 
 export function ResultsCommandBar({
@@ -40,10 +45,29 @@ export function ResultsCommandBar({
 	onDelete,
 	onExport,
 	entityName,
+	columns,
+	onReorderColumns,
 }: CommandBarProps) {
 	const styles = useStyles();
 	const hasSelection = selectedCount > 0;
 	const singleSelection = selectedCount === 1;
+	const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+
+	const handleColumnsClick = useCallback(() => {
+		setColumnDialogOpen(true);
+	}, []);
+
+	const handleColumnDialogClose = useCallback(() => {
+		setColumnDialogOpen(false);
+	}, []);
+
+	const handleReorderColumns = useCallback(
+		(reorderedColumns: LayoutColumn[]) => {
+			onReorderColumns?.(reorderedColumns);
+			setColumnDialogOpen(false);
+		},
+		[onReorderColumns]
+	);
 
 	// Determine if entity supports statecode/statuscode (most common pattern)
 	const supportsActivation = useMemo(() => {
@@ -131,6 +155,29 @@ export function ResultsCommandBar({
 			>
 				Export
 			</ToolbarButton>
+
+			{columns && columns.length > 0 && (
+				<>
+					<ToolbarDivider />
+					<ToolbarButton
+						appearance="subtle"
+						icon={<ColumnTriple20Regular />}
+						onClick={handleColumnsClick}
+						aria-label="Configure columns"
+					>
+						Columns
+					</ToolbarButton>
+				</>
+			)}
+
+			{columns && columns.length > 0 && (
+				<ColumnConfigDialog
+					open={columnDialogOpen}
+					columns={columns}
+					onClose={handleColumnDialogClose}
+					onReorder={handleReorderColumns}
+				/>
+			)}
 		</Toolbar>
 	);
 }
