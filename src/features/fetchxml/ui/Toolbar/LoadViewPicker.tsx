@@ -64,6 +64,8 @@ interface LoadViewPickerProps {
 	selectedEntityMetadata: EntityMetadata | null;
 	/** Callback when a view is selected - provides the view info for execution optimization */
 	onViewSelect: (viewInfo: LoadedViewInfo) => void;
+	/** Callback when the view selection is cleared */
+	onViewClear?: () => void;
 	/** Optional: disable the picker */
 	disabled?: boolean;
 }
@@ -71,6 +73,7 @@ interface LoadViewPickerProps {
 export function LoadViewPicker({
 	selectedEntityMetadata,
 	onViewSelect,
+	onViewClear,
 	disabled = false,
 }: LoadViewPickerProps) {
 	const styles = useStyles();
@@ -151,7 +154,16 @@ export function LoadViewPicker({
 	// Handle selection
 	const handleOptionSelect = useCallback<NonNullable<ComboboxProps["onOptionSelect"]>>(
 		(_event, data) => {
-			if (!data.optionValue || !selectedEntityMetadata) return;
+			// Handle clear action - when clearable button is clicked, optionValue is empty
+			if (!data.optionValue) {
+				setSelectedViewName(null);
+				setInputValue("");
+				onViewClear?.();
+				debugLog("viewAPI", "View selection cleared");
+				return;
+			}
+
+			if (!selectedEntityMetadata) return;
 
 			const view = allViews.find((v) => v.id === data.optionValue);
 			if (view) {
@@ -170,7 +182,7 @@ export function LoadViewPicker({
 				setInputValue(view.name);
 			}
 		},
-		[allViews, onViewSelect, selectedEntityMetadata]
+		[allViews, onViewSelect, onViewClear, selectedEntityMetadata]
 	);
 
 	// Handle input change for filtering
@@ -203,6 +215,7 @@ export function LoadViewPicker({
 				value={inputValue}
 				onChange={handleInputChange}
 				onOptionSelect={handleOptionSelect}
+				clearable={!!selectedViewName}
 				freeform
 			>
 				{loading && (

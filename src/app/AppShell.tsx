@@ -297,6 +297,12 @@ function AppContent() {
 			});
 	}, [builder.fetchQuery?.entity?.name, loadAttributes]);
 
+	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
+	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared
+	useEffect(() => {
+		setQueryResult(null);
+	}, [builder.fetchQuery?.entity?.id]);
+
 	// Generate FetchXML from builder state
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 

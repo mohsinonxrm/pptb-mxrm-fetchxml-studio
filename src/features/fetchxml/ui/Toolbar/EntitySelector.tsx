@@ -191,6 +191,14 @@ export function EntitySelector({
 		[onViewLoad]
 	);
 
+	// Handle view clear from LoadViewPicker - resets tree to default entity state
+	const handleViewClear = useCallback(() => {
+		// Re-set the same entity to reset tree to fresh state while keeping entity selected
+		if (selectedEntity) {
+			onEntityChange(selectedEntity);
+		}
+	}, [selectedEntity, onEntityChange]);
+
 	// Publisher multiselect with filtering
 	const [publisherQuery, setPublisherQuery] = useState("");
 
@@ -719,6 +727,7 @@ export function EntitySelector({
 					<LoadViewPicker
 						selectedEntityMetadata={selectedEntityMetadata}
 						onViewSelect={handleViewSelect}
+						onViewClear={handleViewClear}
 					/>
 				</div>
 			)}
