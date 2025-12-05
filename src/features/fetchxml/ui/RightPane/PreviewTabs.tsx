@@ -16,7 +16,7 @@ import {
 } from "@fluentui/react-components";
 import { Play24Regular } from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
-import { ResultsGrid, type QueryResult } from "./ResultsGrid";
+import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import type { FetchNode } from "../../model/nodes";
@@ -112,6 +112,8 @@ interface PreviewTabsProps {
 	onReorderColumns?: (columns: LayoutXmlConfig["columns"]) => void;
 	/** Callback when user wants to add a column from available attributes */
 	onAddColumn?: (attributeName: string) => void;
+	/** Callback when user changes sort on a column */
+	onSortChange?: (data: SortChangeData) => void;
 }
 
 export function PreviewTabs({
@@ -127,6 +129,7 @@ export function PreviewTabs({
 	onColumnResize,
 	onReorderColumns,
 	onAddColumn,
+	onSortChange,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -202,6 +205,7 @@ export function PreviewTabs({
 								onSelectedCountChange={setToolbarSelectedCount}
 								columnConfig={columnConfig}
 								onColumnResize={onColumnResize}
+								onSortChange={onSortChange}
 							/>
 						</div>
 					</div>

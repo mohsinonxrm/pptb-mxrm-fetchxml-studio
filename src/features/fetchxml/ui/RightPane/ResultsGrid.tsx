@@ -3,6 +3,7 @@
  * Uses rich cell renderers based on attribute metadata for Power Apps-like experience
  * Displays formatted values from OData annotations when available
  * Uses @fluentui-contrib/react-data-grid-react-window for 1D virtualization with multi-select and resizable columns
+ * Sort state is derived from FetchXML orders - clicking headers triggers onSortChange callback
  */
 
 import { useMemo, useCallback, useEffect, useState, useRef } from "react";
@@ -24,11 +25,25 @@ import {
 } from "@fluentui-contrib/react-data-grid-react-window";
 import type { RowRenderer } from "@fluentui-contrib/react-data-grid-react-window";
 import { useScrollbarWidth, useFluent } from "@fluentui/react-components";
+import type { SortDirection } from "@fluentui/react-components";
+import { ArrowSortUp16Regular, ArrowSortDown16Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import { getCellRenderer } from "./DataGridCellRenderers";
 import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUtils";
-import type { FetchNode, AttributeNode } from "../../model/nodes";
+import type { FetchNode, AttributeNode, OrderNode } from "../../model/nodes";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
+
+/** Sort change event data passed to parent */
+export interface SortChangeData {
+	/** Column being sorted (may include entityname prefix for link-entity attributes) */
+	columnId: string;
+	/** New sort direction */
+	direction: SortDirection;
+	/** Whether Shift key was held (multi-column sort) */
+	isMultiSort: boolean;
+	/** The entityname for link-entity attributes, undefined for root entity */
+	entityName?: string;
+}
 
 const ROW_HEIGHT = 42;
 
@@ -90,6 +105,22 @@ const useStyles = makeStyles({
 	body: {
 		scrollbarGutter: "stable",
 	},
+	headerCellContent: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalXS,
+	},
+	sortIndicator: {
+		display: "flex",
+		alignItems: "center",
+		marginLeft: "auto",
+	},
+	// Hide Fluent's default sort indicator - we render our own in renderHeaderCell
+	headerCell: {
+		"& > button > span:last-child": {
+			display: "none",
+		},
+	},
 });
 
 export interface QueryResult {
@@ -106,12 +137,14 @@ interface ResultsGridProps {
 	result: QueryResult | null;
 	isLoading?: boolean;
 	attributeMetadata?: Map<string, AttributeMetadata>;
-	fetchQuery?: FetchNode | null; // For extracting aliases
+	fetchQuery?: FetchNode | null; // For extracting aliases and order state
 	onSelectedCountChange?: (count: number) => void;
 	/** Column layout configuration for order and widths */
 	columnConfig?: LayoutXmlConfig | null;
 	/** Callback when a column is resized */
 	onColumnResize?: (columnName: string, newWidth: number) => void;
+	/** Callback when user clicks a column header to sort */
+	onSortChange?: (data: SortChangeData) => void;
 }
 
 export function ResultsGrid({
@@ -122,6 +155,7 @@ export function ResultsGrid({
 	onSelectedCountChange,
 	columnConfig,
 	onColumnResize,
+	onSortChange,
 }: ResultsGridProps) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
@@ -173,6 +207,54 @@ export function ResultsGrid({
 	useEffect(() => {
 		setSelectedItems(new Set());
 	}, [result]);
+
+	// Derive sort state from FetchXML orders (entity + link-entity orders)
+	// This builds a map from column name to sort direction
+	const sortStateMap = useMemo(() => {
+		const map = new Map<string, { direction: SortDirection; entityName?: string }>();
+		if (!fetchQuery?.entity) return map;
+
+		// Process root entity orders
+		// Orders with entityname refer to link-entity attributes
+		fetchQuery.entity.orders?.forEach((order: OrderNode) => {
+			const direction: SortDirection = order.descending ? "descending" : "ascending";
+			if (order.entityname) {
+				// This order references a link-entity attribute
+				// The column in results might be: alias.attributeName or _attributeName_value for lookups
+				map.set(`${order.entityname}.${order.attribute}`, {
+					direction,
+					entityName: order.entityname,
+				});
+				// Also map just the attribute name in case it appears that way
+				map.set(order.attribute, { direction, entityName: order.entityname });
+			} else {
+				// Root entity attribute
+				map.set(order.attribute, { direction });
+				// Also check for lookup field naming convention
+				map.set(`_${order.attribute}_value`, { direction });
+			}
+		});
+
+		// Process link-entity orders (orders defined inside link-entity)
+		const processLinkOrders = (links: typeof fetchQuery.entity.links) => {
+			links?.forEach((link) => {
+				const alias = link.alias || link.name;
+				link.orders?.forEach((order: OrderNode) => {
+					const direction: SortDirection = order.descending ? "descending" : "ascending";
+					// Link-entity attribute columns appear as alias.attributeName or entityname.attributeName
+					map.set(`${alias}.${order.attribute}`, { direction, entityName: alias });
+					map.set(`${link.name}.${order.attribute}`, { direction, entityName: alias });
+				});
+				// Recurse into nested link-entities
+				if (link.links) {
+					processLinkOrders(link.links);
+				}
+			});
+		};
+		processLinkOrders(fetchQuery.entity.links);
+
+		return map;
+	}, [fetchQuery]);
 
 	// Get primary ID column name (typically {entity}id) from the FetchXML root entity
 	const primaryIdColumn = useMemo(() => {
@@ -374,6 +456,9 @@ export function ResultsGrid({
 				}
 			}
 
+			// Check if this column is sorted (from FetchXML orders)
+			const sortInfo = sortStateMap.get(col);
+
 			return createTableColumn<Record<string, unknown>>({
 				columnId: col,
 				compare: (a, b) => {
@@ -381,7 +466,21 @@ export function ResultsGrid({
 					const bVal = String(getFormattedValue(b, col) ?? b[col] ?? "");
 					return aVal.localeCompare(bVal);
 				},
-				renderHeaderCell: () => displayName,
+				renderHeaderCell: () => (
+					<span className={styles.headerCellContent}>
+						<span>{displayName}</span>
+						{/* Show sort indicator based on FetchXML order state */}
+						{sortInfo && (
+							<span className={styles.sortIndicator}>
+								{sortInfo.direction === "ascending" ? (
+									<ArrowSortUp16Regular />
+								) : (
+									<ArrowSortDown16Regular />
+								)}
+							</span>
+						)}
+					</span>
+				),
 				renderCell: (item) => {
 					const rawValue = item[col];
 					const formattedValue = getFormattedValue(item, col);
@@ -393,7 +492,16 @@ export function ResultsGrid({
 				},
 			});
 		});
-	}, [result, attributeMetadata, aliasMap, fetchQuery, requestedAttributes, columnConfig]);
+	}, [
+		result,
+		attributeMetadata,
+		aliasMap,
+		fetchQuery,
+		requestedAttributes,
+		columnConfig,
+		styles,
+		sortStateMap,
+	]);
 
 	// Selection handlers
 	const handleSelectionChange = useCallback(
@@ -402,6 +510,42 @@ export function ResultsGrid({
 			onSelectedCountChange?.(data.selectedItems.size);
 		},
 		[onSelectedCountChange]
+	);
+
+	// Sort change handler: notifies parent to update FetchXML orders
+	// Shift+click adds/toggles column in multi-sort, regular click replaces all
+	// We calculate direction ourselves based on FetchXML state, not Fluent's sortDirection
+	const handleSortChange = useCallback(
+		(
+			e: React.MouseEvent,
+			data: { sortColumn: string | number | undefined; sortDirection: SortDirection }
+		) => {
+			if (!onSortChange) return;
+
+			const columnId = String(data.sortColumn);
+			const isMultiSort = e.shiftKey;
+
+			// Get current sort info for this column from FetchXML state
+			const sortInfo = sortStateMap.get(columnId);
+
+			// Calculate direction: toggle if already sorted, otherwise ascending
+			let direction: SortDirection;
+			if (sortInfo) {
+				// Column is already sorted - toggle direction
+				direction = sortInfo.direction === "ascending" ? "descending" : "ascending";
+			} else {
+				// Column not sorted yet - start with ascending
+				direction = "ascending";
+			}
+
+			onSortChange({
+				columnId,
+				direction,
+				isMultiSort,
+				entityName: sortInfo?.entityName,
+			});
+		},
+		[onSortChange, sortStateMap]
 	);
 
 	// Row renderer function for virtualization with scrolling indicator support
@@ -465,6 +609,9 @@ export function ResultsGrid({
 		[onColumnResize]
 	);
 
+	// Note: Data is already sorted by Dataverse based on FetchXML orders
+	// No local sorting needed - we display rows as returned
+
 	if (isLoading) {
 		return <div className={styles.emptyState}>Loading results...</div>;
 	}
@@ -484,6 +631,7 @@ export function ResultsGrid({
 		primaryIdColumn,
 		firstRowId: result.rows.length > 0 ? getRowId(result.rows[0]) : "none",
 		columnIds: columns.slice(0, 5).map((c) => c.columnId),
+		sortStateMapSize: sortStateMap.size,
 	});
 
 	return (
@@ -495,10 +643,13 @@ export function ResultsGrid({
 						items={result.rows}
 						columns={columns}
 						sortable
+						// Don't set sortState - we manage sort indicators ourselves in renderHeaderCell
+						// This avoids double arrows (Fluent's + ours) and gives us control over multi-sort display
 						resizableColumns
 						resizableColumnsOptions={{ autoFitColumns: false }}
 						columnSizingOptions={columnSizingOptions}
 						onColumnResize={handleColumnResize}
+						onSortChange={handleSortChange}
 						selectionMode="multiselect"
 						selectedItems={selectedItems}
 						onSelectionChange={handleSelectionChange}
@@ -507,7 +658,9 @@ export function ResultsGrid({
 						<DataGridHeader ref={headerRef as any} style={{ paddingRight: scrollbarWidth }}>
 							<DataGridRow style={{ minHeight: "43px", maxHeight: "43px" }}>
 								{({ renderHeaderCell }) => (
-									<DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+									<DataGridHeaderCell className={styles.headerCell}>
+										{renderHeaderCell()}
+									</DataGridHeaderCell>
 								)}
 							</DataGridRow>
 						</DataGridHeader>

@@ -89,7 +89,14 @@ type BuilderAction =
 	| { type: "SET_COLUMN_CONFIG"; config: LayoutXmlConfig }
 	| { type: "UPDATE_COLUMN_WIDTH"; columnName: string; width: number }
 	| { type: "REORDER_COLUMNS"; fromIndex: number; toIndex: number }
-	| { type: "SYNC_LAYOUT_WITH_FETCHXML"; attributeTypeMap?: Map<string, string> };
+	| { type: "SYNC_LAYOUT_WITH_FETCHXML"; attributeTypeMap?: Map<string, string> }
+	| {
+			type: "SET_SORT";
+			attribute: string;
+			descending: boolean;
+			isMultiSort: boolean;
+			entityName?: string;
+	  };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
@@ -766,6 +773,61 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 		}
 
+		case "SET_SORT": {
+			if (!state.fetchQuery?.entity) return state;
+
+			const { attribute, descending, isMultiSort, entityName } = action;
+
+			// Create new order node
+			const newOrder: OrderNode = {
+				id: generateId(),
+				type: "order",
+				attribute,
+				descending: descending || undefined,
+				entityname: entityName,
+			};
+
+			// Get current orders
+			const currentOrders = state.fetchQuery.entity.orders || [];
+
+			let newOrders: OrderNode[];
+
+			if (isMultiSort) {
+				// Multi-sort: check if this attribute already has an order
+				const existingIndex = currentOrders.findIndex(
+					(o) =>
+						o.attribute === attribute && (o.entityname || undefined) === (entityName || undefined)
+				);
+
+				if (existingIndex >= 0) {
+					// Update existing order's direction
+					newOrders = currentOrders.map((o, i) =>
+						i === existingIndex ? { ...o, descending: descending || undefined } : o
+					);
+				} else {
+					// Add new order to the end
+					newOrders = [...currentOrders, newOrder];
+				}
+			} else {
+				// Single sort: replace all orders with just this one
+				newOrders = [newOrder];
+			}
+
+			// Update the entity with new orders
+			const newFetchQuery: FetchNode = {
+				...state.fetchQuery,
+				entity: {
+					...state.fetchQuery.entity,
+					orders: newOrders,
+				},
+			};
+
+			return {
+				...state,
+				fetchQuery: newFetchQuery,
+			};
+		}
+
 		default:
 			return state;
 	}
@@ -807,6 +869,16 @@ interface BuilderContextValue extends BuilderState {
 	reorderColumns: (fromIndex: number, toIndex: number) => void;
 	/** Sync layout with current FetchXML (regenerate/merge as needed) */
 	syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>) => void;
+	/**
+	 * Set sort order on an attribute. If isMultiSort is true, adds to existing sorts.
+	 * If false, replaces all existing sorts.
+	 */
+	setSort: (
+		attribute: string,
+		descending: boolean,
+		isMultiSort: boolean,
+		entityName?: string
+	) => void;
 }
 
 const BuilderContext = createContext<BuilderContextValue | null>(null);
@@ -864,6 +936,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			dispatch({ type: "REORDER_COLUMNS", fromIndex, toIndex }),
 		syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>) =>
 			dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap }),
+		setSort: (attribute: string, descending: boolean, isMultiSort: boolean, entityName?: string) =>
+			dispatch({ type: "SET_SORT", attribute, descending, isMultiSort, entityName }),
 	};
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

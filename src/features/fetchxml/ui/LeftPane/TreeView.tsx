@@ -388,6 +388,10 @@ export function TreeView({
 
 	const renderOrderNode = (order: OrderNode) => {
 		const direction = order.descending ? "↓" : "↑";
+		// Show entityname prefix for link-entity orders
+		const displayName = order.entityname
+			? `${order.entityname}.${order.attribute}`
+			: order.attribute;
 		return (
 			<TreeItem
 				key={order.id}
@@ -413,7 +417,7 @@ export function TreeView({
 					}
 					onClick={() => onNodeSelect(order.id)}
 				>
-					{order.attribute} {direction}
+					{displayName} {direction}
 				</TreeItemLayout>
 			</TreeItem>
 		);

@@ -151,7 +151,7 @@ function generateOrder(order: OrderNode, indent: number): string[] {
 	const attrs: string[] = [`attribute="${order.attribute}"`];
 
 	if (order.descending) attrs.push('descending="true"');
-	// Note: OrderNode doesn't have alias in our type definition
+	if (order.entityname) attrs.push(`entityname="${order.entityname}"`);
 
 	return [`${spaces}<order ${attrs.join(" ")} />`];
 }

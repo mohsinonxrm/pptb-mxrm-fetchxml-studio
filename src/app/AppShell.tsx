@@ -564,6 +564,30 @@ function AppContent() {
 							builder.addAttributeByName(builder.fetchQuery.entity.id, attributeName);
 						}
 					}}
+					onSortChange={(data) => {
+						// Extract attribute name from columnId (may have entityName prefix)
+						let attribute = data.columnId;
+						let entityName = data.entityName;
+
+						// If columnId contains a dot, it's a link-entity column (alias.attribute)
+						if (attribute.includes(".")) {
+							const parts = attribute.split(".");
+							entityName = parts[0];
+							attribute = parts[1];
+						}
+
+						// Handle lookup field naming (_attributename_value -> attributename)
+						if (attribute.startsWith("_") && attribute.endsWith("_value")) {
+							attribute = attribute.slice(1, -6);
+						}
+
+						builder.setSort(
+							attribute,
+							data.direction === "descending",
+							data.isMultiSort,
+							entityName
+						);
+					}}
 				/>
 			</div>
 		</div>

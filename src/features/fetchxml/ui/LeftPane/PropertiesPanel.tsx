@@ -181,6 +181,7 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 					<OrderEditor
 						node={selectedNode}
 						entityName={findParentEntity(selectedNode.id) ?? ""}
+						fetchQuery={fetchQuery ?? null}
 						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
 					/>
 				);
