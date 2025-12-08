@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -14,6 +14,7 @@ import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
+import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
@@ -25,8 +26,13 @@ import {
 	whoAmI,
 	isDataverseAvailable,
 } from "../features/fetchxml/api/pptbClient";
-import type { AttributeMetadata, LoadedViewInfo } from "../features/fetchxml/api/pptbClient";
+import type {
+	AttributeMetadata,
+	LoadedViewInfo,
+	EntityMetadata,
+} from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
+import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 
@@ -170,7 +176,7 @@ export function AppShell() {
 function AppContent() {
 	const styles = useStyles();
 	const builder = useBuilder();
-	const { loadAttributes } = useLazyMetadata();
+	const { loadAttributes, loadEntityMetadata } = useLazyMetadata();
 
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
@@ -178,6 +184,8 @@ function AppContent() {
 	const [attributeMetadata, setAttributeMetadata] = useState<Map<string, AttributeMetadata>>(
 		new Map()
 	);
+	// State for entity metadata (for layoutxml generation)
+	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -281,9 +289,11 @@ function AppContent() {
 		const entityName = builder.fetchQuery?.entity?.name;
 		if (!entityName) {
 			setAttributeMetadata(new Map());
+			setEntityMetadata(null);
 			return;
 		}
 
+		// Load attribute metadata
 		loadAttributes(entityName)
 			.then((attributes) => {
 				const map = new Map<string, AttributeMetadata>();
@@ -296,7 +306,17 @@ function AppContent() {
 				console.error("Failed to load attribute metadata:", error);
 				setAttributeMetadata(new Map());
 			});
-	}, [builder.fetchQuery?.entity?.name, loadAttributes]);
+
+		// Load entity metadata (for ObjectTypeCode and PrimaryIdAttribute)
+		loadEntityMetadata(entityName)
+			.then((entity) => {
+				setEntityMetadata(entity);
+			})
+			.catch((error) => {
+				console.error("Failed to load entity metadata:", error);
+				setEntityMetadata(null);
+			});
+	}, [builder.fetchQuery?.entity?.name, loadAttributes, loadEntityMetadata]);
 
 	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
 	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared
@@ -324,6 +344,36 @@ function AppContent() {
 
 	// Generate FetchXML from builder state
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
+
+	// Generate LayoutXML from column config for saving
+	const layoutXml = useMemo(() => {
+		if (!builder.columnConfig || !entityMetadata) {
+			return "";
+		}
+		return generateLayoutXml({
+			...builder.columnConfig,
+			objectTypeCode: entityMetadata.ObjectTypeCode,
+			primaryIdAttribute: entityMetadata.PrimaryIdAttribute,
+		});
+	}, [builder.columnConfig, entityMetadata]);
+
+	// Handle save view completion - update loaded view state
+	const handleSaveViewComplete = (
+		viewId: string,
+		viewType: "system" | "personal",
+		viewName: string
+	) => {
+		// Update the builder's loaded view state so subsequent saves overwrite the same view
+		if (entityMetadata) {
+			builder.setLoadedView({
+				id: viewId,
+				type: viewType,
+				entitySetName: entityMetadata.EntitySetName,
+				name: viewName,
+			});
+		}
+		console.log(`✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
+	};
 
 	const handleExecute = async () => {
 		if (!fetchXml) return;
@@ -549,6 +599,18 @@ function AppContent() {
 					fetchQuery={builder.fetchQuery}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
+					saveViewButton={
+						<SaveViewButton
+							fetchXml={fetchXml}
+							layoutXml={layoutXml}
+							entityLogicalName={builder.fetchQuery?.entity?.name || ""}
+							objectTypeCode={entityMetadata?.ObjectTypeCode || 0}
+							primaryIdAttribute={entityMetadata?.PrimaryIdAttribute || ""}
+							loadedView={builder.loadedView}
+							onSaveComplete={handleSaveViewComplete}
+							disabled={!fetchXml || !entityMetadata}
+						/>
+					}
 					onReorderColumns={(columns) => {
 						// Set the column config with new order
 						if (builder.columnConfig) {

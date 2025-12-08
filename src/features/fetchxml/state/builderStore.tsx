@@ -24,6 +24,7 @@ import {
 	parseLayoutXml,
 } from "../model/layoutxml";
 import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
+import { generateFetchXml } from "../model/fetchxml";
 
 // Temporary ID generator
 let idCounter = 0;
@@ -86,6 +87,10 @@ type BuilderAction =
 	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode }
 	| { type: "LOAD_VIEW"; fetchNode: FetchNode; viewInfo: LoadedViewState; layoutXml?: string }
 	| { type: "CLEAR_LOADED_VIEW" }
+	| {
+			type: "SET_LOADED_VIEW";
+			viewInfo: LoadedViewState;
+	  }
 	| { type: "SET_COLUMN_CONFIG"; config: LayoutXmlConfig }
 	| { type: "UPDATE_COLUMN_WIDTH"; columnName: string; width: number }
 	| { type: "REORDER_COLUMNS"; fromIndex: number; toIndex: number }
@@ -302,6 +307,15 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				loadedView: null,
 				layoutNeedsSync: true, // May need to regenerate layout
+			};
+		}
+
+		case "SET_LOADED_VIEW": {
+			// Called after successfully saving a view - update the loadedView state
+			// This allows subsequent saves to overwrite the same view
+			return {
+				...state,
+				loadedView: action.viewInfo,
 			};
 		}
 
@@ -861,6 +875,8 @@ interface BuilderContextValue extends BuilderState {
 	loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string) => ParseResult;
 	/** Clear the loaded view info (called when FetchXML is manually edited) */
 	clearLoadedView: () => void;
+	/** Update loaded view info after save (without re-parsing FetchXML) */
+	setLoadedView: (viewInfo: ViewLoadInfo) => void;
 	/** Set the column configuration (from parsed layoutxml or generated) */
 	setColumnConfig: (config: LayoutXmlConfig) => void;
 	/** Update a single column's width */
@@ -929,6 +945,17 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			return result;
 		},
 		clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
+		setLoadedView: (viewInfo: ViewLoadInfo) =>
+			dispatch({
+				type: "SET_LOADED_VIEW",
+				viewInfo: {
+					id: viewInfo.id,
+					type: viewInfo.type,
+					originalFetchXml: state.fetchQuery ? generateFetchXml(state.fetchQuery) : "",
+					entitySetName: viewInfo.entitySetName,
+					name: viewInfo.name,
+				},
+			}),
 		setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
 		updateColumnWidth: (columnName: string, width: number) =>
 			dispatch({ type: "UPDATE_COLUMN_WIDTH", columnName, width }),

@@ -1362,3 +1362,492 @@ export async function getAllViews(
 
 	return { systemViews, personalViews };
 }
+
+// =============================================================================
+// View Save / Update / Validation APIs
+// =============================================================================
+
+/**
+ * Validator issue from ValidateFetchXmlExpression
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatorissue
+ */
+export interface ValidatorIssue {
+	/** Localized message text describing the issue */
+	LocalizedMessageText: string;
+	/** Severity level: 0 (Low), 1 (Medium), 2 (High), 3 (Critical) */
+	Severity: 0 | 1 | 2 | 3;
+	/** Type code categorizing the issue */
+	TypeCode: number;
+	/** Optional additional properties */
+	OptionalPropertyBag?: Record<string, string>;
+}
+
+/**
+ * Response from ValidateFetchXmlExpression function
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatefetchxmlexpressionresponse
+ */
+export interface ValidateFetchXmlExpressionResponse {
+	ValidationResults: {
+		Helplink?: string;
+		Messages: ValidatorIssue[];
+	};
+}
+
+/**
+ * Validate FetchXML for performance issues before save
+ * Returns validation messages with severity levels
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatefetchxmlexpression
+ */
+export async function validateFetchXmlExpression(
+	fetchXml: string
+): Promise<ValidateFetchXmlExpressionResponse> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 ValidateFetchXmlExpression - Validating FetchXML...`);
+
+	try {
+		// The function requires URL-encoded FetchXML passed as a query parameter
+		// Format: ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='encodedFetchXml'
+		const encodedFetchXml = encodeURIComponent(fetchXml);
+		const query = `ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='${encodedFetchXml}'`;
+
+		const result = (await window.dataverseAPI!.queryData(
+			query
+		)) as unknown as ValidateFetchXmlExpressionResponse;
+
+		debugLog(
+			"viewAPI",
+			`✅ ValidateFetchXmlExpression - Complete: ${
+				result.ValidationResults?.Messages?.length || 0
+			} messages`
+		);
+
+		return result;
+	} catch (error) {
+		console.error("validateFetchXmlExpression: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Validate SavedQuery before creation/update
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatesavedquery
+ */
+export async function validateSavedQuery(fetchXml: string, queryType: number = 0): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 ValidateSavedQuery - Validating saved query...`);
+
+	try {
+		await window.dataverseAPI!.execute({
+			operationName: "ValidateSavedQuery",
+			operationType: "action",
+			parameters: {
+				FetchXml: fetchXml,
+				QueryType: queryType,
+			},
+		});
+
+		debugLog("viewAPI", `✅ ValidateSavedQuery - Validation passed`);
+	} catch (error) {
+		console.error("validateSavedQuery: Validation failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Check if user has privileges for saving system views (savedquery)
+ * Correct privilege names:
+ * - prvWriteQuery: Required to create/update saved queries (system views)
+ * - prvWriteCustomization: Required to write customizations
+ * - prvPublishCustomization: Required to publish customizations
+ * @returns Object with privileges for savedquery operations
+ */
+export async function checkSavedQueryPrivileges(): Promise<{
+	canWrite: boolean;
+	canPublish: boolean;
+}> {
+	const user = await whoAmI();
+	if (!user) {
+		return { canWrite: false, canPublish: false };
+	}
+
+	// Try to check privileges, but handle gracefully if the privilege check fails
+	let canWriteQuery = false;
+	let canWriteCustomization = false;
+	let canPublishCustomization = false;
+
+	try {
+		// Check for prvWriteQuery privilege (create/update system views)
+		canWriteQuery = await checkPrivilegeByName(user.UserId, "prvWriteQuery");
+	} catch (error) {
+		console.warn("Could not check prvWriteQuery, assuming false:", error);
+	}
+
+	try {
+		// Check for prvWriteCustomization privilege
+		canWriteCustomization = await checkPrivilegeByName(user.UserId, "prvWriteCustomization");
+	} catch (error) {
+		console.warn("Could not check prvWriteCustomization, assuming false:", error);
+	}
+
+	try {
+		// Check for prvPublishCustomization privilege
+		canPublishCustomization = await checkPrivilegeByName(user.UserId, "prvPublishCustomization");
+	} catch (error) {
+		console.warn("Could not check prvPublishCustomization, assuming false:", error);
+	}
+
+	// User can write system views if they have both prvWriteQuery and prvWriteCustomization
+	const canWrite = canWriteQuery && canWriteCustomization;
+	// User can publish if they also have prvPublishCustomization
+	const canPublish = canWrite && canPublishCustomization;
+
+	debugLog(
+		"viewAPI",
+		`✅ SavedQuery privileges: writeQuery=${canWriteQuery}, writeCustomization=${canWriteCustomization}, publishCustomization=${canPublishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}`
+	);
+
+	return { canWrite, canPublish };
+}
+
+/**
+ * Check if user has privileges for saving personal views (userquery)
+ * Correct privilege name:
+ * - prvWriteUserQuery: Required to create/update user queries (personal views)
+ * @returns Whether user can write personal views
+ */
+export async function checkUserQueryPrivileges(): Promise<{
+	canWrite: boolean;
+}> {
+	const user = await whoAmI();
+	if (!user) {
+		return { canWrite: false };
+	}
+
+	let canWrite = false;
+
+	try {
+		// Check for prvWriteUserQuery privilege
+		canWrite = await checkPrivilegeByName(user.UserId, "prvWriteUserQuery");
+	} catch (error) {
+		console.warn("Could not check prvWriteUserQuery, assuming false:", error);
+	}
+
+	debugLog("viewAPI", `✅ UserQuery privileges: canWrite=${canWrite}`);
+
+	return { canWrite };
+}
+
+/**
+ * Get unmanaged solutions that can receive components
+ * Used for the solution picker when saving system views
+ */
+export async function getUnmanagedSolutions(): Promise<Solution[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 GET Unmanaged Solutions`);
+
+	try {
+		// Query unmanaged solutions (ismanaged eq false)
+		// Exclude the Default solution (uniquename = 'Default')
+		const query =
+			"solutions?" +
+			"$select=solutionid,friendlyname,uniquename,version,_publisherid_value,isvisible,ismanaged" +
+			"&$filter=ismanaged eq false and isvisible eq true and uniquename ne 'Default'" +
+			"&$orderby=friendlyname asc";
+
+		const result = await window.dataverseAPI!.queryData(query);
+		const solutions = result.value as unknown as Solution[];
+
+		debugLog("viewAPI", `✅ Unmanaged Solutions retrieved: ${solutions.length}`);
+		return solutions;
+	} catch (error) {
+		console.error("getUnmanagedSolutions: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Data for creating a new system view (savedquery)
+ */
+export interface CreateSavedQueryData {
+	name: string;
+	fetchxml: string;
+	layoutxml: string;
+	returnedtypecode: string; // Entity logical name
+	description?: string;
+	querytype?: number; // 0 = Main/Public view
+}
+
+/**
+ * Data for creating a new personal view (userquery)
+ */
+export interface CreateUserQueryData {
+	name: string;
+	fetchxml: string;
+	layoutxml: string;
+	returnedtypecode: string; // Entity logical name
+	description?: string;
+	querytype?: number; // 0 = Saved view
+}
+
+/**
+ * Create a new System View (savedquery)
+ * @returns The ID of the created view
+ */
+export async function createSavedQuery(data: CreateSavedQueryData): Promise<string> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 CREATE SavedQuery: "${data.name}"`);
+
+	try {
+		const record = {
+			name: data.name,
+			fetchxml: data.fetchxml,
+			layoutxml: data.layoutxml,
+			returnedtypecode: data.returnedtypecode,
+			description: data.description || null,
+			querytype: data.querytype ?? 0,
+		};
+
+		const result = await window.dataverseAPI!.create("savedquery", record);
+
+		debugLog("viewAPI", `✅ SavedQuery created: ${result.id}`);
+		return result.id;
+	} catch (error) {
+		console.error("createSavedQuery: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Update an existing System View (savedquery)
+ */
+export async function updateSavedQuery(
+	savedQueryId: string,
+	data: Partial<CreateSavedQueryData>
+): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 UPDATE SavedQuery: ${savedQueryId}`);
+
+	try {
+		const record: Record<string, unknown> = {};
+		if (data.name !== undefined) record.name = data.name;
+		if (data.fetchxml !== undefined) record.fetchxml = data.fetchxml;
+		if (data.layoutxml !== undefined) record.layoutxml = data.layoutxml;
+		if (data.description !== undefined) record.description = data.description;
+
+		await window.dataverseAPI!.update("savedquery", savedQueryId, record);
+
+		debugLog("viewAPI", `✅ SavedQuery updated: ${savedQueryId}`);
+	} catch (error) {
+		console.error("updateSavedQuery: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Create a new Personal View (userquery)
+ * @returns The ID of the created view
+ */
+export async function createUserQuery(data: CreateUserQueryData): Promise<string> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 CREATE UserQuery: "${data.name}"`);
+
+	try {
+		const record = {
+			name: data.name,
+			fetchxml: data.fetchxml,
+			layoutxml: data.layoutxml,
+			returnedtypecode: data.returnedtypecode,
+			description: data.description || null,
+			querytype: data.querytype ?? 0,
+		};
+
+		const result = await window.dataverseAPI!.create("userquery", record);
+
+		debugLog("viewAPI", `✅ UserQuery created: ${result.id}`);
+		return result.id;
+	} catch (error) {
+		console.error("createUserQuery: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Update an existing Personal View (userquery)
+ */
+export async function updateUserQuery(
+	userQueryId: string,
+	data: Partial<CreateUserQueryData>
+): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 UPDATE UserQuery: ${userQueryId}`);
+
+	try {
+		const record: Record<string, unknown> = {};
+		if (data.name !== undefined) record.name = data.name;
+		if (data.fetchxml !== undefined) record.fetchxml = data.fetchxml;
+		if (data.layoutxml !== undefined) record.layoutxml = data.layoutxml;
+		if (data.description !== undefined) record.description = data.description;
+
+		await window.dataverseAPI!.update("userquery", userQueryId, record);
+
+		debugLog("viewAPI", `✅ UserQuery updated: ${userQueryId}`);
+	} catch (error) {
+		console.error("updateUserQuery: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Add a component to a solution
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/addsolutioncomponent
+ */
+export async function addSolutionComponent(
+	componentId: string,
+	componentType: number,
+	solutionUniqueName: string,
+	addRequiredComponents: boolean = false
+): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog(
+		"viewAPI",
+		`📡 AddSolutionComponent: ${componentId} (type=${componentType}) to "${solutionUniqueName}"`
+	);
+
+	try {
+		await window.dataverseAPI!.execute({
+			operationName: "AddSolutionComponent",
+			operationType: "action",
+			parameters: {
+				ComponentId: componentId,
+				ComponentType: componentType,
+				SolutionUniqueName: solutionUniqueName,
+				AddRequiredComponents: addRequiredComponents,
+			},
+		});
+
+		debugLog("viewAPI", `✅ Component added to solution: ${componentId} → ${solutionUniqueName}`);
+	} catch (error) {
+		console.error("addSolutionComponent: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Component type for savedquery (system views)
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/solutioncomponent
+ */
+export const COMPONENT_TYPE_SAVEDQUERY = 26;
+
+/**
+ * Publish a specific savedquery
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/publishxml
+ */
+export async function publishSavedQuery(savedQueryId: string): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 PublishXml for SavedQuery: ${savedQueryId}`);
+
+	try {
+		// Build ParameterXml to publish a specific savedquery
+		const parameterXml = `<importexportxml><savedqueries><savedquery>{${savedQueryId}}</savedquery></savedqueries></importexportxml>`;
+
+		await window.dataverseAPI!.execute({
+			operationName: "PublishXml",
+			operationType: "action",
+			parameters: {
+				ParameterXml: parameterXml,
+			},
+		});
+
+		debugLog("viewAPI", `✅ SavedQuery published: ${savedQueryId}`);
+	} catch (error) {
+		console.error("publishSavedQuery: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Check if a solution is managed by unique name
+ * @returns true if solution is managed, false if unmanaged, null if not found
+ */
+export async function isSolutionManaged(solutionUniqueName: string): Promise<boolean | null> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 Check if solution "${solutionUniqueName}" is managed`);
+
+	try {
+		const query = `solutions?$select=solutionid,ismanaged&$filter=uniquename eq '${solutionUniqueName}'`;
+		const result = await window.dataverseAPI!.queryData(query);
+
+		if (!result.value || result.value.length === 0) {
+			debugLog("viewAPI", `⚠️ Solution "${solutionUniqueName}" not found`);
+			return null;
+		}
+
+		const isManaged = result.value[0].ismanaged as boolean;
+		debugLog("viewAPI", `✅ Solution "${solutionUniqueName}" ismanaged=${isManaged}`);
+		return isManaged;
+	} catch (error) {
+		console.error("isSolutionManaged: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get solution ID by unique name
+ * @returns Solution ID or null if not found
+ */
+export async function getSolutionIdByUniqueName(
+	solutionUniqueName: string
+): Promise<string | null> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("viewAPI", `📡 Get solution ID for "${solutionUniqueName}"`);
+
+	try {
+		const query = `solutions?$select=solutionid&$filter=uniquename eq '${solutionUniqueName}'`;
+		const result = await window.dataverseAPI!.queryData(query);
+
+		if (!result.value || result.value.length === 0) {
+			debugLog("viewAPI", `⚠️ Solution "${solutionUniqueName}" not found`);
+			return null;
+		}
+
+		const solutionId = result.value[0].solutionid as string;
+		debugLog("viewAPI", `✅ Solution ID: ${solutionId}`);
+		return solutionId;
+	} catch (error) {
+		console.error("getSolutionIdByUniqueName: Failed:", error);
+		throw error;
+	}
+}

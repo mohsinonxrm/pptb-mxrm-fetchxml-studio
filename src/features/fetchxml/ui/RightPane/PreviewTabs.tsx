@@ -2,7 +2,7 @@
  * Tabbed preview panel with FetchXML editor and Results grid
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
 	TabList,
 	Tab,
@@ -114,6 +114,8 @@ interface PreviewTabsProps {
 	onAddColumn?: (attributeName: string) => void;
 	/** Callback when user changes sort on a column */
 	onSortChange?: (data: SortChangeData) => void;
+	/** Optional SaveViewButton to render in the toolbar */
+	saveViewButton?: ReactNode;
 }
 
 export function PreviewTabs({
@@ -130,6 +132,7 @@ export function PreviewTabs({
 	onReorderColumns,
 	onAddColumn,
 	onSortChange,
+	saveViewButton,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -161,6 +164,7 @@ export function PreviewTabs({
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
+					{saveViewButton}
 				</Toolbar>
 			</div>
 			{isExecuting && (
