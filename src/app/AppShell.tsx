@@ -43,13 +43,14 @@ const useStyles = makeStyles({
 	root: {
 		display: "flex",
 		flexDirection: "row",
-		height: "98%",
+		height: "100%",
 		width: "100%",
 		overflow: "hidden",
 		position: "absolute",
 		top: 0,
 		left: 0,
 		right: 0,
+		bottom: 0,
 	},
 	leftPane: {
 		display: "flex",
@@ -57,11 +58,13 @@ const useStyles = makeStyles({
 		overflow: "hidden",
 		minWidth: "300px",
 		maxWidth: "800px",
+		height: "100%",
 	},
 	leftPaneTop: {
 		display: "flex",
 		flexDirection: "column",
 		overflow: "hidden",
+		minHeight: 0, // Important for flex child with overflow
 	},
 	horizontalResizeHandle: {
 		height: "6px",
@@ -119,6 +122,7 @@ const useStyles = makeStyles({
 		flexDirection: "column",
 		minHeight: "100px",
 		overflow: "hidden",
+		minWidth: 0, // Important for flex child with overflow
 	},
 	propertiesContent: {
 		flex: 1,

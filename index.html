@@ -37,6 +37,31 @@
 				right: 0;
 				bottom: 0;
 			}
+
+			/* Modern scrollbar styling */
+			::-webkit-scrollbar {
+				width: 8px;
+				height: 8px;
+			}
+
+			::-webkit-scrollbar-track {
+				background: transparent;
+			}
+
+			::-webkit-scrollbar-thumb {
+				background: rgba(128, 128, 128, 0.4);
+				border-radius: 4px;
+			}
+
+			::-webkit-scrollbar-thumb:hover {
+				background: rgba(128, 128, 128, 0.6);
+			}
+
+			/* Firefox scrollbar */
+			* {
+				scrollbar-width: thin;
+				scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+			}
 		</style>
 	</head>
 	<body>

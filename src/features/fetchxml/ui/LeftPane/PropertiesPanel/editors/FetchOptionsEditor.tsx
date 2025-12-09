@@ -3,17 +3,29 @@
  * Controls query-level settings like aggregation, paging, distinct, etc.
  */
 
+import { useState } from "react";
 import {
 	Field,
 	Checkbox,
 	Input,
 	Label,
 	Tooltip,
+	Switch,
 	makeStyles,
 	tokens,
+	TeachingPopover,
+	TeachingPopoverBody,
+	TeachingPopoverSurface,
+	TeachingPopoverTitle,
+	TeachingPopoverTrigger,
+	TeachingPopoverFooter,
 } from "@fluentui/react-components";
 import { Info16Regular } from "@fluentui/react-icons";
 import type { FetchNode } from "../../../../model/nodes";
+import { useBuilder } from "../../../../state/builderStore";
+
+// Track if the teaching popover has been shown this session
+let hasShownRetrieveAllPopover = false;
 
 const useStyles = makeStyles({
 	container: {
@@ -46,6 +58,19 @@ interface FetchOptionsEditorProps {
 export function FetchOptionsEditor({ node, onUpdate }: FetchOptionsEditorProps) {
 	const styles = useStyles();
 	const { options } = node;
+	const { retrieveAllRecords, setRetrieveAllRecords } = useBuilder();
+
+	// TeachingPopover state - show once per session when first toggling on
+	const [showTeachingPopover, setShowTeachingPopover] = useState(false);
+
+	const handleRetrieveAllChange = (_: unknown, data: { checked: boolean }) => {
+		// Show teaching popover the first time user enables this option
+		if (data.checked && !hasShownRetrieveAllPopover) {
+			setShowTeachingPopover(true);
+			hasShownRetrieveAllPopover = true;
+		}
+		setRetrieveAllRecords(data.checked);
+	};
 
 	const handleCheckboxChange =
 		(field: string) => (_: unknown, data: { checked: boolean | "mixed" }) => {
@@ -69,6 +94,43 @@ export function FetchOptionsEditor({ node, onUpdate }: FetchOptionsEditorProps) 
 
 	return (
 		<div className={styles.container}>
+			{/* Execution Options Section */}
+			<div className={styles.section}>
+				<Label weight="semibold">Execution Options</Label>
+
+				<Field>
+					<div className={styles.fieldWithTooltip}>
+						<TeachingPopover
+							open={showTeachingPopover}
+							onOpenChange={(_, data) => setShowTeachingPopover(data.open)}
+						>
+							<TeachingPopoverTrigger>
+								<Switch
+									checked={retrieveAllRecords}
+									onChange={handleRetrieveAllChange}
+									label="Retrieve All Records"
+								/>
+							</TeachingPopoverTrigger>
+							<TeachingPopoverSurface>
+								<TeachingPopoverBody>
+									<TeachingPopoverTitle>Retrieve All Records</TeachingPopoverTitle>
+									<div>Fetches all pages progressively. Use with caution on large datasets.</div>
+								</TeachingPopoverBody>
+								<TeachingPopoverFooter
+									primary={{ children: "Got it", onClick: () => setShowTeachingPopover(false) }}
+								/>
+							</TeachingPopoverSurface>
+						</TeachingPopover>
+						<Tooltip
+							content="Fetches all pages progressively. Use with caution on large datasets."
+							relationship="description"
+						>
+							<Info16Regular className={styles.tooltipIcon} />
+						</Tooltip>
+					</div>
+				</Field>
+			</div>
+
 			{/* Aggregation & Distinct Section */}
 			<div className={styles.section}>
 				<Label weight="semibold">Query Options</Label>

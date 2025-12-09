@@ -69,6 +69,9 @@ const useStyles = makeStyles({
 		flex: 1,
 		overflow: "auto",
 		padding: "8px",
+		minHeight: 0, // Important for flex child with overflow
+		// Ensure scrollbars are always visible when content overflows
+		scrollbarGutter: "stable",
 	},
 	treeItem: {
 		"&:hover": {

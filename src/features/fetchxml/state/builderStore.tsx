@@ -68,6 +68,8 @@ interface BuilderState {
 	columnConfig: LayoutXmlConfig | null;
 	/** Track if layout needs regeneration due to FetchXML changes */
 	layoutNeedsSync: boolean;
+	/** When enabled, execution fetches all pages of results progressively */
+	retrieveAllRecords: boolean;
 }
 
 type BuilderAction =
@@ -101,7 +103,8 @@ type BuilderAction =
 			descending: boolean;
 			isMultiSort: boolean;
 			entityName?: string;
-	  };
+	  }
+	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
@@ -110,6 +113,7 @@ const initialState: BuilderState = {
 	loadedView: null,
 	columnConfig: null,
 	layoutNeedsSync: false,
+	retrieveAllRecords: false,
 };
 
 // Helper to find node by ID in the tree
@@ -270,6 +274,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				loadedView: null, // Clear view info - this was manual edit
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
+				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
 			};
 		}
 
@@ -298,6 +303,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				loadedView: action.viewInfo, // Track the loaded view
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
+				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
 			};
 		}
 
@@ -344,6 +350,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				loadedView: null, // Clear view info - entity changed
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
+				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
 			};
 		}
 
@@ -842,6 +849,13 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 		}
 
+		case "SET_RETRIEVE_ALL_RECORDS": {
+			return {
+				...state,
+				retrieveAllRecords: action.enabled,
+			};
+		}
+
 		default:
 			return state;
 	}
@@ -895,6 +909,11 @@ interface BuilderContextValue extends BuilderState {
 		isMultiSort: boolean,
 		entityName?: string
 	) => void;
+	/**
+	 * Enable or disable "Retrieve All Records" mode.
+	 * When enabled, execution fetches all pages progressively.
+	 */
+	setRetrieveAllRecords: (enabled: boolean) => void;
 }
 
 const BuilderContext = createContext<BuilderContextValue | null>(null);
@@ -965,6 +984,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap }),
 		setSort: (attribute: string, descending: boolean, isMultiSort: boolean, entityName?: string) =>
 			dispatch({ type: "SET_SORT", attribute, descending, isMultiSort, entityName }),
+		setRetrieveAllRecords: (enabled: boolean) =>
+			dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
 	};
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

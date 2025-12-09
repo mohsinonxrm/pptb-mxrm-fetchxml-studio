@@ -26,6 +26,8 @@ const useStyles = makeStyles({
 	container: {
 		overflow: "auto",
 		height: "100%",
+		minHeight: 0, // Important for flex child with overflow
+		scrollbarGutter: "stable",
 	},
 	emptyState: {
 		padding: "16px",
