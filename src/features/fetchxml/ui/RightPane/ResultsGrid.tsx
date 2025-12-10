@@ -136,7 +136,8 @@ export interface QueryResult {
 interface ResultsGridProps {
 	result: QueryResult | null;
 	isLoading?: boolean;
-	attributeMetadata?: Map<string, AttributeMetadata>;
+	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
+	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null; // For extracting aliases and order state
 	onSelectedCountChange?: (count: number) => void;
 	/** Column layout configuration for order and widths */
@@ -214,6 +215,14 @@ export function ResultsGrid({
 		const map = new Map<string, { direction: SortDirection; entityName?: string }>();
 		if (!fetchQuery?.entity) return map;
 
+		// Build a reverse map from attribute name to alias for root entity
+		const attrToAliasMap = new Map<string, string>();
+		fetchQuery.entity.attributes?.forEach((attr) => {
+			if (attr.alias) {
+				attrToAliasMap.set(attr.name, attr.alias);
+			}
+		});
+
 		// Process root entity orders
 		// Orders with entityname refer to link-entity attributes
 		fetchQuery.entity.orders?.forEach((order: OrderNode) => {
@@ -232,6 +241,11 @@ export function ResultsGrid({
 				map.set(order.attribute, { direction });
 				// Also check for lookup field naming convention
 				map.set(`_${order.attribute}_value`, { direction });
+				// Also map by alias if this attribute has one
+				const alias = attrToAliasMap.get(order.attribute);
+				if (alias) {
+					map.set(alias, { direction });
+				}
 			}
 		});
 
@@ -338,45 +352,76 @@ export function ResultsGrid({
 		return attrs;
 	}, [fetchQuery]);
 
-	// Build alias map from FetchXML query structure
-	const aliasMap = useMemo(() => {
-		const map = new Map<string, string>();
-		if (!fetchQuery) return map;
+	// Build comprehensive column metadata map from FetchXML query structure
+	// Maps column name (as it appears in results) to display info
+	interface ColumnDisplayInfo {
+		/** Original attribute logical name */
+		attributeName: string;
+		/** Entity logical name this attribute belongs to */
+		entityName: string;
+		/** Explicit alias provided in FetchXML (if any) */
+		alias?: string;
+		/** Link-entity alias (if from link-entity) */
+		linkEntityAlias?: string;
+		/** Whether this is a lookup column (N:1 navigation) */
+		isLookupColumn?: boolean;
+	}
 
-		// Collect aliases from root entity attributes
-		const collectAttributeAliases = (attributes: Array<AttributeNode>) => {
-			attributes.forEach((attr) => {
-				if (attr.alias) {
-					map.set(attr.alias, attr.name); // Map alias -> original attribute name
-				}
-			});
-		};
+	const columnDisplayMap = useMemo(() => {
+		const map = new Map<string, ColumnDisplayInfo>();
+		if (!fetchQuery?.entity?.name) return map;
 
-		// Collect from root entity
+		const rootEntityName = fetchQuery.entity.name;
+
+		// Collect from root entity attributes
 		if (fetchQuery.entity.attributes) {
-			collectAttributeAliases(fetchQuery.entity.attributes);
+			fetchQuery.entity.attributes.forEach((attr) => {
+				const columnKey = attr.alias || attr.name;
+				map.set(columnKey, {
+					attributeName: attr.name,
+					entityName: rootEntityName,
+					alias: attr.alias,
+				});
+				// Also map lookup column format (_attributename_value) for lookup fields
+				map.set(`_${attr.name}_value`, {
+					attributeName: attr.name,
+					entityName: rootEntityName,
+					isLookupColumn: true,
+				});
+			});
 		}
 
 		// Collect from link-entities recursively
-		const collectFromLinks = (links: Array<any>, linkAlias?: string) => {
+		const collectFromLinks = (links: import("../../model/nodes").LinkEntityNode[]) => {
 			links.forEach((link) => {
-				const currentAlias = link.alias || linkAlias;
+				const linkAlias = link.alias || link.name;
+
 				if (link.attributes) {
-					link.attributes.forEach((attr: AttributeNode) => {
-						if (attr.alias) {
-							map.set(attr.alias, attr.name); // Explicit alias -> attribute name
-						}
-						// Also map link-entity prefixed names
-						if (currentAlias) {
-							map.set(`${currentAlias}.${attr.name}`, attr.name);
-						}
-						if (link.name) {
-							map.set(`${link.name}.${attr.name}`, attr.name);
+					link.attributes.forEach((attr) => {
+						// For link-entity attributes, the column in results may be:
+						// 1. attr.alias (if explicitly aliased)
+						// 2. linkAlias.attributeName (standard format)
+						const columnKey = attr.alias || `${linkAlias}.${attr.name}`;
+						map.set(columnKey, {
+							attributeName: attr.name,
+							entityName: link.name,
+							alias: attr.alias,
+							linkEntityAlias: linkAlias,
+						});
+
+						// Also map entityname.attributeName variant
+						if (link.name !== linkAlias) {
+							map.set(`${link.name}.${attr.name}`, {
+								attributeName: attr.name,
+								entityName: link.name,
+								linkEntityAlias: linkAlias,
+							});
 						}
 					});
 				}
+
 				if (link.links) {
-					collectFromLinks(link.links, currentAlias);
+					collectFromLinks(link.links);
 				}
 			});
 		};
@@ -413,47 +458,105 @@ export function ResultsGrid({
 		// If columnConfig is provided, use it to order the columns
 		if (columnConfig && columnConfig.columns.length > 0) {
 			const configOrder = columnConfig.columns.map((c) => c.name);
-			const configSet = new Set(configOrder);
+
+			// Build a map that handles lookup field naming convention
+			// FetchXML/config uses: primarycontactid, but Dataverse returns: _primarycontactid_value
+			const getConfigIndex = (col: string): number => {
+				// Direct match first
+				const directIndex = configOrder.indexOf(col);
+				if (directIndex >= 0) return directIndex;
+
+				// If it's a lookup column (_xxx_value), try matching the base attribute name
+				if (col.startsWith("_") && col.endsWith("_value")) {
+					const baseAttr = col.slice(1, -6);
+					const baseIndex = configOrder.indexOf(baseAttr);
+					if (baseIndex >= 0) return baseIndex;
+				}
+
+				return -1; // Not in config
+			};
 
 			// Sort displayable columns by config order, append any not in config at end
+			const inConfig = displayableColumns.filter((col) => getConfigIndex(col) >= 0);
+			const notInConfig = displayableColumns.filter((col) => getConfigIndex(col) < 0);
+
 			displayableColumns = [
-				...displayableColumns
-					.filter((col) => configSet.has(col))
-					.sort((a, b) => {
-						return configOrder.indexOf(a) - configOrder.indexOf(b);
-					}),
-				...displayableColumns.filter((col) => !configSet.has(col)),
+				...inConfig.sort((a, b) => getConfigIndex(a) - getConfigIndex(b)),
+				...notInConfig,
 			];
 		}
 
 		return displayableColumns.map((col) => {
-			// Check if this column is an alias
-			const originalAttributeName = aliasMap.get(col) || col;
+			// Get column display info from our comprehensive map
+			const displayInfo = columnDisplayMap.get(col);
 
-			// For lookup columns (_attributename_value), try to get metadata for base attribute
+			// Helper to get attribute metadata from multi-entity map
+			const getAttributeMetadata = (
+				entityName: string,
+				attrName: string
+			): AttributeMetadata | undefined => {
+				return attributeMetadata?.get(entityName)?.get(attrName);
+			};
+
+			// Resolve attribute metadata based on display info
 			let attribute: AttributeMetadata | undefined;
-			if (col.startsWith("_") && col.endsWith("_value")) {
+			let entityDisplayName: string | undefined;
+
+			if (displayInfo) {
+				attribute = getAttributeMetadata(displayInfo.entityName, displayInfo.attributeName);
+
+				// For link-entity columns, also try to get entity display name
+				if (displayInfo.linkEntityAlias) {
+					// Get the entity metadata for display name (could be cached in allEntities)
+					// For now, we'll construct from the link alias
+					entityDisplayName = displayInfo.linkEntityAlias;
+				}
+			} else if (col.startsWith("_") && col.endsWith("_value")) {
+				// Fallback for lookup columns not in our map
 				const baseAttr = col.slice(1, -6);
-				attribute = attributeMetadata?.get(baseAttr);
+				const rootEntity = fetchQuery?.entity?.name;
+				if (rootEntity) {
+					attribute = getAttributeMetadata(rootEntity, baseAttr);
+				}
 			} else {
-				attribute = attributeMetadata?.get(originalAttributeName) || attributeMetadata?.get(col);
+				// Fallback: try root entity
+				const rootEntity = fetchQuery?.entity?.name;
+				if (rootEntity) {
+					attribute = getAttributeMetadata(rootEntity, col);
+				}
 			}
 
-			// Determine display name: prefer alias from FetchXML, then metadata display name, then column name
+			// Determine display name with comprehensive logic:
+			// 1. For aliased columns: Use the alias as display name
+			// 2. For lookup columns (_attr_value): Use attribute display name (e.g., "Primary Contact")
+			// 3. For link-entity columns: "{Link Alias}.{Attribute Display Name}" or "{Link Alias}.{Attr Alias}"
+			// 4. For root entity columns: Use attribute display name
+			// 5. Fallback: Clean up column name
 			let displayName: string;
-			if (aliasMap.has(col)) {
-				// This IS an alias - use it as the display name
-				displayName = col;
+
+			if (displayInfo?.alias) {
+				// User-specified alias takes precedence
+				displayName = displayInfo.alias;
+			} else if (displayInfo?.isLookupColumn) {
+				// Lookup column: show attribute display name (represents the lookup field)
+				displayName =
+					attribute?.DisplayName?.UserLocalizedLabel?.Label ||
+					displayInfo.attributeName ||
+					col.slice(1, -6); // Remove _ prefix and _value suffix
+			} else if (displayInfo?.linkEntityAlias) {
+				// Link-entity column: "EntityAlias.AttributeDisplayName"
+				const attrDisplayName =
+					attribute?.DisplayName?.UserLocalizedLabel?.Label || displayInfo.attributeName;
+				displayName = `${entityDisplayName || displayInfo.linkEntityAlias}.${attrDisplayName}`;
 			} else if (attribute?.DisplayName?.UserLocalizedLabel?.Label) {
-				// Use metadata display name
+				// Root entity attribute with metadata display name
 				displayName = attribute.DisplayName.UserLocalizedLabel.Label;
+			} else if (col.startsWith("_") && col.endsWith("_value")) {
+				// Fallback for lookup columns without metadata
+				displayName = col.slice(1, -6);
 			} else {
-				// Fall back to column name (cleaned up for lookups)
-				if (col.startsWith("_") && col.endsWith("_value")) {
-					displayName = col.slice(1, -6); // Remove _ prefix and _value suffix
-				} else {
-					displayName = col;
-				}
+				// Final fallback: use column name as-is
+				displayName = col;
 			}
 
 			// Check if this column is sorted (from FetchXML orders)
@@ -495,7 +598,7 @@ export function ResultsGrid({
 	}, [
 		result,
 		attributeMetadata,
-		aliasMap,
+		columnDisplayMap,
 		fetchQuery,
 		requestedAttributes,
 		columnConfig,
@@ -574,10 +677,13 @@ export function ResultsGrid({
 			{};
 
 		// Create a map of column widths from config
+		// Also map lookup field variants (_xxx_value -> config width for xxx)
 		const configWidths = new Map<string, number>();
 		if (columnConfig) {
 			for (const col of columnConfig.columns) {
 				configWidths.set(col.name, col.width);
+				// Also map the lookup column variant
+				configWidths.set(`_${col.name}_value`, col.width);
 			}
 		}
 
@@ -597,13 +703,19 @@ export function ResultsGrid({
 	}, [columns, columnConfig]);
 
 	// Handle column resize callback
+	// Maps lookup column names back to config names for storage
 	const handleColumnResize = useCallback(
 		(
 			_e: KeyboardEvent | TouchEvent | MouseEvent | undefined,
 			data: { columnId: string | number; width: number }
 		) => {
 			if (onColumnResize) {
-				onColumnResize(String(data.columnId), data.width);
+				let columnName = String(data.columnId);
+				// If it's a lookup column (_xxx_value), store width under the base attribute name
+				if (columnName.startsWith("_") && columnName.endsWith("_value")) {
+					columnName = columnName.slice(1, -6);
+				}
+				onColumnResize(columnName, data.width);
 			}
 		},
 		[onColumnResize]

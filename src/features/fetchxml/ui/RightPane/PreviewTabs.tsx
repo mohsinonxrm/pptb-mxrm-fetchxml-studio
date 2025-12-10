@@ -102,7 +102,8 @@ interface PreviewTabsProps {
 	onExecute?: () => void;
 	onExport?: () => void;
 	onParseToTree?: (xmlString: string) => ParseResult;
-	attributeMetadata?: Map<string, AttributeMetadata>;
+	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
+	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null;
 	/** Column layout configuration for ordering and sizing */
 	columnConfig?: LayoutXmlConfig | null;
@@ -193,7 +194,10 @@ export function PreviewTabs({
 								columns={columnConfig?.columns}
 								onReorderColumns={onReorderColumns}
 								availableAttributes={
-									attributeMetadata ? Array.from(attributeMetadata.values()) : undefined
+									// Get root entity attributes from multi-entity map
+									attributeMetadata && fetchQuery?.entity?.name
+										? Array.from(attributeMetadata.get(fetchQuery.entity.name)?.values() || [])
+										: undefined
 								}
 								selectedAttributes={fetchQuery?.entity.attributes.map((a) => a.name)}
 								onAddColumn={onAddColumn}

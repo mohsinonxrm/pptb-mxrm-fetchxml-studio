@@ -177,6 +177,36 @@ export function AppShell() {
 	);
 }
 
+/**
+ * Collect all unique entity logical names from a FetchXML query
+ * Includes root entity and all link-entities (recursively)
+ */
+function collectEntitiesFromFetchQuery(
+	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null
+): string[] {
+	if (!fetchQuery?.entity?.name) return [];
+
+	const entities = new Set<string>();
+	entities.add(fetchQuery.entity.name);
+
+	const collectFromLinks = (
+		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined
+	) => {
+		links?.forEach((link) => {
+			if (link.name) {
+				entities.add(link.name);
+			}
+			if (link.links) {
+				collectFromLinks(link.links);
+			}
+		});
+	};
+
+	collectFromLinks(fetchQuery.entity.links);
+
+	return Array.from(entities);
+}
+
 function AppContent() {
 	const styles = useStyles();
 	const builder = useBuilder();
@@ -185,9 +215,10 @@ function AppContent() {
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
 	const [isExecuting, setIsExecuting] = useState(false);
-	const [attributeMetadata, setAttributeMetadata] = useState<Map<string, AttributeMetadata>>(
-		new Map()
-	);
+	// Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>>
+	const [attributeMetadata, setAttributeMetadata] = useState<
+		Map<string, Map<string, AttributeMetadata>>
+	>(new Map());
 	// State for entity metadata (for layoutxml generation)
 	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
 
@@ -288,31 +319,50 @@ function AppContent() {
 		console.log("===================================================");
 	}, []);
 
-	// Load attribute metadata when entity changes
+	// Collect entities from FetchXML and memoize to avoid unnecessary reloads
+	const entitiesInQuery = useMemo(() => {
+		return collectEntitiesFromFetchQuery(builder.fetchQuery);
+	}, [builder.fetchQuery]);
+
+	// Create a stable key for the entities list to minimize effect re-runs
+	const entitiesKey = useMemo(() => entitiesInQuery.sort().join(","), [entitiesInQuery]);
+
+	// Load attribute metadata for all entities in the FetchXML query
+	// This includes the root entity and all link-entities
 	useEffect(() => {
-		const entityName = builder.fetchQuery?.entity?.name;
-		if (!entityName) {
+		if (entitiesInQuery.length === 0) {
 			setAttributeMetadata(new Map());
 			setEntityMetadata(null);
 			return;
 		}
 
-		// Load attribute metadata
-		loadAttributes(entityName)
-			.then((attributes) => {
-				const map = new Map<string, AttributeMetadata>();
-				attributes.forEach((attr) => {
-					map.set(attr.LogicalName, attr);
-				});
-				setAttributeMetadata(map);
+		const rootEntityName = entitiesInQuery[0];
+
+		// Load attributes for all entities in the query
+		Promise.all(
+			entitiesInQuery.map(async (entityName) => {
+				try {
+					const attributes = await loadAttributes(entityName);
+					const attrMap = new Map<string, AttributeMetadata>();
+					attributes.forEach((attr) => {
+						attrMap.set(attr.LogicalName, attr);
+					});
+					return { entityName, attrMap };
+				} catch (error) {
+					console.error(`Failed to load attributes for ${entityName}:`, error);
+					return { entityName, attrMap: new Map<string, AttributeMetadata>() };
+				}
 			})
-			.catch((error) => {
-				console.error("Failed to load attribute metadata:", error);
-				setAttributeMetadata(new Map());
+		).then((results) => {
+			const multiEntityMap = new Map<string, Map<string, AttributeMetadata>>();
+			results.forEach(({ entityName, attrMap }) => {
+				multiEntityMap.set(entityName, attrMap);
 			});
+			setAttributeMetadata(multiEntityMap);
+		});
 
 		// Load entity metadata (for ObjectTypeCode and PrimaryIdAttribute)
-		loadEntityMetadata(entityName)
+		loadEntityMetadata(rootEntityName)
 			.then((entity) => {
 				setEntityMetadata(entity);
 			})
@@ -320,7 +370,8 @@ function AppContent() {
 				console.error("Failed to load entity metadata:", error);
 				setEntityMetadata(null);
 			});
-	}, [builder.fetchQuery?.entity?.name, loadAttributes, loadEntityMetadata]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [entitiesKey, loadAttributes, loadEntityMetadata]);
 
 	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
 	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared
@@ -336,9 +387,12 @@ function AppContent() {
 
 		if (needsSync && builder.fetchQuery) {
 			// Build attribute type map from metadata for better column widths
+			// Use root entity's attribute metadata
 			const attributeTypeMap = new Map<string, string>();
-			if (attributeMetadata) {
-				attributeMetadata.forEach((attr, name) => {
+			const rootEntityName = builder.fetchQuery.entity?.name;
+			if (attributeMetadata && rootEntityName) {
+				const rootEntityAttrs = attributeMetadata.get(rootEntityName);
+				rootEntityAttrs?.forEach((attr, name) => {
 					attributeTypeMap.set(name, attr.AttributeType || "");
 				});
 			}
@@ -631,7 +685,7 @@ function AppContent() {
 						}
 					}}
 					onSortChange={(data) => {
-						// Extract attribute name from columnId (may have entityName prefix)
+						// Extract attribute name from columnId (may have entityName prefix or be an alias)
 						let attribute = data.columnId;
 						let entityName = data.entityName;
 
@@ -645,6 +699,17 @@ function AppContent() {
 						// Handle lookup field naming (_attributename_value -> attributename)
 						if (attribute.startsWith("_") && attribute.endsWith("_value")) {
 							attribute = attribute.slice(1, -6);
+						}
+
+						// Check if this is an aliased column on root entity - need to find original attribute name
+						// FetchXML order-by uses the original attribute name, not the alias
+						if (!entityName && builder.fetchQuery?.entity?.attributes) {
+							const aliasedAttr = builder.fetchQuery.entity.attributes.find(
+								(a) => a.alias === attribute
+							);
+							if (aliasedAttr) {
+								attribute = aliasedAttr.name;
+							}
 						}
 
 						builder.setSort(

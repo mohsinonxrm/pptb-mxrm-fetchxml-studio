@@ -57,7 +57,12 @@ export function AttributeEditor({
 	const styles = useStyles();
 
 	const handleTextChange = (field: string) => (_: unknown, data: { value: string }) => {
-		onUpdate({ [field]: data.value || undefined });
+		let value = data.value;
+		// For alias field, remove spaces (aliases cannot contain spaces)
+		if (field === "alias") {
+			value = value.replace(/\s/g, "");
+		}
+		onUpdate({ [field]: value || undefined });
 	};
 
 	const handleCheckboxChange =
