@@ -31,7 +31,7 @@ import type {
 	LoadedViewInfo,
 	EntityMetadata,
 } from "../features/fetchxml/api/pptbClient";
-import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
+import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/model/fetchxml";
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
@@ -215,12 +215,22 @@ function AppContent() {
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
 	const [isExecuting, setIsExecuting] = useState(false);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	// Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>>
 	const [attributeMetadata, setAttributeMetadata] = useState<
 		Map<string, Map<string, AttributeMetadata>>
 	>(new Map());
 	// State for entity metadata (for layoutxml generation)
 	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
+
+	// Paging state for infinite scroll / Retrieve All
+	// Kept separate from queryResult to track progress across page fetches
+	const [pagingState, setPagingState] = useState<{
+		currentPage: number;
+		pagingCookie?: string;
+		moreRecords: boolean;
+		isRetrieveAllInProgress: boolean;
+	} | null>(null);
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -433,28 +443,86 @@ function AppContent() {
 		console.log(`✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
 	};
 
+	/**
+	 * Build columns array from FetchXML and result data
+	 * Handles lookup field naming conventions and ensures all requested columns are present
+	 */
+	const buildColumnsFromResult = (
+		records: Record<string, unknown>[],
+		fetchQuery: typeof builder.fetchQuery
+	): string[] => {
+		// Start with columns from the result data (these have actual values)
+		const resultKeys = records.length > 0 ? Object.keys(records[0]) : [];
+		const resultKeySet = new Set(resultKeys.filter((k) => !k.includes("@")));
+
+		if (fetchQuery) {
+			// Get columns from FetchXML - this includes all requested attributes
+			const fetchXmlColumns = collectAttributesFromFetchXml(fetchQuery);
+			const fetchXmlColumnNames = fetchXmlColumns.map((col) => col.name);
+
+			// Build the final column list, handling lookup field naming conventions
+			const columnSet = new Set<string>();
+			const columns: string[] = [];
+
+			for (const colName of fetchXmlColumnNames) {
+				if (resultKeySet.has(colName)) {
+					columns.push(colName);
+					columnSet.add(colName);
+				} else if (resultKeySet.has(`_${colName}_value`)) {
+					columns.push(`_${colName}_value`);
+					columnSet.add(`_${colName}_value`);
+					columnSet.add(colName);
+				} else {
+					columns.push(colName);
+					columnSet.add(colName);
+				}
+			}
+
+			// Add any result columns not already handled
+			for (const key of resultKeys) {
+				if (!columnSet.has(key) && !key.includes("@")) {
+					columns.push(key);
+					columnSet.add(key);
+				}
+			}
+
+			return columns;
+		} else {
+			return resultKeys.filter((k) => !k.includes("@"));
+		}
+	};
+
+	/**
+	 * Execute the query and handle Retrieve All if enabled
+	 */
 	const handleExecute = async () => {
 		if (!fetchXml) return;
 
 		setIsExecuting(true);
 		setQueryResult(null);
+		setPagingState(null);
+
+		const startTime = performance.now();
+		const entityLogicalName = builder.fetchQuery?.entity.name;
+		const retrieveAll = builder.retrieveAllRecords;
+
+		// Check if user has set a 'top' limit in FetchXML - if so, we respect it and don't enable paging
+		const hasTopLimit = builder.fetchQuery?.options?.top !== undefined;
+		// Get page size from fetch options (count), default to 5000 if not set
+		const pageSize = builder.fetchQuery?.options?.count;
 
 		try {
-			// Measure execution time
-			const startTime = performance.now();
-
 			// Determine execution method based on loaded view state
 			let result;
 			const loadedView = builder.loadedView;
+			let useViewExecution = false;
 
 			if (loadedView) {
-				// We have a loaded view - check if it's still unmodified
-				// by comparing current generated fetchXml with the original
 				const isUnmodified =
 					fetchXml.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
 
 				if (isUnmodified) {
-					// Execute using optimized view query (savedQuery/userQuery)
+					useViewExecution = true;
 					console.log(
 						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
 							loadedView.type === "system" ? "savedQuery" : "userQuery"
@@ -466,96 +534,188 @@ function AppContent() {
 					} else {
 						result = await executePersonalView(loadedView.entitySetName, loadedView.id);
 					}
-				} else {
-					// View was modified - fall back to fetchXml execution
-					console.log(`📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`);
-					result = await executeFetchXml(fetchXml);
 				}
-			} else {
-				// No loaded view - use standard fetchXml execution
+			}
+
+			// If not using view execution (either no view or view was modified), use FetchXML
+			if (!result) {
+				console.log(
+					loadedView
+						? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
+						: "📡 Executing FetchXML query"
+				);
 				result = await executeFetchXml(fetchXml);
 			}
 
 			const executionTimeMs = Math.round(performance.now() - startTime);
+			const columns = buildColumnsFromResult(result.records, builder.fetchQuery);
+			const rows = result.records.map((record) => ({ ...record }));
 
-			// Convert FetchXmlResult to QueryResult format for DataGrid
-			// IMPORTANT: Derive columns from FetchXML query, not from result data
-			// Dataverse doesn't return keys for null/empty values, so we'd miss columns
-			// if we relied only on Object.keys(result.records[0])
-			let columns: string[];
-
-			// Start with columns from the result data (these have actual values)
-			const resultKeys = result.records.length > 0 ? Object.keys(result.records[0]) : [];
-			const resultKeySet = new Set(resultKeys.filter((k) => !k.includes("@")));
-
-			if (builder.fetchQuery) {
-				// Get columns from FetchXML - this includes all requested attributes
-				const fetchXmlColumns = collectAttributesFromFetchXml(builder.fetchQuery);
-				const fetchXmlColumnNames = fetchXmlColumns.map((col) => col.name);
-
-				// Build the final column list, handling lookup field naming conventions
-				// FetchXML uses: primarycontactid
-				// Dataverse returns: _primarycontactid_value
-				const columnSet = new Set<string>();
-				columns = [];
-
-				for (const colName of fetchXmlColumnNames) {
-					// Check if this column exists in result keys directly
-					if (resultKeySet.has(colName)) {
-						columns.push(colName);
-						columnSet.add(colName);
-					}
-					// Check if it's a lookup field (Dataverse returns _xxx_value for lookups)
-					else if (resultKeySet.has(`_${colName}_value`)) {
-						// Use the Dataverse naming convention for lookup fields
-						columns.push(`_${colName}_value`);
-						columnSet.add(`_${colName}_value`);
-						columnSet.add(colName); // Mark original name as handled too
-					}
-					// Column requested but not in results (null for all records)
-					else {
-						columns.push(colName);
-						columnSet.add(colName);
-					}
-				}
-
-				// Add any result columns not already handled (e.g., extra columns from view)
-				for (const key of resultKeys) {
-					if (!columnSet.has(key) && !key.includes("@")) {
-						columns.push(key);
-						columnSet.add(key);
-					}
-				}
-			} else {
-				// Fallback: use result keys if no FetchXML query available
-				columns = resultKeys.filter((k) => !k.includes("@"));
-			}
-
-			const rows = result.records.map((record) => ({
-				...record,
-			}));
-
-			// Extract entity name from builder state
-			const entityLogicalName = builder.fetchQuery?.entity.name;
-
+			// Set initial result
 			setQueryResult({
 				columns,
 				rows,
 				totalRecordCount: result.totalRecordCount,
 				moreRecords: result.moreRecords,
 				pagingCookie: result.pagingCookie,
-				entityLogicalName, // NEW: for CommandBar actions
-				executionTimeMs, // NEW: for timing display
+				entityLogicalName,
+				executionTimeMs,
 			});
+
+			// Initialize paging state
+			setPagingState({
+				currentPage: 1,
+				pagingCookie: result.pagingCookie,
+				moreRecords: result.moreRecords ?? false,
+				isRetrieveAllInProgress: retrieveAll && (result.moreRecords ?? false) && !hasTopLimit,
+			});
+
+			setIsExecuting(false);
+
+			// If Retrieve All is enabled and there are more records, start progressive loading
+			// Only for FetchXML execution, not for view execution (which doesn't support paging)
+			// Don't do Retrieve All if user set a 'top' limit - Dataverse handles the limit
+			if (retrieveAll && result.moreRecords && !useViewExecution && !hasTopLimit) {
+				await loadAllPages(
+					fetchXml,
+					columns,
+					rows,
+					result.pagingCookie,
+					2,
+					entityLogicalName,
+					pageSize
+				);
+			}
 		} catch (error) {
 			console.error("Failed to execute FetchXML:", error);
-			// TODO Phase 7: Show error notification to user
-			setQueryResult({
-				columns: [],
-				rows: [],
-			});
-		} finally {
+			setQueryResult({ columns: [], rows: [] });
 			setIsExecuting(false);
+		}
+	};
+
+	/**
+	 * Progressive loading of all pages (Retrieve All)
+	 * Updates results as each page is fetched
+	 */
+	const loadAllPages = async (
+		baseFetchXml: string,
+		columns: string[],
+		initialRows: Record<string, unknown>[],
+		pagingCookie: string | undefined,
+		startPage: number,
+		entityLogicalName: string | undefined,
+		pageSize?: number
+	) => {
+		let allRows = [...initialRows];
+		let currentPagingCookie = pagingCookie;
+		let page = startPage;
+		let hasMore = true;
+
+		setIsLoadingMore(true);
+
+		try {
+			while (hasMore) {
+				console.log(`📄 Retrieve All: Fetching page ${page}...`);
+
+				// Add paging parameters to FetchXML (page, paging-cookie, and count for page size)
+				const pagedFetchXml = addPagingToFetchXml(
+					baseFetchXml,
+					page,
+					currentPagingCookie,
+					pageSize
+				);
+				const result = await executeFetchXml(pagedFetchXml);
+
+				// Append new rows
+				allRows = [...allRows, ...result.records];
+
+				// Update the grid progressively
+				setQueryResult((prev) => ({
+					columns: prev?.columns || columns,
+					rows: allRows,
+					totalRecordCount: prev?.totalRecordCount,
+					moreRecords: result.moreRecords,
+					pagingCookie: result.pagingCookie,
+					entityLogicalName,
+					executionTimeMs: prev?.executionTimeMs,
+				}));
+
+				// Update paging state
+				currentPagingCookie = result.pagingCookie;
+				hasMore = result.moreRecords ?? false;
+
+				setPagingState({
+					currentPage: page,
+					pagingCookie: currentPagingCookie,
+					moreRecords: hasMore,
+					isRetrieveAllInProgress: hasMore,
+				});
+
+				page++;
+			}
+
+			console.log(`✅ Retrieve All complete: ${allRows.length} total records`);
+		} catch (error) {
+			console.error("Failed during Retrieve All:", error);
+		} finally {
+			setIsLoadingMore(false);
+			setPagingState((prev) => (prev ? { ...prev, isRetrieveAllInProgress: false } : null));
+		}
+	};
+
+	/**
+	 * Load more records (for infinite scroll when Retrieve All is OFF)
+	 */
+	const handleLoadMore = async () => {
+		if (!fetchXml || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
+		if (pagingState.isRetrieveAllInProgress) return; // Don't allow manual load during Retrieve All
+
+		// Don't load more if user has set a 'top' limit
+		if (builder.fetchQuery?.options?.top !== undefined) return;
+
+		setIsLoadingMore(true);
+
+		// Get page size from fetch options to maintain consistent page sizes
+		const pageSize = builder.fetchQuery?.options?.count;
+
+		try {
+			const nextPage = pagingState.currentPage + 1;
+			console.log(
+				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`
+			);
+
+			// Add paging parameters: page number, paging cookie (required for reliable paging), and count (page size)
+			const pagedFetchXml = addPagingToFetchXml(
+				fetchXml,
+				nextPage,
+				pagingState.pagingCookie,
+				pageSize
+			);
+			const result = await executeFetchXml(pagedFetchXml);
+
+			// Append new rows to existing result
+			setQueryResult((prev) => {
+				if (!prev) return prev;
+				return {
+					...prev,
+					rows: [...prev.rows, ...result.records],
+					moreRecords: result.moreRecords,
+					pagingCookie: result.pagingCookie,
+				};
+			});
+
+			setPagingState({
+				currentPage: nextPage,
+				pagingCookie: result.pagingCookie,
+				moreRecords: result.moreRecords ?? false,
+				isRetrieveAllInProgress: false,
+			});
+
+			console.log(`✅ Page ${nextPage} loaded: ${result.records.length} records`);
+		} catch (error) {
+			console.error("Failed to load more records:", error);
+		} finally {
+			setIsLoadingMore(false);
 		}
 	};
 
@@ -650,6 +810,7 @@ function AppContent() {
 					xml={fetchXml}
 					result={queryResult}
 					isExecuting={isExecuting}
+					isLoadingMore={isLoadingMore}
 					onExecute={handleExecute}
 					onExport={handleExport}
 					onParseToTree={builder.loadFetchXml}
@@ -657,6 +818,7 @@ function AppContent() {
 					fetchQuery={builder.fetchQuery}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
+					onLoadMore={handleLoadMore}
 					saveViewButton={
 						<SaveViewButton
 							fetchXml={fetchXml}

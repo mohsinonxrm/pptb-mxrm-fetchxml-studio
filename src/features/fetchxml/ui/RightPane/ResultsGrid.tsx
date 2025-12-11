@@ -136,6 +136,8 @@ export interface QueryResult {
 interface ResultsGridProps {
 	result: QueryResult | null;
 	isLoading?: boolean;
+	/** Whether more pages are currently being loaded (for infinite scroll / Retrieve All) */
+	isLoadingMore?: boolean;
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null; // For extracting aliases and order state
@@ -146,17 +148,21 @@ interface ResultsGridProps {
 	onColumnResize?: (columnName: string, newWidth: number) => void;
 	/** Callback when user clicks a column header to sort */
 	onSortChange?: (data: SortChangeData) => void;
+	/** Callback when user scrolls near bottom and more records are available (infinite scroll) */
+	onLoadMore?: () => void;
 }
 
 export function ResultsGrid({
 	result,
 	isLoading,
+	isLoadingMore,
 	attributeMetadata,
 	fetchQuery,
 	onSelectedCountChange,
 	columnConfig,
 	onColumnResize,
 	onSortChange,
+	onLoadMore,
 }: ResultsGridProps) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
@@ -721,6 +727,28 @@ export function ResultsGrid({
 		[onColumnResize]
 	);
 
+	// Infinite scroll: load more when user scrolls near bottom
+	const handleItemsRendered = useCallback(
+		({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
+			if (!result || !onLoadMore || isLoadingMore) return;
+
+			// If user has scrolled to within 10 rows of the end, and there are more records
+			const rowCount = result.rows.length;
+			const threshold = Math.min(10, Math.max(1, Math.floor(rowCount * 0.1))); // 10 rows or 10% of data, whichever is smaller
+
+			if (visibleStopIndex >= rowCount - threshold && result.moreRecords) {
+				console.log("[ResultsGrid] Near bottom, triggering load more:", {
+					visibleStopIndex,
+					rowCount,
+					threshold,
+					moreRecords: result.moreRecords,
+				});
+				onLoadMore();
+			}
+		},
+		[result, onLoadMore, isLoadingMore]
+	);
+
 	// Note: Data is already sorted by Dataverse based on FetchXML orders
 	// No local sorting needed - we display rows as returned
 
@@ -780,7 +808,11 @@ export function ResultsGrid({
 							className={styles.body}
 							itemSize={ROW_HEIGHT}
 							height={Math.max(0, gridDimensions.height - headerHeight)}
-							listProps={{ useIsScrolling: true, className: styles.body }}
+							listProps={{
+								useIsScrolling: true,
+								className: styles.body,
+								onItemsRendered: handleItemsRendered,
+							}}
 						>
 							{renderRow}
 						</DataGridBody>
@@ -789,6 +821,8 @@ export function ResultsGrid({
 				<div className={styles.infoBar}>
 					<span>
 						Rows: {result.rows.length}
+						{result.moreRecords && !isLoadingMore && " (more available)"}
+						{isLoadingMore && " (loading more...)"}
 						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
 					</span>
 					<span>Selected: {selectedItems.size}</span>

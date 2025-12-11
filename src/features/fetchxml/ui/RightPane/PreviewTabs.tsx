@@ -99,6 +99,8 @@ interface PreviewTabsProps {
 	xml: string;
 	result: QueryResult | null;
 	isExecuting?: boolean;
+	/** Whether more pages are being loaded (for progress display) */
+	isLoadingMore?: boolean;
 	onExecute?: () => void;
 	onExport?: () => void;
 	onParseToTree?: (xmlString: string) => ParseResult;
@@ -117,12 +119,15 @@ interface PreviewTabsProps {
 	onSortChange?: (data: SortChangeData) => void;
 	/** Optional SaveViewButton to render in the toolbar */
 	saveViewButton?: ReactNode;
+	/** Callback when user scrolls near bottom (infinite scroll) */
+	onLoadMore?: () => void;
 }
 
 export function PreviewTabs({
 	xml,
 	result,
 	isExecuting,
+	isLoadingMore,
 	onExecute,
 	onExport,
 	onParseToTree,
@@ -134,6 +139,7 @@ export function PreviewTabs({
 	onAddColumn,
 	onSortChange,
 	saveViewButton,
+	onLoadMore,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -161,14 +167,14 @@ export function PreviewTabs({
 						appearance="primary"
 						icon={<Play24Regular />}
 						onClick={handleExecute}
-						disabled={isExecuting || !xml}
+						disabled={isExecuting || isLoadingMore || !xml}
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
 					{saveViewButton}
 				</Toolbar>
 			</div>
-			{isExecuting && (
+			{(isExecuting || isLoadingMore) && (
 				<div className={styles.progressContainer}>
 					<ProgressBar />
 				</div>
@@ -208,12 +214,14 @@ export function PreviewTabs({
 							<ResultsGrid
 								result={result}
 								isLoading={isExecuting}
+								isLoadingMore={isLoadingMore}
 								attributeMetadata={attributeMetadata}
 								fetchQuery={fetchQuery}
 								onSelectedCountChange={setToolbarSelectedCount}
 								columnConfig={columnConfig}
 								onColumnResize={onColumnResize}
 								onSortChange={onSortChange}
+								onLoadMore={onLoadMore}
 							/>
 						</div>
 					</div>
