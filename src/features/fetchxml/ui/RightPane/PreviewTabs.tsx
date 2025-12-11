@@ -11,10 +11,15 @@ import {
 	Button,
 	makeStyles,
 	Toolbar,
+	ToolbarDivider,
 	ProgressBar,
 	tokens,
+	MessageBar,
+	MessageBarBody,
+	MessageBarTitle,
+	MessageBarActions,
 } from "@fluentui/react-components";
-import { Play24Regular } from "@fluentui/react-icons";
+import { Play24Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
@@ -93,6 +98,13 @@ const useStyles = makeStyles({
 		gridTemplateRows: "auto 8px 1fr",
 		height: "100%",
 	},
+	messageBarContainer: {
+		paddingLeft: "16px",
+		paddingRight: "16px",
+		paddingTop: "8px",
+		paddingBottom: "8px",
+		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+	},
 });
 
 interface PreviewTabsProps {
@@ -121,6 +133,16 @@ interface PreviewTabsProps {
 	saveViewButton?: ReactNode;
 	/** Callback when user scrolls near bottom (infinite scroll) */
 	onLoadMore?: () => void;
+	/** Whether export is available (requires a saved view) */
+	canExport?: boolean;
+	/** Whether export is in progress */
+	isExporting?: boolean;
+	/** Export error message */
+	exportError?: string;
+	/** Callback to dismiss export error */
+	onDismissExportError?: () => void;
+	/** Tooltip text for disabled export button */
+	exportDisabledReason?: string;
 }
 
 export function PreviewTabs({
@@ -140,6 +162,11 @@ export function PreviewTabs({
 	onSortChange,
 	saveViewButton,
 	onLoadMore,
+	canExport,
+	isExporting,
+	exportError,
+	onDismissExportError,
+	exportDisabledReason,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -171,12 +198,44 @@ export function PreviewTabs({
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
+					<ToolbarDivider />
 					{saveViewButton}
 				</Toolbar>
 			</div>
 			{(isExecuting || isLoadingMore) && (
 				<div className={styles.progressContainer}>
 					<ProgressBar />
+				</div>
+			)}
+			{/* Export status MessageBar */}
+			{isExporting && (
+				<div className={styles.messageBarContainer}>
+					<MessageBar intent="info">
+						<MessageBarBody>
+							<MessageBarTitle>Exporting</MessageBarTitle>
+							Exporting view to Excel...
+						</MessageBarBody>
+					</MessageBar>
+				</div>
+			)}
+			{exportError && !isExporting && (
+				<div className={styles.messageBarContainer}>
+					<MessageBar intent="error">
+						<MessageBarBody>
+							<MessageBarTitle>Export Failed</MessageBarTitle>
+							{exportError}
+						</MessageBarBody>
+						<MessageBarActions
+							containerAction={
+								<Button
+									appearance="transparent"
+									icon={<Dismiss16Regular />}
+									onClick={onDismissExportError}
+									aria-label="Dismiss"
+								/>
+							}
+						/>
+					</MessageBar>
 				</div>
 			)}
 			<div className={styles.tabContent}>
@@ -196,6 +255,9 @@ export function PreviewTabs({
 								onDeactivate={() => console.log("Deactivate not yet implemented")}
 								onDelete={() => console.log("Delete not yet implemented")}
 								onExport={onExport || (() => console.log("Export not yet implemented"))}
+								canExport={canExport}
+								isExporting={isExporting}
+								exportDisabledReason={exportDisabledReason}
 								entityName={result?.entityLogicalName}
 								columns={columnConfig?.columns}
 								onReorderColumns={onReorderColumns}

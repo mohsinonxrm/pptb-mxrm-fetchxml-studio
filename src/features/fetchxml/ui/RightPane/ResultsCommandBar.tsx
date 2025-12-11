@@ -15,6 +15,7 @@ import {
 	MenuList,
 	MenuItem,
 	Input,
+	Tooltip,
 	tokens,
 } from "@fluentui/react-components";
 import {
@@ -54,6 +55,12 @@ export interface CommandBarProps {
 	onDeactivate?: () => void;
 	onDelete?: () => void;
 	onExport?: () => void;
+	/** Whether export is available (requires a saved view and export privilege) */
+	canExport?: boolean;
+	/** Whether export is in progress */
+	isExporting?: boolean;
+	/** Tooltip text to show when export is disabled */
+	exportDisabledReason?: string;
 	entityName?: string;
 	columns?: LayoutColumn[];
 	onReorderColumns?: (columns: LayoutColumn[]) => void;
@@ -73,6 +80,9 @@ export function ResultsCommandBar({
 	onDeactivate,
 	onDelete,
 	onExport,
+	canExport = false,
+	isExporting = false,
+	exportDisabledReason,
 	entityName,
 	columns,
 	onReorderColumns,
@@ -211,14 +221,24 @@ export function ResultsCommandBar({
 
 			<ToolbarDivider />
 
-			<ToolbarButton
-				appearance="subtle"
-				icon={<ArrowExport20Regular />}
-				onClick={onExport}
-				aria-label="Export to CSV"
+			<Tooltip
+				content={
+					canExport
+						? "Export to Excel"
+						: exportDisabledReason || "Save as a view first to enable export"
+				}
+				relationship="description"
 			>
-				Export
-			</ToolbarButton>
+				<ToolbarButton
+					appearance="subtle"
+					icon={<ArrowExport20Regular />}
+					onClick={onExport}
+					disabled={!canExport || isExporting}
+					aria-label="Export to Excel"
+				>
+					{isExporting ? "Exporting..." : "Export"}
+				</ToolbarButton>
+			</Tooltip>
 
 			{columns && columns.length > 0 && (
 				<>

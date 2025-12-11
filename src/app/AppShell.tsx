@@ -25,6 +25,9 @@ import {
 	executePersonalView,
 	whoAmI,
 	isDataverseAvailable,
+	exportToExcel,
+	downloadBase64File,
+	checkPrivilegeByName,
 } from "../features/fetchxml/api/pptbClient";
 import type {
 	AttributeMetadata,
@@ -232,6 +235,18 @@ function AppContent() {
 		isRetrieveAllInProgress: boolean;
 	} | null>(null);
 
+	// Export to Excel state
+	const [exportStatus, setExportStatus] = useState<{
+		isExporting: boolean;
+		error?: string;
+		hasPrivilege: boolean;
+		privilegeChecked: boolean;
+	}>({
+		isExporting: false,
+		hasPrivilege: false,
+		privilegeChecked: false,
+	});
+
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
 	const [leftPaneWidth, setLeftPaneWidth] = useState(480); // Width of left pane in pixels
@@ -327,6 +342,41 @@ function AppContent() {
 		}
 
 		console.log("===================================================");
+	}, []);
+
+	// Check export privilege on mount
+	useEffect(() => {
+		const checkExportPrivilege = async () => {
+			try {
+				const user = await whoAmI();
+				if (user) {
+					const hasPrivilege = await checkPrivilegeByName(user.UserId, "prvExportToExcel");
+					setExportStatus((prev) => ({
+						...prev,
+						hasPrivilege,
+						privilegeChecked: true,
+					}));
+					console.log(`📊 Export to Excel privilege: ${hasPrivilege ? "GRANTED" : "DENIED"}`);
+				} else {
+					setExportStatus((prev) => ({
+						...prev,
+						hasPrivilege: false,
+						privilegeChecked: true,
+					}));
+				}
+			} catch (error) {
+				console.error("Failed to check export privilege:", error);
+				setExportStatus((prev) => ({
+					...prev,
+					hasPrivilege: false,
+					privilegeChecked: true,
+				}));
+			}
+		};
+
+		if (isDataverseAvailable()) {
+			checkExportPrivilege();
+		}
 	}, []);
 
 	// Collect entities from FetchXML and memoize to avoid unnecessary reloads
@@ -719,9 +769,90 @@ function AppContent() {
 		}
 	};
 
-	const handleExport = () => {
-		// TODO: Implement export functionality in Phase 7
+	/**
+	 * Export to Excel using Dataverse ExportToExcel API
+	 * Requires a saved view (system or personal) and prvExportToExcel privilege
+	 */
+	const handleExport = async () => {
+		// Check privilege first
+		if (!exportStatus.hasPrivilege) {
+			setExportStatus((prev) => ({
+				...prev,
+				error:
+					"You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
+			}));
+			return;
+		}
+
+		// Check if we have a saved view
+		if (!builder.loadedView) {
+			setExportStatus((prev) => ({
+				...prev,
+				error: "Export to Excel requires a saved view. Please save your query as a view first.",
+			}));
+			return;
+		}
+
+		if (!fetchXml || !layoutXml) {
+			setExportStatus((prev) => ({
+				...prev,
+				error: "Export to Excel requires FetchXML and LayoutXML",
+			}));
+			return;
+		}
+
+		// Clear any previous error and set exporting state
+		setExportStatus((prev) => ({
+			...prev,
+			isExporting: true,
+			error: undefined,
+		}));
+
+		try {
+			console.log(
+				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`
+			);
+
+			// Use view name for filename
+			const viewName = builder.loadedView.name;
+
+			const result = await exportToExcel(
+				builder.loadedView.id,
+				builder.loadedView.type,
+				fetchXml,
+				layoutXml,
+				viewName
+			);
+
+			// Trigger download
+			downloadBase64File(result.excelFile, result.filename);
+
+			console.log(`✅ Export complete: ${result.filename}`);
+
+			// Clear exporting state on success
+			setExportStatus((prev) => ({
+				...prev,
+				isExporting: false,
+			}));
+		} catch (error) {
+			console.error("Export to Excel failed:", error);
+			setExportStatus((prev) => ({
+				...prev,
+				isExporting: false,
+				error: error instanceof Error ? error.message : "Export to Excel failed. Please try again.",
+			}));
+		}
 	};
+
+	// Clear export error after 10 seconds
+	useEffect(() => {
+		if (exportStatus.error) {
+			const timer = setTimeout(() => {
+				setExportStatus((prev) => ({ ...prev, error: undefined }));
+			}, 10000);
+			return () => clearTimeout(timer);
+		}
+	}, [exportStatus.error]);
 
 	return (
 		<div className={styles.root} data-app-root>
@@ -813,6 +944,17 @@ function AppContent() {
 					isLoadingMore={isLoadingMore}
 					onExecute={handleExecute}
 					onExport={handleExport}
+					canExport={!!builder.loadedView && exportStatus.hasPrivilege}
+					isExporting={exportStatus.isExporting}
+					exportError={exportStatus.error}
+					onDismissExportError={() => setExportStatus((prev) => ({ ...prev, error: undefined }))}
+					exportDisabledReason={
+						!builder.loadedView
+							? "Save as a view first to enable export"
+							: !exportStatus.hasPrivilege
+							? "You don't have the prvExportToExcel privilege"
+							: undefined
+					}
 					onParseToTree={builder.loadFetchXml}
 					attributeMetadata={attributeMetadata}
 					fetchQuery={builder.fetchQuery}

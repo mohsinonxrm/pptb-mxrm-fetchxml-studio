@@ -1851,3 +1851,133 @@ export async function getSolutionIdByUniqueName(
 		throw error;
 	}
 }
+
+/**
+ * Export to Excel using Dataverse ExportToExcel action
+ * Requires a saved view (system or personal)
+ *
+ * The ExportToExcel action expects:
+ * - View: Object with @odata.type and view ID (savedqueryid or userqueryid)
+ * - FetchXml: The FetchXML query string
+ * - LayoutXml: The LayoutXML for column configuration
+ * - QueryApi: Empty string
+ * - QueryParameters: Object with Arguments
+ *
+ * @param viewId - The savedqueryid (system) or userqueryid (personal)
+ * @param viewType - Whether it's a system or personal view
+ * @param fetchXml - The FetchXML query
+ * @param layoutXml - The LayoutXML for column configuration
+ * @param viewName - Name of the view for the filename
+ * @returns Base64 encoded Excel file data
+ */
+export async function exportToExcel(
+	viewId: string,
+	viewType: "system" | "personal",
+	fetchXml: string,
+	layoutXml: string,
+	viewName: string
+): Promise<{ excelFile: string; filename: string }> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	// Build the View object based on view type
+	const viewObject =
+		viewType === "system"
+			? {
+					"@odata.type": "Microsoft.Dynamics.CRM.savedquery",
+					savedqueryid: viewId,
+			  }
+			: {
+					"@odata.type": "Microsoft.Dynamics.CRM.userquery",
+					userqueryid: viewId,
+			  };
+
+	debugLog("exportAPI", `📡 ExportToExcel: ${viewType} view ${viewId}`);
+	debugLog("exportAPI", `📡 View object:`, viewObject);
+	debugLog(
+		"exportAPI",
+		`📡 FetchXML length: ${fetchXml.length}, LayoutXML length: ${layoutXml.length}`
+	);
+
+	try {
+		// Build the ExportToExcel request matching Dataverse format
+		const result = (await window.dataverseAPI!.execute({
+			operationName: "ExportToExcel",
+			operationType: "action",
+			parameters: {
+				View: viewObject,
+				FetchXml: fetchXml,
+				LayoutXml: layoutXml,
+				QueryApi: "",
+				QueryParameters: {
+					Arguments: {
+						Count: 0,
+						IsReadOnly: true,
+						Keys: [],
+						Values: [],
+					},
+				},
+			},
+		})) as { ExcelFile: string };
+
+		// Generate filename with view name and timestamp
+		const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+		const filename = `${viewName} - ${timestamp}.xlsx`;
+
+		debugLog(
+			"exportAPI",
+			`✅ ExportToExcel successful, file size: ${result.ExcelFile?.length || 0} bytes`
+		);
+
+		return {
+			excelFile: result.ExcelFile,
+			filename,
+		};
+	} catch (error) {
+		console.error("exportToExcel: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Download a Base64 encoded file
+ * @param base64Data - The Base64 encoded file data
+ * @param filename - The filename for the download
+ * @param mimeType - The MIME type of the file
+ */
+export function downloadBase64File(
+	base64Data: string,
+	filename: string,
+	mimeType: string = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+): void {
+	try {
+		// Convert Base64 to Blob
+		const byteCharacters = atob(base64Data);
+		const byteNumbers = new Array(byteCharacters.length);
+		for (let i = 0; i < byteCharacters.length; i++) {
+			byteNumbers[i] = byteCharacters.charCodeAt(i);
+		}
+		const byteArray = new Uint8Array(byteNumbers);
+		const blob = new Blob([byteArray], { type: mimeType });
+
+		// Create download link
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = filename;
+
+		// Trigger download
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+
+		// Clean up
+		URL.revokeObjectURL(url);
+
+		debugLog("exportAPI", `✅ File downloaded: ${filename}`);
+	} catch (error) {
+		console.error("downloadBase64File: Failed:", error);
+		throw error;
+	}
+}
