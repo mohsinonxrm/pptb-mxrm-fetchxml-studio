@@ -9,14 +9,7 @@ import {
 	ToolbarButton,
 	ToolbarDivider,
 	makeStyles,
-	Menu,
-	MenuTrigger,
-	MenuPopover,
-	MenuList,
-	MenuItem,
-	Input,
 	Tooltip,
-	tokens,
 } from "@fluentui/react-components";
 import {
 	Open20Regular,
@@ -26,24 +19,19 @@ import {
 	Delete20Regular,
 	ArrowExport20Regular,
 	ColumnTriple20Regular,
-	Add20Regular,
-	Search20Regular,
 } from "@fluentui/react-icons";
-import { ColumnConfigDialog } from "./ColumnConfigDialog";
+import { EditColumnsPanel } from "./EditColumnsPanel";
+import {
+	AddColumnsPanel,
+	type AddColumnSelection,
+	type RelatedEntityColumn,
+} from "./AddColumnsPanel";
 import type { LayoutColumn } from "../../model/layoutxml";
-import type { AttributeMetadata } from "../../api/pptbClient";
+import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	toolbar: {
 		padding: "0",
-	},
-	menuSearch: {
-		padding: "8px",
-		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-	},
-	menuList: {
-		maxHeight: "300px",
-		overflowY: "auto",
 	},
 });
 
@@ -61,15 +49,32 @@ export interface CommandBarProps {
 	isExporting?: boolean;
 	/** Tooltip text to show when export is disabled */
 	exportDisabledReason?: string;
+	/** Entity logical name */
 	entityName?: string;
+	/** Entity display name */
+	entityDisplayName?: string;
+	/** Current column layout */
 	columns?: LayoutColumn[];
+	/** Callback when columns are reordered */
 	onReorderColumns?: (columns: LayoutColumn[]) => void;
+	/** Callback when columns are removed */
+	onRemoveColumn?: (columnName: string) => void;
 	/** Available attributes from metadata for adding columns */
 	availableAttributes?: AttributeMetadata[];
 	/** Currently selected attributes in the query */
 	selectedAttributes?: string[];
-	/** Callback when user wants to add a column */
+	/** Callback when user wants to add a column from root entity */
 	onAddColumn?: (attributeName: string) => void;
+	/** Callback when user wants to add columns from related entity */
+	onAddRelatedColumns?: (columns: RelatedEntityColumn[]) => void;
+	/** Lookup relationships (many-to-one) for related entity columns */
+	lookupRelationships?: RelationshipMetadata[];
+	/** Whether relationship data is loading */
+	isLoadingRelationships?: boolean;
+	/** Callback to load attributes for a related entity */
+	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
+	/** Callback to reset columns to default */
+	onResetToDefault?: () => void;
 }
 
 export function ResultsCommandBar({
@@ -84,69 +89,78 @@ export function ResultsCommandBar({
 	isExporting = false,
 	exportDisabledReason,
 	entityName,
+	entityDisplayName,
 	columns,
 	onReorderColumns,
+	onRemoveColumn,
 	availableAttributes,
 	selectedAttributes,
 	onAddColumn,
+	onAddRelatedColumns,
+	lookupRelationships,
+	isLoadingRelationships,
+	onLoadRelatedAttributes,
+	onResetToDefault,
 }: CommandBarProps) {
 	const styles = useStyles();
 	const hasSelection = selectedCount > 0;
 	const singleSelection = selectedCount === 1;
-	const [columnDialogOpen, setColumnDialogOpen] = useState(false);
-	const [addColumnSearch, setAddColumnSearch] = useState("");
+	const [editPanelOpen, setEditPanelOpen] = useState(false);
+	const [addPanelOpen, setAddPanelOpen] = useState(false);
 
-	const handleColumnsClick = useCallback(() => {
-		setColumnDialogOpen(true);
+	const handleEditColumnsClick = useCallback(() => {
+		setEditPanelOpen(true);
 	}, []);
 
-	const handleColumnDialogClose = useCallback(() => {
-		setColumnDialogOpen(false);
+	const handleEditPanelClose = useCallback(() => {
+		setEditPanelOpen(false);
 	}, []);
 
-	const handleReorderColumns = useCallback(
-		(reorderedColumns: LayoutColumn[]) => {
-			onReorderColumns?.(reorderedColumns);
-			setColumnDialogOpen(false);
+	const handleAddPanelClose = useCallback(() => {
+		setAddPanelOpen(false);
+	}, []);
+
+	const handleEditApply = useCallback(
+		(updatedColumns: LayoutColumn[]) => {
+			// Detect removed columns
+			if (columns && onRemoveColumn) {
+				const updatedNames = new Set(updatedColumns.map((c) => c.name));
+				for (const col of columns) {
+					if (!updatedNames.has(col.name)) {
+						onRemoveColumn(col.name);
+					}
+				}
+			}
+			// Apply reordering
+			onReorderColumns?.(updatedColumns);
+			setEditPanelOpen(false);
 		},
-		[onReorderColumns]
+		[columns, onReorderColumns, onRemoveColumn]
 	);
 
-	// Filter attributes that aren't already in the query
-	const addableAttributes = useMemo(() => {
-		if (!availableAttributes) return [];
-		const selectedSet = new Set(selectedAttributes || []);
-		return availableAttributes
-			.filter((attr) => !selectedSet.has(attr.LogicalName))
-			.filter((attr) => {
-				// Filter by search term
-				if (!addColumnSearch) return true;
-				const searchLower = addColumnSearch.toLowerCase();
-				const displayName = attr.DisplayName?.UserLocalizedLabel?.Label || "";
-				return (
-					attr.LogicalName.toLowerCase().includes(searchLower) ||
-					displayName.toLowerCase().includes(searchLower)
-				);
-			})
-			.sort((a, b) => {
-				const aName = a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
-				const bName = b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
-				return aName.localeCompare(bName);
-			});
-	}, [availableAttributes, selectedAttributes, addColumnSearch]);
-
-	const handleAddColumnSelect = useCallback(
-		(attributeName: string) => {
-			onAddColumn?.(attributeName);
-			setAddColumnSearch("");
+	const handleAddApply = useCallback(
+		(selection: AddColumnSelection) => {
+			// Add root entity attributes
+			for (const attrName of selection.rootAttributes) {
+				onAddColumn?.(attrName);
+			}
+			// Add related entity columns
+			if (selection.relatedColumns.length > 0 && onAddRelatedColumns) {
+				onAddRelatedColumns(selection.relatedColumns);
+			}
+			setAddPanelOpen(false);
 		},
-		[onAddColumn]
+		[onAddColumn, onAddRelatedColumns]
 	);
+
+	const handleOpenAddFromEdit = useCallback(() => {
+		setAddPanelOpen(true);
+	}, []);
 
 	// Determine if entity supports statecode/statuscode (most common pattern)
 	const supportsActivation = useMemo(() => {
 		if (!entityName) return false;
-		// Most entities support activation, but some don't (e.g., activitypointer, annotation)
+		// Most entities support activation, but some don't
 		const noActivationEntities = [
 			"activitypointer",
 			"annotation",
@@ -160,150 +174,123 @@ export function ResultsCommandBar({
 	}, [entityName]);
 
 	return (
-		<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
-			<ToolbarButton
-				appearance="subtle"
-				icon={<Open20Regular />}
-				disabled={!singleSelection}
-				onClick={onOpen}
-				aria-label="Open record"
-			>
-				Open
-			</ToolbarButton>
-
-			<ToolbarButton
-				appearance="subtle"
-				icon={<Link20Regular />}
-				disabled={!singleSelection}
-				onClick={onCopyUrl}
-				aria-label="Copy record URL"
-			>
-				Copy URL
-			</ToolbarButton>
-
-			<ToolbarDivider />
-
-			{supportsActivation && (
-				<>
-					<ToolbarButton
-						appearance="subtle"
-						icon={<CheckmarkCircle20Regular />}
-						disabled={!hasSelection}
-						onClick={onActivate}
-						aria-label="Activate selected records"
-					>
-						Activate
-					</ToolbarButton>
-
-					<ToolbarButton
-						appearance="subtle"
-						icon={<DismissCircle20Regular />}
-						disabled={!hasSelection}
-						onClick={onDeactivate}
-						aria-label="Deactivate selected records"
-					>
-						Deactivate
-					</ToolbarButton>
-
-					<ToolbarDivider />
-				</>
-			)}
-
-			<ToolbarButton
-				appearance="subtle"
-				icon={<Delete20Regular />}
-				disabled={!hasSelection}
-				onClick={onDelete}
-				aria-label="Delete selected records"
-			>
-				Delete
-			</ToolbarButton>
-
-			<ToolbarDivider />
-
-			<Tooltip
-				content={
-					canExport
-						? "Export to Excel"
-						: exportDisabledReason || "Save as a view first to enable export"
-				}
-				relationship="description"
-			>
+		<>
+			<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
 				<ToolbarButton
 					appearance="subtle"
-					icon={<ArrowExport20Regular />}
-					onClick={onExport}
-					disabled={!canExport || isExporting}
-					aria-label="Export to Excel"
+					icon={<Open20Regular />}
+					disabled={!singleSelection}
+					onClick={onOpen}
+					aria-label="Open record"
 				>
-					{isExporting ? "Exporting..." : "Export"}
+					Open
 				</ToolbarButton>
-			</Tooltip>
 
-			{columns && columns.length > 0 && (
-				<>
-					<ToolbarDivider />
+				<ToolbarButton
+					appearance="subtle"
+					icon={<Link20Regular />}
+					disabled={!singleSelection}
+					onClick={onCopyUrl}
+					aria-label="Copy record URL"
+				>
+					Copy URL
+				</ToolbarButton>
+
+				<ToolbarDivider />
+
+				{supportsActivation && (
+					<>
+						<ToolbarButton
+							appearance="subtle"
+							icon={<CheckmarkCircle20Regular />}
+							disabled={!hasSelection}
+							onClick={onActivate}
+							aria-label="Activate selected records"
+						>
+							Activate
+						</ToolbarButton>
+
+						<ToolbarButton
+							appearance="subtle"
+							icon={<DismissCircle20Regular />}
+							disabled={!hasSelection}
+							onClick={onDeactivate}
+							aria-label="Deactivate selected records"
+						>
+							Deactivate
+						</ToolbarButton>
+
+						<ToolbarDivider />
+					</>
+				)}
+
+				<ToolbarButton
+					appearance="subtle"
+					icon={<Delete20Regular />}
+					disabled={!hasSelection}
+					onClick={onDelete}
+					aria-label="Delete selected records"
+				>
+					Delete
+				</ToolbarButton>
+
+				<ToolbarDivider />
+
+				<Tooltip
+					content={
+						canExport
+							? "Export to Excel"
+							: exportDisabledReason || "Save as a view first to enable export"
+					}
+					relationship="description"
+				>
 					<ToolbarButton
 						appearance="subtle"
-						icon={<ColumnTriple20Regular />}
-						onClick={handleColumnsClick}
-						aria-label="Configure columns"
+						icon={<ArrowExport20Regular />}
+						onClick={onExport}
+						disabled={!canExport || isExporting}
+						aria-label="Export to Excel"
 					>
-						Columns
+						{isExporting ? "Exporting..." : "Export"}
 					</ToolbarButton>
-				</>
-			)}
+				</Tooltip>
 
-			{availableAttributes && availableAttributes.length > 0 && onAddColumn && (
-				<Menu>
-					<MenuTrigger disableButtonEnhancement>
-						<ToolbarButton appearance="subtle" icon={<Add20Regular />} aria-label="Add column">
-							Add Column
-						</ToolbarButton>
-					</MenuTrigger>
-					<MenuPopover>
-						<div className={styles.menuSearch}>
-							<Input
-								contentBefore={<Search20Regular />}
-								placeholder="Search attributes..."
-								value={addColumnSearch}
-								onChange={(_e, data) => setAddColumnSearch(data.value)}
-								size="small"
-							/>
-						</div>
-						<MenuList className={styles.menuList}>
-							{addableAttributes.length === 0 ? (
-								<MenuItem disabled>
-									{addColumnSearch ? "No matching attributes" : "All attributes already added"}
-								</MenuItem>
-							) : (
-								addableAttributes.slice(0, 50).map((attr) => (
-									<MenuItem
-										key={attr.LogicalName}
-										onClick={() => handleAddColumnSelect(attr.LogicalName)}
-									>
-										{attr.DisplayName?.UserLocalizedLabel?.Label || attr.LogicalName}
-									</MenuItem>
-								))
-							)}
-							{addableAttributes.length > 50 && (
-								<MenuItem disabled>
-									...and {addableAttributes.length - 50} more (use search)
-								</MenuItem>
-							)}
-						</MenuList>
-					</MenuPopover>
-				</Menu>
-			)}
+				<ToolbarDivider />
 
-			{columns && columns.length > 0 && (
-				<ColumnConfigDialog
-					open={columnDialogOpen}
-					columns={columns}
-					onClose={handleColumnDialogClose}
-					onReorder={handleReorderColumns}
-				/>
-			)}
-		</Toolbar>
+				<ToolbarButton
+					appearance="subtle"
+					icon={<ColumnTriple20Regular />}
+					onClick={handleEditColumnsClick}
+					aria-label="Edit columns"
+				>
+					Edit columns
+				</ToolbarButton>
+			</Toolbar>
+
+			{/* Edit Columns Panel */}
+			<EditColumnsPanel
+				open={editPanelOpen}
+				columns={columns || []}
+				entityDisplayName={entityDisplayName}
+				onClose={handleEditPanelClose}
+				onApply={handleEditApply}
+				onAddColumns={handleOpenAddFromEdit}
+				onResetToDefault={onResetToDefault}
+			/>
+
+			{/* Add Columns Panel */}
+			<AddColumnsPanel
+				open={addPanelOpen}
+				entityDisplayName={entityDisplayName}
+				entityLogicalName={entityName}
+				availableAttributes={availableAttributes}
+				selectedAttributes={selectedAttributes}
+				lookupRelationships={lookupRelationships}
+				isLoadingRelationships={isLoadingRelationships}
+				onLoadRelatedAttributes={onLoadRelatedAttributes}
+				onClose={handleAddPanelClose}
+				onApply={handleAddApply}
+			/>
+		</>
 	);
 }

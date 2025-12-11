@@ -13,6 +13,7 @@ import {
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
+import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
@@ -33,6 +34,7 @@ import type {
 	AttributeMetadata,
 	LoadedViewInfo,
 	EntityMetadata,
+	RelationshipMetadata,
 } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/model/fetchxml";
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
@@ -213,7 +215,7 @@ function collectEntitiesFromFetchQuery(
 function AppContent() {
 	const styles = useStyles();
 	const builder = useBuilder();
-	const { loadAttributes, loadEntityMetadata } = useLazyMetadata();
+	const { loadAttributes, loadEntityMetadata, loadRelationships } = useLazyMetadata();
 
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
@@ -225,6 +227,9 @@ function AppContent() {
 	>(new Map());
 	// State for entity metadata (for layoutxml generation)
 	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
+	// State for lookup relationships (many-to-one)
+	const [lookupRelationships, setLookupRelationships] = useState<RelationshipMetadata[]>([]);
+	const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
 
 	// Paging state for infinite scroll / Retrieve All
 	// Kept separate from queryResult to track progress across page fetches
@@ -430,8 +435,23 @@ function AppContent() {
 				console.error("Failed to load entity metadata:", error);
 				setEntityMetadata(null);
 			});
+
+		// Load lookup relationships (many-to-one) for the Add Columns panel
+		setIsLoadingRelationships(true);
+		loadRelationships(rootEntityName)
+			.then((relationships) => {
+				// Filter to just lookup relationships (many-to-one)
+				setLookupRelationships(relationships.manyToOne);
+			})
+			.catch((error) => {
+				console.error("Failed to load relationships:", error);
+				setLookupRelationships([]);
+			})
+			.finally(() => {
+				setIsLoadingRelationships(false);
+			});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [entitiesKey, loadAttributes, loadEntityMetadata]);
+	}, [entitiesKey, loadAttributes, loadEntityMetadata, loadRelationships]);
 
 	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
 	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared
@@ -961,6 +981,12 @@ function AppContent() {
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
 					onLoadMore={handleLoadMore}
+					entityDisplayName={
+						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityMetadata?.LogicalName
+					}
+					lookupRelationships={lookupRelationships}
+					isLoadingRelationships={isLoadingRelationships}
+					onLoadRelatedAttributes={loadAttributes}
 					saveViewButton={
 						<SaveViewButton
 							fetchXml={fetchXml}
@@ -982,10 +1008,74 @@ function AppContent() {
 							});
 						}
 					}}
+					onRemoveColumn={(columnName) => {
+						// Remove the attribute from the FetchXML
+						if (builder.fetchQuery?.entity.id) {
+							// Find the attribute node by name and remove it
+							const attr = builder.fetchQuery.entity.attributes.find((a) => a.name === columnName);
+							if (attr) {
+								builder.removeNode(attr.id);
+							}
+						}
+					}}
 					onAddColumn={(attributeName) => {
 						// Add the attribute to the root entity
 						if (builder.fetchQuery?.entity.id) {
 							builder.addAttributeByName(builder.fetchQuery.entity.id, attributeName);
+						}
+					}}
+					onAddRelatedColumns={(relatedColumns: RelatedEntityColumn[]) => {
+						// Add related entity columns - this requires creating link-entities
+						if (!builder.fetchQuery?.entity.id) return;
+
+						// Group by relationship to create link-entities
+						const byRelationship = new Map<string, RelatedEntityColumn[]>();
+						for (const col of relatedColumns) {
+							const key = col.relationship.SchemaName;
+							if (!byRelationship.has(key)) {
+								byRelationship.set(key, []);
+							}
+							byRelationship.get(key)!.push(col);
+						}
+
+						// For each relationship, find or create link-entity and add attributes
+						for (const [, cols] of byRelationship) {
+							const rel = cols[0].relationship;
+							// For N:1 (Many-to-One) lookup relationships:
+							// - ReferencingAttribute = FK on current entity (e.g., primarycontactid on account)
+							// - ReferencedAttribute = PK on related entity (e.g., contactid on contact)
+							// In FetchXML link-entity:
+							// - from = attribute on the LINKED entity (the PK)
+							// - to = attribute on the PARENT entity (the FK)
+							const foreignKey = rel.ReferencingAttribute; // FK on parent (account.primarycontactid)
+							const primaryKey = rel.ReferencedAttribute; // PK on linked (contact.contactid)
+							const relatedEntity = rel.ReferencedEntity; // contact
+
+							// Check if link-entity already exists for this lookup
+							const existingLinkEntity = builder.fetchQuery.entity.links.find(
+								(le) => le.from === primaryKey && le.to === foreignKey && le.name === relatedEntity
+							);
+
+							let linkEntityId: string;
+
+							if (existingLinkEntity) {
+								linkEntityId = existingLinkEntity.id;
+							} else {
+								// Create the link-entity with config - returns the ID immediately
+								// from = PK on linked entity, to = FK on parent entity
+								linkEntityId = builder.addLinkEntityWithConfig(
+									builder.fetchQuery.entity.id,
+									relatedEntity,
+									primaryKey, // from: contactid
+									foreignKey, // to: primarycontactid
+									"outer"
+								);
+							}
+
+							// Add attributes to the link-entity using the ID
+							for (const col of cols) {
+								builder.addAttributeByName(linkEntityId, col.attribute.LogicalName);
+							}
 						}
 					}}
 					onSortChange={(data) => {

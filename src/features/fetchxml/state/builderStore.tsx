@@ -83,6 +83,15 @@ type BuilderAction =
 	| { type: "ADD_SUBFILTER"; filterId: NodeId }
 	| { type: "ADD_CONDITION"; filterId: NodeId }
 	| { type: "ADD_LINK_ENTITY"; parentId: NodeId }
+	| {
+			type: "ADD_LINK_ENTITY_WITH_CONFIG";
+			id: NodeId;
+			parentId: NodeId;
+			name: string;
+			from: string;
+			to: string;
+			linkType: "inner" | "outer";
+	  }
 	| { type: "REMOVE_NODE"; nodeId: NodeId }
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
 	| { type: "NEW_QUERY" }
@@ -681,6 +690,48 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 		}
 
+		case "ADD_LINK_ENTITY_WITH_CONFIG": {
+			if (!state.fetchQuery) return state;
+
+			// Find parent node (entity or link-entity)
+			const parent = findNodeById(state.fetchQuery, action.parentId);
+			if (!parent || (parent.type !== "entity" && parent.type !== "link-entity")) {
+				return state;
+			}
+
+			// Create new link-entity node with provided configuration
+			const newLinkEntity: LinkEntityNode = {
+				id: action.id, // Use pre-generated ID from caller
+				type: "link-entity",
+				name: action.name,
+				from: action.from,
+				to: action.to,
+				linkType: action.linkType,
+				attributes: [],
+				orders: [],
+				filters: [],
+				links: [],
+			};
+
+			// Update the tree immutably
+			const updatedFetch = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
+				const typedNode = node as EntityNode | LinkEntityNode;
+				return {
+					...typedNode,
+					links: [...typedNode.links, newLinkEntity],
+				};
+			});
+
+			return {
+				...state,
+				fetchQuery: updatedFetch,
+				selectedNodeId: newLinkEntity.id,
+				selectedNode: newLinkEntity,
+				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // Link-entity may add columns
+			};
+		}
+
 		case "REMOVE_NODE": {
 			if (!state.fetchQuery) return state;
 
@@ -881,6 +932,14 @@ interface BuilderContextValue extends BuilderState {
 	addSubfilter: (filterId: NodeId) => void;
 	addCondition: (filterId: NodeId) => void;
 	addLinkEntity: (parentId: NodeId) => void;
+	/** Add a link-entity with specific configuration, returns the new link-entity's ID */
+	addLinkEntityWithConfig: (
+		parentId: NodeId,
+		name: string,
+		from: string,
+		to: string,
+		linkType: "inner" | "outer"
+	) => NodeId;
 	removeNode: (nodeId: NodeId) => void;
 	updateNode: (nodeId: NodeId, updates: Record<string, unknown>) => void;
 	newQuery: () => void;
@@ -934,6 +993,17 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		addSubfilter: (filterId: NodeId) => dispatch({ type: "ADD_SUBFILTER", filterId }),
 		addCondition: (filterId: NodeId) => dispatch({ type: "ADD_CONDITION", filterId }),
 		addLinkEntity: (parentId: NodeId) => dispatch({ type: "ADD_LINK_ENTITY", parentId }),
+		addLinkEntityWithConfig: (
+			parentId: NodeId,
+			name: string,
+			from: string,
+			to: string,
+			linkType: "inner" | "outer"
+		): NodeId => {
+			const id = generateId();
+			dispatch({ type: "ADD_LINK_ENTITY_WITH_CONFIG", id, parentId, name, from, to, linkType });
+			return id;
+		},
 		removeNode: (nodeId: NodeId) => dispatch({ type: "REMOVE_NODE", nodeId }),
 		updateNode: (nodeId: NodeId, updates: Record<string, unknown>) =>
 			dispatch({ type: "UPDATE_NODE", nodeId, updates }),

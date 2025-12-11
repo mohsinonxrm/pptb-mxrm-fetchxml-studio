@@ -23,7 +23,8 @@ import { Play24Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
-import type { AttributeMetadata } from "../../api/pptbClient";
+import type { RelatedEntityColumn } from "./AddColumnsPanel";
+import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import type { FetchNode } from "../../model/nodes";
 import type { ParseResult } from "../../model/fetchxmlParser";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
@@ -127,6 +128,10 @@ interface PreviewTabsProps {
 	onReorderColumns?: (columns: LayoutXmlConfig["columns"]) => void;
 	/** Callback when user wants to add a column from available attributes */
 	onAddColumn?: (attributeName: string) => void;
+	/** Callback when user wants to add columns from related entity */
+	onAddRelatedColumns?: (columns: RelatedEntityColumn[]) => void;
+	/** Callback when user removes a column */
+	onRemoveColumn?: (columnName: string) => void;
 	/** Callback when user changes sort on a column */
 	onSortChange?: (data: SortChangeData) => void;
 	/** Optional SaveViewButton to render in the toolbar */
@@ -143,6 +148,16 @@ interface PreviewTabsProps {
 	onDismissExportError?: () => void;
 	/** Tooltip text for disabled export button */
 	exportDisabledReason?: string;
+	/** Entity display name */
+	entityDisplayName?: string;
+	/** Lookup relationships for related columns */
+	lookupRelationships?: RelationshipMetadata[];
+	/** Whether relationship data is loading */
+	isLoadingRelationships?: boolean;
+	/** Callback to load attributes for a related entity */
+	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
+	/** Callback to reset columns to default */
+	onResetToDefault?: () => void;
 }
 
 export function PreviewTabs({
@@ -159,6 +174,8 @@ export function PreviewTabs({
 	onColumnResize,
 	onReorderColumns,
 	onAddColumn,
+	onAddRelatedColumns,
+	onRemoveColumn,
 	onSortChange,
 	saveViewButton,
 	onLoadMore,
@@ -167,6 +184,11 @@ export function PreviewTabs({
 	exportError,
 	onDismissExportError,
 	exportDisabledReason,
+	entityDisplayName,
+	lookupRelationships,
+	isLoadingRelationships,
+	onLoadRelatedAttributes,
+	onResetToDefault,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
@@ -259,8 +281,10 @@ export function PreviewTabs({
 								isExporting={isExporting}
 								exportDisabledReason={exportDisabledReason}
 								entityName={result?.entityLogicalName}
+								entityDisplayName={entityDisplayName}
 								columns={columnConfig?.columns}
 								onReorderColumns={onReorderColumns}
+								onRemoveColumn={onRemoveColumn}
 								availableAttributes={
 									// Get root entity attributes from multi-entity map
 									attributeMetadata && fetchQuery?.entity?.name
@@ -269,6 +293,11 @@ export function PreviewTabs({
 								}
 								selectedAttributes={fetchQuery?.entity.attributes.map((a) => a.name)}
 								onAddColumn={onAddColumn}
+								onAddRelatedColumns={onAddRelatedColumns}
+								lookupRelationships={lookupRelationships}
+								isLoadingRelationships={isLoadingRelationships}
+								onLoadRelatedAttributes={onLoadRelatedAttributes}
+								onResetToDefault={onResetToDefault}
 							/>
 						</div>
 						<div /> {/* 8px spacer */}
