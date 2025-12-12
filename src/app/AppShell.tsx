@@ -1352,6 +1352,7 @@ function AppContent() {
 			<div className={styles.rightPane}>
 				<PreviewTabs
 					xml={fetchXml}
+					layoutXml={layoutXml}
 					result={queryResult}
 					isExecuting={isExecuting}
 					isLoadingMore={isLoadingMore}

@@ -21,6 +21,7 @@ import {
 } from "@fluentui/react-components";
 import { Play24Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
+import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { RelatedEntityColumn } from "./AddColumnsPanel";
@@ -111,6 +112,8 @@ const useStyles = makeStyles({
 
 interface PreviewTabsProps {
 	xml: string;
+	/** LayoutXML string for the grid column configuration */
+	layoutXml?: string;
 	result: QueryResult | null;
 	isExecuting?: boolean;
 	/** Whether more pages are being loaded (for progress display) */
@@ -192,6 +195,7 @@ interface PreviewTabsProps {
 
 export function PreviewTabs({
 	xml,
+	layoutXml,
 	result,
 	isExecuting,
 	isLoadingMore,
@@ -235,12 +239,12 @@ export function PreviewTabs({
 	getSelectedRecordIds,
 }: PreviewTabsProps) {
 	const styles = useStyles();
-	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
+	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results">("xml");
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-		setSelectedTab(data.value as "xml" | "results");
+		setSelectedTab(data.value as "xml" | "layout" | "results");
 	};
 
 	const handleExecute = () => {
@@ -268,6 +272,7 @@ export function PreviewTabs({
 			<div className={styles.header}>
 				<TabList selectedValue={selectedTab} onTabSelect={handleTabSelect}>
 					<Tab value="xml">FetchXML</Tab>
+					<Tab value="layout">LayoutXML</Tab>
 					<Tab value="results">Results</Tab>
 				</TabList>
 				<Toolbar size="small">
@@ -323,6 +328,11 @@ export function PreviewTabs({
 				{selectedTab === "xml" && (
 					<div className={styles.codeCard}>
 						<FetchXmlEditor xml={xml} onParseToTree={onParseToTree} />
+					</div>
+				)}
+				{selectedTab === "layout" && (
+					<div className={styles.codeCard}>
+						<LayoutXmlViewer layoutXml={layoutXml || ""} />
 					</div>
 				)}
 				{selectedTab === "results" && (
