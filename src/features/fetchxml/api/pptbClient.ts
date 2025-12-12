@@ -1981,3 +1981,655 @@ export function downloadBase64File(
 		throw error;
 	}
 }
+
+// ============================================================================
+// RECORD ACTIONS
+// ============================================================================
+
+/**
+ * Get the Dataverse environment URL from the active connection
+ */
+export async function getEnvironmentUrl(): Promise<string | null> {
+	try {
+		if (typeof window !== "undefined" && window.toolboxAPI?.connections?.getActiveConnection) {
+			const conn = await window.toolboxAPI.connections.getActiveConnection();
+			return conn?.url || null;
+		}
+		return null;
+	} catch (error) {
+		console.error("getEnvironmentUrl: Failed:", error);
+		return null;
+	}
+}
+
+/**
+ * Build a record URL for opening in browser
+ * @param entityName Logical name of the entity
+ * @param recordId GUID of the record
+ * @param environmentUrl Base URL of the environment
+ */
+export function buildRecordUrl(
+	entityName: string,
+	recordId: string,
+	environmentUrl: string
+): string {
+	// Remove trailing slash from environmentUrl if present to avoid double slashes
+	const baseUrl = environmentUrl.endsWith("/") ? environmentUrl.slice(0, -1) : environmentUrl;
+	// Standard Dynamics 365 record URL format
+	return `${baseUrl}/main.aspx?etn=${entityName}&id=${recordId}&pagetype=entityrecord`;
+}
+
+/**
+ * Delete a single record
+ * @param entitySetName OData entity set name (e.g., "accounts")
+ * @param recordId GUID of the record to delete
+ */
+export async function deleteRecord(entitySetName: string, recordId: string): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("recordAPI", `📡 Deleting record: ${entitySetName}(${recordId})`);
+
+	try {
+		await window.dataverseAPI!.delete(entitySetName, recordId);
+		debugLog("recordAPI", `✅ Record deleted: ${entitySetName}(${recordId})`);
+	} catch (error) {
+		console.error("deleteRecord: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Check if user has privilege for bulk delete
+ */
+export async function checkBulkDeletePrivilege(): Promise<boolean> {
+	try {
+		const user = await whoAmI();
+		if (!user) return false;
+		return await checkPrivilegeByName(user.UserId, "prvBulkDelete");
+	} catch (error) {
+		console.error("checkBulkDeletePrivilege: Failed:", error);
+		return false;
+	}
+}
+
+/**
+ * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function
+ * This function must be called via GET request with URL-encoded parameters
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
+ */
+export async function fetchXmlToQueryExpression(fetchXml: string): Promise<unknown> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("recordAPI", `📡 Converting FetchXML to QueryExpression`);
+
+	try {
+		// FetchXmlToQueryExpression is a function - must be called via GET with URL-encoded FetchXml
+		// The parameter must be properly escaped and wrapped in single quotes
+		const encodedFetchXml = encodeURIComponent(fetchXml);
+		const functionUrl = `FetchXmlToQueryExpression(FetchXml=@p1)?@p1='${encodedFetchXml}'`;
+
+		const result = await window.dataverseAPI!.queryData(functionUrl);
+
+		debugLog("recordAPI", `✅ Converted FetchXML to QueryExpression`, result);
+		return (result as { Query?: unknown }).Query || result;
+	} catch (error) {
+		console.error("fetchXmlToQueryExpression: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Get the bulkdeleteoperationid from an asyncoperationid
+ * The BulkDelete action returns an asyncoperationid, but we need the bulkdeleteoperationid
+ * to link to the correct record in the UI
+ * @param asyncOperationId The asyncoperationid returned from BulkDelete action
+ * @returns The bulkdeleteoperationid or empty string if not found
+ */
+async function getBulkDeleteOperationId(asyncOperationId: string): Promise<string> {
+	if (!asyncOperationId || !isDataverseAvailable()) {
+		return "";
+	}
+
+	try {
+		// Query bulkdeleteoperations to find the one with this asyncoperationid
+		const query = `bulkdeleteoperations?$select=bulkdeleteoperationid&$filter=_asyncoperationid_value eq ${asyncOperationId}`;
+		const result = await window.dataverseAPI!.queryData(query);
+
+		const operations = result.value as Array<{ bulkdeleteoperationid?: string }>;
+		if (operations && operations.length > 0 && operations[0].bulkdeleteoperationid) {
+			debugLog(
+				"recordAPI",
+				`✅ Found bulkdeleteoperationid: ${operations[0].bulkdeleteoperationid}`
+			);
+			return operations[0].bulkdeleteoperationid;
+		}
+
+		debugLog(
+			"recordAPI",
+			`⚠️ No bulkdeleteoperationid found for asyncoperationid: ${asyncOperationId}`
+		);
+		return "";
+	} catch (error) {
+		console.error("getBulkDeleteOperationId: Failed:", error);
+		return "";
+	}
+}
+
+/**
+ * Submit a bulk delete job for selected records
+ * Uses FetchXmlToQueryExpression function to convert FetchXML to QueryExpression
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
+ * @param entityLogicalName Logical name of the entity
+ * @param primaryIdAttribute Primary ID attribute name (e.g., "accountid")
+ * @param recordIds Array of record GUIDs to delete
+ * @param jobName Name for the bulk delete job
+ * @returns AsyncOperationId and BulkDeleteOperationId for tracking the job
+ */
+export async function submitBulkDelete(
+	entityLogicalName: string,
+	primaryIdAttribute: string,
+	recordIds: string[],
+	jobName: string
+): Promise<{ asyncOperationId: string; bulkDeleteOperationId: string; jobUrl: string }> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog(
+		"recordAPI",
+		`📡 Submitting bulk delete job: ${jobName} for ${recordIds.length} records`
+	);
+
+	try {
+		// Build FetchXML to select records by their IDs
+		// Use <value> elements for the "in" operator
+		const valuesXml = recordIds.map((id) => `<value>${id}</value>`).join("");
+		const fetchXml = `<fetch>
+			<entity name="${entityLogicalName}">
+				<attribute name="${primaryIdAttribute}" />
+				<filter>
+					<condition attribute="${primaryIdAttribute}" operator="in">
+						${valuesXml}
+					</condition>
+				</filter>
+			</entity>
+		</fetch>`;
+
+		// Convert FetchXML to QueryExpression using the Dataverse function
+		const queryExpression = await fetchXmlToQueryExpression(fetchXml);
+
+		// Submit BulkDelete with the converted QueryExpression
+		const result = (await window.dataverseAPI!.execute({
+			operationName: "BulkDelete",
+			operationType: "action",
+			parameters: {
+				QuerySet: [queryExpression],
+				JobName: jobName,
+				SendEmailNotification: false,
+				ToRecipients: [],
+				CCRecipients: [],
+				RecurrencePattern: "",
+				StartDateTime: new Date().toISOString(),
+			},
+		})) as { JobId?: string; AsyncOperationId?: string };
+
+		const asyncOpId = result.AsyncOperationId || result.JobId || "";
+
+		// Query for the bulkdeleteoperationid using the asyncoperationid
+		const bulkDeleteOpId = await getBulkDeleteOperationId(asyncOpId);
+
+		// Build job tracking URL using bulkdeleteoperation entity
+		const envUrl = await getEnvironmentUrl();
+		const baseUrl = envUrl?.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
+		const jobUrl =
+			baseUrl && bulkDeleteOpId
+				? `${baseUrl}/main.aspx?pagetype=entityrecord&etn=bulkdeleteoperation&id=${bulkDeleteOpId}`
+				: "";
+
+		debugLog(
+			"recordAPI",
+			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`
+		);
+
+		return {
+			asyncOperationId: asyncOpId,
+			bulkDeleteOperationId: bulkDeleteOpId,
+			jobUrl,
+		};
+	} catch (error) {
+		console.error("submitBulkDelete: Failed:", error);
+		throw error;
+	}
+}
+
+// ============================================================================
+// WORKFLOW ACTIONS
+// ============================================================================
+
+export interface WorkflowInfo {
+	workflowid: string;
+	name: string;
+	description?: string;
+	primaryentity: string;
+	category: number; // 0 = Workflow, 2 = Business Rule, etc.
+	type: number; // 1 = Definition, 2 = Activation, 3 = Template
+	statuscode: number;
+}
+
+/**
+ * Check if user has privileges to read and execute workflows
+ * Returns true if user can both read workflows and execute them
+ */
+export async function checkWorkflowPrivileges(): Promise<boolean> {
+	try {
+		const user = await whoAmI();
+		if (!user) return false;
+
+		const [canRead, canExecute] = await Promise.all([
+			checkPrivilegeByName(user.UserId, "prvReadWorkflow"),
+			checkPrivilegeByName(user.UserId, "prvWorkflowExecution"),
+		]);
+
+		return canRead && canExecute;
+	} catch (error) {
+		console.error("checkWorkflowPrivileges: Failed:", error);
+		return false;
+	}
+}
+
+/**
+ * Get available on-demand workflows for an entity
+ * @param entityLogicalName Logical name of the entity
+ * @returns List of workflows that can be run on-demand
+ */
+export async function getOnDemandWorkflows(entityLogicalName: string): Promise<WorkflowInfo[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("workflowAPI", `📡 Getting on-demand workflows for: ${entityLogicalName}`);
+
+	try {
+		// Query for active, on-demand workflows for this entity using OData
+		// statecode=1 (Activated), statuscode=2 (Activated), ondemand=true, category=0 (Workflow), type=1 (Definition)
+		// primaryentity must be quoted as a string value
+		const odataQuery = `workflows?$select=workflowid,name,description,primaryentity,category,type,statuscode&$filter=(statecode eq 1 and statuscode eq 2 and ondemand eq true and category eq 0 and type eq 1 and primaryentity eq '${entityLogicalName}')&$orderby=name asc`;
+
+		const result = await window.dataverseAPI!.queryData(odataQuery);
+
+		// Map the records to WorkflowInfo type
+		const workflows: WorkflowInfo[] = (result.value || []).map((record) => ({
+			workflowid: String(record.workflowid || ""),
+			name: String(record.name || ""),
+			description: record.description ? String(record.description) : undefined,
+			primaryentity: String(record.primaryentity || ""),
+			category: Number(record.category || 0),
+			type: Number(record.type || 0),
+			statuscode: Number(record.statuscode || 0),
+		}));
+
+		debugLog("workflowAPI", `✅ Found ${workflows.length} on-demand workflows`);
+
+		return workflows;
+	} catch (error) {
+		console.error("getOnDemandWorkflows: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Execute a workflow on a specific record
+ * @param workflowId GUID of the workflow to execute
+ * @param recordId GUID of the record to run the workflow on
+ * @param entityLogicalName Logical name of the entity (for the target EntityReference)
+ */
+export async function executeWorkflow(
+	workflowId: string,
+	recordId: string,
+	entityLogicalName: string
+): Promise<void> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog(
+		"workflowAPI",
+		`📡 Executing workflow ${workflowId} on ${entityLogicalName}(${recordId})`
+	);
+
+	try {
+		await window.dataverseAPI!.execute({
+			operationName: "ExecuteWorkflow",
+			operationType: "action",
+			entityName: "workflow",
+			entityId: workflowId,
+			parameters: {
+				EntityId: recordId,
+			},
+		});
+
+		debugLog("workflowAPI", `✅ Workflow executed successfully`);
+	} catch (error) {
+		console.error("executeWorkflow: Failed:", error);
+		throw error;
+	}
+}
+
+/**
+ * Progress info for workflow batch execution
+ */
+export interface WorkflowBatchProgress {
+	completed: number;
+	total: number;
+	succeeded: number;
+	failed: number;
+	batchesCompleted: number;
+	totalBatches: number;
+	estimatedSecondsRemaining?: number;
+}
+
+/**
+ * Execute a workflow on multiple records using $batch requests for parallelization
+ * Uses parallel execution via PPTB dataverseAPI for performance
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api
+ * @param workflowId GUID of the workflow to execute
+ * @param recordIds Array of record GUIDs to run the workflow on
+ * @param entityLogicalName Logical name of the entity (unused but kept for API compatibility)
+ * @param onProgress Callback for progress updates with batch info and ETA
+ * @param batchSize Number of concurrent requests per batch (default: 10)
+ */
+export async function executeWorkflowBatch(
+	workflowId: string,
+	recordIds: string[],
+	entityLogicalName: string,
+	onProgress?: (progress: WorkflowBatchProgress) => void,
+	batchSize: number = 10
+): Promise<{ succeeded: number; failed: number; errors: string[] }> {
+	const result = { succeeded: 0, failed: 0, errors: [] as string[] };
+	const total = recordIds.length;
+	let completed = 0;
+
+	// Split recordIds into batches of batchSize (default 10) for parallel execution
+	const batches: string[][] = [];
+	for (let i = 0; i < recordIds.length; i += batchSize) {
+		batches.push(recordIds.slice(i, i + batchSize));
+	}
+
+	debugLog(
+		"workflowAPI",
+		`📡 Executing workflow ${workflowId} on ${recordIds.length} records in ${batches.length} batches`
+	);
+
+	// Track timing for ETA calculation
+	const batchTimes: number[] = [];
+	let batchesCompleted = 0;
+
+	// Process batches sequentially (each batch processes in parallel)
+	for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+		const batchRecordIds = batches[batchIndex];
+		const batchStartTime = Date.now();
+
+		debugLog(
+			"workflowAPI",
+			`📡 Executing batch ${batchIndex + 1}/${batches.length} with ${batchRecordIds.length} records`
+		);
+
+		// Execute workflows in parallel within the batch
+		const workflowPromises = batchRecordIds.map(async (recordId) => {
+			try {
+				await executeWorkflow(workflowId, recordId, entityLogicalName);
+				return { success: true, recordId };
+			} catch (error) {
+				return {
+					success: false,
+					recordId,
+					error: error instanceof Error ? error.message : String(error),
+				};
+			}
+		});
+
+		const batchResults = await Promise.all(workflowPromises);
+		const batchEndTime = Date.now();
+		const batchTime = batchEndTime - batchStartTime;
+		batchTimes.push(batchTime);
+
+		// Aggregate results
+		for (const execResult of batchResults) {
+			if (execResult.success) {
+				result.succeeded++;
+			} else {
+				result.failed++;
+				result.errors.push(`Record ${execResult.recordId}: ${execResult.error}`);
+			}
+			completed++;
+		}
+		batchesCompleted++;
+
+		// Calculate ETA based on average batch time
+		let estimatedSecondsRemaining: number | undefined;
+		if (batchTimes.length >= 2) {
+			const avgBatchTime = batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length;
+			const remainingBatches = batches.length - batchesCompleted;
+			estimatedSecondsRemaining = Math.ceil((avgBatchTime * remainingBatches) / 1000);
+		}
+
+		onProgress?.({
+			completed,
+			total,
+			succeeded: result.succeeded,
+			failed: result.failed,
+			batchesCompleted,
+			totalBatches: batches.length,
+			estimatedSecondsRemaining,
+		});
+	}
+
+	debugLog(
+		"workflowAPI",
+		`✅ Workflow execution complete: ${result.succeeded} succeeded, ${result.failed} failed`
+	);
+	return result;
+}
+
+/**
+ * Check if user has delete privilege for a specific entity
+ */
+export async function checkDeletePrivilege(entityLogicalName: string): Promise<boolean> {
+	try {
+		const user = await whoAmI();
+		if (!user) return false;
+
+		// Entity-specific delete privilege (e.g., prvDeleteAccount)
+		const deletePriv = `prvDelete${entityLogicalName
+			.charAt(0)
+			.toUpperCase()}${entityLogicalName.slice(1)}`;
+		return await checkPrivilegeByName(user.UserId, deletePriv);
+	} catch (error) {
+		console.error("checkDeletePrivilege: Failed:", error);
+		return false;
+	}
+}
+
+// ============================================================================
+// BATCH DELETE OPERATIONS
+// ============================================================================
+
+export interface BatchDeleteProgress {
+	completed: number;
+	total: number;
+	succeeded: number;
+	failed: number;
+	batchesCompleted: number;
+	totalBatches: number;
+	estimatedSecondsRemaining?: number;
+}
+
+export interface BatchDeleteResult {
+	succeeded: number;
+	failed: number;
+	errors: string[];
+}
+
+/**
+ * Delete multiple records using parallel delete requests via PPTB API
+ * Recommended for 1-100 records. For larger sets, use submitBulkDelete.
+ * Uses batches of parallel requests for performance while respecting rate limits.
+ *
+ * @param entitySetName OData entity set name (e.g., "accounts")
+ * @param recordIds Array of record GUIDs to delete
+ * @param onProgress Callback for progress updates with ETA
+ * @param batchSize Number of concurrent requests per batch (default: 10)
+ */
+export async function deleteRecordsBatch(
+	entitySetName: string,
+	recordIds: string[],
+	onProgress?: (progress: BatchDeleteProgress) => void,
+	batchSize: number = 10
+): Promise<BatchDeleteResult> {
+	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
+	const total = recordIds.length;
+
+	// Split recordIds into batches for parallel processing
+	const batches: string[][] = [];
+	for (let i = 0; i < recordIds.length; i += batchSize) {
+		batches.push(recordIds.slice(i, i + batchSize));
+	}
+
+	debugLog("recordAPI", `📡 Deleting ${recordIds.length} records in ${batches.length} batches`);
+
+	// Track timing for ETA calculation
+	const batchTimes: number[] = [];
+	let completed = 0;
+	let batchesCompleted = 0;
+
+	// Process batches sequentially (each batch processes in parallel)
+	for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+		const batchRecordIds = batches[batchIndex];
+		const batchStartTime = Date.now();
+
+		// Execute deletes in parallel within the batch
+		const deletePromises = batchRecordIds.map(async (recordId) => {
+			try {
+				await deleteRecord(entitySetName, recordId);
+				return { success: true, recordId };
+			} catch (error) {
+				return {
+					success: false,
+					recordId,
+					error: error instanceof Error ? error.message : String(error),
+				};
+			}
+		});
+
+		const batchResults = await Promise.all(deletePromises);
+		const batchEndTime = Date.now();
+		const batchTime = batchEndTime - batchStartTime;
+		batchTimes.push(batchTime);
+
+		// Aggregate results
+		for (const deleteResult of batchResults) {
+			if (deleteResult.success) {
+				result.succeeded++;
+			} else {
+				result.failed++;
+				result.errors.push(`${deleteResult.recordId}: ${deleteResult.error}`);
+			}
+			completed++;
+		}
+		batchesCompleted++;
+
+		// Calculate ETA based on average batch time
+		let estimatedSecondsRemaining: number | undefined;
+		if (batchTimes.length >= 2) {
+			const avgBatchTime = batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length;
+			const remainingBatches = batches.length - batchesCompleted;
+			estimatedSecondsRemaining = Math.ceil((avgBatchTime * remainingBatches) / 1000);
+		}
+
+		onProgress?.({
+			completed,
+			total,
+			succeeded: result.succeeded,
+			failed: result.failed,
+			batchesCompleted,
+			totalBatches: batches.length,
+			estimatedSecondsRemaining,
+		});
+	}
+
+	debugLog(
+		"recordAPI",
+		`✅ Delete complete: ${result.succeeded} succeeded, ${result.failed} failed`
+	);
+	return result;
+}
+
+/**
+ * Submit bulk delete for all records matching a FetchXML query
+ * Use this when no specific records are selected - deletes ALL matching records
+ *
+ * @param fetchXml The FetchXML query defining which records to delete
+ * @param jobName Name for the bulk delete job
+ * @returns AsyncOperationId for tracking the job
+ */
+export async function submitBulkDeleteFromFetchXml(
+	fetchXml: string,
+	jobName: string
+): Promise<{ asyncOperationId: string; bulkDeleteOperationId: string; jobUrl: string }> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+
+	debugLog("recordAPI", `📡 Submitting bulk delete job from FetchXML: ${jobName}`);
+
+	try {
+		// Convert FetchXML to QueryExpression using the Dataverse function
+		const queryExpression = await fetchXmlToQueryExpression(fetchXml);
+
+		// Submit BulkDelete with the converted QueryExpression
+		const result = (await window.dataverseAPI!.execute({
+			operationName: "BulkDelete",
+			operationType: "action",
+			parameters: {
+				QuerySet: [queryExpression],
+				JobName: jobName,
+				SendEmailNotification: false,
+				ToRecipients: [],
+				CCRecipients: [],
+				RecurrencePattern: "",
+				StartDateTime: new Date().toISOString(),
+			},
+		})) as { JobId?: string; AsyncOperationId?: string };
+
+		const asyncOpId = result.AsyncOperationId || result.JobId || "";
+
+		// Query for the bulkdeleteoperationid using the asyncoperationid
+		const bulkDeleteOpId = await getBulkDeleteOperationId(asyncOpId);
+
+		// Build job tracking URL using bulkdeleteoperation entity
+		const envUrl = await getEnvironmentUrl();
+		const baseUrl = envUrl?.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
+		const jobUrl =
+			baseUrl && bulkDeleteOpId
+				? `${baseUrl}/main.aspx?pagetype=entityrecord&etn=bulkdeleteoperation&id=${bulkDeleteOpId}`
+				: "";
+
+		debugLog(
+			"recordAPI",
+			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`
+		);
+
+		return {
+			asyncOperationId: asyncOpId,
+			bulkDeleteOperationId: bulkDeleteOpId,
+			jobUrl,
+		};
+	} catch (error) {
+		console.error("submitBulkDeleteFromFetchXml: Failed:", error);
+		throw error;
+	}
+}

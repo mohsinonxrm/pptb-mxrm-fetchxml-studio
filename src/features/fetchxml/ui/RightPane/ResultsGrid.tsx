@@ -84,6 +84,10 @@ const useStyles = makeStyles({
 		minHeight: "32px",
 		zIndex: 1,
 	},
+	selectionWarning: {
+		color: tokens.colorPaletteYellowForeground1,
+		marginLeft: tokens.spacingHorizontalM,
+	},
 	emptyState: {
 		display: "flex",
 		alignItems: "center",
@@ -142,6 +146,8 @@ interface ResultsGridProps {
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null; // For extracting aliases and order state
 	onSelectedCountChange?: (count: number) => void;
+	/** Callback when selection changes, provides the selected record IDs (GUIDs) */
+	onSelectionChange?: (recordIds: string[]) => void;
 	/** Column layout configuration for order and widths */
 	columnConfig?: LayoutXmlConfig | null;
 	/** Callback when a column is resized */
@@ -159,6 +165,7 @@ export function ResultsGrid({
 	attributeMetadata,
 	fetchQuery,
 	onSelectedCountChange,
+	onSelectionChange,
 	columnConfig,
 	onColumnResize,
 	onSortChange,
@@ -617,8 +624,11 @@ export function ResultsGrid({
 		(_e: unknown, data: { selectedItems: Set<string | number> }) => {
 			setSelectedItems(data.selectedItems);
 			onSelectedCountChange?.(data.selectedItems.size);
+			// Convert Set to array of string IDs for the callback
+			const recordIds = Array.from(data.selectedItems).map(String);
+			onSelectionChange?.(recordIds);
 		},
-		[onSelectedCountChange]
+		[onSelectedCountChange, onSelectionChange]
 	);
 
 	// Sort change handler: notifies parent to update FetchXML orders
@@ -825,7 +835,16 @@ export function ResultsGrid({
 						{isLoadingMore && " (loading more...)"}
 						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
 					</span>
-					<span>Selected: {selectedItems.size}</span>
+					<span>
+						Selected: {selectedItems.size}
+						{selectedItems.size > 0 &&
+							selectedItems.size === result.rows.length &&
+							result.moreRecords && (
+								<span className={styles.selectionWarning}>
+									⚠ Selection limited to loaded records. Use "Retrieve all pages" to load more.
+								</span>
+							)}
+					</span>
 				</div>
 			</div>
 		</div>

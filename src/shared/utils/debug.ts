@@ -16,6 +16,8 @@ const DEBUG_FLAGS = {
 	solutionComponentAPI: true, // Solution component API calls
 	viewAPI: true, // View (savedquery/userquery) API calls
 	exportAPI: true, // Export to Excel API calls
+	recordAPI: true, // Record CRUD operations
+	workflowAPI: true, // Workflow execution
 } as const;
 
 type DebugCategory = keyof typeof DEBUG_FLAGS;

@@ -2,7 +2,7 @@
  * Tabbed preview panel with FetchXML editor and Results grid
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import {
 	TabList,
 	Tab,
@@ -28,6 +28,7 @@ import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClie
 import type { FetchNode } from "../../model/nodes";
 import type { ParseResult } from "../../model/fetchxmlParser";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
+import type { WorkflowInfo } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	container: {
@@ -158,6 +159,35 @@ interface PreviewTabsProps {
 	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
 	/** Callback to reset columns to default */
 	onResetToDefault?: () => void;
+	// Record action callbacks
+	/** Callback when user clicks Open (opens record(s) in new tab) */
+	onOpenRecord?: (recordIds: string[]) => void;
+	/** Callback when user clicks Copy URL (copies record URL(s)) */
+	onCopyRecordUrl?: (recordIds: string[]) => void;
+	/** Callback when user clicks Delete */
+	onDeleteRecords?: (recordIds: string[]) => void;
+	/** Callback when user clicks Bulk Delete */
+	onBulkDeleteRecords?: (recordIds: string[]) => void;
+	/** Callback when user clicks Activate */
+	onActivateRecords?: (recordIds: string[]) => void;
+	/** Callback when user clicks Deactivate */
+	onDeactivateRecords?: (recordIds: string[]) => void;
+	/** Callback when user wants to run a specific workflow directly */
+	onRunSpecificWorkflow?: (workflow: WorkflowInfo, recordIds: string[]) => void;
+	/** Whether user can delete records */
+	canDelete?: boolean;
+	/** Whether user can bulk delete records */
+	canBulkDelete?: boolean;
+	/** Whether user can run workflows */
+	canRunWorkflow?: boolean;
+	/** Fetch available workflows for the entity */
+	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
+	/** Whether the current query is an aggregate query (disables delete/workflow) */
+	isAggregateQuery?: boolean;
+	/** Callback when selection changes in ResultsGrid */
+	onSelectionChange?: (recordIds: string[]) => void;
+	/** Callback to get currently selected record IDs */
+	getSelectedRecordIds?: () => string[];
 }
 
 export function PreviewTabs({
@@ -189,10 +219,25 @@ export function PreviewTabs({
 	isLoadingRelationships,
 	onLoadRelatedAttributes,
 	onResetToDefault,
+	onOpenRecord,
+	onCopyRecordUrl,
+	onDeleteRecords,
+	onBulkDeleteRecords,
+	onActivateRecords,
+	onDeactivateRecords,
+	onRunSpecificWorkflow,
+	canDelete,
+	canBulkDelete,
+	canRunWorkflow,
+	onFetchWorkflows,
+	isAggregateQuery,
+	onSelectionChange,
+	getSelectedRecordIds,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "results">("xml");
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
+	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
 		setSelectedTab(data.value as "xml" | "results");
@@ -203,6 +248,20 @@ export function PreviewTabs({
 		setSelectedTab("results");
 		onExecute?.();
 	};
+
+	const handleSelectionChange = useCallback(
+		(recordIds: string[]) => {
+			setSelectedRecordIds(recordIds);
+			// Also notify parent
+			onSelectionChange?.(recordIds);
+		},
+		[onSelectionChange]
+	);
+
+	// If parent provided a getter, use ours; otherwise use internal state
+	const getSelectedIds = useCallback(() => {
+		return getSelectedRecordIds ? getSelectedRecordIds() : selectedRecordIds;
+	}, [getSelectedRecordIds, selectedRecordIds]);
 
 	return (
 		<div className={styles.container}>
@@ -271,11 +330,53 @@ export function PreviewTabs({
 						<div className={styles.toolbarCard}>
 							<ResultsCommandBar
 								selectedCount={toolbarSelectedCount}
-								onOpen={() => console.log("Open not yet implemented")}
-								onCopyUrl={() => console.log("Copy URL not yet implemented")}
-								onActivate={() => console.log("Activate not yet implemented")}
-								onDeactivate={() => console.log("Deactivate not yet implemented")}
-								onDelete={() => console.log("Delete not yet implemented")}
+								onOpen={() => {
+									const ids = getSelectedIds();
+									if (ids?.length && onOpenRecord) {
+										onOpenRecord(ids);
+									}
+								}}
+								onCopyUrl={() => {
+									const ids = getSelectedIds();
+									if (ids?.length && onCopyRecordUrl) {
+										onCopyRecordUrl(ids);
+									}
+								}}
+								onActivate={() => {
+									const ids = getSelectedIds();
+									if (ids?.length && onActivateRecords) {
+										onActivateRecords(ids);
+									}
+								}}
+								onDeactivate={() => {
+									const ids = getSelectedIds();
+									if (ids?.length && onDeactivateRecords) {
+										onDeactivateRecords(ids);
+									}
+								}}
+								onDelete={() => {
+									const ids = getSelectedIds();
+									// For delete, we allow empty selection to trigger "delete all" dialog
+									if (onDeleteRecords) {
+										onDeleteRecords(ids || []);
+									}
+								}}
+								onBulkDelete={() => {
+									const ids = getSelectedIds();
+									if (onBulkDeleteRecords) {
+										onBulkDeleteRecords(ids || []);
+									}
+								}}
+								canDelete={canDelete && !isAggregateQuery}
+								canBulkDelete={canBulkDelete && !isAggregateQuery}
+								onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
+									const ids = getSelectedIds();
+									if (ids?.length && onRunSpecificWorkflow) {
+										onRunSpecificWorkflow(workflow, ids);
+									}
+								}}
+								canRunWorkflow={canRunWorkflow && !isAggregateQuery}
+								onFetchWorkflows={onFetchWorkflows}
 								onExport={onExport || (() => console.log("Export not yet implemented"))}
 								canExport={canExport}
 								isExporting={isExporting}
@@ -309,6 +410,7 @@ export function PreviewTabs({
 								attributeMetadata={attributeMetadata}
 								fetchQuery={fetchQuery}
 								onSelectedCountChange={setToolbarSelectedCount}
+								onSelectionChange={handleSelectionChange}
 								columnConfig={columnConfig}
 								onColumnResize={onColumnResize}
 								onSortChange={onSortChange}

@@ -10,6 +10,14 @@ import {
 	ToolbarDivider,
 	makeStyles,
 	Tooltip,
+	Menu,
+	MenuTrigger,
+	MenuPopover,
+	MenuList,
+	MenuItem,
+	SplitButton,
+	MenuButton,
+	type MenuButtonProps,
 } from "@fluentui/react-components";
 import {
 	Open20Regular,
@@ -19,6 +27,8 @@ import {
 	Delete20Regular,
 	ArrowExport20Regular,
 	ColumnTriple20Regular,
+	Play20Regular,
+	DocumentBulletList20Regular,
 } from "@fluentui/react-icons";
 import { EditColumnsPanel } from "./EditColumnsPanel";
 import {
@@ -27,11 +37,14 @@ import {
 	type RelatedEntityColumn,
 } from "./AddColumnsPanel";
 import type { LayoutColumn } from "../../model/layoutxml";
-import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
+import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	toolbar: {
 		padding: "0",
+	},
+	splitButtonAppearance: {
+		// Use subtle appearance for split buttons to match toolbar
 	},
 });
 
@@ -41,7 +54,20 @@ export interface CommandBarProps {
 	onCopyUrl?: () => void;
 	onActivate?: () => void;
 	onDeactivate?: () => void;
+	/** Delete selected records (or all if none selected) */
 	onDelete?: () => void;
+	/** Bulk delete (creates async job) */
+	onBulkDelete?: () => void;
+	/** Whether delete is available */
+	canDelete?: boolean;
+	/** Whether bulk delete is available */
+	canBulkDelete?: boolean;
+	/** Execute a specific workflow directly */
+	onRunSpecificWorkflow?: (workflow: WorkflowInfo) => void;
+	/** Whether workflow execution is available */
+	canRunWorkflow?: boolean;
+	/** Fetch available workflows for the entity */
+	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
 	onExport?: () => void;
 	/** Whether export is available (requires a saved view and export privilege) */
 	canExport?: boolean;
@@ -84,6 +110,12 @@ export function ResultsCommandBar({
 	onActivate,
 	onDeactivate,
 	onDelete,
+	onBulkDelete,
+	canDelete = false,
+	canBulkDelete = false,
+	onRunSpecificWorkflow,
+	canRunWorkflow = false,
+	onFetchWorkflows,
 	onExport,
 	canExport = false,
 	isExporting = false,
@@ -107,6 +139,27 @@ export function ResultsCommandBar({
 	const singleSelection = selectedCount === 1;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
+
+	// Workflow menu state
+	const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
+	const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
+	const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
+
+	// Load workflows when menu opens (lazy loading)
+	const handleWorkflowMenuOpen = useCallback(async () => {
+		if (workflowsLoaded || isLoadingWorkflows || !onFetchWorkflows) return;
+
+		setIsLoadingWorkflows(true);
+		try {
+			const wfs = await onFetchWorkflows();
+			setWorkflows(wfs);
+			setWorkflowsLoaded(true);
+		} catch (err) {
+			console.error("Failed to load workflows:", err);
+		} finally {
+			setIsLoadingWorkflows(false);
+		}
+	}, [workflowsLoaded, isLoadingWorkflows, onFetchWorkflows]);
 
 	const handleEditColumnsClick = useCallback(() => {
 		setEditPanelOpen(true);
@@ -224,15 +277,75 @@ export function ResultsCommandBar({
 					</>
 				)}
 
-				<ToolbarButton
-					appearance="subtle"
-					icon={<Delete20Regular />}
-					disabled={!hasSelection}
-					onClick={onDelete}
-					aria-label="Delete selected records"
-				>
-					Delete
-				</ToolbarButton>
+				{canDelete && (
+					<Menu positioning="below-end">
+						<MenuTrigger disableButtonEnhancement>
+							{(triggerProps: MenuButtonProps) => (
+								<SplitButton
+									appearance="subtle"
+									menuButton={triggerProps}
+									primaryActionButton={{
+										onClick: onDelete,
+									}}
+									icon={<Delete20Regular />}
+									aria-label={
+										hasSelection ? "Delete selected records" : "Delete all records from view"
+									}
+								>
+									{hasSelection ? "Delete" : "Delete All"}
+								</SplitButton>
+							)}
+						</MenuTrigger>
+						<MenuPopover>
+							<MenuList>
+								<MenuItem icon={<Delete20Regular />} onClick={onDelete}>
+									Delete{hasSelection ? ` (${selectedCount})` : " All"}
+								</MenuItem>
+								{canBulkDelete && (
+									<MenuItem icon={<DocumentBulletList20Regular />} onClick={onBulkDelete}>
+										Bulk Delete (Job)
+									</MenuItem>
+								)}
+							</MenuList>
+						</MenuPopover>
+					</Menu>
+				)}
+
+				{canRunWorkflow && (
+					<Menu
+						positioning="below-end"
+						onOpenChange={(_, data) => data.open && handleWorkflowMenuOpen()}
+					>
+						<MenuTrigger disableButtonEnhancement>
+							<MenuButton
+								appearance="subtle"
+								icon={<Play20Regular />}
+								disabled={!hasSelection}
+								aria-label="Run workflow on selected records"
+							>
+								Run Workflow
+							</MenuButton>
+						</MenuTrigger>
+						<MenuPopover>
+							<MenuList>
+								{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
+								{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
+									<MenuItem disabled>No workflows available</MenuItem>
+								)}
+								{!isLoadingWorkflows &&
+									workflows.map((wf) => (
+										<MenuItem
+											key={wf.workflowid}
+											icon={<Play20Regular />}
+											onClick={() => onRunSpecificWorkflow?.(wf)}
+										>
+											{wf.name}
+										</MenuItem>
+									))}
+							</MenuList>
+						</MenuPopover>
+					</Menu>
+				)}
 
 				<ToolbarDivider />
 

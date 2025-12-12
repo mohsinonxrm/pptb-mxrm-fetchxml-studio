@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -20,6 +20,9 @@ import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
+import { DeleteConfirmDialog } from "../features/fetchxml/ui/Dialogs/DeleteConfirmDialog";
+import { BulkDeleteDialog } from "../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
+import { WorkflowPickerDialog } from "../features/fetchxml/ui/Dialogs/WorkflowPickerDialog";
 import {
 	executeFetchXml,
 	executeSystemView,
@@ -29,12 +32,27 @@ import {
 	exportToExcel,
 	downloadBase64File,
 	checkPrivilegeByName,
+	getEnvironmentUrl,
+	buildRecordUrl,
+	deleteRecord,
+	deleteRecordsBatch,
+	checkBulkDeletePrivilege,
+	submitBulkDelete,
+	submitBulkDeleteFromFetchXml,
+	checkWorkflowPrivileges,
+	getOnDemandWorkflows,
+	executeWorkflowBatch,
+	checkDeletePrivilege,
 } from "../features/fetchxml/api/pptbClient";
 import type {
 	AttributeMetadata,
 	LoadedViewInfo,
 	EntityMetadata,
 	RelationshipMetadata,
+	WorkflowInfo,
+	BatchDeleteProgress,
+	BatchDeleteResult,
+	WorkflowBatchProgress,
 } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/model/fetchxml";
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
@@ -252,6 +270,46 @@ function AppContent() {
 		privilegeChecked: false,
 	});
 
+	// Record action privileges state
+	const [recordActionPrivileges, setRecordActionPrivileges] = useState<{
+		canDelete: boolean;
+		canBulkDelete: boolean;
+		canRunWorkflow: boolean;
+		privilegesChecked: boolean;
+	}>({
+		canDelete: false,
+		canBulkDelete: false,
+		canRunWorkflow: false,
+		privilegesChecked: false,
+	});
+
+	// Dialog states for record actions
+	const [deleteDialogState, setDeleteDialogState] = useState<{
+		open: boolean;
+		recordIds: string[];
+		recordName?: string;
+		isBatchDelete?: boolean; // Using batch DELETE for 4-100 records
+	}>({ open: false, recordIds: [] });
+
+	// Progress tracking for batch delete
+	const [deleteProgress, setDeleteProgress] = useState<BatchDeleteProgress | null>(null);
+
+	const [bulkDeleteDialogState, setBulkDeleteDialogState] = useState<{
+		open: boolean;
+		recordIds: string[];
+		isAllRecords?: boolean;
+		totalViewRecords?: number;
+	}>({ open: false, recordIds: [] });
+
+	const [workflowDialogState, setWorkflowDialogState] = useState<{
+		open: boolean;
+		recordIds: string[];
+		preSelectedWorkflow?: WorkflowInfo;
+	}>({ open: false, recordIds: [] });
+
+	// Currently selected record IDs (from ResultsGrid)
+	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
 	const [leftPaneWidth, setLeftPaneWidth] = useState(480); // Width of left pane in pixels
@@ -384,6 +442,56 @@ function AppContent() {
 		}
 	}, []);
 
+	// Check record action privileges when entity changes
+	const entityLogicalName = builder.fetchQuery?.entity.name;
+	useEffect(() => {
+		if (!entityLogicalName || !isDataverseAvailable()) {
+			setRecordActionPrivileges({
+				canDelete: false,
+				canBulkDelete: false,
+				canRunWorkflow: false,
+				privilegesChecked: false,
+			});
+			return;
+		}
+
+		const checkRecordPrivileges = async () => {
+			try {
+				// Check delete privilege for this entity
+				const canDelete = await checkDeletePrivilege(entityLogicalName);
+
+				// Check bulk delete privilege
+				const canBulkDelete = await checkBulkDeletePrivilege();
+
+				// Check workflow privileges
+				const canRunWorkflow = await checkWorkflowPrivileges();
+
+				setRecordActionPrivileges({
+					canDelete,
+					canBulkDelete,
+					canRunWorkflow,
+					privilegesChecked: true,
+				});
+
+				console.log(`🔐 Record action privileges for ${entityLogicalName}:`, {
+					canDelete,
+					canBulkDelete,
+					canRunWorkflow,
+				});
+			} catch (error) {
+				console.error("Failed to check record action privileges:", error);
+				setRecordActionPrivileges({
+					canDelete: false,
+					canBulkDelete: false,
+					canRunWorkflow: false,
+					privilegesChecked: true,
+				});
+			}
+		};
+
+		checkRecordPrivileges();
+	}, [entityLogicalName]);
+
 	// Collect entities from FetchXML and memoize to avoid unnecessary reloads
 	const entitiesInQuery = useMemo(() => {
 		return collectEntitiesFromFetchQuery(builder.fetchQuery);
@@ -482,6 +590,9 @@ function AppContent() {
 
 	// Generate FetchXML from builder state
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
+
+	// Check if current query is an aggregate query (disables delete/workflow buttons)
+	const isAggregateQuery = builder.fetchQuery?.options?.aggregate === true;
 
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
@@ -874,6 +985,288 @@ function AppContent() {
 		}
 	}, [exportStatus.error]);
 
+	// ============ RECORD ACTION HANDLERS ============
+
+	/**
+	 * Handle selection change from ResultsGrid
+	 */
+	const handleSelectionChange = useCallback((recordIds: string[]) => {
+		setSelectedRecordIds(recordIds);
+	}, []);
+
+	/**
+	 * Get selected record IDs - called by command bar actions
+	 */
+	const getSelectedRecordIds = useCallback(() => {
+		return selectedRecordIds;
+	}, [selectedRecordIds]);
+
+	/**
+	 * Open record in a new browser tab
+	 */
+	const handleOpenRecord = useCallback(
+		async (recordIds: string[]) => {
+			if (recordIds.length === 0 || !entityLogicalName) return;
+
+			const envUrl = await getEnvironmentUrl();
+			if (!envUrl) {
+				console.error("Failed to get environment URL");
+				return;
+			}
+
+			// Open each selected record in a new tab
+			for (const recordId of recordIds) {
+				const url = buildRecordUrl(entityLogicalName, recordId, envUrl);
+				window.open(url, "_blank");
+			}
+		},
+		[entityLogicalName]
+	);
+
+	/**
+	 * Copy record URL(s) to clipboard
+	 */
+	const handleCopyRecordUrl = useCallback(
+		async (recordIds: string[]) => {
+			if (recordIds.length === 0 || !entityLogicalName) return;
+
+			const envUrl = await getEnvironmentUrl();
+			if (!envUrl) {
+				console.error("Failed to get environment URL");
+				return;
+			}
+
+			const urls = recordIds.map((id) => buildRecordUrl(entityLogicalName, id, envUrl));
+			const textToCopy = urls.join("\n");
+
+			try {
+				await navigator.clipboard.writeText(textToCopy);
+				console.log(`📋 Copied ${urls.length} record URL(s) to clipboard`);
+			} catch (error) {
+				console.error("Failed to copy to clipboard:", error);
+			}
+		},
+		[entityLogicalName]
+	);
+
+	/**
+	 * Open delete confirmation dialog
+	 * Handles 3 scenarios:
+	 * 1. No selection → Bulk delete ALL records from view (with warning)
+	 * 2. 1-100 records → Batch DELETE requests (with progress)
+	 * 3. >100 records → Bulk delete with FetchXML IN operator
+	 */
+	const handleDeleteRecords = useCallback(
+		(recordIds: string[]) => {
+			if (!entityLogicalName) return;
+
+			// Scenario 1: No selection - delete ALL records from view
+			if (recordIds.length === 0) {
+				if (!recordActionPrivileges.canBulkDelete) {
+					console.warn("Bulk delete privilege required to delete all records from view");
+					return;
+				}
+				const totalRecords = queryResult?.rows.length || 0;
+				setBulkDeleteDialogState({
+					open: true,
+					recordIds: [],
+					isAllRecords: true,
+					totalViewRecords: totalRecords,
+				});
+				return;
+			}
+
+			// Scenario 3: More than 100 records - use bulk delete with IN operator
+			if (recordIds.length > 100 && recordActionPrivileges.canBulkDelete) {
+				setBulkDeleteDialogState({
+					open: true,
+					recordIds,
+					isAllRecords: false,
+				});
+				return;
+			}
+
+			// Scenario 2: 1-100 records - use batch DELETE or direct delete
+			const recordName =
+				recordIds.length === 1
+					? (queryResult?.rows.find(
+							(row) => row[entityMetadata?.PrimaryIdAttribute || ""] === recordIds[0]
+					  )?.[entityMetadata?.PrimaryNameAttribute || ""] as string | undefined)
+					: undefined;
+
+			// Use batch delete for 4+ records (more efficient than sequential)
+			const isBatchDelete = recordIds.length >= 4;
+			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
+		},
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata]
+	);
+
+	/**
+	 * Explicitly trigger bulk delete dialog (from command bar menu)
+	 * Bypasses the normal auto-routing logic and always uses bulk delete
+	 */
+	const handleBulkDeleteRecords = useCallback(
+		(recordIds: string[]) => {
+			if (!entityLogicalName || !recordActionPrivileges.canBulkDelete) return;
+
+			const isAllRecords = recordIds.length === 0;
+			const totalRecords = queryResult?.rows.length || 0;
+
+			setBulkDeleteDialogState({
+				open: true,
+				recordIds,
+				isAllRecords,
+				totalViewRecords: isAllRecords ? totalRecords : undefined,
+			});
+		},
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult]
+	);
+
+	/**
+	 * Execute delete for records (called from DeleteConfirmDialog)
+	 * Supports both sequential delete (1-3 records) and batch delete (4-100 records)
+	 */
+	const handleConfirmDelete = useCallback(async (): Promise<BatchDeleteResult | void> => {
+		if (!entityLogicalName || deleteDialogState.recordIds.length === 0) return;
+
+		const recordIds = deleteDialogState.recordIds;
+		setDeleteProgress(null);
+
+		// For batch delete (4+ records), use $batch endpoint
+		if (deleteDialogState.isBatchDelete) {
+			const result = await deleteRecordsBatch(
+				entityLogicalName, // Use logical name, API will pluralize
+				recordIds,
+				(progress) => setDeleteProgress(progress)
+			);
+
+			if (result.succeeded > 0) {
+				console.log(`✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`);
+				// Re-execute query to refresh results
+				handleExecute();
+			}
+
+			return result;
+		}
+
+		// Sequential delete for 1-3 records
+		let successCount = 0;
+		const errors: string[] = [];
+
+		for (const recordId of recordIds) {
+			try {
+				await deleteRecord(entityLogicalName, recordId);
+				successCount++;
+			} catch (error) {
+				errors.push(
+					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`
+				);
+			}
+		}
+
+		if (successCount > 0) {
+			console.log(`✅ Deleted ${successCount} of ${recordIds.length} records`);
+			// Re-execute query to refresh results
+			handleExecute();
+		}
+
+		if (errors.length > 0) {
+			console.error("Delete errors:", errors);
+			return { succeeded: successCount, failed: errors.length, errors };
+		}
+	}, [
+		entityLogicalName,
+		deleteDialogState.recordIds,
+		deleteDialogState.isBatchDelete,
+		handleExecute,
+	]);
+
+	/**
+	 * Submit bulk delete job (called from BulkDeleteDialog)
+	 * Supports both selected records (IN operator) and all records from view
+	 */
+	const handleConfirmBulkDelete = useCallback(
+		async (jobName: string) => {
+			if (!entityLogicalName || !entityMetadata) {
+				throw new Error("Missing entity information for bulk delete");
+			}
+
+			// If deleting ALL records from view (no selection)
+			if (bulkDeleteDialogState.isAllRecords) {
+				// Use the current FetchXML directly from builder state
+				if (!builder.fetchQuery) {
+					throw new Error("No FetchXML query available");
+				}
+				const currentFetchXml = generateFetchXml(builder.fetchQuery);
+				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
+				console.log(`📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
+				return result;
+			}
+
+			// If deleting specific selected records
+			if (bulkDeleteDialogState.recordIds.length === 0) {
+				throw new Error("No records selected for bulk delete");
+			}
+
+			const recordIds = bulkDeleteDialogState.recordIds;
+			const primaryIdAttribute = entityMetadata.PrimaryIdAttribute;
+
+			const result = await submitBulkDelete(
+				entityLogicalName,
+				primaryIdAttribute,
+				recordIds,
+				jobName
+			);
+
+			console.log(`📤 Bulk delete job submitted: ${result.asyncOperationId}`);
+			return result;
+		},
+		[
+			entityLogicalName,
+			entityMetadata,
+			bulkDeleteDialogState.recordIds,
+			bulkDeleteDialogState.isAllRecords,
+			builder.fetchQuery,
+		]
+	);
+
+	/**
+	 * Run a specific workflow directly (from menu button)
+	 * Opens the workflow dialog with the workflow pre-selected for confirmation
+	 */
+	const handleRunSpecificWorkflow = useCallback((workflow: WorkflowInfo, recordIds: string[]) => {
+		if (recordIds.length === 0) return;
+		// Open the workflow dialog with the selected workflow pre-selected
+		setWorkflowDialogState({ open: true, recordIds, preSelectedWorkflow: workflow });
+	}, []);
+
+	/**
+	 * Fetch available workflows for the entity
+	 */
+	const handleFetchWorkflows = useCallback(async (): Promise<WorkflowInfo[]> => {
+		if (!entityLogicalName) return [];
+		return getOnDemandWorkflows(entityLogicalName);
+	}, [entityLogicalName]);
+
+	/**
+	 * Execute workflow on selected records
+	 */
+	const handleExecuteWorkflow = useCallback(
+		async (
+			workflowId: string,
+			recordIds: string[],
+			onProgress: (progress: WorkflowBatchProgress) => void
+		): Promise<{ succeeded: number; failed: number; errors: string[] }> => {
+			if (!entityLogicalName) {
+				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
+			}
+			return executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress);
+		},
+		[entityLogicalName]
+	);
+
+	// ============ END RECORD ACTION HANDLERS ============
+
 	return (
 		<div className={styles.root} data-app-root>
 			{/* Left Pane */}
@@ -1113,8 +1506,62 @@ function AppContent() {
 							entityName
 						);
 					}}
+					// Record action handlers
+					onOpenRecord={handleOpenRecord}
+					onCopyRecordUrl={handleCopyRecordUrl}
+					onDeleteRecords={handleDeleteRecords}
+					onBulkDeleteRecords={handleBulkDeleteRecords}
+					onRunSpecificWorkflow={handleRunSpecificWorkflow}
+					canDelete={recordActionPrivileges.canDelete}
+					canBulkDelete={recordActionPrivileges.canBulkDelete}
+					canRunWorkflow={recordActionPrivileges.canRunWorkflow}
+					onFetchWorkflows={handleFetchWorkflows}
+					isAggregateQuery={isAggregateQuery}
+					onSelectionChange={handleSelectionChange}
+					getSelectedRecordIds={getSelectedRecordIds}
 				/>
 			</div>
+			{/* Delete Confirmation Dialog */}
+			<DeleteConfirmDialog
+				open={deleteDialogState.open}
+				recordName={deleteDialogState.recordName}
+				entityDisplayName={
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "record"
+				}
+				recordCount={deleteDialogState.recordIds.length}
+				onClose={() => {
+					setDeleteDialogState({ open: false, recordIds: [] });
+					setDeleteProgress(null);
+				}}
+				onConfirm={handleConfirmDelete}
+				onProgress={deleteProgress ?? undefined}
+			/>
+			{/* Bulk Delete Dialog */}
+			<BulkDeleteDialog
+				open={bulkDeleteDialogState.open}
+				recordCount={bulkDeleteDialogState.recordIds.length}
+				entityDisplayName={
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
+				}
+				isAllRecords={bulkDeleteDialogState.isAllRecords}
+				totalViewRecords={bulkDeleteDialogState.totalViewRecords}
+				onClose={() => setBulkDeleteDialogState({ open: false, recordIds: [] })}
+				onConfirm={handleConfirmBulkDelete}
+			/>
+			{/* Workflow Picker Dialog */}
+			<WorkflowPickerDialog
+				open={workflowDialogState.open}
+				recordCount={workflowDialogState.recordIds.length}
+				entityDisplayName={
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
+				}
+				preSelectedWorkflow={workflowDialogState.preSelectedWorkflow}
+				onClose={() => setWorkflowDialogState({ open: false, recordIds: [] })}
+				onFetchWorkflows={handleFetchWorkflows}
+				onExecute={(workflow, onProgress) =>
+					handleExecuteWorkflow(workflow.workflowid, workflowDialogState.recordIds, onProgress)
+				}
+			/>
 		</div>
 	);
 }
