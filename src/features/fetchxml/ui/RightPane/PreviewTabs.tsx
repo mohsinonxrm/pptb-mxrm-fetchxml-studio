@@ -19,7 +19,7 @@ import {
 	MessageBarTitle,
 	MessageBarActions,
 } from "@fluentui/react-components";
-import { Play24Regular, Dismiss16Regular } from "@fluentui/react-icons";
+import { Play24Regular, Dismiss16Regular, Settings20Regular } from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
@@ -30,6 +30,7 @@ import type { FetchNode } from "../../model/nodes";
 import type { ParseResult } from "../../model/fetchxmlParser";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { WorkflowInfo } from "../../api/pptbClient";
+import type { DisplaySettings } from "../../model/displaySettings";
 
 const useStyles = makeStyles({
 	container: {
@@ -72,6 +73,7 @@ const useStyles = makeStyles({
 		backgroundColor: tokens.colorNeutralBackground1,
 		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		padding: "4px 8px",
+		flexShrink: 0,
 	},
 	// Grid card styling
 	gridCard: {
@@ -81,9 +83,11 @@ const useStyles = makeStyles({
 		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		display: "flex",
 		flexDirection: "column",
+		flex: 1,
 		minHeight: "240px",
 		minWidth: "480px",
 		overflow: "hidden",
+		marginTop: "8px",
 	},
 	// Code card for FetchXML tab
 	codeCard: {
@@ -97,9 +101,10 @@ const useStyles = makeStyles({
 	},
 	// Results tab layout grid
 	resultsLayout: {
-		display: "grid",
-		gridTemplateRows: "auto 8px 1fr",
+		display: "flex",
+		flexDirection: "column",
 		height: "100%",
+		overflow: "hidden",
 	},
 	messageBarContainer: {
 		paddingLeft: "16px",
@@ -119,7 +124,10 @@ interface PreviewTabsProps {
 	/** Whether more pages are being loaded (for progress display) */
 	isLoadingMore?: boolean;
 	onExecute?: () => void;
+	/** Export via Dataverse ExportToExcel API */
 	onExport?: () => void;
+	/** Export locally using exceljs */
+	onExportLocal?: () => void;
 	onParseToTree?: (xmlString: string) => ParseResult;
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
@@ -156,6 +164,8 @@ interface PreviewTabsProps {
 	entityDisplayName?: string;
 	/** Lookup relationships for related columns */
 	lookupRelationships?: RelationshipMetadata[];
+	/** One-to-many relationships for 1-N related columns */
+	oneToManyRelationships?: RelationshipMetadata[];
 	/** Whether relationship data is loading */
 	isLoadingRelationships?: boolean;
 	/** Callback to load attributes for a related entity */
@@ -187,10 +197,16 @@ interface PreviewTabsProps {
 	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
 	/** Whether the current query is an aggregate query (disables delete/workflow) */
 	isAggregateQuery?: boolean;
+	/** Whether the query has 1-N or N-N relationships that cause row duplication */
+	hasOneToManyRelationship?: boolean;
 	/** Callback when selection changes in ResultsGrid */
 	onSelectionChange?: (recordIds: string[]) => void;
 	/** Callback to get currently selected record IDs */
 	getSelectedRecordIds?: () => string[];
+	/** Callback when user clicks Settings button */
+	onOpenSettings?: () => void;
+	/** Display settings (logical names, value format) */
+	displaySettings?: DisplaySettings;
 }
 
 export function PreviewTabs({
@@ -201,6 +217,7 @@ export function PreviewTabs({
 	isLoadingMore,
 	onExecute,
 	onExport,
+	onExportLocal,
 	onParseToTree,
 	attributeMetadata,
 	fetchQuery,
@@ -220,6 +237,7 @@ export function PreviewTabs({
 	exportDisabledReason,
 	entityDisplayName,
 	lookupRelationships,
+	oneToManyRelationships,
 	isLoadingRelationships,
 	onLoadRelatedAttributes,
 	onResetToDefault,
@@ -235,8 +253,11 @@ export function PreviewTabs({
 	canRunWorkflow,
 	onFetchWorkflows,
 	isAggregateQuery,
+	hasOneToManyRelationship,
 	onSelectionChange,
 	getSelectedRecordIds,
+	onOpenSettings,
+	displaySettings,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results">("xml");
@@ -284,8 +305,19 @@ export function PreviewTabs({
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
+					{selectedTab === "xml" && saveViewButton && (
+						<>
+							<ToolbarDivider />
+							{saveViewButton}
+						</>
+					)}
 					<ToolbarDivider />
-					{saveViewButton}
+					<Button
+						appearance="subtle"
+						icon={<Settings20Regular />}
+						onClick={onOpenSettings}
+						aria-label="Settings"
+					/>
 				</Toolbar>
 			</div>
 			{(isExecuting || isLoadingMore) && (
@@ -377,17 +409,20 @@ export function PreviewTabs({
 										onBulkDeleteRecords(ids || []);
 									}
 								}}
-								canDelete={canDelete && !isAggregateQuery}
-								canBulkDelete={canBulkDelete && !isAggregateQuery}
+								canDelete={canDelete}
+								canBulkDelete={canBulkDelete}
+								deleteDisabled={isAggregateQuery || hasOneToManyRelationship}
 								onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
 									const ids = getSelectedIds();
 									if (ids?.length && onRunSpecificWorkflow) {
 										onRunSpecificWorkflow(workflow, ids);
 									}
 								}}
-								canRunWorkflow={canRunWorkflow && !isAggregateQuery}
+								canRunWorkflow={canRunWorkflow}
+								workflowDisabled={isAggregateQuery || hasOneToManyRelationship}
 								onFetchWorkflows={onFetchWorkflows}
 								onExport={onExport || (() => console.log("Export not yet implemented"))}
+								onExportLocal={onExportLocal}
 								canExport={canExport}
 								isExporting={isExporting}
 								exportDisabledReason={exportDisabledReason}
@@ -406,12 +441,12 @@ export function PreviewTabs({
 								onAddColumn={onAddColumn}
 								onAddRelatedColumns={onAddRelatedColumns}
 								lookupRelationships={lookupRelationships}
+								oneToManyRelationships={oneToManyRelationships}
 								isLoadingRelationships={isLoadingRelationships}
 								onLoadRelatedAttributes={onLoadRelatedAttributes}
 								onResetToDefault={onResetToDefault}
 							/>
 						</div>
-						<div /> {/* 8px spacer */}
 						<div className={styles.gridCard}>
 							<ResultsGrid
 								result={result}
@@ -425,6 +460,7 @@ export function PreviewTabs({
 								onColumnResize={onColumnResize}
 								onSortChange={onSortChange}
 								onLoadMore={onLoadMore}
+								displaySettings={displaySettings}
 							/>
 						</div>
 					</div>

@@ -38,11 +38,18 @@ const useStyles = makeStyles({
 		gap: "8px",
 		padding: "8px 12px",
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+		containerType: "inline-size",
 	},
 	filtersRow: {
 		display: "flex",
 		gap: "12px",
 		alignItems: "flex-end",
+		flexWrap: "wrap",
+		// Stack vertically when container is narrow (< 520px)
+		"@container (max-width: 519px)": {
+			flexDirection: "column",
+			alignItems: "stretch",
+		},
 	},
 	entityRow: {
 		display: "flex",

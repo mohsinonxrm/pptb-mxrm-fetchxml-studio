@@ -44,6 +44,7 @@ import {
 	executeWorkflowBatch,
 	checkDeletePrivilege,
 } from "../features/fetchxml/api/pptbClient";
+import { exportToExcelLocal, downloadExcelFile } from "../features/fetchxml/api/excelExport";
 import type {
 	AttributeMetadata,
 	LoadedViewInfo,
@@ -58,6 +59,11 @@ import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/mode
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
+import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
+import {
+	defaultDisplaySettings,
+	type DisplaySettings,
+} from "../features/fetchxml/model/displaySettings";
 
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
 // but tokens will automatically update when FluentProvider theme changes
@@ -179,12 +185,12 @@ const useStyles = makeStyles({
 
 export function AppShell() {
 	const { theme } = usePptbContext();
-	// HARDCODED: Force dark theme
-	const isDark = true;
+	// Use theme from PPTB host context
+	const isDark = theme === "dark";
 
 	console.log("🎨 AppShell rendering:");
 	console.log("  - theme from context:", theme);
-	console.log("  - isDark (HARDCODED):", isDark);
+	console.log("  - isDark:", isDark);
 	console.log("  - will use Fluent theme:", isDark ? "webDarkTheme" : "webLightTheme");
 	console.log("  - tokens.colorNeutralBackground1:", tokens.colorNeutralBackground1);
 	console.log("  - tokens.colorNeutralForeground1:", tokens.colorNeutralForeground1);
@@ -245,8 +251,9 @@ function AppContent() {
 	>(new Map());
 	// State for entity metadata (for layoutxml generation)
 	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
-	// State for lookup relationships (many-to-one)
+	// State for lookup relationships (many-to-one) and one-to-many relationships
 	const [lookupRelationships, setLookupRelationships] = useState<RelationshipMetadata[]>([]);
+	const [oneToManyRelationships, setOneToManyRelationships] = useState<RelationshipMetadata[]>([]);
 	const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
 
 	// Paging state for infinite scroll / Retrieve All
@@ -309,6 +316,10 @@ function AppContent() {
 
 	// Currently selected record IDs (from ResultsGrid)
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+
+	// Settings drawer state
+	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
+	const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -544,16 +555,19 @@ function AppContent() {
 				setEntityMetadata(null);
 			});
 
-		// Load lookup relationships (many-to-one) for the Add Columns panel
+		// Load relationships (many-to-one and one-to-many) for the Add Columns panel
 		setIsLoadingRelationships(true);
 		loadRelationships(rootEntityName)
 			.then((relationships) => {
-				// Filter to just lookup relationships (many-to-one)
+				// Store lookup relationships (many-to-one)
 				setLookupRelationships(relationships.manyToOne);
+				// Store one-to-many relationships for 1-N column support
+				setOneToManyRelationships(relationships.oneToMany);
 			})
 			.catch((error) => {
 				console.error("Failed to load relationships:", error);
 				setLookupRelationships([]);
+				setOneToManyRelationships([]);
 			})
 			.finally(() => {
 				setIsLoadingRelationships(false);
@@ -593,6 +607,28 @@ function AppContent() {
 
 	// Check if current query is an aggregate query (disables delete/workflow buttons)
 	const isAggregateQuery = builder.fetchQuery?.options?.aggregate === true;
+
+	// Check if query has 1-N or N-N relationships that cause row duplication
+	// When these relationships exist, record commands should be disabled
+	const hasOneToManyRelationship = useMemo(() => {
+		if (!builder.fetchQuery?.entity?.links) return false;
+
+		const checkLinks = (links: typeof builder.fetchQuery.entity.links): boolean => {
+			for (const link of links) {
+				// Check if this link-entity is a 1-N or N-N relationship
+				if (link.relationshipType === "1N" || link.relationshipType === "NN") {
+					return true;
+				}
+				// Check nested link-entities
+				if (link.links && checkLinks(link.links)) {
+					return true;
+				}
+			}
+			return false;
+		};
+
+		return checkLinks(builder.fetchQuery.entity.links);
+	}, [builder.fetchQuery]);
 
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
@@ -971,6 +1007,97 @@ function AppContent() {
 				...prev,
 				isExporting: false,
 				error: error instanceof Error ? error.message : "Export to Excel failed. Please try again.",
+			}));
+		}
+	};
+
+	/**
+	 * Export to Excel locally using exceljs
+	 * Exports the current result set with native Excel data types
+	 * No view required - works directly with query results
+	 */
+	const handleExportLocal = async () => {
+		if (!queryResult || !queryResult.rows.length) {
+			setExportStatus((prev) => ({
+				...prev,
+				error: "No data to export. Execute a query first.",
+			}));
+			return;
+		}
+
+		setExportStatus((prev) => ({
+			...prev,
+			isExporting: true,
+			error: undefined,
+		}));
+
+		try {
+			console.log(`📤 Exporting ${queryResult.rows.length} records locally...`);
+
+			// Build column display names map
+			const columnDisplayNames = new Map<string, string>();
+
+			// Use actual column names from queryResult (includes _value format for lookups)
+			const columns = queryResult.columns;
+
+			for (const col of columns) {
+				// Try to get display name from attribute metadata
+				let displayName = col;
+
+				if (attributeMetadata && entityLogicalName) {
+					const entityAttrs = attributeMetadata.get(entityLogicalName);
+					if (entityAttrs) {
+						// Direct attribute lookup
+						const attr = entityAttrs.get(col);
+						if (attr?.DisplayName?.UserLocalizedLabel?.Label) {
+							displayName = attr.DisplayName.UserLocalizedLabel.Label;
+						}
+						// Handle lookup columns (_primarycontactid_value -> primarycontactid)
+						if (col.startsWith("_") && col.endsWith("_value")) {
+							const baseAttr = col.slice(1, -6);
+							const lookupAttr = entityAttrs.get(baseAttr);
+							if (lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
+								displayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
+							}
+						}
+					}
+				}
+
+				columnDisplayNames.set(col, displayName);
+			}
+
+			// Generate filename from entity or view name
+			const fileName =
+				builder.loadedView?.name ||
+				entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+				entityLogicalName ||
+				"export";
+
+			const { buffer, fileName: finalFileName } = await exportToExcelLocal({
+				records: queryResult.rows,
+				columns,
+				columnDisplayNames,
+				attributeMetadata,
+				entityName: entityLogicalName,
+				fileName,
+				displaySettings,
+			});
+
+			// Trigger download
+			downloadExcelFile(buffer, finalFileName);
+
+			console.log(`✅ Local export complete: ${finalFileName}`);
+
+			setExportStatus((prev) => ({
+				...prev,
+				isExporting: false,
+			}));
+		} catch (error) {
+			console.error("Local export failed:", error);
+			setExportStatus((prev) => ({
+				...prev,
+				isExporting: false,
+				error: error instanceof Error ? error.message : "Local export failed. Please try again.",
 			}));
 		}
 	};
@@ -1358,6 +1485,7 @@ function AppContent() {
 					isLoadingMore={isLoadingMore}
 					onExecute={handleExecute}
 					onExport={handleExport}
+					onExportLocal={handleExportLocal}
 					canExport={!!builder.loadedView && exportStatus.hasPrivilege}
 					isExporting={exportStatus.isExporting}
 					exportError={exportStatus.error}
@@ -1379,6 +1507,7 @@ function AppContent() {
 						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityMetadata?.LogicalName
 					}
 					lookupRelationships={lookupRelationships}
+					oneToManyRelationships={oneToManyRelationships}
 					isLoadingRelationships={isLoadingRelationships}
 					onLoadRelatedAttributes={loadAttributes}
 					saveViewButton={
@@ -1435,19 +1564,45 @@ function AppContent() {
 						// For each relationship, find or create link-entity and add attributes
 						for (const [, cols] of byRelationship) {
 							const rel = cols[0].relationship;
-							// For N:1 (Many-to-One) lookup relationships:
-							// - ReferencingAttribute = FK on current entity (e.g., primarycontactid on account)
-							// - ReferencedAttribute = PK on related entity (e.g., contactid on contact)
-							// In FetchXML link-entity:
-							// - from = attribute on the LINKED entity (the PK)
-							// - to = attribute on the PARENT entity (the FK)
-							const foreignKey = rel.ReferencingAttribute; // FK on parent (account.primarycontactid)
-							const primaryKey = rel.ReferencedAttribute; // PK on linked (contact.contactid)
-							const relatedEntity = rel.ReferencedEntity; // contact
+							const relType = cols[0].relationshipType;
 
-							// Check if link-entity already exists for this lookup
+							let fromAttr: string;
+							let toAttr: string;
+							let relatedEntity: string;
+							let linkType: "inner" | "outer";
+							let relTypeForBuilder: "N1" | "1N";
+
+							if (relType === "N1") {
+								// For N:1 (Many-to-One) lookup relationships:
+								// - ReferencingAttribute = FK on current entity (e.g., primarycontactid on account)
+								// - ReferencedAttribute = PK on related entity (e.g., contactid on contact)
+								// In FetchXML link-entity:
+								// - from = attribute on the LINKED entity (the PK)
+								// - to = attribute on the PARENT entity (the FK)
+								fromAttr = rel.ReferencedAttribute; // PK on linked (contact.contactid)
+								toAttr = rel.ReferencingAttribute; // FK on parent (account.primarycontactid)
+								relatedEntity = rel.ReferencedEntity; // contact
+								linkType = "outer"; // N:1 typically use outer join to not filter parent records
+								relTypeForBuilder = "N1";
+							} else {
+								// For 1:N (One-to-Many) relationships:
+								// - ReferencingEntity = the related entity (the "many" side that has the FK)
+								// - ReferencedEntity = the current entity (the "one" side)
+								// - ReferencingAttribute = FK on the related entity
+								// - ReferencedAttribute = PK on the current entity
+								// In FetchXML link-entity:
+								// - from = FK on the LINKED entity (the FK to parent)
+								// - to = PK on the PARENT entity
+								fromAttr = rel.ReferencingAttribute; // FK on linked entity
+								toAttr = rel.ReferencedAttribute; // PK on parent (e.g., accountid)
+								relatedEntity = rel.ReferencingEntity; // The related entity (e.g., contact)
+								linkType = "outer"; // 1:N use outer join to include parent records without children
+								relTypeForBuilder = "1N";
+							}
+
+							// Check if link-entity already exists for this relationship
 							const existingLinkEntity = builder.fetchQuery.entity.links.find(
-								(le) => le.from === primaryKey && le.to === foreignKey && le.name === relatedEntity
+								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity
 							);
 
 							let linkEntityId: string;
@@ -1456,13 +1611,13 @@ function AppContent() {
 								linkEntityId = existingLinkEntity.id;
 							} else {
 								// Create the link-entity with config - returns the ID immediately
-								// from = PK on linked entity, to = FK on parent entity
 								linkEntityId = builder.addLinkEntityWithConfig(
 									builder.fetchQuery.entity.id,
 									relatedEntity,
-									primaryKey, // from: contactid
-									foreignKey, // to: primarycontactid
-									"outer"
+									fromAttr,
+									toAttr,
+									linkType,
+									relTypeForBuilder
 								);
 							}
 
@@ -1518,8 +1673,11 @@ function AppContent() {
 					canRunWorkflow={recordActionPrivileges.canRunWorkflow}
 					onFetchWorkflows={handleFetchWorkflows}
 					isAggregateQuery={isAggregateQuery}
+					hasOneToManyRelationship={hasOneToManyRelationship}
 					onSelectionChange={handleSelectionChange}
 					getSelectedRecordIds={getSelectedRecordIds}
+					onOpenSettings={() => setSettingsDrawerOpen(true)}
+					displaySettings={displaySettings}
 				/>
 			</div>
 			{/* Delete Confirmation Dialog */}
@@ -1562,6 +1720,13 @@ function AppContent() {
 				onExecute={(workflow, onProgress) =>
 					handleExecuteWorkflow(workflow.workflowid, workflowDialogState.recordIds, onProgress)
 				}
+			/>
+			{/* Settings Drawer */}
+			<SettingsDrawer
+				open={settingsDrawerOpen}
+				settings={displaySettings}
+				onClose={() => setSettingsDrawerOpen(false)}
+				onSettingsChange={setDisplaySettings}
 			/>
 		</div>
 	);

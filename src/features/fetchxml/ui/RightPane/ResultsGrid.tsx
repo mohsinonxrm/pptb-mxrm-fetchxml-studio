@@ -32,6 +32,7 @@ import { getCellRenderer } from "./DataGridCellRenderers";
 import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUtils";
 import type { FetchNode, AttributeNode, OrderNode } from "../../model/nodes";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
+import type { DisplaySettings } from "../../model/displaySettings";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -156,6 +157,8 @@ interface ResultsGridProps {
 	onSortChange?: (data: SortChangeData) => void;
 	/** Callback when user scrolls near bottom and more records are available (infinite scroll) */
 	onLoadMore?: () => void;
+	/** Display settings (logical names, value format) */
+	displaySettings?: DisplaySettings;
 }
 
 export function ResultsGrid({
@@ -170,6 +173,7 @@ export function ResultsGrid({
 	onColumnResize,
 	onSortChange,
 	onLoadMore,
+	displaySettings,
 }: ResultsGridProps) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
@@ -378,6 +382,8 @@ export function ResultsGrid({
 		linkEntityAlias?: string;
 		/** Whether this is a lookup column (N:1 navigation) */
 		isLookupColumn?: boolean;
+		/** The lookup attribute on parent entity that joins to this link-entity (for N:1 relationships) */
+		lookupAttribute?: string;
 	}
 
 	const columnDisplayMap = useMemo(() => {
@@ -405,9 +411,16 @@ export function ResultsGrid({
 		}
 
 		// Collect from link-entities recursively
-		const collectFromLinks = (links: import("../../model/nodes").LinkEntityNode[]) => {
+		const collectFromLinks = (
+			links: import("../../model/nodes").LinkEntityNode[],
+			parentLookupAttr?: string
+		) => {
 			links.forEach((link) => {
 				const linkAlias = link.alias || link.name;
+				// For N:1 relationships, 'to' is the lookup attribute on the parent entity (e.g., primarycontactid)
+				// For 1:N relationships, 'to' is the PK on the parent entity
+				// We use 'to' as it represents the attribute on the parent that links to this entity
+				const lookupAttr = link.to || parentLookupAttr;
 
 				if (link.attributes) {
 					link.attributes.forEach((attr) => {
@@ -420,6 +433,7 @@ export function ResultsGrid({
 							entityName: link.name,
 							alias: attr.alias,
 							linkEntityAlias: linkAlias,
+							lookupAttribute: lookupAttr,
 						});
 
 						// Also map entityname.attributeName variant
@@ -428,13 +442,14 @@ export function ResultsGrid({
 								attributeName: attr.name,
 								entityName: link.name,
 								linkEntityAlias: linkAlias,
+								lookupAttribute: lookupAttr,
 							});
 						}
 					});
 				}
 
 				if (link.links) {
-					collectFromLinks(link.links);
+					collectFromLinks(link.links, link.to);
 				}
 			});
 		};
@@ -499,7 +514,7 @@ export function ResultsGrid({
 			];
 		}
 
-		return displayableColumns.map((col) => {
+		return displayableColumns.flatMap((col) => {
 			// Get column display info from our comprehensive map
 			const displayInfo = columnDisplayMap.get(col);
 
@@ -513,17 +528,9 @@ export function ResultsGrid({
 
 			// Resolve attribute metadata based on display info
 			let attribute: AttributeMetadata | undefined;
-			let entityDisplayName: string | undefined;
 
 			if (displayInfo) {
 				attribute = getAttributeMetadata(displayInfo.entityName, displayInfo.attributeName);
-
-				// For link-entity columns, also try to get entity display name
-				if (displayInfo.linkEntityAlias) {
-					// Get the entity metadata for display name (could be cached in allEntities)
-					// For now, we'll construct from the link alias
-					entityDisplayName = displayInfo.linkEntityAlias;
-				}
 			} else if (col.startsWith("_") && col.endsWith("_value")) {
 				// Fallback for lookup columns not in our map
 				const baseAttr = col.slice(1, -6);
@@ -542,12 +549,27 @@ export function ResultsGrid({
 			// Determine display name with comprehensive logic:
 			// 1. For aliased columns: Use the alias as display name
 			// 2. For lookup columns (_attr_value): Use attribute display name (e.g., "Primary Contact")
-			// 3. For link-entity columns: "{Link Alias}.{Attribute Display Name}" or "{Link Alias}.{Attr Alias}"
+			// 3. For link-entity columns: "{Attribute Display Name} ({Lookup Attribute Display Name})"
 			// 4. For root entity columns: Use attribute display name
 			// 5. Fallback: Clean up column name
+			// If displaySettings.useLogicalNames is true, show logical names instead
 			let displayName: string;
 
-			if (displayInfo?.alias) {
+			// Helper to get logical name (column key or attribute LogicalName)
+			const getLogicalName = (): string => {
+				if (displayInfo?.isLookupColumn) {
+					return displayInfo.attributeName || col.slice(1, -6);
+				}
+				if (displayInfo?.linkEntityAlias) {
+					return `${displayInfo.linkEntityAlias}.${displayInfo.attributeName || col}`;
+				}
+				return displayInfo?.attributeName || col;
+			};
+
+			if (displaySettings?.useLogicalNames) {
+				// Show logical name
+				displayName = getLogicalName();
+			} else if (displayInfo?.alias) {
 				// User-specified alias takes precedence
 				displayName = displayInfo.alias;
 			} else if (displayInfo?.isLookupColumn) {
@@ -557,10 +579,24 @@ export function ResultsGrid({
 					displayInfo.attributeName ||
 					col.slice(1, -6); // Remove _ prefix and _value suffix
 			} else if (displayInfo?.linkEntityAlias) {
-				// Link-entity column: "EntityAlias.AttributeDisplayName"
+				// Link-entity column: "Attribute Display Name (Lookup Attribute Display Name)"
+				// e.g., "Email (Primary Contact)" where Email is from contact entity, Primary Contact is the lookup
 				const attrDisplayName =
 					attribute?.DisplayName?.UserLocalizedLabel?.Label || displayInfo.attributeName;
-				displayName = `${entityDisplayName || displayInfo.linkEntityAlias}.${attrDisplayName}`;
+
+				// Get the lookup attribute display name from root entity metadata
+				let lookupDisplayName = displayInfo.lookupAttribute || displayInfo.linkEntityAlias;
+				if (displayInfo.lookupAttribute) {
+					const rootEntityName = fetchQuery?.entity?.name;
+					if (rootEntityName) {
+						const lookupAttr = getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute);
+						if (lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
+							lookupDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
+						}
+					}
+				}
+
+				displayName = `${attrDisplayName} (${lookupDisplayName})`;
 			} else if (attribute?.DisplayName?.UserLocalizedLabel?.Label) {
 				// Root entity attribute with metadata display name
 				displayName = attribute.DisplayName.UserLocalizedLabel.Label;
@@ -574,7 +610,85 @@ export function ResultsGrid({
 
 			// Check if this column is sorted (from FetchXML orders)
 			const sortInfo = sortStateMap.get(col);
+			const valueMode = displaySettings?.valueDisplayMode ?? "formatted";
 
+			// For "both" mode, check if this column has formatted values in the result set
+			// Only create a raw column if at least one record has a different formatted value
+			const hasFormattedValues =
+				valueMode === "both" &&
+				result?.rows?.some((record: Record<string, unknown>) => {
+					const rawValue = record[col];
+					const formattedValue = getFormattedValue(record, col);
+					return formattedValue !== undefined && formattedValue !== rawValue;
+				});
+
+			// For "both" mode with formatted values, create two columns
+			if (valueMode === "both" && hasFormattedValues) {
+				// Create formatted value column
+				const formattedColumn = createTableColumn<Record<string, unknown>>({
+					columnId: col,
+					compare: (a, b) => {
+						const aVal = String(getFormattedValue(a, col) ?? a[col] ?? "");
+						const bVal = String(getFormattedValue(b, col) ?? b[col] ?? "");
+						return aVal.localeCompare(bVal);
+					},
+					renderHeaderCell: () => (
+						<span className={styles.headerCellContent}>
+							<span style={{ fontWeight: 600 }}>{displayName}</span>
+							{/* Show sort indicator based on FetchXML order state */}
+							{sortInfo && (
+								<span className={styles.sortIndicator}>
+									{sortInfo.direction === "ascending" ? (
+										<ArrowSortUp16Regular />
+									) : (
+										<ArrowSortDown16Regular />
+									)}
+								</span>
+							)}
+						</span>
+					),
+					renderCell: (item) => {
+						const rawValue = item[col];
+						const formattedValue = getFormattedValue(item, col);
+						return (
+							<TableCellLayout>
+								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
+							</TableCellLayout>
+						);
+					},
+				});
+
+				// Create raw value column
+				const rawColumn = createTableColumn<Record<string, unknown>>({
+					columnId: `${col}__raw`,
+					compare: (a, b) => {
+						const aVal = String(a[col] ?? "");
+						const bVal = String(b[col] ?? "");
+						return aVal.localeCompare(bVal);
+					},
+					renderHeaderCell: () => (
+						<span className={styles.headerCellContent}>
+							<span style={{ fontWeight: 600 }}>{displayName} (Raw)</span>
+						</span>
+					),
+					renderCell: (item) => {
+						const rawValue = item[col];
+						return (
+							<TableCellLayout>
+								{rawValue === null || rawValue === undefined ? (
+									<span>—</span>
+								) : (
+									<span>{String(rawValue)}</span>
+								)}
+							</TableCellLayout>
+						);
+					},
+				});
+
+				return [formattedColumn, rawColumn];
+			}
+
+			// Standard single column (formatted or raw mode)
 			return createTableColumn<Record<string, unknown>>({
 				columnId: col,
 				compare: (a, b) => {
@@ -584,7 +698,7 @@ export function ResultsGrid({
 				},
 				renderHeaderCell: () => (
 					<span className={styles.headerCellContent}>
-						<span>{displayName}</span>
+						<span style={{ fontWeight: 600 }}>{displayName}</span>
 						{/* Show sort indicator based on FetchXML order state */}
 						{sortInfo && (
 							<span className={styles.sortIndicator}>
@@ -600,11 +714,27 @@ export function ResultsGrid({
 				renderCell: (item) => {
 					const rawValue = item[col];
 					const formattedValue = getFormattedValue(item, col);
-					return (
-						<TableCellLayout>
-							{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
-						</TableCellLayout>
-					);
+
+					// Determine what to display based on value display mode
+					if (valueMode === "raw") {
+						// Show raw value only (skip cell renderer formatting)
+						return (
+							<TableCellLayout>
+								{rawValue === null || rawValue === undefined ? (
+									<span>—</span>
+								) : (
+									<span>{String(rawValue)}</span>
+								)}
+							</TableCellLayout>
+						);
+					} else {
+						// Default: formatted (use cell renderer)
+						return (
+							<TableCellLayout>
+								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
+							</TableCellLayout>
+						);
+					}
 				},
 			});
 		});
@@ -617,6 +747,7 @@ export function ResultsGrid({
 		columnConfig,
 		styles,
 		sortStateMap,
+		displaySettings,
 	]);
 
 	// Selection handlers

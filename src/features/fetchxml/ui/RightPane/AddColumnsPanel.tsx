@@ -24,6 +24,11 @@ import {
 	Tab,
 	Combobox,
 	Option,
+	Badge,
+	Accordion,
+	AccordionItem,
+	AccordionHeader,
+	AccordionPanel,
 	type SelectTabData,
 	type SelectTabEvent,
 } from "@fluentui/react-components";
@@ -89,6 +94,23 @@ const useStyles = makeStyles({
 		fontSize: tokens.fontSizeBase200,
 		color: tokens.colorNeutralForeground3,
 	},
+	relationshipType: {
+		marginLeft: tokens.spacingHorizontalS,
+	},
+	relationshipHeader: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		width: "100%",
+	},
+	accordionHeader: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+	},
+	warningBadge: {
+		marginLeft: tokens.spacingHorizontalS,
+	},
 	loadingContainer: {
 		display: "flex",
 		alignItems: "center",
@@ -129,8 +151,10 @@ export interface RelatedEntityColumn {
 	attribute: AttributeMetadata;
 	/** Display name including relationship context, e.g. "First Name (Primary Contact)" */
 	displayName: string;
-	/** The lookup attribute name on the root entity */
+	/** The lookup attribute name on the root entity (for N:1) */
 	lookupAttribute: string;
+	/** The relationship type: N1 (lookup) or 1N (one-to-many) */
+	relationshipType: "N1" | "1N";
 }
 
 export interface AddColumnSelection {
@@ -153,6 +177,8 @@ export interface AddColumnsPanelProps {
 	selectedAttributes?: string[];
 	/** Lookup relationships (many-to-one) for related entity columns */
 	lookupRelationships?: RelationshipMetadata[];
+	/** One-to-many relationships for 1-N related entity columns */
+	oneToManyRelationships?: RelationshipMetadata[];
 	/** Whether relationship data is loading */
 	isLoadingRelationships?: boolean;
 	/** Callback to load attributes for a related entity */
@@ -170,6 +196,7 @@ export function AddColumnsPanel({
 	availableAttributes = [],
 	selectedAttributes = [],
 	lookupRelationships = [],
+	oneToManyRelationships = [],
 	isLoadingRelationships,
 	onLoadRelatedAttributes,
 	onClose,
@@ -233,23 +260,69 @@ export function AddColumnsPanel({
 		});
 	}, [availableAttributes, selectedAttributes, searchText, filterType]);
 
-	// Filter lookup relationships
-	const filteredRelationships = useMemo(() => {
-		let rels = lookupRelationships;
+	// Combined relationship type for display
+	type RelationshipWithType = {
+		relationship: RelationshipMetadata;
+		type: "N1" | "1N";
+		displayName: string;
+		relatedEntity: string;
+	};
 
-		// Apply search to relationships
+	// Filter and combine N:1 (lookup) and 1:N relationships
+	const { filteredN1Relationships, filtered1NRelationships } = useMemo(() => {
+		const search = searchText.toLowerCase();
+
+		// Process N:1 (lookup/many-to-one) relationships
+		let n1Rels: RelationshipWithType[] = lookupRelationships.map((rel) => {
+			const lookupAttr = availableAttributes.find(
+				(a) => a.LogicalName === rel.ReferencingAttribute
+			);
+			const displayName =
+				lookupAttr?.DisplayName?.UserLocalizedLabel?.Label || rel.ReferencingAttribute;
+			return {
+				relationship: rel,
+				type: "N1" as const,
+				displayName,
+				relatedEntity: rel.ReferencedEntity,
+			};
+		});
+
+		// Process 1:N (one-to-many) relationships
+		let oneNRels: RelationshipWithType[] = oneToManyRelationships.map((rel) => {
+			// For 1:N, ReferencingEntity is the related entity (the "many" side)
+			return {
+				relationship: rel,
+				type: "1N" as const,
+				displayName: rel.ReferencingEntity, // Show the related entity name
+				relatedEntity: rel.ReferencingEntity,
+			};
+		});
+
+		// Apply search filter
 		if (searchText) {
-			const search = searchText.toLowerCase();
-			rels = rels.filter(
-				(rel) =>
-					rel.ReferencedEntity.toLowerCase().includes(search) ||
-					rel.ReferencingAttribute.toLowerCase().includes(search) ||
-					rel.SchemaName.toLowerCase().includes(search)
+			n1Rels = n1Rels.filter(
+				(r) =>
+					r.relatedEntity.toLowerCase().includes(search) ||
+					r.displayName.toLowerCase().includes(search) ||
+					r.relationship.SchemaName.toLowerCase().includes(search)
+			);
+			oneNRels = oneNRels.filter(
+				(r) =>
+					r.relatedEntity.toLowerCase().includes(search) ||
+					r.displayName.toLowerCase().includes(search) ||
+					r.relationship.SchemaName.toLowerCase().includes(search)
 			);
 		}
 
-		return rels.sort((a, b) => a.ReferencingAttribute.localeCompare(b.ReferencingAttribute));
-	}, [lookupRelationships, searchText]);
+		// Sort by display name
+		n1Rels.sort((a, b) => a.displayName.localeCompare(b.displayName));
+		oneNRels.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+		return {
+			filteredN1Relationships: n1Rels,
+			filtered1NRelationships: oneNRels,
+		};
+	}, [lookupRelationships, oneToManyRelationships, availableAttributes, searchText]);
 
 	const handleTabSelect = useCallback((_e: SelectTabEvent, data: SelectTabData) => {
 		setActiveTab(data.value as "entity" | "related");
@@ -268,7 +341,7 @@ export function AddColumnsPanel({
 	}, []);
 
 	const handleExpandRelationship = useCallback(
-		async (relationship: RelationshipMetadata) => {
+		async (relationship: RelationshipMetadata, relatedEntity: string) => {
 			const relKey = relationship.SchemaName;
 
 			setExpandedRelationships((prev) => {
@@ -282,17 +355,15 @@ export function AddColumnsPanel({
 			});
 
 			// Load related entity attributes if not already loaded
-			if (!relatedAttributesCache.has(relationship.ReferencedEntity) && onLoadRelatedAttributes) {
-				setLoadingEntities((prev) => new Set(prev).add(relationship.ReferencedEntity));
+			if (!relatedAttributesCache.has(relatedEntity) && onLoadRelatedAttributes) {
+				setLoadingEntities((prev) => new Set(prev).add(relatedEntity));
 				try {
-					const attrs = await onLoadRelatedAttributes(relationship.ReferencedEntity);
-					setRelatedAttributesCache((prev) =>
-						new Map(prev).set(relationship.ReferencedEntity, attrs)
-					);
+					const attrs = await onLoadRelatedAttributes(relatedEntity);
+					setRelatedAttributesCache((prev) => new Map(prev).set(relatedEntity, attrs));
 				} finally {
 					setLoadingEntities((prev) => {
 						const next = new Set(prev);
-						next.delete(relationship.ReferencedEntity);
+						next.delete(relatedEntity);
 						return next;
 					});
 				}
@@ -302,19 +373,37 @@ export function AddColumnsPanel({
 	);
 
 	const handleRelatedAttributeToggle = useCallback(
-		(relationship: RelationshipMetadata, attribute: AttributeMetadata) => {
-			const lookupAttr = relationship.ReferencingAttribute;
-			const relDisplayName =
-				availableAttributes.find((a) => a.LogicalName === lookupAttr)?.DisplayName
-					?.UserLocalizedLabel?.Label || lookupAttr;
+		(
+			relationship: RelationshipMetadata,
+			attribute: AttributeMetadata,
+			relType: "N1" | "1N",
+			relatedEntity: string
+		) => {
 			const attrDisplayName =
 				attribute.DisplayName?.UserLocalizedLabel?.Label || attribute.LogicalName;
+
+			let lookupAttr: string;
+			let displaySuffix: string;
+
+			if (relType === "N1") {
+				// For N:1, the lookup attribute is on the root entity
+				lookupAttr = relationship.ReferencingAttribute;
+				const lookupDisplayName =
+					availableAttributes.find((a) => a.LogicalName === lookupAttr)?.DisplayName
+						?.UserLocalizedLabel?.Label || lookupAttr;
+				displaySuffix = lookupDisplayName;
+			} else {
+				// For 1:N, there's no lookup on root - use the related entity name
+				lookupAttr = relationship.ReferencingAttribute; // FK on the related entity
+				displaySuffix = relatedEntity;
+			}
 
 			const relatedCol: RelatedEntityColumn = {
 				relationship,
 				attribute,
-				displayName: `${attrDisplayName} (${relDisplayName})`,
+				displayName: `${attrDisplayName} (${displaySuffix})`,
 				lookupAttribute: lookupAttr,
+				relationshipType: relType,
 			};
 
 			setSelectedRelatedCols((prev) => {
@@ -437,7 +526,10 @@ export function AddColumnsPanel({
 									>
 										<Checkbox
 											checked={selectedRootAttrs.has(attr.LogicalName)}
-											onChange={() => handleRootAttributeToggle(attr.LogicalName)}
+											onChange={(e) => {
+												e.stopPropagation();
+												handleRootAttributeToggle(attr.LogicalName);
+											}}
 										/>
 										<Text>{attr.DisplayName?.UserLocalizedLabel?.Label || attr.LogicalName}</Text>
 									</div>
@@ -452,84 +544,238 @@ export function AddColumnsPanel({
 								<div className={styles.loadingContainer}>
 									<Spinner size="small" label="Loading relationships..." />
 								</div>
-							) : filteredRelationships.length === 0 ? (
+							) : filteredN1Relationships.length === 0 && filtered1NRelationships.length === 0 ? (
 								<div className={styles.emptyState}>
-									<Text>No lookup relationships found</Text>
+									<Text>No relationships found</Text>
 								</div>
 							) : (
-								<Tree aria-label="Related entities">
-									{filteredRelationships.map((rel) => {
-										const lookupAttr = availableAttributes.find(
-											(a) => a.LogicalName === rel.ReferencingAttribute
-										);
-										const lookupDisplayName =
-											lookupAttr?.DisplayName?.UserLocalizedLabel?.Label ||
-											rel.ReferencingAttribute;
-										const isExpanded = expandedRelationships.has(rel.SchemaName);
-										const relatedAttrs = relatedAttributesCache.get(rel.ReferencedEntity);
-										const isLoading = loadingEntities.has(rel.ReferencedEntity);
+								<Accordion multiple collapsible defaultOpenItems={["n1"]}>
+									{/* N:1 (Lookup) Relationships */}
+									{filteredN1Relationships.length > 0 && (
+										<AccordionItem value="n1">
+											<AccordionHeader size="small">
+												<div className={styles.accordionHeader}>
+													<Text weight="semibold">Lookups (N:1)</Text>
+													<Badge appearance="filled" color="informative" size="small">
+														{filteredN1Relationships.length}
+													</Badge>
+												</div>
+											</AccordionHeader>
+											<AccordionPanel>
+												<Tree aria-label="Lookup relationships">
+													{filteredN1Relationships.map((relItem) => {
+														const rel = relItem.relationship;
+														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
+														const isLoading = loadingEntities.has(relItem.relatedEntity);
 
-										return (
-											<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
-												<TreeItemLayout onClick={() => handleExpandRelationship(rel)}>
-													<div className={styles.relationshipLabel}>
-														<span className={styles.relationshipName}>{lookupDisplayName}</span>
-														<span className={styles.relationshipEntity}>
-															{rel.ReferencedEntity}
-														</span>
-													</div>
-												</TreeItemLayout>
-												{isExpanded && (
-													<Tree>
-														{isLoading ? (
-															<TreeItem itemType="leaf">
-																<TreeItemLayout>
-																	<Spinner size="tiny" label="Loading..." />
+														return (
+															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+																<TreeItemLayout
+																	onClick={() =>
+																		handleExpandRelationship(rel, relItem.relatedEntity)
+																	}
+																>
+																	<div className={styles.relationshipHeader}>
+																		<div className={styles.relationshipLabel}>
+																			<span className={styles.relationshipName}>
+																				{relItem.displayName}
+																			</span>
+																			<span className={styles.relationshipEntity}>
+																				{relItem.relatedEntity}
+																			</span>
+																		</div>
+																	</div>
 																</TreeItemLayout>
+																{isExpanded && (
+																	<Tree>
+																		{isLoading ? (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Spinner size="tiny" label="Loading..." />
+																				</TreeItemLayout>
+																			</TreeItem>
+																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																			relatedAttrs
+																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.sort((a, b) => {
+																					const aName =
+																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a.LogicalName;
+																					const bName =
+																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b.LogicalName;
+																					return aName.localeCompare(bName);
+																				})
+																				.map((attr) => (
+																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																						<TreeItemLayout
+																							onClick={() =>
+																								handleRelatedAttributeToggle(
+																									rel,
+																									attr,
+																									"N1",
+																									relItem.relatedEntity
+																								)
+																							}
+																						>
+																							<div className={styles.attributeItem}>
+																								<Checkbox
+																									checked={isRelatedAttributeSelected(rel, attr)}
+																									onChange={(e) => {
+																										e.stopPropagation();
+																										handleRelatedAttributeToggle(
+																											rel,
+																											attr,
+																											"N1",
+																											relItem.relatedEntity
+																										);
+																									}}
+																								/>
+																								<Text>
+																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																										attr.LogicalName}
+																								</Text>
+																							</div>
+																						</TreeItemLayout>
+																					</TreeItem>
+																				))
+																		) : (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
+																						No attributes available
+																					</Text>
+																				</TreeItemLayout>
+																			</TreeItem>
+																		)}
+																	</Tree>
+																)}
 															</TreeItem>
-														) : relatedAttrs && relatedAttrs.length > 0 ? (
-															relatedAttrs
-																.filter((attr) => attr.AttributeType !== "Virtual")
-																.sort((a, b) => {
-																	const aName =
-																		a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
-																	const bName =
-																		b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
-																	return aName.localeCompare(bName);
-																})
-																.map((attr) => (
-																	<TreeItem key={attr.LogicalName} itemType="leaf">
-																		<TreeItemLayout
-																			onClick={() => handleRelatedAttributeToggle(rel, attr)}
-																		>
-																			<div className={styles.attributeItem}>
-																				<Checkbox
-																					checked={isRelatedAttributeSelected(rel, attr)}
-																					onChange={() => handleRelatedAttributeToggle(rel, attr)}
-																				/>
-																				<Text>
-																					{attr.DisplayName?.UserLocalizedLabel?.Label ||
-																						attr.LogicalName}
-																				</Text>
-																			</div>
-																		</TreeItemLayout>
-																	</TreeItem>
-																))
-														) : (
-															<TreeItem itemType="leaf">
-																<TreeItemLayout>
-																	<Text style={{ color: tokens.colorNeutralForeground3 }}>
-																		No attributes available
-																	</Text>
+														);
+													})}
+												</Tree>
+											</AccordionPanel>
+										</AccordionItem>
+									)}
+
+									{/* 1:N (One-to-Many) Relationships */}
+									{filtered1NRelationships.length > 0 && (
+										<AccordionItem value="1n">
+											<AccordionHeader size="small">
+												<div className={styles.accordionHeader}>
+													<Text weight="semibold">Related (1:N)</Text>
+													<Badge appearance="filled" color="informative" size="small">
+														{filtered1NRelationships.length}
+													</Badge>
+													<Badge
+														appearance="tint"
+														color="warning"
+														size="small"
+														className={styles.warningBadge}
+													>
+														May duplicate rows
+													</Badge>
+												</div>
+											</AccordionHeader>
+											<AccordionPanel>
+												<Tree aria-label="One-to-many relationships">
+													{filtered1NRelationships.map((relItem) => {
+														const rel = relItem.relationship;
+														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
+														const isLoading = loadingEntities.has(relItem.relatedEntity);
+
+														return (
+															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+																<TreeItemLayout
+																	onClick={() =>
+																		handleExpandRelationship(rel, relItem.relatedEntity)
+																	}
+																>
+																	<div className={styles.relationshipHeader}>
+																		<div className={styles.relationshipLabel}>
+																			<span className={styles.relationshipName}>
+																				{relItem.displayName}
+																			</span>
+																			<span className={styles.relationshipEntity}>
+																				{rel.SchemaName}
+																			</span>
+																		</div>
+																	</div>
 																</TreeItemLayout>
+																{isExpanded && (
+																	<Tree>
+																		{isLoading ? (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Spinner size="tiny" label="Loading..." />
+																				</TreeItemLayout>
+																			</TreeItem>
+																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																			relatedAttrs
+																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.sort((a, b) => {
+																					const aName =
+																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a.LogicalName;
+																					const bName =
+																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b.LogicalName;
+																					return aName.localeCompare(bName);
+																				})
+																				.map((attr) => (
+																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																						<TreeItemLayout
+																							onClick={() =>
+																								handleRelatedAttributeToggle(
+																									rel,
+																									attr,
+																									"1N",
+																									relItem.relatedEntity
+																								)
+																							}
+																						>
+																							<div className={styles.attributeItem}>
+																								<Checkbox
+																									checked={isRelatedAttributeSelected(rel, attr)}
+																									onChange={(e) => {
+																										e.stopPropagation();
+																										handleRelatedAttributeToggle(
+																											rel,
+																											attr,
+																											"1N",
+																											relItem.relatedEntity
+																										);
+																									}}
+																								/>
+																								<Text>
+																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																										attr.LogicalName}
+																								</Text>
+																							</div>
+																						</TreeItemLayout>
+																					</TreeItem>
+																				))
+																		) : (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
+																						No attributes available
+																					</Text>
+																				</TreeItemLayout>
+																			</TreeItem>
+																		)}
+																	</Tree>
+																)}
 															</TreeItem>
-														)}
-													</Tree>
-												)}
-											</TreeItem>
-										);
-									})}
-								</Tree>
+														);
+													})}
+												</Tree>
+											</AccordionPanel>
+										</AccordionItem>
+									)}
+								</Accordion>
 							)}
 						</div>
 					)}

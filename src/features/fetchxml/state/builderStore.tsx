@@ -91,6 +91,7 @@ type BuilderAction =
 			from: string;
 			to: string;
 			linkType: "inner" | "outer";
+			relationshipType?: "N1" | "1N" | "NN";
 	  }
 	| { type: "REMOVE_NODE"; nodeId: NodeId }
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
@@ -155,6 +156,73 @@ function findNodeById(node: unknown, targetId: NodeId): SelectedNode {
 	}
 
 	return null;
+}
+
+/**
+ * Helper to collect all link-entity aliases from the tree
+ * Used to generate unique aliases when adding new link-entities
+ */
+function collectLinkEntityAliases(node: unknown): Set<string> {
+	const aliases = new Set<string>();
+
+	function traverse(n: unknown): void {
+		if (!n || typeof n !== "object") return;
+
+		const record = n as Record<string, unknown>;
+
+		// If this is a link-entity with an alias, add it
+		if (record.type === "link-entity" && typeof record.alias === "string") {
+			aliases.add(record.alias);
+		}
+
+		// Traverse entity
+		if (record.entity) {
+			traverse(record.entity);
+		}
+
+		// Traverse links array
+		if (Array.isArray(record.links)) {
+			for (const link of record.links) {
+				traverse(link);
+			}
+		}
+	}
+
+	traverse(node);
+	return aliases;
+}
+
+/**
+ * Generate a unique alias for a link-entity
+ * Appends a short alphanumeric suffix if the base alias already exists
+ */
+function generateUniqueAlias(baseName: string, existingAliases: Set<string>): string {
+	// If the base name isn't taken, use it
+	if (!existingAliases.has(baseName)) {
+		return baseName;
+	}
+
+	// Generate a unique suffix (e.g., contact_a1, contact_b2, etc.)
+	const chars = "abcdefghijklmnopqrstuvwxyz";
+	let suffix = 1;
+
+	while (true) {
+		// Generate suffixes like: _a1, _b1, ..., _z1, _a2, _b2, etc.
+		const charIndex = (suffix - 1) % 26;
+		const numPart = Math.floor((suffix - 1) / 26) + 1;
+		const candidate = `${baseName}_${chars[charIndex]}${numPart}`;
+
+		if (!existingAliases.has(candidate)) {
+			return candidate;
+		}
+
+		suffix++;
+
+		// Safety limit to prevent infinite loops
+		if (suffix > 1000) {
+			return `${baseName}_${Date.now()}`;
+		}
+	}
 }
 
 // Helper to update a node in the tree immutably
@@ -647,12 +715,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				return state;
 			}
 
+			// Collect existing aliases to ensure uniqueness
+			const existingAliases = collectLinkEntityAliases(state.fetchQuery);
+			const uniqueAlias = generateUniqueAlias("new_entity", existingAliases);
+
 			// Create new link-entity node
 			// For filter parents, use "any" link type by default (common use case)
 			const newLinkEntity: LinkEntityNode = {
 				id: generateId(),
 				type: "link-entity",
 				name: "new_entity",
+				alias: uniqueAlias,
 				from: "id_field",
 				to: "parent_id_field",
 				linkType: parent.type === "filter" ? "any" : "inner",
@@ -699,14 +772,20 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				return state;
 			}
 
+			// Collect existing aliases to ensure uniqueness
+			const existingAliases = collectLinkEntityAliases(state.fetchQuery);
+			const uniqueAlias = generateUniqueAlias(action.name, existingAliases);
+
 			// Create new link-entity node with provided configuration
 			const newLinkEntity: LinkEntityNode = {
 				id: action.id, // Use pre-generated ID from caller
 				type: "link-entity",
 				name: action.name,
+				alias: uniqueAlias, // Use unique alias
 				from: action.from,
 				to: action.to,
 				linkType: action.linkType,
+				relationshipType: action.relationshipType ?? "N1", // Default to N1 if not specified
 				attributes: [],
 				orders: [],
 				filters: [],
@@ -938,7 +1017,8 @@ interface BuilderContextValue extends BuilderState {
 		name: string,
 		from: string,
 		to: string,
-		linkType: "inner" | "outer"
+		linkType: "inner" | "outer",
+		relationshipType?: "N1" | "1N" | "NN"
 	) => NodeId;
 	removeNode: (nodeId: NodeId) => void;
 	updateNode: (nodeId: NodeId, updates: Record<string, unknown>) => void;
@@ -998,10 +1078,20 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			name: string,
 			from: string,
 			to: string,
-			linkType: "inner" | "outer"
+			linkType: "inner" | "outer",
+			relationshipType?: "N1" | "1N" | "NN"
 		): NodeId => {
 			const id = generateId();
-			dispatch({ type: "ADD_LINK_ENTITY_WITH_CONFIG", id, parentId, name, from, to, linkType });
+			dispatch({
+				type: "ADD_LINK_ENTITY_WITH_CONFIG",
+				id,
+				parentId,
+				name,
+				from,
+				to,
+				linkType,
+				relationshipType,
+			});
 			return id;
 		},
 		removeNode: (nodeId: NodeId) => dispatch({ type: "REMOVE_NODE", nodeId }),
