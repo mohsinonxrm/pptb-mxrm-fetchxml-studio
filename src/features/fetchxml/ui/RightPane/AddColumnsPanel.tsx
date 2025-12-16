@@ -1,0 +1,800 @@
+/**
+ * Add Columns Panel (Drawer)
+ * Shows available attributes with support for related entities (lookups)
+ * Matches Power Apps Model-Driven Apps UX
+ */
+
+import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+	DrawerBody,
+	DrawerHeader,
+	DrawerHeaderTitle,
+	OverlayDrawer,
+	Button,
+	makeStyles,
+	tokens,
+	Text,
+	Input,
+	Checkbox,
+	Tree,
+	TreeItem,
+	TreeItemLayout,
+	Spinner,
+	TabList,
+	Tab,
+	Combobox,
+	Option,
+	Badge,
+	Accordion,
+	AccordionItem,
+	AccordionHeader,
+	AccordionPanel,
+	type SelectTabData,
+	type SelectTabEvent,
+} from "@fluentui/react-components";
+import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
+import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
+
+const useStyles = makeStyles({
+	drawer: {
+		width: "420px",
+	},
+	searchContainer: {
+		display: "flex",
+		gap: tokens.spacingHorizontalS,
+		marginBottom: tokens.spacingVerticalM,
+	},
+	searchInput: {
+		flex: 1,
+	},
+	filterCombo: {
+		minWidth: "120px",
+	},
+	tabContent: {
+		marginTop: tokens.spacingVerticalM,
+	},
+	attributeList: {
+		display: "flex",
+		flexDirection: "column",
+		gap: tokens.spacingVerticalXXS,
+		maxHeight: "calc(100vh - 300px)",
+		overflowY: "auto",
+	},
+	attributeItem: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+		padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
+		borderRadius: tokens.borderRadiusSmall,
+		cursor: "pointer",
+		"&:hover": {
+			backgroundColor: tokens.colorNeutralBackground1Hover,
+		},
+	},
+	attributeItemSelected: {
+		backgroundColor: tokens.colorNeutralBackground1Selected,
+	},
+	relationshipTree: {
+		maxHeight: "calc(100vh - 300px)",
+		overflowY: "auto",
+	},
+	relationshipItem: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+	},
+	relationshipLabel: {
+		display: "flex",
+		flexDirection: "column",
+	},
+	relationshipName: {
+		fontWeight: tokens.fontWeightSemibold,
+	},
+	relationshipEntity: {
+		fontSize: tokens.fontSizeBase200,
+		color: tokens.colorNeutralForeground3,
+	},
+	relationshipType: {
+		marginLeft: tokens.spacingHorizontalS,
+	},
+	relationshipHeader: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		width: "100%",
+	},
+	accordionHeader: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+	},
+	warningBadge: {
+		marginLeft: tokens.spacingHorizontalS,
+	},
+	loadingContainer: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: tokens.spacingVerticalXXL,
+	},
+	footer: {
+		display: "flex",
+		justifyContent: "flex-end",
+		gap: tokens.spacingHorizontalS,
+		padding: tokens.spacingVerticalM,
+		borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+		marginTop: "auto",
+	},
+	emptyState: {
+		display: "flex",
+		flexDirection: "column",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: tokens.spacingVerticalXXL,
+		color: tokens.colorNeutralForeground3,
+		textAlign: "center",
+	},
+	selectedCount: {
+		marginRight: "auto",
+		color: tokens.colorNeutralForeground2,
+		display: "flex",
+		alignItems: "center",
+	},
+});
+
+type FilterType = "all" | "standard" | "custom";
+
+export interface RelatedEntityColumn {
+	/** The relationship used to access this entity */
+	relationship: RelationshipMetadata;
+	/** The attribute on the related entity */
+	attribute: AttributeMetadata;
+	/** Display name including relationship context, e.g. "First Name (Primary Contact)" */
+	displayName: string;
+	/** The lookup attribute name on the root entity (for N:1) */
+	lookupAttribute: string;
+	/** The relationship type: N1 (lookup) or 1N (one-to-many) */
+	relationshipType: "N1" | "1N";
+}
+
+export interface AddColumnSelection {
+	/** Root entity attributes to add */
+	rootAttributes: string[];
+	/** Related entity columns to add (will create link-entity if needed) */
+	relatedColumns: RelatedEntityColumn[];
+}
+
+export interface AddColumnsPanelProps {
+	/** Whether the panel is open */
+	open: boolean;
+	/** Entity display name */
+	entityDisplayName?: string;
+	/** Entity logical name */
+	entityLogicalName?: string;
+	/** Available attributes for the root entity */
+	availableAttributes?: AttributeMetadata[];
+	/** Currently selected attribute names (already in the query) */
+	selectedAttributes?: string[];
+	/** Lookup relationships (many-to-one) for related entity columns */
+	lookupRelationships?: RelationshipMetadata[];
+	/** One-to-many relationships for 1-N related entity columns */
+	oneToManyRelationships?: RelationshipMetadata[];
+	/** Whether relationship data is loading */
+	isLoadingRelationships?: boolean;
+	/** Callback to load attributes for a related entity */
+	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
+	/** Called when panel is closed */
+	onClose: () => void;
+	/** Called when columns are selected and Apply is clicked */
+	onApply: (selection: AddColumnSelection) => void;
+}
+
+export function AddColumnsPanel({
+	open,
+	entityDisplayName,
+	entityLogicalName,
+	availableAttributes = [],
+	selectedAttributes = [],
+	lookupRelationships = [],
+	oneToManyRelationships = [],
+	isLoadingRelationships,
+	onLoadRelatedAttributes,
+	onClose,
+	onApply,
+}: AddColumnsPanelProps) {
+	const styles = useStyles();
+	const [activeTab, setActiveTab] = useState<"entity" | "related">("entity");
+	const [searchText, setSearchText] = useState("");
+	const [filterType, setFilterType] = useState<FilterType>("all");
+	const [selectedRootAttrs, setSelectedRootAttrs] = useState<Set<string>>(new Set());
+	const [selectedRelatedCols, setSelectedRelatedCols] = useState<RelatedEntityColumn[]>([]);
+	const [expandedRelationships, setExpandedRelationships] = useState<Set<string>>(new Set());
+	const [relatedAttributesCache, setRelatedAttributesCache] = useState<
+		Map<string, AttributeMetadata[]>
+	>(new Map());
+	const [loadingEntities, setLoadingEntities] = useState<Set<string>>(new Set());
+
+	// Reset state when panel opens
+	useEffect(() => {
+		if (open) {
+			setSelectedRootAttrs(new Set());
+			setSelectedRelatedCols([]);
+			setSearchText("");
+			setFilterType("all");
+			setActiveTab("entity");
+		}
+	}, [open]);
+
+	// Filter attributes based on search and filter type
+	const filteredAttributes = useMemo(() => {
+		let attrs = availableAttributes.filter(
+			(attr) => !selectedAttributes.includes(attr.LogicalName)
+		);
+
+		// Apply filter type
+		if (filterType === "standard") {
+			attrs = attrs.filter(
+				(attr) => !attr.LogicalName.startsWith("new_") && !attr.SchemaName.includes("_")
+			);
+		} else if (filterType === "custom") {
+			attrs = attrs.filter(
+				(attr) => attr.LogicalName.startsWith("new_") || attr.SchemaName.includes("_")
+			);
+		}
+
+		// Apply search
+		if (searchText) {
+			const search = searchText.toLowerCase();
+			attrs = attrs.filter(
+				(attr) =>
+					attr.LogicalName.toLowerCase().includes(search) ||
+					(attr.DisplayName?.UserLocalizedLabel?.Label || "").toLowerCase().includes(search)
+			);
+		}
+
+		// Sort by display name
+		return attrs.sort((a, b) => {
+			const aName = a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
+			const bName = b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
+			return aName.localeCompare(bName);
+		});
+	}, [availableAttributes, selectedAttributes, searchText, filterType]);
+
+	// Combined relationship type for display
+	type RelationshipWithType = {
+		relationship: RelationshipMetadata;
+		type: "N1" | "1N";
+		displayName: string;
+		relatedEntity: string;
+	};
+
+	// Filter and combine N:1 (lookup) and 1:N relationships
+	const { filteredN1Relationships, filtered1NRelationships } = useMemo(() => {
+		const search = searchText.toLowerCase();
+
+		// Process N:1 (lookup/many-to-one) relationships
+		let n1Rels: RelationshipWithType[] = lookupRelationships.map((rel) => {
+			const lookupAttr = availableAttributes.find(
+				(a) => a.LogicalName === rel.ReferencingAttribute
+			);
+			const displayName =
+				lookupAttr?.DisplayName?.UserLocalizedLabel?.Label || rel.ReferencingAttribute;
+			return {
+				relationship: rel,
+				type: "N1" as const,
+				displayName,
+				relatedEntity: rel.ReferencedEntity,
+			};
+		});
+
+		// Process 1:N (one-to-many) relationships
+		let oneNRels: RelationshipWithType[] = oneToManyRelationships.map((rel) => {
+			// For 1:N, ReferencingEntity is the related entity (the "many" side)
+			return {
+				relationship: rel,
+				type: "1N" as const,
+				displayName: rel.ReferencingEntity, // Show the related entity name
+				relatedEntity: rel.ReferencingEntity,
+			};
+		});
+
+		// Apply search filter
+		if (searchText) {
+			n1Rels = n1Rels.filter(
+				(r) =>
+					r.relatedEntity.toLowerCase().includes(search) ||
+					r.displayName.toLowerCase().includes(search) ||
+					r.relationship.SchemaName.toLowerCase().includes(search)
+			);
+			oneNRels = oneNRels.filter(
+				(r) =>
+					r.relatedEntity.toLowerCase().includes(search) ||
+					r.displayName.toLowerCase().includes(search) ||
+					r.relationship.SchemaName.toLowerCase().includes(search)
+			);
+		}
+
+		// Sort by display name
+		n1Rels.sort((a, b) => a.displayName.localeCompare(b.displayName));
+		oneNRels.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+		return {
+			filteredN1Relationships: n1Rels,
+			filtered1NRelationships: oneNRels,
+		};
+	}, [lookupRelationships, oneToManyRelationships, availableAttributes, searchText]);
+
+	const handleTabSelect = useCallback((_e: SelectTabEvent, data: SelectTabData) => {
+		setActiveTab(data.value as "entity" | "related");
+	}, []);
+
+	const handleRootAttributeToggle = useCallback((logicalName: string) => {
+		setSelectedRootAttrs((prev) => {
+			const next = new Set(prev);
+			if (next.has(logicalName)) {
+				next.delete(logicalName);
+			} else {
+				next.add(logicalName);
+			}
+			return next;
+		});
+	}, []);
+
+	const handleExpandRelationship = useCallback(
+		async (relationship: RelationshipMetadata, relatedEntity: string) => {
+			const relKey = relationship.SchemaName;
+
+			setExpandedRelationships((prev) => {
+				const next = new Set(prev);
+				if (next.has(relKey)) {
+					next.delete(relKey);
+				} else {
+					next.add(relKey);
+				}
+				return next;
+			});
+
+			// Load related entity attributes if not already loaded
+			if (!relatedAttributesCache.has(relatedEntity) && onLoadRelatedAttributes) {
+				setLoadingEntities((prev) => new Set(prev).add(relatedEntity));
+				try {
+					const attrs = await onLoadRelatedAttributes(relatedEntity);
+					setRelatedAttributesCache((prev) => new Map(prev).set(relatedEntity, attrs));
+				} finally {
+					setLoadingEntities((prev) => {
+						const next = new Set(prev);
+						next.delete(relatedEntity);
+						return next;
+					});
+				}
+			}
+		},
+		[relatedAttributesCache, onLoadRelatedAttributes]
+	);
+
+	const handleRelatedAttributeToggle = useCallback(
+		(
+			relationship: RelationshipMetadata,
+			attribute: AttributeMetadata,
+			relType: "N1" | "1N",
+			relatedEntity: string
+		) => {
+			const attrDisplayName =
+				attribute.DisplayName?.UserLocalizedLabel?.Label || attribute.LogicalName;
+
+			let lookupAttr: string;
+			let displaySuffix: string;
+
+			if (relType === "N1") {
+				// For N:1, the lookup attribute is on the root entity
+				lookupAttr = relationship.ReferencingAttribute;
+				const lookupDisplayName =
+					availableAttributes.find((a) => a.LogicalName === lookupAttr)?.DisplayName
+						?.UserLocalizedLabel?.Label || lookupAttr;
+				displaySuffix = lookupDisplayName;
+			} else {
+				// For 1:N, there's no lookup on root - use the related entity name
+				lookupAttr = relationship.ReferencingAttribute; // FK on the related entity
+				displaySuffix = relatedEntity;
+			}
+
+			const relatedCol: RelatedEntityColumn = {
+				relationship,
+				attribute,
+				displayName: `${attrDisplayName} (${displaySuffix})`,
+				lookupAttribute: lookupAttr,
+				relationshipType: relType,
+			};
+
+			setSelectedRelatedCols((prev) => {
+				// Check if already selected
+				const existingIndex = prev.findIndex(
+					(col) =>
+						col.relationship.SchemaName === relationship.SchemaName &&
+						col.attribute.LogicalName === attribute.LogicalName
+				);
+
+				if (existingIndex >= 0) {
+					// Remove it
+					return prev.filter((_, i) => i !== existingIndex);
+				} else {
+					// Add it
+					return [...prev, relatedCol];
+				}
+			});
+		},
+		[availableAttributes]
+	);
+
+	const isRelatedAttributeSelected = useCallback(
+		(relationship: RelationshipMetadata, attribute: AttributeMetadata) => {
+			return selectedRelatedCols.some(
+				(col) =>
+					col.relationship.SchemaName === relationship.SchemaName &&
+					col.attribute.LogicalName === attribute.LogicalName
+			);
+		},
+		[selectedRelatedCols]
+	);
+
+	const handleApply = useCallback(() => {
+		onApply({
+			rootAttributes: Array.from(selectedRootAttrs),
+			relatedColumns: selectedRelatedCols,
+		});
+	}, [selectedRootAttrs, selectedRelatedCols, onApply]);
+
+	const totalSelected = selectedRootAttrs.size + selectedRelatedCols.length;
+
+	return (
+		<OverlayDrawer
+			open={open}
+			onOpenChange={(_e, data) => !data.open && onClose()}
+			position="end"
+			size="medium"
+			className={styles.drawer}
+		>
+			<DrawerHeader>
+				<DrawerHeaderTitle
+					action={
+						<Button
+							appearance="subtle"
+							aria-label="Close"
+							icon={<Dismiss24Regular />}
+							onClick={onClose}
+						/>
+					}
+				>
+					Add columns
+				</DrawerHeaderTitle>
+			</DrawerHeader>
+			<DrawerBody>
+				<TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
+					<Tab value="entity">{entityDisplayName || entityLogicalName || "Entity"}</Tab>
+					<Tab value="related">Related</Tab>
+				</TabList>
+
+				<div className={styles.tabContent}>
+					<div className={styles.searchContainer}>
+						<Input
+							className={styles.searchInput}
+							contentBefore={<Search20Regular />}
+							placeholder="Search columns..."
+							value={searchText}
+							onChange={(_e, data) => setSearchText(data.value)}
+						/>
+						<Combobox
+							className={styles.filterCombo}
+							value={
+								filterType === "all" ? "All" : filterType === "standard" ? "Standard" : "Custom"
+							}
+							onOptionSelect={(_e, data) =>
+								setFilterType((data.optionValue as FilterType) || "all")
+							}
+						>
+							<Option value="all">All</Option>
+							<Option value="standard">Standard</Option>
+							<Option value="custom">Custom</Option>
+						</Combobox>
+					</div>
+
+					{activeTab === "entity" && (
+						<div className={styles.attributeList}>
+							{filteredAttributes.length === 0 ? (
+								<div className={styles.emptyState}>
+									<Text>
+										{searchText ? "No matching attributes found" : "All attributes already added"}
+									</Text>
+								</div>
+							) : (
+								filteredAttributes.map((attr) => (
+									<div
+										key={attr.LogicalName}
+										className={`${styles.attributeItem} ${
+											selectedRootAttrs.has(attr.LogicalName) ? styles.attributeItemSelected : ""
+										}`}
+										onClick={() => handleRootAttributeToggle(attr.LogicalName)}
+										role="checkbox"
+										aria-checked={selectedRootAttrs.has(attr.LogicalName)}
+										tabIndex={0}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												e.preventDefault();
+												handleRootAttributeToggle(attr.LogicalName);
+											}
+										}}
+									>
+										<Checkbox
+											checked={selectedRootAttrs.has(attr.LogicalName)}
+											onChange={(e) => {
+												e.stopPropagation();
+												handleRootAttributeToggle(attr.LogicalName);
+											}}
+										/>
+										<Text>{attr.DisplayName?.UserLocalizedLabel?.Label || attr.LogicalName}</Text>
+									</div>
+								))
+							)}
+						</div>
+					)}
+
+					{activeTab === "related" && (
+						<div className={styles.relationshipTree}>
+							{isLoadingRelationships ? (
+								<div className={styles.loadingContainer}>
+									<Spinner size="small" label="Loading relationships..." />
+								</div>
+							) : filteredN1Relationships.length === 0 && filtered1NRelationships.length === 0 ? (
+								<div className={styles.emptyState}>
+									<Text>No relationships found</Text>
+								</div>
+							) : (
+								<Accordion multiple collapsible defaultOpenItems={["n1"]}>
+									{/* N:1 (Lookup) Relationships */}
+									{filteredN1Relationships.length > 0 && (
+										<AccordionItem value="n1">
+											<AccordionHeader size="small">
+												<div className={styles.accordionHeader}>
+													<Text weight="semibold">Lookups (N:1)</Text>
+													<Badge appearance="filled" color="informative" size="small">
+														{filteredN1Relationships.length}
+													</Badge>
+												</div>
+											</AccordionHeader>
+											<AccordionPanel>
+												<Tree aria-label="Lookup relationships">
+													{filteredN1Relationships.map((relItem) => {
+														const rel = relItem.relationship;
+														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
+														const isLoading = loadingEntities.has(relItem.relatedEntity);
+
+														return (
+															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+																<TreeItemLayout
+																	onClick={() =>
+																		handleExpandRelationship(rel, relItem.relatedEntity)
+																	}
+																>
+																	<div className={styles.relationshipHeader}>
+																		<div className={styles.relationshipLabel}>
+																			<span className={styles.relationshipName}>
+																				{relItem.displayName}
+																			</span>
+																			<span className={styles.relationshipEntity}>
+																				{relItem.relatedEntity}
+																			</span>
+																		</div>
+																	</div>
+																</TreeItemLayout>
+																{isExpanded && (
+																	<Tree>
+																		{isLoading ? (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Spinner size="tiny" label="Loading..." />
+																				</TreeItemLayout>
+																			</TreeItem>
+																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																			relatedAttrs
+																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.sort((a, b) => {
+																					const aName =
+																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a.LogicalName;
+																					const bName =
+																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b.LogicalName;
+																					return aName.localeCompare(bName);
+																				})
+																				.map((attr) => (
+																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																						<TreeItemLayout
+																							onClick={() =>
+																								handleRelatedAttributeToggle(
+																									rel,
+																									attr,
+																									"N1",
+																									relItem.relatedEntity
+																								)
+																							}
+																						>
+																							<div className={styles.attributeItem}>
+																								<Checkbox
+																									checked={isRelatedAttributeSelected(rel, attr)}
+																									onChange={(e) => {
+																										e.stopPropagation();
+																										handleRelatedAttributeToggle(
+																											rel,
+																											attr,
+																											"N1",
+																											relItem.relatedEntity
+																										);
+																									}}
+																								/>
+																								<Text>
+																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																										attr.LogicalName}
+																								</Text>
+																							</div>
+																						</TreeItemLayout>
+																					</TreeItem>
+																				))
+																		) : (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
+																						No attributes available
+																					</Text>
+																				</TreeItemLayout>
+																			</TreeItem>
+																		)}
+																	</Tree>
+																)}
+															</TreeItem>
+														);
+													})}
+												</Tree>
+											</AccordionPanel>
+										</AccordionItem>
+									)}
+
+									{/* 1:N (One-to-Many) Relationships */}
+									{filtered1NRelationships.length > 0 && (
+										<AccordionItem value="1n">
+											<AccordionHeader size="small">
+												<div className={styles.accordionHeader}>
+													<Text weight="semibold">Related (1:N)</Text>
+													<Badge appearance="filled" color="informative" size="small">
+														{filtered1NRelationships.length}
+													</Badge>
+													<Badge
+														appearance="tint"
+														color="warning"
+														size="small"
+														className={styles.warningBadge}
+													>
+														May duplicate rows
+													</Badge>
+												</div>
+											</AccordionHeader>
+											<AccordionPanel>
+												<Tree aria-label="One-to-many relationships">
+													{filtered1NRelationships.map((relItem) => {
+														const rel = relItem.relationship;
+														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
+														const isLoading = loadingEntities.has(relItem.relatedEntity);
+
+														return (
+															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+																<TreeItemLayout
+																	onClick={() =>
+																		handleExpandRelationship(rel, relItem.relatedEntity)
+																	}
+																>
+																	<div className={styles.relationshipHeader}>
+																		<div className={styles.relationshipLabel}>
+																			<span className={styles.relationshipName}>
+																				{relItem.displayName}
+																			</span>
+																			<span className={styles.relationshipEntity}>
+																				{rel.SchemaName}
+																			</span>
+																		</div>
+																	</div>
+																</TreeItemLayout>
+																{isExpanded && (
+																	<Tree>
+																		{isLoading ? (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Spinner size="tiny" label="Loading..." />
+																				</TreeItemLayout>
+																			</TreeItem>
+																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																			relatedAttrs
+																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.sort((a, b) => {
+																					const aName =
+																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a.LogicalName;
+																					const bName =
+																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b.LogicalName;
+																					return aName.localeCompare(bName);
+																				})
+																				.map((attr) => (
+																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																						<TreeItemLayout
+																							onClick={() =>
+																								handleRelatedAttributeToggle(
+																									rel,
+																									attr,
+																									"1N",
+																									relItem.relatedEntity
+																								)
+																							}
+																						>
+																							<div className={styles.attributeItem}>
+																								<Checkbox
+																									checked={isRelatedAttributeSelected(rel, attr)}
+																									onChange={(e) => {
+																										e.stopPropagation();
+																										handleRelatedAttributeToggle(
+																											rel,
+																											attr,
+																											"1N",
+																											relItem.relatedEntity
+																										);
+																									}}
+																								/>
+																								<Text>
+																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																										attr.LogicalName}
+																								</Text>
+																							</div>
+																						</TreeItemLayout>
+																					</TreeItem>
+																				))
+																		) : (
+																			<TreeItem itemType="leaf">
+																				<TreeItemLayout>
+																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
+																						No attributes available
+																					</Text>
+																				</TreeItemLayout>
+																			</TreeItem>
+																		)}
+																	</Tree>
+																)}
+															</TreeItem>
+														);
+													})}
+												</Tree>
+											</AccordionPanel>
+										</AccordionItem>
+									)}
+								</Accordion>
+							)}
+						</div>
+					)}
+				</div>
+
+				<div className={styles.footer}>
+					{totalSelected > 0 && (
+						<Text className={styles.selectedCount}>
+							{totalSelected} column{totalSelected !== 1 ? "s" : ""} selected
+						</Text>
+					)}
+					<Button appearance="secondary" onClick={onClose}>
+						Close
+					</Button>
+					<Button appearance="primary" onClick={handleApply} disabled={totalSelected === 0}>
+						Add
+					</Button>
+				</div>
+			</DrawerBody>
+		</OverlayDrawer>
+	);
+}
