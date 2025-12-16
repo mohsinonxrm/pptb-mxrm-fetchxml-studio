@@ -1,6 +1,6 @@
-# PowerPlatform Toolbox - FetchXML Builder
+# PowerPlatform Toolbox - FetchXML Studio
 
-A modern FetchXML query builder for PowerPlatform Toolbox, built with React 19, TypeScript, and Fluent UI v9.
+A modern FetchXML query studio for PowerPlatform Toolbox, built with React 19, TypeScript, and Fluent UI v9.
 
 ## Features
 
@@ -73,7 +73,7 @@ Debug categories:
 ```
 src/
   app/              # App shell and layout
-  features/         # Feature modules (fetchxml builder)
+  features/         # Feature modules (FetchXML Studio)
   shared/           # Shared components and utilities
 ```
 

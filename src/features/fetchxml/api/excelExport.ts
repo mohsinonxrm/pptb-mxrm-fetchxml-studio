@@ -47,7 +47,7 @@ export async function exportToExcelLocal(
 	const valueDisplayMode = displaySettings?.valueDisplayMode ?? "formatted";
 
 	const workbook = new ExcelJS.Workbook();
-	workbook.creator = "FetchXML Builder";
+	workbook.creator = "FetchXML Studio";
 	workbook.created = new Date();
 
 	const worksheet = workbook.addWorksheet("Data");

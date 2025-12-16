@@ -1,6 +1,6 @@
 /**
  * Settings Drawer
- * Contains display preferences for the FetchXML Builder
+ * Contains display preferences for FetchXML Studio
  */
 
 import { useCallback } from "react";

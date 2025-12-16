@@ -1,5 +1,5 @@
 /**
- * TypeScript type definitions for FetchXML Builder tree nodes
+ * TypeScript type definitions for FetchXML Studio tree nodes
  * Based on FetchXML XSD schema with all supported attributes
  */
 

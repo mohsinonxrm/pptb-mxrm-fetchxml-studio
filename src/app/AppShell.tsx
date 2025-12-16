@@ -389,7 +389,7 @@ function AppContent() {
 
 	// Check Dataverse API on mount
 	useEffect(() => {
-		console.log("=== PPTB FetchXML Builder - Dataverse API Check ===");
+		console.log("=== PPTB FetchXML Studio - Dataverse API Check ===");
 		console.log("Dataverse API Available:", isDataverseAvailable());
 
 		if (isDataverseAvailable()) {

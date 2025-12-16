@@ -1,7 +1,6 @@
 {
-  "name": "pptb-mxrm-fetchxml-builder",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@mohsinonxrm/pptb-fetchxml-studio",
+  "version": "1.0.0",
   "type": "module",
   "cspExceptions": {
     "connect-src": [
