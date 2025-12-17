@@ -236,7 +236,7 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
