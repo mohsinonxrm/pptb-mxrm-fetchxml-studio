@@ -1,8 +1,8 @@
-# FetchXML Studio for PowerPlatform Toolbox
+# FetchXML Studio for Power Platform ToolBox
 
-A powerful, modern FetchXML query builder and data explorer for [PowerPlatform Toolbox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 19, Fluent UI v9, and seamless Dataverse integration.
+A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 19, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.3-blue)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
@@ -44,7 +44,7 @@ A powerful, modern FetchXML query builder and data explorer for [PowerPlatform T
 - **Run workflows** — Execute on-demand workflows on selected records
 
 ### 🎨 User Experience
-- **Dark/Light themes** — Follows PowerPlatform Toolbox theme with Fluent UI tokens
+- **Dark/Light themes** — Follows Power Platform ToolBox theme with Fluent UI tokens
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
 - **Intelligent caching** — In-memory cache prevents duplicate API calls
 - **Resizable panes** — Adjust the layout to your preference
@@ -84,11 +84,11 @@ A powerful, modern FetchXML query builder and data explorer for [PowerPlatform T
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [PowerPlatform Toolbox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application
+- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application
 - Connection to a Dataverse environment
 
 ### Installation
-FetchXML Studio is available as a tool in PowerPlatform Toolbox. Install it from the tool gallery or load as a custom tool.
+FetchXML Studio is available as a tool in Power Platform ToolBox. Install it from the tool gallery or load as a custom tool.
 
 ## 🛠️ Development
 
@@ -147,7 +147,7 @@ disableAllDebug();
 | **Monaco Editor** | VS Code's editor for XML editing |
 | **react-window** | Virtualized list rendering for large datasets |
 | **exceljs** | Native Excel file generation |
-| **@pptb/types** | PowerPlatform Toolbox API types |
+| **@pptb/types** | Power Platform ToolBox API types |
 
 ## 📁 Project Structure
 
@@ -241,7 +241,7 @@ Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See [
 ## 🙏 Acknowledgments
 
 - [XrmToolBox FetchXML Builder](https://github.com/rappen/FetchXMLBuilder) - Original inspiration
-- [PowerPlatform Toolbox](https://github.com/PowerPlatformToolBox/desktop-app) - Host platform
+- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) - Host platform
 - [Fluent UI](https://react.fluentui.dev/) - UI component library
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) - Code editor
 
