@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎉 Initial Release
 
-FetchXML Studio v1.0.0 - A powerful FetchXML query builder for PowerPlatform Toolbox.
+FetchXML Studio v1.0.0 - A powerful FetchXML query builder for Power Platform ToolBox.
 
 ### ✨ Features
 
@@ -78,7 +78,7 @@ FetchXML Studio v1.0.0 - A powerful FetchXML query builder for PowerPlatform Too
 - Monaco Editor integration
 - ExcelJS for native Excel export
 - Vite build tooling
-- PowerPlatform Toolbox integration via @pptb/types
+- Power Platform ToolBox integration via @pptb/types
 
 ### 📚 Documentation
 
