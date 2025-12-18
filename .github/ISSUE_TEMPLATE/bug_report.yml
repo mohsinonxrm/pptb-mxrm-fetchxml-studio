@@ -1,0 +1,109 @@
+name: 🐛 Bug report
+description: Something isn't working as expected.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please provide enough detail so we can reproduce the issue.
+        **Do not include secrets** (tokens, client secrets, Authorization headers).
+
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and discussions and didn’t find a duplicate.
+          required: true
+        - label: I'm using the latest released version (or I've confirmed the issue exists on main).
+          required: true
+        - label: I can reproduce this consistently.
+          required: false
+
+  - type: input
+    attributes:
+      label: App/Extension version
+      description: Version number or commit SHA.
+      placeholder: "e.g., v0.6.1 or 1a2b3c4"
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Host environment
+      options:
+        - Power Platform ToolBox (PPTB)
+        - Standalone (web)
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Browser (if applicable)
+      placeholder: "e.g., Edge 121 / Chrome 120"
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: OS
+      placeholder: "e.g., Windows 11 / macOS 14"
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: "Describe what you observed..."
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Provide minimal steps to reproduce the issue.
+      placeholder: |
+        1. Open...
+        2. Click...
+        3. Run query...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      placeholder: "What should have happened?"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual behavior
+      placeholder: "What actually happened?"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Screenshots or recordings (optional)
+      description: Drag and drop images/video here.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Console logs (optional)
+      description: Paste relevant browser/devtools logs (sanitize sensitive info).
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Anything else that might help.
+    validations:
