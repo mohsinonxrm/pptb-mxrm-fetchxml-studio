@@ -1,0 +1,28 @@
+name: ❓ Question
+description: Ask a question about usage or behavior.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For questions, include enough context for others to help.
+
+  - type: textarea
+    attributes:
+      label: Question
+      validations:
+        required: true
+
+  - type: textarea
+    attributes:
+      label: What have you tried?
+      validations:
+        required: false
+
+  - type: input
+    attributes:
+      label: Version
+      placeholder: "e.g., v0.6.1"
+    validations:
+      required: false

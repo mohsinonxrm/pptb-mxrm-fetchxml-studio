@@ -1,0 +1,71 @@
+name: ✨ Feature request
+description: Suggest an idea or improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Great feature requests include the **problem**, **who it helps**, and **what success looks like**.
+
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues/discussions for duplicates.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: "As a user, I want to..."
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+      placeholder: "Add support for..."
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches/workarounds you tried?
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: UX / UI notes (Fluent UI v9)
+      description: Any UI expectations, accessibility concerns, keyboard shortcuts, etc.
+      placeholder: "e.g., CommandBar action, panel layout, copy-to-clipboard behavior..."
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Dataverse considerations (if relevant)
+      description: Tables, metadata, paging, throttling, batch, permissions, etc.
+      placeholder: "e.g., requires $expand, needs paging via @odata.nextLink..."
+    validations:
+      required: false
+
+  - type: dropdown
+    attributes:
+      label: Priority / impact
+      options:
+        - Nice to have
+        - Important
+        - Critical for adoption
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Screenshots, examples, references to FetchXML Builder behavior, etc.
+    validations:

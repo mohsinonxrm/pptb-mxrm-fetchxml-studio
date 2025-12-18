@@ -1,0 +1,134 @@
+name: 🧩 Dataverse / Web API bug
+description: Issues involving Dataverse Web API calls, metadata loading, or query execution.
+title: "[Dataverse Bug]: "
+labels: ["bug", "dataverse", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the issue involves Dataverse Web API (OData), metadata, or query execution.
+        ✅ Include HTTP status + request/correlation IDs if available.
+        🚫 Do NOT paste secrets (tokens, Authorization headers).
+
+        Note: Dataverse can return partial results and requires paging in many scenarios (often a common cause of “missing records”). See FetchXML paging/limits guidance if relevant.
+
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I can reproduce consistently.
+          required: false
+        - label: I tested with a different table/query and see similar behavior.
+          required: false
+
+  - type: input
+    attributes:
+      label: Tool version
+      placeholder: "e.g., v0.3.0 or commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: PPTB version (if known)
+      placeholder: "e.g., 1.0.x"
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: Dataverse Web API version (if known)
+      placeholder: "e.g., v9.2"
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: Environment region (optional)
+      placeholder: "e.g., NA / EU / UK / APAC"
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Affected area
+      description: What part is failing?
+      placeholder: |
+        - Metadata loading (tables/columns/relationships)
+        - Query execution
+        - Results rendering
+        - Export
+        - Other (describe)
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Minimal FetchXML snippet
+      description: Provide the smallest query that reproduces (redact identifiers if needed).
+      placeholder: |
+        <fetch top="50">
+          <entity name="account">
+            <attribute name="name" />
+          </entity>
+        </fetch>
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open tool in PPTB
+        2. Select environment
+        3. Paste/build query
+        4. Execute
+        5. Observe error / incorrect behavior
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected vs actual
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: HTTP / error details (recommended)
+      description: Include HTTP status + error payload shown in UI (sanitize).
+      placeholder: |
+        Status: 400
+        Error code: 0x...
+        Message: ...
+        Request/Correlation ID: ...
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Paging / result size notes (optional)
+      description: Mention if you hit row limits, nextLink/paging, or large datasets.
+      placeholder: |
+        - Returns exactly 5000 rows
+        - nextLink present/not present
+        - Very large table / heavy joins
+    validations:
+      required: false
+
+  - type: dropdown
+    attributes:
+      label: Impact
+      options:
+        - Blocking (cannot use tool)
+        - Major (core feature broken)
+        - Minor (workaround exists)
+        - Cosmetic / UI only
+    validations:
+      required: true

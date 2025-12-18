@@ -1,0 +1,30 @@
+name: 📚 Documentation
+description: Report missing/incorrect docs or request a new guide.
+title: "[Docs]: "
+labels: ["docs"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues/discussions for duplicates.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Suggested improvement
+      placeholder: "Propose wording, steps, or a new section..."
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Context
+      placeholder: "Link to page/section or screenshot..."
+    validations:
