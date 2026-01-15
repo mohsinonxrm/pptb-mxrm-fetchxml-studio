@@ -1432,6 +1432,7 @@ function AppContent() {
 							onAddCondition={builder.addCondition}
 							onAddLinkEntity={builder.addLinkEntity}
 							onRemoveNode={builder.removeNode}
+							onUpdateAttributes={builder.updateAttributes}
 						/>
 					) : (
 						<div className={styles.placeholder}>Select an entity to begin</div>

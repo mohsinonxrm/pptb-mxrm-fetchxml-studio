@@ -3,7 +3,7 @@
  * Displays hierarchical structure: Entity -> Attributes, Orders, Filters, Link-Entities
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
 	Tree,
 	TreeItem,
@@ -40,6 +40,10 @@ import type {
 } from "../../model/nodes";
 import { operatorRequiresValue } from "../../model/operators";
 import { debugLog, debugWarn } from "../../../../shared/utils/debug";
+import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
+import { metadataCache } from "../../state/cache";
+import type { AttributeMetadata } from "../../api/pptbClient";
+import { loadEntityAttributes } from "../../api/dataverseMetadata";
 
 /**
  * Format a value for display, avoiding scientific notation for numbers
@@ -106,6 +110,7 @@ interface TreeViewProps {
 	onAddCondition: (filterId: NodeId) => void;
 	onAddLinkEntity: (parentId: NodeId) => void;
 	onRemoveNode: (nodeId: NodeId) => void;
+	onUpdateAttributes: (parentId: NodeId, attributeNames: string[]) => void;
 }
 
 export function TreeView({
@@ -120,8 +125,16 @@ export function TreeView({
 	onAddCondition,
 	onAddLinkEntity,
 	onRemoveNode,
+	onUpdateAttributes,
 }: TreeViewProps) {
 	const styles = useStyles();
+
+	// Dialog state
+	const [selectAttrsDialogOpen, setSelectAttrsDialogOpen] = useState(false);
+	const [selectAttrsEntityId, setSelectAttrsEntityId] = useState<NodeId | null>(null);
+	const [selectAttrsDisplayName, setSelectAttrsDisplayName] = useState<string>("");
+	const [selectAttrsAttributes, setSelectAttrsAttributes] = useState<AttributeMetadata[]>([]);
+	const [selectAttrsCurrentNames, setSelectAttrsCurrentNames] = useState<string[]>([]);
 
 	// Manage which tree items are open/expanded
 	const [openItems, setOpenItems] = useState<Set<NodeId>>(
@@ -226,6 +239,47 @@ export function TreeView({
 		}
 	}, [selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+	// Handle opening the Select Attributes dialog
+	const handleOpenSelectAttributes = useCallback(
+		async (entityNode: EntityNode | LinkEntityNode) => {
+			const entityName = entityNode.name;
+			const entityDisplayName =
+				metadataCache.getEntityMetadata(entityName)?.DisplayName?.UserLocalizedLabel?.Label ||
+				entityName;
+
+			// Get currently selected attribute names
+			const currentAttributeNames = entityNode.attributes.map((attr) => attr.name);
+
+			// Get all attributes for this entity
+			let attributes = metadataCache.getEntityAttributes(entityName);
+			if (!attributes) {
+				// Fetch from API
+				try {
+					attributes = await loadEntityAttributes(entityName);
+					metadataCache.setEntityAttributes(entityName, attributes);
+				} catch (error) {
+					console.error("Failed to load attributes:", error);
+					attributes = [];
+				}
+			}
+
+			setSelectAttrsEntityId(entityNode.id);
+			setSelectAttrsDisplayName(entityDisplayName);
+			setSelectAttrsAttributes(attributes || []);
+			setSelectAttrsCurrentNames(currentAttributeNames);
+			setSelectAttrsDialogOpen(true);
+		},
+		[]
+	);
+
+	// Handle applying selected attributes from dialog
+	const handleApplySelectedAttributes = useCallback(
+		(nodeId: NodeId, selectedAttributes: string[]) => {
+			onUpdateAttributes(nodeId, selectedAttributes);
+		},
+		[onUpdateAttributes]
+	);
+
 	const handleOpenChange = (_event: unknown, data: TreeOpenChangeData) => {
 		debugLog("treeExpansion", "handleOpenChange called:", {
 			open: data.open,
@@ -281,6 +335,9 @@ export function TreeView({
 											All Attributes
 										</MenuItem>
 										<MenuItem onClick={() => onAddAttribute(entity.id)}>Attribute</MenuItem>
+										<MenuItem onClick={() => handleOpenSelectAttributes(entity)}>
+											Select Attributes
+										</MenuItem>
 										<MenuItem onClick={() => onAddOrder(entity.id)}>Order By</MenuItem>
 										<MenuItem onClick={() => onAddFilter(entity.id)} disabled={hasFilter}>
 											Filter
@@ -554,6 +611,12 @@ export function TreeView({
 										<MenuItem onClick={() => onAddAttribute(link.id)} disabled={!canHaveAttributes}>
 											Attribute
 										</MenuItem>
+										<MenuItem
+											onClick={() => handleOpenSelectAttributes(link)}
+											disabled={!canHaveAttributes}
+										>
+											Select Attributes
+										</MenuItem>
 										<MenuItem onClick={() => onAddOrder(link.id)}>Order By</MenuItem>
 										<MenuItem onClick={() => onAddFilter(link.id)} disabled={hasFilter}>
 											Filter
@@ -599,6 +662,16 @@ export function TreeView({
 			>
 				{renderFetchNode(fetchQuery)}
 			</Tree>
+
+			<SelectAttributesDialog
+				open={selectAttrsDialogOpen}
+				onOpenChange={setSelectAttrsDialogOpen}
+				entityDisplayName={selectAttrsDisplayName}
+				nodeId={selectAttrsEntityId || ""}
+				attributes={selectAttrsAttributes}
+				selectedAttributeNames={selectAttrsCurrentNames}
+				onApply={handleApplySelectedAttributes}
+			/>
 		</div>
 	);
 }
