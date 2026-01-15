@@ -417,7 +417,9 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				id: generateId(),
 				type: "fetch",
 				entity: entityNode,
-				options: {},
+				options: {
+					count: 50, // Default to top 50
+				},
 			};
 
 			return {

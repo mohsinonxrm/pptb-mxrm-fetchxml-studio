@@ -34,6 +34,7 @@ import {
 } from "@fluentui/react-components";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
+import { metadataCache } from "../../state/cache";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -290,10 +291,15 @@ export function AddColumnsPanel({
 		// Process 1:N (one-to-many) relationships
 		let oneNRels: RelationshipWithType[] = oneToManyRelationships.map((rel) => {
 			// For 1:N, ReferencingEntity is the related entity (the "many" side)
+			// Get entity display name from metadata cache
+			const entityMetadata = metadataCache.getEntityMetadata(rel.ReferencingEntity);
+			const entityDisplayName =
+				entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || rel.ReferencingEntity;
+
 			return {
 				relationship: rel,
 				type: "1N" as const,
-				displayName: rel.ReferencingEntity, // Show the related entity name
+				displayName: entityDisplayName, // Show the related entity display name
 				relatedEntity: rel.ReferencingEntity,
 			};
 		});

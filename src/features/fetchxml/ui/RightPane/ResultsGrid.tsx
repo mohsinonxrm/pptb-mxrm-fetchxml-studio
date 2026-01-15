@@ -33,6 +33,7 @@ import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUti
 import type { FetchNode, AttributeNode, OrderNode } from "../../model/nodes";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { DisplaySettings } from "../../model/displaySettings";
+import { metadataCache } from "../../state/cache";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -579,24 +580,34 @@ export function ResultsGrid({
 					displayInfo.attributeName ||
 					col.slice(1, -6); // Remove _ prefix and _value suffix
 			} else if (displayInfo?.linkEntityAlias) {
-				// Link-entity column: "Attribute Display Name (Lookup Attribute Display Name)"
-				// e.g., "Email (Primary Contact)" where Email is from contact entity, Primary Contact is the lookup
+				// Link-entity column: "Attribute Display Name (Related Entity Display Name)"
+				// e.g., "Email (Contact)" or "Email (Primary Contact)"
 				const attrDisplayName =
 					attribute?.DisplayName?.UserLocalizedLabel?.Label || displayInfo.attributeName;
 
-				// Get the lookup attribute display name from root entity metadata
-				let lookupDisplayName = displayInfo.lookupAttribute || displayInfo.linkEntityAlias;
+				// Determine what to show in parentheses:
+				// - For N:1 (many-to-one): Show the lookup attribute display name (e.g., "Primary Contact")
+				// - For 1:N (one-to-many): Show the related entity display name (e.g., "Contact")
+				let relatedDisplayName = displayInfo.linkEntityAlias;
+
 				if (displayInfo.lookupAttribute) {
+					// N:1 relationship - get the lookup attribute display name from root entity
 					const rootEntityName = fetchQuery?.entity?.name;
 					if (rootEntityName) {
 						const lookupAttr = getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute);
 						if (lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
-							lookupDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
+							relatedDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
 						}
+					}
+				} else {
+					// 1:N relationship - get the entity display name
+					const entityMetadata = metadataCache.getEntityMetadata(displayInfo.entityName);
+					if (entityMetadata?.DisplayName?.UserLocalizedLabel?.Label) {
+						relatedDisplayName = entityMetadata.DisplayName.UserLocalizedLabel.Label;
 					}
 				}
 
-				displayName = `${attrDisplayName} (${lookupDisplayName})`;
+				displayName = `${attrDisplayName} (${relatedDisplayName})`;
 			} else if (attribute?.DisplayName?.UserLocalizedLabel?.Label) {
 				// Root entity attribute with metadata display name
 				displayName = attribute.DisplayName.UserLocalizedLabel.Label;

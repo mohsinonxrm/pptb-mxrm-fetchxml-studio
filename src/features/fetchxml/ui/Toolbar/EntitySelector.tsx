@@ -421,11 +421,35 @@ export function EntitySelector({
 	const [entityQuery, setEntityQuery] = useState<string>("");
 
 	const entityOptions = useMemo(() => {
-		return availableEntities.map((entity) => ({
-			value: entity.LogicalName,
-			children: entity.DisplayName?.UserLocalizedLabel?.Label || entity.LogicalName,
-		}));
+		return availableEntities.map((entity) => {
+			const displayName = entity.DisplayName?.UserLocalizedLabel?.Label || entity.LogicalName;
+			const label = `${displayName} (${entity.LogicalName})`;
+			return {
+				value: entity.LogicalName,
+				children: label,
+			};
+		});
 	}, [availableEntities]);
+
+	// Sync entityQuery with selectedEntity to show formatted display name
+	useEffect(() => {
+		if (selectedEntity) {
+			const selectedEntityMetadata = availableEntities.find(
+				(e) => e.LogicalName === selectedEntity
+			);
+			if (selectedEntityMetadata) {
+				const displayName =
+					selectedEntityMetadata.DisplayName?.UserLocalizedLabel?.Label ||
+					selectedEntityMetadata.LogicalName;
+				setEntityQuery(`${displayName} (${selectedEntityMetadata.LogicalName})`);
+			} else {
+				// Entity not in available list yet, just show logical name
+				setEntityQuery(selectedEntity);
+			}
+		} else {
+			setEntityQuery("");
+		}
+	}, [selectedEntity, availableEntities]);
 
 	const filteredEntityOptions = useComboboxFilter(entityQuery, entityOptions, {
 		noOptionsMessage: "No entities match your search.",
