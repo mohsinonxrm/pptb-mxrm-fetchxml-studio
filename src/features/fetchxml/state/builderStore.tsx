@@ -77,6 +77,7 @@ type BuilderAction =
 	| { type: "SELECT_NODE"; nodeId: NodeId }
 	| { type: "ADD_ATTRIBUTE"; parentId: NodeId }
 	| { type: "ADD_ATTRIBUTE_BY_NAME"; parentId: NodeId; attributeName: string }
+	| { type: "UPDATE_ATTRIBUTES"; parentId: NodeId; attributeNames: string[] }
 	| { type: "ADD_ALL_ATTRIBUTES"; parentId: NodeId }
 	| { type: "ADD_ORDER"; parentId: NodeId }
 	| { type: "ADD_FILTER"; parentId: NodeId }
@@ -417,7 +418,9 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				id: generateId(),
 				type: "fetch",
 				entity: entityNode,
-				options: {},
+				options: {
+					count: 50, // Default to top 50
+				},
 			};
 
 			return {
@@ -556,6 +559,55 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNode: newAllAttributes,
 				loadedView: null, // Clear view info - query modified
 				layoutNeedsSync: true, // All attributes changes layout
+			};
+		}
+
+		case "UPDATE_ATTRIBUTES": {
+			if (!state.fetchQuery) return state;
+
+			// Find parent node (entity or link-entity)
+			const parent = findNodeById(state.fetchQuery, action.parentId);
+			if (!parent || (parent.type !== "entity" && parent.type !== "link-entity")) {
+				return state;
+			}
+
+			const entityNode = parent as EntityNode | LinkEntityNode;
+			const existingAttributes = entityNode.attributes;
+			const newAttributeNames = action.attributeNames;
+
+			// Determine which attributes to add and which to remove
+			const existingNames = new Set(existingAttributes.map((attr) => attr.name));
+			const newNames = new Set(newAttributeNames);
+
+			// Attributes to add (in newNames but not in existingNames)
+			const toAdd = newAttributeNames.filter((name) => !existingNames.has(name));
+
+			// Attributes to keep (in both sets)
+			const updatedAttributes = existingAttributes.filter((attr) => newNames.has(attr.name));
+
+			// Add new attributes
+			toAdd.forEach((name) => {
+				updatedAttributes.push({
+					id: generateId(),
+					type: "attribute",
+					name,
+				});
+			});
+
+			// Update the tree immutably
+			const updatedFetchForBulk = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
+				const n = node as EntityNode | LinkEntityNode;
+				return {
+					...n,
+					attributes: updatedAttributes,
+				};
+			});
+
+			return {
+				...state,
+				fetchQuery: updatedFetchForBulk,
+				loadedView: null, // Clear view info - query modified
+				layoutNeedsSync: true, // Attributes changed - layout needs update
 			};
 		}
 
@@ -1005,6 +1057,8 @@ interface BuilderContextValue extends BuilderState {
 	addAttribute: (parentId: NodeId) => void;
 	/** Add a specific attribute by name to an entity or link-entity */
 	addAttributeByName: (parentId: NodeId, attributeName: string) => void;
+	/** Update attributes for an entity or link-entity (bulk add/remove) */
+	updateAttributes: (parentId: NodeId, attributeNames: string[]) => void;
 	addAllAttributes: (parentId: NodeId) => void;
 	addOrder: (parentId: NodeId) => void;
 	addFilter: (parentId: NodeId) => void;
@@ -1067,6 +1121,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
 		addAttributeByName: (parentId: NodeId, attributeName: string) =>
 			dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),
+		updateAttributes: (parentId: NodeId, attributeNames: string[]) =>
+			dispatch({ type: "UPDATE_ATTRIBUTES", parentId, attributeNames }),
 		addAllAttributes: (parentId: NodeId) => dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
 		addOrder: (parentId: NodeId) => dispatch({ type: "ADD_ORDER", parentId }),
 		addFilter: (parentId: NodeId) => dispatch({ type: "ADD_FILTER", parentId }),
