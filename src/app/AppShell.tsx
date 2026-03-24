@@ -211,7 +211,7 @@ export function AppShell() {
  * Includes root entity and all link-entities (recursively)
  */
 function collectEntitiesFromFetchQuery(
-	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null
+	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null,
 ): string[] {
 	if (!fetchQuery?.entity?.name) return [];
 
@@ -219,7 +219,7 @@ function collectEntitiesFromFetchQuery(
 	entities.add(fetchQuery.entity.name);
 
 	const collectFromLinks = (
-		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined
+		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined,
 	) => {
 		links?.forEach((link) => {
 			if (link.name) {
@@ -536,7 +536,7 @@ function AppContent() {
 					console.error(`Failed to load attributes for ${entityName}:`, error);
 					return { entityName, attrMap: new Map<string, AttributeMetadata>() };
 				}
-			})
+			}),
 		).then((results) => {
 			const multiEntityMap = new Map<string, Map<string, AttributeMetadata>>();
 			results.forEach(({ entityName, attrMap }) => {
@@ -646,7 +646,7 @@ function AppContent() {
 	const handleSaveViewComplete = (
 		viewId: string,
 		viewType: "system" | "personal",
-		viewName: string
+		viewName: string,
 	) => {
 		// Update the builder's loaded view state so subsequent saves overwrite the same view
 		if (entityMetadata) {
@@ -666,7 +666,7 @@ function AppContent() {
 	 */
 	const buildColumnsFromResult = (
 		records: Record<string, unknown>[],
-		fetchQuery: typeof builder.fetchQuery
+		fetchQuery: typeof builder.fetchQuery,
 	): string[] => {
 		// Start with columns from the result data (these have actual values)
 		const resultKeys = records.length > 0 ? Object.keys(records[0]) : [];
@@ -743,7 +743,7 @@ function AppContent() {
 					console.log(
 						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
 							loadedView.type === "system" ? "savedQuery" : "userQuery"
-						}=${loadedView.id}`
+						}=${loadedView.id}`,
 					);
 
 					if (loadedView.type === "system") {
@@ -759,7 +759,7 @@ function AppContent() {
 				console.log(
 					loadedView
 						? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
-						: "📡 Executing FetchXML query"
+						: "📡 Executing FetchXML query",
 				);
 				result = await executeFetchXml(fetchXml);
 			}
@@ -800,7 +800,7 @@ function AppContent() {
 					result.pagingCookie,
 					2,
 					entityLogicalName,
-					pageSize
+					pageSize,
 				);
 			}
 		} catch (error) {
@@ -821,7 +821,7 @@ function AppContent() {
 		pagingCookie: string | undefined,
 		startPage: number,
 		entityLogicalName: string | undefined,
-		pageSize?: number
+		pageSize?: number,
 	) => {
 		let allRows = [...initialRows];
 		let currentPagingCookie = pagingCookie;
@@ -839,7 +839,7 @@ function AppContent() {
 					baseFetchXml,
 					page,
 					currentPagingCookie,
-					pageSize
+					pageSize,
 				);
 				const result = await executeFetchXml(pagedFetchXml);
 
@@ -898,7 +898,7 @@ function AppContent() {
 		try {
 			const nextPage = pagingState.currentPage + 1;
 			console.log(
-				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`
+				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`,
 			);
 
 			// Add paging parameters: page number, paging cookie (required for reliable paging), and count (page size)
@@ -906,7 +906,7 @@ function AppContent() {
 				fetchXml,
 				nextPage,
 				pagingState.pagingCookie,
-				pageSize
+				pageSize,
 			);
 			const result = await executeFetchXml(pagedFetchXml);
 
@@ -977,7 +977,7 @@ function AppContent() {
 
 		try {
 			console.log(
-				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`
+				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`,
 			);
 
 			// Use view name for filename
@@ -988,11 +988,11 @@ function AppContent() {
 				builder.loadedView.type,
 				fetchXml,
 				layoutXml,
-				viewName
+				viewName,
 			);
 
 			// Trigger download
-			downloadBase64File(result.excelFile, result.filename);
+			await downloadBase64File(result.excelFile, result.filename);
 
 			console.log(`✅ Export complete: ${result.filename}`);
 
@@ -1084,7 +1084,7 @@ function AppContent() {
 			});
 
 			// Trigger download
-			downloadExcelFile(buffer, finalFileName);
+			await downloadExcelFile(buffer, finalFileName);
 
 			console.log(`✅ Local export complete: ${finalFileName}`);
 
@@ -1147,7 +1147,7 @@ function AppContent() {
 				window.open(url, "_blank");
 			}
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	/**
@@ -1173,7 +1173,7 @@ function AppContent() {
 				console.error("Failed to copy to clipboard:", error);
 			}
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	/**
@@ -1217,15 +1217,15 @@ function AppContent() {
 			const recordName =
 				recordIds.length === 1
 					? (queryResult?.rows.find(
-							(row) => row[entityMetadata?.PrimaryIdAttribute || ""] === recordIds[0]
-					  )?.[entityMetadata?.PrimaryNameAttribute || ""] as string | undefined)
+							(row) => row[entityMetadata?.PrimaryIdAttribute || ""] === recordIds[0],
+						)?.[entityMetadata?.PrimaryNameAttribute || ""] as string | undefined)
 					: undefined;
 
 			// Use batch delete for 4+ records (more efficient than sequential)
 			const isBatchDelete = recordIds.length >= 4;
 			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata]
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata],
 	);
 
 	/**
@@ -1246,7 +1246,7 @@ function AppContent() {
 				totalViewRecords: isAllRecords ? totalRecords : undefined,
 			});
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult]
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult],
 	);
 
 	/**
@@ -1264,7 +1264,7 @@ function AppContent() {
 			const result = await deleteRecordsBatch(
 				entityLogicalName, // Use logical name, API will pluralize
 				recordIds,
-				(progress) => setDeleteProgress(progress)
+				(progress) => setDeleteProgress(progress),
 			);
 
 			if (result.succeeded > 0) {
@@ -1286,7 +1286,7 @@ function AppContent() {
 				successCount++;
 			} catch (error) {
 				errors.push(
-					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`
+					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`,
 				);
 			}
 		}
@@ -1342,7 +1342,7 @@ function AppContent() {
 				entityLogicalName,
 				primaryIdAttribute,
 				recordIds,
-				jobName
+				jobName,
 			);
 
 			console.log(`📤 Bulk delete job submitted: ${result.asyncOperationId}`);
@@ -1354,7 +1354,7 @@ function AppContent() {
 			bulkDeleteDialogState.recordIds,
 			bulkDeleteDialogState.isAllRecords,
 			builder.fetchQuery,
-		]
+		],
 	);
 
 	/**
@@ -1382,14 +1382,14 @@ function AppContent() {
 		async (
 			workflowId: string,
 			recordIds: string[],
-			onProgress: (progress: WorkflowBatchProgress) => void
+			onProgress: (progress: WorkflowBatchProgress) => void,
 		): Promise<{ succeeded: number; failed: number; errors: string[] }> => {
 			if (!entityLogicalName) {
 				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
 			}
 			return executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress);
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	// ============ END RECORD ACTION HANDLERS ============
@@ -1415,7 +1415,7 @@ function AppContent() {
 									entitySetName: viewInfo.entitySetName,
 									name: viewInfo.name,
 								},
-								viewInfo.layoutxml
+								viewInfo.layoutxml,
 							);
 						}}
 					/>
@@ -1495,8 +1495,8 @@ function AppContent() {
 						!builder.loadedView
 							? "Save as a view first to enable export"
 							: !exportStatus.hasPrivilege
-							? "You don't have the prvExportToExcel privilege"
-							: undefined
+								? "You don't have the prvExportToExcel privilege"
+								: undefined
 					}
 					onParseToTree={builder.loadFetchXml}
 					attributeMetadata={attributeMetadata}
@@ -1603,7 +1603,7 @@ function AppContent() {
 
 							// Check if link-entity already exists for this relationship
 							const existingLinkEntity = builder.fetchQuery.entity.links.find(
-								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity
+								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity,
 							);
 
 							let linkEntityId: string;
@@ -1618,7 +1618,7 @@ function AppContent() {
 									fromAttr,
 									toAttr,
 									linkType,
-									relTypeForBuilder
+									relTypeForBuilder,
 								);
 							}
 
@@ -1649,7 +1649,7 @@ function AppContent() {
 						// FetchXML order-by uses the original attribute name, not the alias
 						if (!entityName && builder.fetchQuery?.entity?.attributes) {
 							const aliasedAttr = builder.fetchQuery.entity.attributes.find(
-								(a) => a.alias === attribute
+								(a) => a.alias === attribute,
 							);
 							if (aliasedAttr) {
 								attribute = aliasedAttr.name;
@@ -1660,7 +1660,7 @@ function AppContent() {
 							attribute,
 							data.direction === "descending",
 							data.isMultiSort,
-							entityName
+							entityName,
 						);
 					}}
 					// Record action handlers
