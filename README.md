@@ -1,11 +1,12 @@
 # FetchXML Studio for Power Platform ToolBox
 
-A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 19, Fluent UI v9, and seamless Dataverse integration.
+A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.0.6-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
+![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.0-orange)
 
 ## ✨ Features
 
@@ -37,23 +38,35 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Solution-aware** — Add views to solutions during save
 
 ### 📤 Export & Data Operations
-- **Export to Excel** — Native Excel export with proper data types (numbers, dates, currencies)
-- **Formatted value options** — Export formatted, raw, or both value types
-- **Record deletion** — Delete selected records with confirmation
-- **Bulk delete jobs** — Submit async bulk delete operations to Dataverse
-- **Run workflows** — Execute on-demand workflows on selected records
+- **Local Excel export** — Native `.xlsx` generation via ExcelJS with proper data types (numbers, dates, currencies, booleans)
+- **Dataverse Excel export** — Server-side export via the `ExportToExcel` action (requires a saved view)
+- **Native save dialog** — When running inside PPTB, both export paths use `fileSystem.saveFile` for a native OS save-file dialog; falls back to browser blob download in standalone/dev mode
+- **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
+- **Record deletion** — Delete selected records with confirmation dialog
+- **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL
+- **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
+- **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking
+
+### 📋 Bulk Attribute Selection
+- **Select Attributes dialog** — Multi-select attributes from a searchable DataGrid; accessible from entity and link-entity context menus
+- **Smart updates** — Adds new selections and removes deselected attributes while preserving existing order and properties
+- **Search & filter** — Real-time filtering across logical name, display name, and data type columns
 
 ### 🎨 User Experience
 - **Dark/Light themes** — Follows Power Platform ToolBox theme with Fluent UI tokens
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
-- **Intelligent caching** — In-memory cache prevents duplicate API calls
-- **Resizable panes** — Adjust the layout to your preference
-- **Keyboard shortcuts** — Execute queries, copy XML, and more
+- **Intelligent caching** — In-memory cache prevents duplicate API calls per session
+- **Resizable panes** — Adjust split-pane layout to your preference
+- **Keyboard shortcuts** — `Ctrl+Enter` to execute query, copy XML to clipboard
+- **Display settings** — Toggle logical names vs display names in column headers; choose formatted, raw, or both value modes in the grid and exports
 
 ### 🔒 Privilege-Aware
-- **Security checks** — Validates user privileges before operations
-- **Export privilege check** — Only shows export option if user has access
-- **Delete privilege check** — Validates delete permissions per entity
+- **Security checks** — Validates user privileges before every destructive or restricted operation
+- **Export privilege check** — Only shows Dataverse export option if user has access
+- **Delete privilege check** — Validates entity-specific delete permissions before enabling delete actions
+- **Bulk delete privilege check** — Validates `prvBulkDelete` before surfacing bulk delete
+- **Workflow privilege check** — Validates `prvReadWorkflow` + `prvWorkflowExecution` before showing workflow picker
+- **View save privilege check** — Validates `prvWriteQuery` / `prvWriteCustomization` / `prvPublishCustomization` / `prvWriteUserQuery` before save operations
 
 ## 🖼️ Interface Overview
 
@@ -114,6 +127,12 @@ npm run build
 
 # Preview production build
 npm run preview
+
+# Validate package manifest against PPTB registry rules
+npm run validate
+
+# Finalize for publishing (build + shrinkwrap)
+npm run finalize-package
 ```
 
 ### Debug Logging
@@ -138,48 +157,57 @@ disableAllDebug();
 
 ## 📦 Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| **React 19** | UI framework with latest features (transitions, actions) |
-| **TypeScript 5.9** | Type-safe development |
-| **Vite** | Fast build tooling and HMR |
-| **Fluent UI v9** | Microsoft's design system (Tree, DataGrid, Tabs, etc.) |
-| **Monaco Editor** | VS Code's editor for XML editing |
-| **react-window** | Virtualized list rendering for large datasets |
-| **exceljs** | Native Excel file generation |
-| **@pptb/types** | Power Platform ToolBox API types |
+| Technology | Version | Purpose |
+|------------|---------|--------|
+| **React** | 18.3 | UI framework |
+| **TypeScript** | 5.9 | Type-safe development |
+| **Vite** | 7 | Build tooling and HMR |
+| **Fluent UI v9** | 9.72 | Microsoft design system (Tree, DataGrid, Tabs, Drawer, etc.) |
+| **Monaco Editor** | 0.54 | VS Code XML editor for FetchXML authoring |
+| **react-window** | 2 | Virtualized list rendering for large datasets |
+| **ExcelJS** | 4.4 | Native `.xlsx` generation with typed cells |
+| **@pptb/types** | 1.2.0 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── app/
-│   └── AppShell.tsx              # Main layout with split panes
+│   └── AppShell.tsx              # Main layout with resizable split panes
 ├── features/fetchxml/
 │   ├── api/
-│   │   ├── pptbClient.ts         # Dataverse API wrapper
-│   │   ├── dataverseMetadata.ts  # Metadata fetching
-│   │   ├── excelExport.ts        # Excel export logic
-│   │   └── formattedValues.ts    # OData formatted value handling
+│   │   ├── pptbClient.ts         # window.dataverseAPI wrapper (all Dataverse ops)
+│   │   ├── dataverseMetadata.ts  # Lazy metadata loading with cache + dedup
+│   │   ├── excelExport.ts        # Local ExcelJS export with native types
+│   │   └── formattedValues.ts    # OData @FormattedValue annotation helpers
 │   ├── model/
-│   │   ├── nodes.ts              # TypeScript node definitions
-│   │   ├── fetchxml.ts           # FetchXML generation
-│   │   ├── fetchxmlParser.ts     # FetchXML parsing
+│   │   ├── nodes.ts              # FetchXML node TypeScript definitions
+│   │   ├── fetchxml.ts           # FetchXML XML generation
+│   │   ├── fetchxmlParser.ts     # FetchXML XML → node tree parser
+│   │   ├── fetchxmlIntellisense.ts # Intellisense / autocomplete helpers
 │   │   ├── layoutxml.ts          # LayoutXML generation
-│   │   └── operators.ts          # Operator definitions by type
+│   │   ├── operators.ts          # Operator definitions by attribute type
+│   │   ├── displaySettings.ts    # Display settings types and defaults
+│   │   └── treeUtils.ts          # Tree traversal utilities
 │   ├── state/
-│   │   ├── builderStore.tsx      # React context state management
-│   │   └── cache.ts              # Metadata caching
+│   │   ├── builderStore.tsx      # React context + reducer state management
+│   │   └── cache.ts              # Per-session in-memory metadata cache
 │   └── ui/
-│       ├── LeftPane/             # Tree view and properties
-│       ├── RightPane/            # Tabs, editor, grid
-│       ├── Toolbar/              # Entity selector, view picker
-│       ├── Dialogs/              # Delete, bulk delete, workflow
-│       └── Settings/             # Display preferences
+│       ├── LeftPane/             # Tree view + context-aware properties panel
+│       │   └── PropertiesPanel/
+│       │       └── editors/      # Node-specific property editors
+│       ├── RightPane/            # Monaco editor, LayoutXML viewer, results grid
+│       ├── Toolbar/              # Entity selector, load view picker, save button
+│       ├── Dialogs/              # Save view, select attributes, delete, bulk
+│       │                         # delete, workflow picker, solution picker
+│       └── Settings/             # Settings drawer (display preferences)
 └── shared/
-    ├── components/               # Reusable pickers
-    ├── hooks/                    # Custom React hooks
-    └── utils/                    # Debug utilities
+    ├── components/               # Reusable value pickers (option set, boolean,
+    │                             # date, numeric, multi-value, relationship, etc.)
+    ├── contexts/                 # ThemeContext
+    ├── hooks/                    # usePptbContext, useLazyMetadata, useAccessMode,
+    │                             # usePublisherFilter, useSolutionFilter
+    └── utils/                    # Debug logging utilities
 ```
 
 ## 🔧 FetchXML Features Support

@@ -3,64 +3,18 @@
  * Provides typed interface to window.dataverseAPI exposed by PPTB host
  */
 
-// Extend window interface for PPTB Dataverse API
-declare global {
-	interface Window {
-		dataverseAPI?: {
-			// CRUD operations
-			create: (entitySetName: string, data: Record<string, unknown>) => Promise<{ id: string }>;
-			retrieve: (
-				entitySetName: string,
-				id: string,
-				select?: string[]
-			) => Promise<Record<string, unknown>>;
-			update: (entitySetName: string, id: string, data: Record<string, unknown>) => Promise<void>;
-			delete: (entitySetName: string, id: string) => Promise<void>;
+// NOTE: window.dataverseAPI global types are provided by @pptb/types (see tsconfig.app.json)
 
-			// Query operations
-			fetchXmlQuery: (fetchXml: string) => Promise<{
-				value: Record<string, unknown>[];
-				"@Microsoft.Dynamics.CRM.totalrecordcount"?: number;
-				"@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"?: boolean;
-				"@Microsoft.Dynamics.CRM.morerecords"?: boolean;
-				"@Microsoft.Dynamics.CRM.pagingcookie"?: string;
-			}>;
-			retrieveMultiple: (
-				entitySetName: string,
-				query?: string
-			) => Promise<{
-				value: Record<string, unknown>[];
-			}>;
-			queryData: (odataQuery: string) => Promise<{
-				value: Record<string, unknown>[];
-			}>;
-
-			// Metadata operations
-			getEntityMetadata: (
-				entityLogicalName: string,
-				searchByLogicalName?: boolean,
-				selectColumns?: string[]
-			) => Promise<EntityMetadata>;
-			getAllEntitiesMetadata: () => Promise<{ value: EntityMetadata[] }>;
-			getEntityRelatedMetadata: (
-				entityLogicalName: string,
-				relatedPath: string,
-				selectColumns?: string[]
-			) => Promise<{ value: unknown[] }>;
-
-			// Other operations
-			execute: (options: {
-				operationName: string;
-				operationType: "action" | "function";
-				entityName?: string;
-				entityId?: string;
-				parameters?: Record<string, unknown>;
-			}) => Promise<unknown>;
-			getSolutions: (selectColumns?: string[]) => Promise<{ value: unknown[] }>;
-
-			// User context - note: WhoAmI is called via execute({ operationName: 'WhoAmI', operationType: 'function' })
-		};
-	}
+// Extended type for accessing Dataverse OData response annotations beyond what @pptb/types explicitly declares.
+// Dataverse returns these extra annotations on FetchXML responses; we cast to this locally.
+interface DataverseFetchXmlResponse {
+	value: Record<string, unknown>[];
+	"@odata.context"?: string;
+	"@Microsoft.Dynamics.CRM.fetchxmlpagingcookie"?: string;
+	"@Microsoft.Dynamics.CRM.totalrecordcount"?: number;
+	"@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"?: boolean;
+	"@Microsoft.Dynamics.CRM.morerecords"?: boolean;
+	"@Microsoft.Dynamics.CRM.pagingcookie"?: string;
 }
 
 import { debugLog } from "../../../shared/utils/debug";
@@ -258,7 +212,10 @@ export async function getEntityMetadata(logicalName: string): Promise<EntityMeta
 		throw new Error("PPTB Dataverse API not available");
 	}
 
-	return await window.dataverseAPI!.getEntityMetadata(logicalName, true);
+	return (await window.dataverseAPI!.getEntityMetadata(
+		logicalName,
+		true,
+	)) as unknown as EntityMetadata;
 }
 
 /**
@@ -266,7 +223,7 @@ export async function getEntityMetadata(logicalName: string): Promise<EntityMeta
  */
 export async function getEntityAttributes(
 	logicalName: string,
-	advancedFindOnly: boolean = true
+	advancedFindOnly: boolean = true,
 ): Promise<AttributeMetadata[]> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -288,7 +245,7 @@ export async function getEntityAttributes(
 
 	debugLog(
 		"metadataAPI",
-		`✅ Attributes retrieved for '${logicalName}': ${attributes.length} attributes`
+		`✅ Attributes retrieved for '${logicalName}': ${attributes.length} attributes`,
 	);
 
 	// Sort alphabetically by display name (fallback to logical name)
@@ -309,7 +266,7 @@ export async function getEntityAttributes(
  */
 export async function getAttributeWithOptionSet(
 	entityLogicalName: string,
-	attributeLogicalName: string
+	attributeLogicalName: string,
 ): Promise<AttributeMetadata> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -342,7 +299,7 @@ export async function getAttributeWithOptionSet(
 		// For non-optionset attributes, return the basic metadata
 		debugLog(
 			"metadataAPI",
-			`⚠️ Attribute '${attributeLogicalName}' is type '${basicAttr.AttributeType}' - no OptionSet available`
+			`⚠️ Attribute '${attributeLogicalName}' is type '${basicAttr.AttributeType}' - no OptionSet available`,
 		);
 		return basicAttr;
 	}
@@ -352,7 +309,7 @@ export async function getAttributeWithOptionSet(
 
 	debugLog(
 		"metadataAPI",
-		`📡 GET Attribute with OptionSet for '${attributeLogicalName}': ${fullQuery}`
+		`📡 GET Attribute with OptionSet for '${attributeLogicalName}': ${fullQuery}`,
 	);
 
 	const fullResult = await window.dataverseAPI!.queryData(fullQuery);
@@ -361,14 +318,14 @@ export async function getAttributeWithOptionSet(
 
 	if (!fullAttr || !fullAttr.LogicalName) {
 		throw new Error(
-			`Failed to retrieve attribute ${attributeLogicalName} with OptionSet expansion`
+			`Failed to retrieve attribute ${attributeLogicalName} with OptionSet expansion`,
 		);
 	}
 
 	debugLog(
 		"metadataAPI",
 		`✅ Attribute with OptionSet retrieved for '${attributeLogicalName}':`,
-		fullAttr.OptionSet
+		fullAttr.OptionSet,
 	);
 
 	return fullAttr;
@@ -382,7 +339,7 @@ export async function getAttributeWithOptionSet(
 export async function getAttributeDetailedMetadata(
 	entityLogicalName: string,
 	attributeLogicalName: string,
-	attributeType: string
+	attributeType: string,
 ): Promise<AttributeMetadata> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -420,7 +377,7 @@ export async function getAttributeDetailedMetadata(
 			// For types that don't need detailed metadata, return early with warning
 			debugLog(
 				"metadataAPI",
-				`⚠️ Attribute '${attributeLogicalName}' is type '${attributeType}' - no detailed metadata needed`
+				`⚠️ Attribute '${attributeLogicalName}' is type '${attributeType}' - no detailed metadata needed`,
 			);
 			// Return basic metadata query without type cast
 			const basicQuery = `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes(LogicalName='${attributeLogicalName}')?$select=SchemaName,LogicalName,DisplayName,AttributeType,MetadataId`;
@@ -434,7 +391,7 @@ export async function getAttributeDetailedMetadata(
 
 	debugLog(
 		"metadataAPI",
-		`📡 GET Detailed Attribute metadata for '${attributeLogicalName}' (${attributeType}): ${detailedQuery}`
+		`📡 GET Detailed Attribute metadata for '${attributeLogicalName}' (${attributeType}): ${detailedQuery}`,
 	);
 
 	const result = await window.dataverseAPI!.queryData(detailedQuery);
@@ -452,7 +409,7 @@ export async function getAttributeDetailedMetadata(
 	debugLog(
 		"metadataAPI",
 		`✅ Detailed attribute metadata retrieved for '${attributeLogicalName}':`,
-		detailedAttr
+		detailedAttr,
 	);
 
 	return detailedAttr;
@@ -463,7 +420,7 @@ export async function getAttributeDetailedMetadata(
  */
 export async function getEntityRelationships(
 	logicalName: string,
-	advancedFindOnly: boolean = true
+	advancedFindOnly: boolean = true,
 ): Promise<{
 	oneToMany: RelationshipMetadata[];
 	manyToOne: RelationshipMetadata[];
@@ -512,7 +469,7 @@ export async function getEntityRelationships(
 
 	debugLog(
 		"metadataAPI",
-		`✅ Relationships retrieved for '${logicalName}': 1:N=${oneToManyResult.value.length}, N:1=${manyToOneResult.value.length}, N:N=${manyToManyResult.value.length}`
+		`✅ Relationships retrieved for '${logicalName}': 1:N=${oneToManyResult.value.length}, N:1=${manyToOneResult.value.length}, N:N=${manyToManyResult.value.length}`,
 	);
 
 	// Helper function to sort relationships alphabetically by SchemaName
@@ -542,7 +499,9 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 	debugLog("fetchXmlAPI", `📡 Executing FetchXML query...`);
 	debugLog("fetchXmlAPI", `FetchXML:\n${fetchXml}`);
 
-	const result = await window.dataverseAPI!.fetchXmlQuery(fetchXml);
+	const result = (await window.dataverseAPI!.fetchXmlQuery(
+		fetchXml,
+	)) as unknown as DataverseFetchXmlResponse;
 
 	// Log the raw response to console for inspection
 	console.log("🔍 Raw FetchXML Response:", result);
@@ -565,16 +524,16 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 		console.warn("🔧 In dataverseManager.ts (around line 405), change:");
 		console.warn('   FROM: Prefer: "return=representation"');
 		console.warn(
-			'   TO:   Prefer: "return=representation, odata.include-annotations=\\"OData.Community.Display.V1.FormattedValue\\""'
+			'   TO:   Prefer: "return=representation, odata.include-annotations=\\"OData.Community.Display.V1.FormattedValue\\""',
 		);
 		console.warn("");
 		console.warn("📖 Microsoft Learn reference:");
 		console.warn(
-			"   https://learn.microsoft.com/en-us/power-apps/developer/data-platform/fetchxml/select-columns?tabs=webapi#formatted-values"
+			"   https://learn.microsoft.com/en-us/power-apps/developer/data-platform/fetchxml/select-columns?tabs=webapi#formatted-values",
 		);
 		console.warn("");
 		console.warn(
-			"💡 This will enable rich display: labels for picklists, names for lookups, formatted dates, etc."
+			"💡 This will enable rich display: labels for picklists, names for lookups, formatted dates, etc.",
 		);
 	}
 
@@ -596,7 +555,7 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
  */
 export async function executeSystemView(
 	entitySetName: string,
-	savedQueryId: string
+	savedQueryId: string,
 ): Promise<FetchXmlResult> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -627,7 +586,7 @@ export async function executeSystemView(
  */
 export async function executePersonalView(
 	entitySetName: string,
-	userQueryId: string
+	userQueryId: string,
 ): Promise<FetchXmlResult> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -665,7 +624,7 @@ export async function whoAmI(): Promise<WhoAmIResponse | null> {
 		const result = (await window.dataverseAPI!.execute({
 			operationName: "WhoAmI",
 			operationType: "function",
-		})) as WhoAmIResponse;
+		})) as unknown as WhoAmIResponse;
 		return result;
 	} catch (error) {
 		console.error("WhoAmI failed:", error);
@@ -678,7 +637,7 @@ export async function whoAmI(): Promise<WhoAmIResponse | null> {
  */
 export async function checkPrivilegeByName(
 	userId: string,
-	privilegeName: string
+	privilegeName: string,
 ): Promise<boolean> {
 	if (!isDataverseAvailable()) {
 		return false;
@@ -696,7 +655,7 @@ export async function checkPrivilegeByName(
 
 		const hasPrivilege = !!response?.RolePrivileges?.length;
 		console.log(
-			`✅ checkPrivilegeByName(${privilegeName}): ${hasPrivilege ? "GRANTED" : "DENIED"}`
+			`✅ checkPrivilegeByName(${privilegeName}): ${hasPrivilege ? "GRANTED" : "DENIED"}`,
 		);
 
 		return hasPrivilege;
@@ -775,8 +734,8 @@ export async function getPublishersWithSolutions(): Promise<PublisherWithSolutio
 				publishersWithSolutions.length
 			} publishers, ${publishersWithSolutions.reduce(
 				(sum, p) => sum + p.solutions.length,
-				0
-			)} total solutions`
+				0,
+			)} total solutions`,
 		);
 
 		return publishersWithSolutions;
@@ -844,7 +803,7 @@ export async function getSolutionsByPublishers(publisherIds: string[]): Promise<
 				debugLog("solutionAPI", `📡 GET Solutions for publishers: ${chunk.length} IDs`);
 				const result = await window.dataverseAPI!.queryData(query);
 				return result.value as unknown as Solution[];
-			})
+			}),
 		);
 
 		// Flatten and dedupe
@@ -923,7 +882,7 @@ export async function getSolutionComponents(solutionIds: string[]): Promise<Solu
 					components: result.value,
 				});
 				return result.value as unknown as SolutionComponent[];
-			})
+			}),
 		);
 
 		// Flatten and deduplicate by msdyn_name
@@ -951,7 +910,7 @@ export async function getSolutionComponents(solutionIds: string[]): Promise<Solu
 
 		debugLog(
 			"solutionComponentAPI",
-			`✅ Components retrieved: ${components.length} unique entities`
+			`✅ Components retrieved: ${components.length} unique entities`,
 		);
 		return components;
 	} catch (error) {
@@ -1031,7 +990,7 @@ export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetad
  * Get EntityDefinitions filtered by logical names and IsValidForAdvancedFind
  */
 export async function getAdvancedFindEntitiesByNames(
-	logicalNames: string[]
+	logicalNames: string[],
 ): Promise<EntityMetadata[]> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1039,7 +998,7 @@ export async function getAdvancedFindEntitiesByNames(
 
 	if (!logicalNames.length) {
 		console.log(
-			"[API] getAdvancedFindEntitiesByNames - Empty logical names, returning all AF entities"
+			"[API] getAdvancedFindEntitiesByNames - Empty logical names, returning all AF entities",
 		);
 		// Return all AF-valid entities
 		return getAllEntities(true);
@@ -1076,7 +1035,7 @@ export async function getAdvancedFindEntitiesByNames(
 					returnedEntities: entities.map((e) => e.LogicalName),
 				});
 				return entities;
-			})
+			}),
 		);
 
 		// Flatten and dedupe
@@ -1230,7 +1189,7 @@ export function generateLayoutXml(
 	columns: LayoutColumn[],
 	objectTypeCode: number,
 	primaryIdAttribute: string,
-	jumpAttribute?: string
+	jumpAttribute?: string,
 ): string {
 	const cellsXml = columns
 		.map((col) => {
@@ -1288,7 +1247,7 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 
 		debugLog(
 			"viewAPI",
-			`✅ System Views retrieved for '${entityLogicalName}': ${views.length} views`
+			`✅ System Views retrieved for '${entityLogicalName}': ${views.length} views`,
 		);
 
 		return views;
@@ -1335,14 +1294,14 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 
 		debugLog(
 			"viewAPI",
-			`✅ Personal Views retrieved for '${entityLogicalName}': ${views.length} views`
+			`✅ Personal Views retrieved for '${entityLogicalName}': ${views.length} views`,
 		);
 
 		return views;
 	} catch (error) {
 		console.error(
 			`getPersonalViews: Failed to get personal views for '${entityLogicalName}':`,
-			error
+			error,
 		);
 		throw error;
 	}
@@ -1353,7 +1312,7 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
  * @param entityLogicalName The logical name of the entity
  */
 export async function getAllViews(
-	entityLogicalName: string
+	entityLogicalName: string,
 ): Promise<{ systemViews: SavedView[]; personalViews: SavedView[] }> {
 	const [systemViews, personalViews] = await Promise.all([
 		getSystemViews(entityLogicalName),
@@ -1399,7 +1358,7 @@ export interface ValidateFetchXmlExpressionResponse {
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatefetchxmlexpression
  */
 export async function validateFetchXmlExpression(
-	fetchXml: string
+	fetchXml: string,
 ): Promise<ValidateFetchXmlExpressionResponse> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1414,14 +1373,14 @@ export async function validateFetchXmlExpression(
 		const query = `ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='${encodedFetchXml}'`;
 
 		const result = (await window.dataverseAPI!.queryData(
-			query
+			query,
 		)) as unknown as ValidateFetchXmlExpressionResponse;
 
 		debugLog(
 			"viewAPI",
 			`✅ ValidateFetchXmlExpression - Complete: ${
 				result.ValidationResults?.Messages?.length || 0
-			} messages`
+			} messages`,
 		);
 
 		return result;
@@ -1509,7 +1468,7 @@ export async function checkSavedQueryPrivileges(): Promise<{
 
 	debugLog(
 		"viewAPI",
-		`✅ SavedQuery privileges: writeQuery=${canWriteQuery}, writeCustomization=${canWriteCustomization}, publishCustomization=${canPublishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}`
+		`✅ SavedQuery privileges: writeQuery=${canWriteQuery}, writeCustomization=${canWriteCustomization}, publishCustomization=${canPublishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}`,
 	);
 
 	return { canWrite, canPublish };
@@ -1634,7 +1593,7 @@ export async function createSavedQuery(data: CreateSavedQueryData): Promise<stri
  */
 export async function updateSavedQuery(
 	savedQueryId: string,
-	data: Partial<CreateSavedQueryData>
+	data: Partial<CreateSavedQueryData>,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1694,7 +1653,7 @@ export async function createUserQuery(data: CreateUserQueryData): Promise<string
  */
 export async function updateUserQuery(
 	userQueryId: string,
-	data: Partial<CreateUserQueryData>
+	data: Partial<CreateUserQueryData>,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1726,7 +1685,7 @@ export async function addSolutionComponent(
 	componentId: string,
 	componentType: number,
 	solutionUniqueName: string,
-	addRequiredComponents: boolean = false
+	addRequiredComponents: boolean = false,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1734,7 +1693,7 @@ export async function addSolutionComponent(
 
 	debugLog(
 		"viewAPI",
-		`📡 AddSolutionComponent: ${componentId} (type=${componentType}) to "${solutionUniqueName}"`
+		`📡 AddSolutionComponent: ${componentId} (type=${componentType}) to "${solutionUniqueName}"`,
 	);
 
 	try {
@@ -1826,7 +1785,7 @@ export async function isSolutionManaged(solutionUniqueName: string): Promise<boo
  * @returns Solution ID or null if not found
  */
 export async function getSolutionIdByUniqueName(
-	solutionUniqueName: string
+	solutionUniqueName: string,
 ): Promise<string | null> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1875,7 +1834,7 @@ export async function exportToExcel(
 	viewType: "system" | "personal",
 	fetchXml: string,
 	layoutXml: string,
-	viewName: string
+	viewName: string,
 ): Promise<{ excelFile: string; filename: string }> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -1887,17 +1846,17 @@ export async function exportToExcel(
 			? {
 					"@odata.type": "Microsoft.Dynamics.CRM.savedquery",
 					savedqueryid: viewId,
-			  }
+				}
 			: {
 					"@odata.type": "Microsoft.Dynamics.CRM.userquery",
 					userqueryid: viewId,
-			  };
+				};
 
 	debugLog("exportAPI", `📡 ExportToExcel: ${viewType} view ${viewId}`);
 	debugLog("exportAPI", `📡 View object:`, viewObject);
 	debugLog(
 		"exportAPI",
-		`📡 FetchXML length: ${fetchXml.length}, LayoutXML length: ${layoutXml.length}`
+		`📡 FetchXML length: ${fetchXml.length}, LayoutXML length: ${layoutXml.length}`,
 	);
 
 	try {
@@ -1927,7 +1886,7 @@ export async function exportToExcel(
 
 		debugLog(
 			"exportAPI",
-			`✅ ExportToExcel successful, file size: ${result.ExcelFile?.length || 0} bytes`
+			`✅ ExportToExcel successful, file size: ${result.ExcelFile?.length || 0} bytes`,
 		);
 
 		return {
@@ -1946,33 +1905,37 @@ export async function exportToExcel(
  * @param filename - The filename for the download
  * @param mimeType - The MIME type of the file
  */
-export function downloadBase64File(
+export async function downloadBase64File(
 	base64Data: string,
 	filename: string,
-	mimeType: string = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-): void {
+	mimeType: string = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+): Promise<void> {
 	try {
-		// Convert Base64 to Blob
+		// Decode Base64 to binary buffer
 		const byteCharacters = atob(base64Data);
-		const byteNumbers = new Array(byteCharacters.length);
+		const byteArray = new Uint8Array(byteCharacters.length);
 		for (let i = 0; i < byteCharacters.length; i++) {
-			byteNumbers[i] = byteCharacters.charCodeAt(i);
+			byteArray[i] = byteCharacters.charCodeAt(i);
 		}
-		const byteArray = new Uint8Array(byteNumbers);
-		const blob = new Blob([byteArray], { type: mimeType });
 
-		// Create download link
+		// Use PPTB fileSystem.saveFile when running in the desktop host (opens native save dialog)
+		if (window.toolboxAPI?.fileSystem?.saveFile) {
+			const saved = await window.toolboxAPI.fileSystem.saveFile(filename, byteArray);
+			if (saved) {
+				debugLog("exportAPI", `✅ File saved via fileSystem: ${saved}`);
+			}
+			return;
+		}
+
+		// Fallback: browser blob download (standalone / dev context)
+		const blob = new Blob([byteArray], { type: mimeType });
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement("a");
 		link.href = url;
 		link.download = filename;
-
-		// Trigger download
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
-
-		// Clean up
 		URL.revokeObjectURL(url);
 
 		debugLog("exportAPI", `✅ File downloaded: ${filename}`);
@@ -2011,7 +1974,7 @@ export async function getEnvironmentUrl(): Promise<string | null> {
 export function buildRecordUrl(
 	entityName: string,
 	recordId: string,
-	environmentUrl: string
+	environmentUrl: string,
 ): string {
 	// Remove trailing slash from environmentUrl if present to avoid double slashes
 	const baseUrl = environmentUrl.endsWith("/") ? environmentUrl.slice(0, -1) : environmentUrl;
@@ -2103,14 +2066,14 @@ async function getBulkDeleteOperationId(asyncOperationId: string): Promise<strin
 		if (operations && operations.length > 0 && operations[0].bulkdeleteoperationid) {
 			debugLog(
 				"recordAPI",
-				`✅ Found bulkdeleteoperationid: ${operations[0].bulkdeleteoperationid}`
+				`✅ Found bulkdeleteoperationid: ${operations[0].bulkdeleteoperationid}`,
 			);
 			return operations[0].bulkdeleteoperationid;
 		}
 
 		debugLog(
 			"recordAPI",
-			`⚠️ No bulkdeleteoperationid found for asyncoperationid: ${asyncOperationId}`
+			`⚠️ No bulkdeleteoperationid found for asyncoperationid: ${asyncOperationId}`,
 		);
 		return "";
 	} catch (error) {
@@ -2133,7 +2096,7 @@ export async function submitBulkDelete(
 	entityLogicalName: string,
 	primaryIdAttribute: string,
 	recordIds: string[],
-	jobName: string
+	jobName: string,
 ): Promise<{ asyncOperationId: string; bulkDeleteOperationId: string; jobUrl: string }> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2141,7 +2104,7 @@ export async function submitBulkDelete(
 
 	debugLog(
 		"recordAPI",
-		`📡 Submitting bulk delete job: ${jobName} for ${recordIds.length} records`
+		`📡 Submitting bulk delete job: ${jobName} for ${recordIds.length} records`,
 	);
 
 	try {
@@ -2192,7 +2155,7 @@ export async function submitBulkDelete(
 
 		debugLog(
 			"recordAPI",
-			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`
+			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`,
 		);
 
 		return {
@@ -2290,7 +2253,7 @@ export async function getOnDemandWorkflows(entityLogicalName: string): Promise<W
 export async function executeWorkflow(
 	workflowId: string,
 	recordId: string,
-	entityLogicalName: string
+	entityLogicalName: string,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2298,7 +2261,7 @@ export async function executeWorkflow(
 
 	debugLog(
 		"workflowAPI",
-		`📡 Executing workflow ${workflowId} on ${entityLogicalName}(${recordId})`
+		`📡 Executing workflow ${workflowId} on ${entityLogicalName}(${recordId})`,
 	);
 
 	try {
@@ -2347,7 +2310,7 @@ export async function executeWorkflowBatch(
 	recordIds: string[],
 	entityLogicalName: string,
 	onProgress?: (progress: WorkflowBatchProgress) => void,
-	batchSize: number = 10
+	batchSize: number = 10,
 ): Promise<{ succeeded: number; failed: number; errors: string[] }> {
 	const result = { succeeded: 0, failed: 0, errors: [] as string[] };
 	const total = recordIds.length;
@@ -2361,7 +2324,7 @@ export async function executeWorkflowBatch(
 
 	debugLog(
 		"workflowAPI",
-		`📡 Executing workflow ${workflowId} on ${recordIds.length} records in ${batches.length} batches`
+		`📡 Executing workflow ${workflowId} on ${recordIds.length} records in ${batches.length} batches`,
 	);
 
 	// Track timing for ETA calculation
@@ -2375,7 +2338,7 @@ export async function executeWorkflowBatch(
 
 		debugLog(
 			"workflowAPI",
-			`📡 Executing batch ${batchIndex + 1}/${batches.length} with ${batchRecordIds.length} records`
+			`📡 Executing batch ${batchIndex + 1}/${batches.length} with ${batchRecordIds.length} records`,
 		);
 
 		// Execute workflows in parallel within the batch
@@ -2430,7 +2393,7 @@ export async function executeWorkflowBatch(
 
 	debugLog(
 		"workflowAPI",
-		`✅ Workflow execution complete: ${result.succeeded} succeeded, ${result.failed} failed`
+		`✅ Workflow execution complete: ${result.succeeded} succeeded, ${result.failed} failed`,
 	);
 	return result;
 }
@@ -2488,7 +2451,7 @@ export async function deleteRecordsBatch(
 	entitySetName: string,
 	recordIds: string[],
 	onProgress?: (progress: BatchDeleteProgress) => void,
-	batchSize: number = 10
+	batchSize: number = 10,
 ): Promise<BatchDeleteResult> {
 	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
 	const total = recordIds.length;
@@ -2563,7 +2526,7 @@ export async function deleteRecordsBatch(
 
 	debugLog(
 		"recordAPI",
-		`✅ Delete complete: ${result.succeeded} succeeded, ${result.failed} failed`
+		`✅ Delete complete: ${result.succeeded} succeeded, ${result.failed} failed`,
 	);
 	return result;
 }
@@ -2578,7 +2541,7 @@ export async function deleteRecordsBatch(
  */
 export async function submitBulkDeleteFromFetchXml(
 	fetchXml: string,
-	jobName: string
+	jobName: string,
 ): Promise<{ asyncOperationId: string; bulkDeleteOperationId: string; jobUrl: string }> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2620,7 +2583,7 @@ export async function submitBulkDeleteFromFetchXml(
 
 		debugLog(
 			"recordAPI",
-			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`
+			`✅ Bulk delete job submitted: asyncOpId=${asyncOpId}, bulkDeleteOpId=${bulkDeleteOpId}`,
 		);
 
 		return {

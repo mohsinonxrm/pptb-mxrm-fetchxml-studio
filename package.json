@@ -1,11 +1,12 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.0.6",
+	"version": "1.1.0",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
 	"author": "Mohsin On xRM",
 	"main": "index.html",
+	"icon": "icons/icon.svg",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio.git"
@@ -34,15 +35,32 @@
 	],
 	"cspExceptions": {
 		"connect-src": [
-			"https://*.dynamics.com",
-			"https://*.crm*.dynamics.com"
+			{
+				"domain": "https://*.dynamics.com",
+				"exceptionReason": "Required to **fetch metadata and records** from Dataverse."
+			},
+			{
+				"domain": "https://*.crm*.dynamics.com",
+				"exceptionReason": "Required to connect to region-specific Dataverse environments."
+			}
 		],
 		"script-src": [
-			"https://cdn.jsdelivr.net"
+			{
+				"domain": "https://cdn.jsdelivr.net",
+				"exceptionReason": "Loads the Monaco XML editor used for FetchXML authoring."
+			}
 		],
 		"style-src": [
-			"https://cdn.jsdelivr.net"
+			{
+				"domain": "https://cdn.jsdelivr.net",
+				"exceptionReason": "Loads Monaco editor bundled styles.",
+				"optional": true
+			}
 		]
+	},
+	"features": {
+		"multiConnection": "none",
+		"minAPI": "1.2.0"
 	},
 	"bugs": {
 		"url": "https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/issues"
@@ -50,7 +68,6 @@
 	"configurations": {
 		"repository": "https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio",
 		"website": "https://fetchxml.studio",
-		"iconUrl": "",
 		"readmeUrl": "https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/README.md"
 	},
 	"files": [
@@ -60,6 +77,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
+		"validate": "pptb-validate",
 		"lint": "eslint .",
 		"preview": "vite preview",
 		"finalize-package": "npm run build && npm shrinkwrap"
@@ -79,7 +97,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.36.0",
-		"@pptb/types": "^1.0.7",
+		"@pptb/types": "^1.2.0",
 		"@types/node": "^24.10.4",
 		"@types/react": "^18.3.27",
 		"@types/react-dom": "^18.3.7",
