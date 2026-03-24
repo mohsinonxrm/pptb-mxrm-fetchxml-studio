@@ -25,6 +25,7 @@ import {
 } from "@fluentui/react-components";
 import { Add20Regular, LockClosed20Regular } from "@fluentui/react-icons";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
+import type { EntityScopeMode } from "../../model/displaySettings";
 import { usePublisherFilter } from "../../../../shared/hooks/usePublisherFilter";
 import { useSolutionFilter } from "../../../../shared/hooks/useSolutionFilter";
 import { useLazyMetadata } from "../../../../shared/hooks/useLazyMetadata";
@@ -104,6 +105,10 @@ interface EntitySelectorProps {
 	onNewQuery: () => void;
 	/** Callback when a saved view should be loaded - provides full view info for execution optimization */
 	onViewLoad?: (viewInfo: LoadedViewInfo) => void;
+	/** User-preferred entity scope mode (may be clamped to privilege ceiling) */
+	entityScopeMode: EntityScopeMode;
+	/** Limit entities and attributes to Advanced Find–eligible ones */
+	advancedFindOnly: boolean;
 }
 
 export function EntitySelector({
@@ -111,6 +116,8 @@ export function EntitySelector({
 	onEntityChange,
 	onNewQuery,
 	onViewLoad,
+	entityScopeMode,
+	advancedFindOnly,
 }: EntitySelectorProps) {
 	const styles = useStyles();
 	const publisherComboId = useId("publisher-combobox");
@@ -119,13 +126,18 @@ export function EntitySelector({
 
 	// Access mode detection
 	const {
+		accessSummary,
 		loading: accessLoading,
-		fullFilterMode,
-		solutionsOnlyMode,
-		publishersOnlyMode,
-		metadataOnlyMode,
 		noAccessMode,
 	} = useAccessMode();
+
+	// Effective scope mode: user preference clamped to privilege ceiling
+	const effectiveScopeMode = useMemo((): EntityScopeMode => {
+		if (accessLoading || noAccessMode || !accessSummary) return "all";
+		if (entityScopeMode === "publisher-solution" && accessSummary.fullFilterMode) return "publisher-solution";
+		if (entityScopeMode !== "all" && (accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode)) return "solution-only";
+		return "all";
+	}, [entityScopeMode, accessSummary, accessLoading, noAccessMode]);
 
 	// Full filter mode (Publisher → Solution → Entity)
 	const publisherFilter = usePublisherFilter();
@@ -138,31 +150,31 @@ export function EntitySelector({
 	const [allEntities, setAllEntities] = useState<EntityMetadata[]>([]);
 	const [allEntitiesLoading, setAllEntitiesLoading] = useState(false);
 
-	// Load all entities for metadata-only or publishers-only mode
+	// Load all entities when scope mode is "all"
 	useEffect(() => {
-		if (!metadataOnlyMode && !publishersOnlyMode) return;
+		if (effectiveScopeMode !== "all") return;
 
 		setAllEntitiesLoading(true);
-		loadEntities(true)
+		loadEntities(advancedFindOnly)
 			.then((entities) => setAllEntities(entities))
 			.catch((err) => console.error("Failed to load entities:", err))
 			.finally(() => setAllEntitiesLoading(false));
-	}, [metadataOnlyMode, publishersOnlyMode, loadEntities]);
+	}, [effectiveScopeMode, advancedFindOnly, loadEntities]);
 
-	// Determine available entities based on mode
+	// Determine available entities based on effective scope mode
 	const availableEntities = useMemo(() => {
 		let entities: EntityMetadata[] = [];
-		if (fullFilterMode) {
+		if (effectiveScopeMode === "publisher-solution") {
 			entities = publisherFilter.entities;
-		} else if (solutionsOnlyMode) {
+		} else if (effectiveScopeMode === "solution-only") {
 			entities = solutionFilter.entities;
-		} else if (metadataOnlyMode || publishersOnlyMode) {
+		} else {
 			entities = allEntities;
 		}
 
 		console.log("[EntitySelector] Available Entities Updated:", {
-			mode: fullFilterMode ? "Full Filter" : solutionsOnlyMode ? "Solutions Only" : "Other",
-			selectedSolutionIds: fullFilterMode
+			mode: effectiveScopeMode,
+			selectedSolutionIds: effectiveScopeMode === "publisher-solution"
 				? publisherFilter.selectedSolutionIds
 				: solutionFilter.selectedSolutionIds,
 			entityCount: entities.length,
@@ -171,10 +183,7 @@ export function EntitySelector({
 
 		return entities;
 	}, [
-		fullFilterMode,
-		solutionsOnlyMode,
-		metadataOnlyMode,
-		publishersOnlyMode,
+		effectiveScopeMode,
 		publisherFilter.entities,
 		solutionFilter.entities,
 		allEntities,
@@ -297,9 +306,9 @@ export function EntitySelector({
 	const [solutionQuery, setSolutionQuery] = useState("");
 
 	// Get current solutions based on mode
-	const currentSolutions = fullFilterMode ? publisherFilter.solutions : solutionFilter.solutions;
+	const currentSolutions = effectiveScopeMode === "publisher-solution" ? publisherFilter.solutions : solutionFilter.solutions;
 
-	const currentSelectedSolutionIds = fullFilterMode
+	const currentSelectedSolutionIds = effectiveScopeMode === "publisher-solution"
 		? publisherFilter.selectedSolutionIds
 		: solutionFilter.selectedSolutionIds;
 
@@ -343,9 +352,9 @@ export function EntitySelector({
 		}
 
 		// No validation needed, proceed with update
-		if (fullFilterMode) {
+		if (effectiveScopeMode === "publisher-solution") {
 			publisherFilter.updateSelectedSolutions(newSolutionIds);
-		} else if (solutionsOnlyMode) {
+		} else if (effectiveScopeMode === "solution-only") {
 			solutionFilter.updateSelectedSolutions(newSolutionIds);
 		}
 		setSolutionQuery("");
@@ -360,9 +369,9 @@ export function EntitySelector({
 
 	const handleConfirmSolutionChange = () => {
 		// User confirmed - proceed with solution change, entity will auto-clear via useEffect
-		if (fullFilterMode) {
+		if (effectiveScopeMode === "publisher-solution") {
 			publisherFilter.updateSelectedSolutions(pendingSolutionIds);
-		} else if (solutionsOnlyMode) {
+		} else if (effectiveScopeMode === "solution-only") {
 			solutionFilter.updateSelectedSolutions(pendingSolutionIds);
 		}
 		setShowConfirmDialog(false);
@@ -491,22 +500,22 @@ export function EntitySelector({
 	}
 
 	// Entity loading state
-	const entityLoading = fullFilterMode
+	const entityLoading = effectiveScopeMode === "publisher-solution"
 		? publisherFilter.entitiesLoading
-		: solutionsOnlyMode
+		: effectiveScopeMode === "solution-only"
 		? solutionFilter.entitiesLoading
 		: allEntitiesLoading;
 
-	const entityError = fullFilterMode
+	const entityError = effectiveScopeMode === "publisher-solution"
 		? publisherFilter.entitiesError
-		: solutionsOnlyMode
+		: effectiveScopeMode === "solution-only"
 		? solutionFilter.entitiesError
 		: null;
 
 	return (
 		<div className={styles.container}>
 			{/* Full Filter Mode: Publisher + Solution filters */}
-			{fullFilterMode && (
+		{effectiveScopeMode === "publisher-solution" && (
 				<div className={styles.filtersRow}>
 					{/* Publishers */}
 					<div className={styles.field}>
@@ -600,8 +609,8 @@ export function EntitySelector({
 				</div>
 			)}
 
-			{/* Solutions-Only Mode: Solution filter with disabled Publisher */}
-			{solutionsOnlyMode && (
+		{/* Solution-Only Mode: Solution filter (no publisher picker) */}
+		{effectiveScopeMode === "solution-only" && (
 				<div className={styles.filtersRow}>
 					{/* Publisher - disabled with tooltip */}
 					<div className={styles.field}>
@@ -687,29 +696,7 @@ export function EntitySelector({
 				</div>
 			)}
 
-			{/* Publishers-only mode: Disabled Publisher with tooltip + direct entity loading */}
-			{publishersOnlyMode && (
-				<div className={styles.filtersRow}>
-					{/* Publisher - disabled with tooltip */}
-					<div className={styles.field}>
-						<Tooltip
-							content="Solution filtering requires prvReadSolution privilege"
-							relationship="description"
-						>
-							<label id={publisherComboId} className={`${styles.label} ${styles.disabledLabel}`}>
-								Publishers <LockClosed20Regular fontSize={14} />
-							</label>
-						</Tooltip>
-						<Combobox
-							aria-labelledby={publisherComboId}
-							placeholder="No access to solutions"
-							disabled
-						>
-							<Option>Requires prvReadSolution privilege</Option>
-						</Combobox>
-					</div>
-				</div>
-			)}
+
 
 			{/* Entity selector (all modes) */}
 			<div className={styles.entityRow}>
@@ -730,10 +717,8 @@ export function EntitySelector({
 							<Option>Loading...</Option>
 						) : availableEntities.length === 0 ? (
 							<Option>
-								{fullFilterMode || solutionsOnlyMode
-									? "Select solutions to see entities"
-									: publishersOnlyMode
-									? "Loading all entities..."
+							{effectiveScopeMode !== "all"
+								? "Select solutions to see entities"
 									: "No entities available"}
 							</Option>
 						) : (
