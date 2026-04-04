@@ -60,10 +60,8 @@ import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
-import {
-	defaultDisplaySettings,
-	type DisplaySettings,
-} from "../features/fetchxml/model/displaySettings";
+import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
+import { useAccessMode } from "../shared/hooks/useAccessMode";
 
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
 // but tokens will automatically update when FluentProvider theme changes
@@ -319,7 +317,10 @@ function AppContent() {
 
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
-	const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
+	const [displaySettings, setDisplaySettings] = usePersistedSettings();
+
+	// Access summary for constraining SettingsDrawer scope options
+	const { accessSummary } = useAccessMode();
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -1404,6 +1405,8 @@ function AppContent() {
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
+						entityScopeMode={displaySettings.entityScopeMode}
+						advancedFindOnly={displaySettings.advancedFindOnly}
 						onViewLoad={(viewInfo: LoadedViewInfo) => {
 							// Load the view's FetchXML into the tree while preserving view info
 							// Pass layoutxml for column configuration if available
@@ -1726,6 +1729,7 @@ function AppContent() {
 			<SettingsDrawer
 				open={settingsDrawerOpen}
 				settings={displaySettings}
+				accessSummary={accessSummary}
 				onClose={() => setSettingsDrawerOpen(false)}
 				onSettingsChange={setDisplaySettings}
 			/>

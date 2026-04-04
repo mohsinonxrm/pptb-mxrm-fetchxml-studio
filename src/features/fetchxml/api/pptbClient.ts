@@ -660,7 +660,17 @@ export async function checkPrivilegeByName(
 
 		return hasPrivilege;
 	} catch (error) {
-		console.error(`checkPrivilegeByName(${privilegeName}) failed:`, error);
+		// 0x80040203 = privilege name does not exist in this environment — expected for
+		// some entity-specific privileges (e.g. prvDeleteGitorganization). Warn, not error.
+		const message = error instanceof Error ? error.message : String(error);
+		const isMissingPrivilege = message.includes("0x80040203") || message.includes("does not exist");
+		if (isMissingPrivilege) {
+			console.warn(
+				`checkPrivilegeByName(${privilegeName}): privilege not found in environment, treating as denied.`,
+			);
+		} else {
+			console.error(`checkPrivilegeByName(${privilegeName}) failed:`, error);
+		}
 		return false;
 	}
 }
@@ -833,7 +843,10 @@ export async function getAllSolutionsWithEntities(): Promise<Solution[]> {
 			"$select=solutionid,friendlyname,uniquename,version,_publisherid_value,isvisible,ismanaged";
 		const HAS_ENTITIES = "solution_solutioncomponent/any(c: c/componenttype eq 1)";
 		const IS_VISIBLE = "isvisible eq true";
-		const query = `solutions?${SELECT}&$filter=${IS_VISIBLE} and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
+		// Exclude solutions from readonly publishers (same logic as getPublishersWithSolutions)
+		// to avoid showing Microsoft's internal/system solutions in the list.
+		const NON_INTERNAL_PUBLISHER = "publisherid/isreadonly eq false";
+		const query = `solutions?${SELECT}&$filter=${IS_VISIBLE} and ${HAS_ENTITIES} and ${NON_INTERNAL_PUBLISHER}&$orderby=friendlyname asc`;
 
 		debugLog("solutionAPI", `📡 GET All Solutions with entities (visible only)`);
 		const result = await window.dataverseAPI!.queryData(query);

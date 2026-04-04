@@ -29,15 +29,18 @@ export function useAccessMode() {
 				if (mounted) {
 					setAccessSummary(summary);
 
-					// Preload all entity metadata if user has customization access
+					// Preload the AF-valid entity metadata cache so publisher-solution and
+					// solution-only modes have instant access via filterCachedEntitiesByNames.
+					// The "All Entities" cache is loaded lazily by EntitySelector when that
+					// scope mode is actually selected — no need to fetch it unconditionally.
 					if (summary && !summary.noAccessMode) {
-						console.log("[useAccessMode] Preloading all entity metadata...");
+						console.log("[useAccessMode] Preloading AF-valid entity metadata...");
 						getAllAdvancedFindEntities()
 							.then((entities) => {
 								console.log(
-									"[useAccessMode] Entity metadata preloaded:",
+									"[useAccessMode] AF-valid entity metadata preloaded:",
 									entities.length,
-									"entities"
+									"entities",
 								);
 							})
 							.catch((err) => {
