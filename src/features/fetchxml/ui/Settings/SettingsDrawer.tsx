@@ -22,7 +22,11 @@ import {
 	Tooltip,
 } from "@fluentui/react-components";
 import { Dismiss24Regular, Settings20Regular, Info16Regular } from "@fluentui/react-icons";
-import type { DisplaySettings, ValueDisplayMode, EntityScopeMode } from "../../model/displaySettings";
+import type {
+	DisplaySettings,
+	ValueDisplayMode,
+	EntityScopeMode,
+} from "../../model/displaySettings";
 import type { AccessSummary } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
@@ -94,40 +98,45 @@ export interface SettingsDrawerProps {
 	accessSummary?: AccessSummary | null;
 }
 
-export function SettingsDrawer({ open, settings, onClose, onSettingsChange, accessSummary }: SettingsDrawerProps) {
+export function SettingsDrawer({
+	open,
+	settings,
+	onClose,
+	onSettingsChange,
+	accessSummary,
+}: SettingsDrawerProps) {
 	const styles = useStyles();
 
 	const handleLogicalNamesChange = useCallback(
 		(checked: boolean) => {
 			onSettingsChange({ ...settings, useLogicalNames: checked });
 		},
-		[settings, onSettingsChange]
+		[settings, onSettingsChange],
 	);
 
 	const handleValueDisplayModeChange = useCallback(
 		(mode: ValueDisplayMode) => {
 			onSettingsChange({ ...settings, valueDisplayMode: mode });
 		},
-		[settings, onSettingsChange]
+		[settings, onSettingsChange],
 	);
 
 	const handleEntityScopeModeChange = useCallback(
 		(mode: EntityScopeMode) => {
 			onSettingsChange({ ...settings, entityScopeMode: mode });
 		},
-		[settings, onSettingsChange]
+		[settings, onSettingsChange],
 	);
 
 	const handleAdvancedFindOnlyChange = useCallback(
 		(checked: boolean) => {
 			onSettingsChange({ ...settings, advancedFindOnly: checked });
 		},
-		[settings, onSettingsChange]
+		[settings, onSettingsChange],
 	);
 
 	// Determine which scope options are available given the user's privilege ceiling
-	const canUsePublisherSolution =
-		!accessSummary || accessSummary.fullFilterMode;
+	const canUsePublisherSolution = !accessSummary || accessSummary.fullFilterMode;
 	const canUseSolutionOnly =
 		!accessSummary || accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode;
 
@@ -155,7 +164,6 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange, acce
 				</DrawerHeaderTitle>
 			</DrawerHeader>
 			<DrawerBody>
-
 				{/* ── Query Scope Section ──────────────────────────────── */}
 				<div className={styles.section}>
 					<Text className={styles.sectionTitle}>Query Scope</Text>
@@ -180,7 +188,9 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange, acce
 							onChange={(_e, data) => handleEntityScopeModeChange(data.value as EntityScopeMode)}
 						>
 							<Tooltip
-								content={!canUsePublisherSolution ? "Requires prvReadPublisher + prvReadSolution" : ""}
+								content={
+									!canUsePublisherSolution ? "Requires prvReadPublisher + prvReadSolution" : ""
+								}
 								relationship="description"
 								positioning="before"
 							>
@@ -195,11 +205,7 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange, acce
 								relationship="description"
 								positioning="before"
 							>
-								<Radio
-									value="solution-only"
-									label="Solution only"
-									disabled={!canUseSolutionOnly}
-								/>
+								<Radio value="solution-only" label="Solution only" disabled={!canUseSolutionOnly} />
 							</Tooltip>
 							<Radio value="all" label="All Entities" />
 						</RadioGroup>
@@ -271,8 +277,8 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange, acce
 								settings.valueDisplayMode === "formatted"
 									? "Formatted"
 									: settings.valueDisplayMode === "raw"
-									? "Raw"
-									: "Both"
+										? "Raw"
+										: "Both"
 							}
 							selectedOptions={[settings.valueDisplayMode]}
 							onOptionSelect={(_e, data) =>
@@ -285,7 +291,6 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange, acce
 						</Dropdown>
 					</div>
 				</div>
-
 			</DrawerBody>
 		</OverlayDrawer>
 	);

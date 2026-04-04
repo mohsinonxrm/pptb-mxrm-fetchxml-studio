@@ -125,17 +125,18 @@ export function EntitySelector({
 	const entityComboId = useId("entity-combobox");
 
 	// Access mode detection
-	const {
-		accessSummary,
-		loading: accessLoading,
-		noAccessMode,
-	} = useAccessMode();
+	const { accessSummary, loading: accessLoading, noAccessMode } = useAccessMode();
 
 	// Effective scope mode: user preference clamped to privilege ceiling
 	const effectiveScopeMode = useMemo((): EntityScopeMode => {
 		if (accessLoading || noAccessMode || !accessSummary) return "all";
-		if (entityScopeMode === "publisher-solution" && accessSummary.fullFilterMode) return "publisher-solution";
-		if (entityScopeMode !== "all" && (accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode)) return "solution-only";
+		if (entityScopeMode === "publisher-solution" && accessSummary.fullFilterMode)
+			return "publisher-solution";
+		if (
+			entityScopeMode !== "all" &&
+			(accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode)
+		)
+			return "solution-only";
 		return "all";
 	}, [entityScopeMode, accessSummary, accessLoading, noAccessMode]);
 
@@ -150,18 +151,19 @@ export function EntitySelector({
 	const [allEntities, setAllEntities] = useState<EntityMetadata[]>([]);
 	const [allEntitiesLoading, setAllEntitiesLoading] = useState(false);
 
-	// Load all entities when scope mode is "all"
+	// Load all entities when scope mode is "all" (always fetches everything; AF filter is local)
 	useEffect(() => {
 		if (effectiveScopeMode !== "all") return;
 
 		setAllEntitiesLoading(true);
-		loadEntities(advancedFindOnly)
+		loadEntities()
 			.then((entities) => setAllEntities(entities))
 			.catch((err) => console.error("Failed to load entities:", err))
 			.finally(() => setAllEntitiesLoading(false));
-	}, [effectiveScopeMode, advancedFindOnly, loadEntities]);
+	}, [effectiveScopeMode, loadEntities]);
 
-	// Determine available entities based on effective scope mode
+	// Determine available entities based on effective scope mode.
+	// advancedFindOnly is applied as a local filter so toggling it is instant.
 	const availableEntities = useMemo(() => {
 		let entities: EntityMetadata[] = [];
 		if (effectiveScopeMode === "publisher-solution") {
@@ -172,23 +174,18 @@ export function EntitySelector({
 			entities = allEntities;
 		}
 
-		console.log("[EntitySelector] Available Entities Updated:", {
-			mode: effectiveScopeMode,
-			selectedSolutionIds: effectiveScopeMode === "publisher-solution"
-				? publisherFilter.selectedSolutionIds
-				: solutionFilter.selectedSolutionIds,
-			entityCount: entities.length,
-			entityNames: entities.map((e) => e.LogicalName).slice(0, 10),
-		});
+		// Apply Advanced Find filter locally — no re-fetch needed when toggled
+		if (advancedFindOnly) {
+			entities = entities.filter((e) => e.IsValidForAdvancedFind !== false);
+		}
 
 		return entities;
 	}, [
 		effectiveScopeMode,
+		advancedFindOnly,
 		publisherFilter.entities,
 		solutionFilter.entities,
 		allEntities,
-		publisherFilter.selectedSolutionIds,
-		solutionFilter.selectedSolutionIds,
 	]);
 
 	// Get full entity metadata for the selected entity (needed for LoadViewPicker)
@@ -204,7 +201,7 @@ export function EntitySelector({
 				onViewLoad(viewInfo);
 			}
 		},
-		[onViewLoad]
+		[onViewLoad],
 	);
 
 	// Handle view clear from LoadViewPicker - resets tree to default entity state
@@ -230,7 +227,7 @@ export function EntitySelector({
 		if (!publisherQuery) return publisherOptions;
 		const lowerQuery = publisherQuery.toLowerCase();
 		return publisherOptions.filter(
-			(opt) => typeof opt.children === "string" && opt.children.toLowerCase().includes(lowerQuery)
+			(opt) => typeof opt.children === "string" && opt.children.toLowerCase().includes(lowerQuery),
 		);
 	}, [publisherQuery, publisherOptions]);
 
@@ -260,19 +257,19 @@ export function EntitySelector({
 			if (isDeselecting) {
 				// Find which publishers are being removed
 				const removedPublisherIds = publisherFilter.selectedPublisherIds.filter(
-					(id) => !newPublisherIds.includes(id)
+					(id) => !newPublisherIds.includes(id),
 				);
 
 				// Find solutions under removed publishers
 				const removedPublisherSolutionIds = publisherFilter.solutions
 					.filter(
-						(sol) => sol._publisherid_value && removedPublisherIds.includes(sol._publisherid_value)
+						(sol) => sol._publisherid_value && removedPublisherIds.includes(sol._publisherid_value),
 					)
 					.map((sol) => sol.solutionid);
 
 				// Check if any of the currently selected solutions are from removed publishers
 				const wouldLoseSolutions = publisherFilter.selectedSolutionIds.some((solId) =>
-					removedPublisherSolutionIds.includes(solId)
+					removedPublisherSolutionIds.includes(solId),
 				);
 
 				// If we'd lose solutions that might contain the entity, show confirmation
@@ -306,11 +303,15 @@ export function EntitySelector({
 	const [solutionQuery, setSolutionQuery] = useState("");
 
 	// Get current solutions based on mode
-	const currentSolutions = effectiveScopeMode === "publisher-solution" ? publisherFilter.solutions : solutionFilter.solutions;
+	const currentSolutions =
+		effectiveScopeMode === "publisher-solution"
+			? publisherFilter.solutions
+			: solutionFilter.solutions;
 
-	const currentSelectedSolutionIds = effectiveScopeMode === "publisher-solution"
-		? publisherFilter.selectedSolutionIds
-		: solutionFilter.selectedSolutionIds;
+	const currentSelectedSolutionIds =
+		effectiveScopeMode === "publisher-solution"
+			? publisherFilter.selectedSolutionIds
+			: solutionFilter.selectedSolutionIds;
 
 	// Group solutions by managed status
 	const { unmanagedSolutions, managedSolutions } = useMemo(() => {
@@ -330,12 +331,12 @@ export function EntitySelector({
 			if (isDeselecting) {
 				// Find which solutions are being removed
 				const removedSolutionIds = currentSelectedSolutionIds.filter(
-					(id) => !newSolutionIds.includes(id)
+					(id) => !newSolutionIds.includes(id),
 				);
 
 				// Check if current entity exists in the remaining solutions
 				const remainingEntityExists = availableEntities.some(
-					(entity) => entity.LogicalName === selectedEntity
+					(entity) => entity.LogicalName === selectedEntity,
 				);
 
 				// Only show confirmation if entity would be removed
@@ -396,29 +397,39 @@ export function EntitySelector({
 		return `${selectedNames.length} selected`;
 	}, [currentSelectedSolutionIds, currentSolutions]);
 
-	// Validate entity when available entities change (solution selection changes)
+	// Validate entity when available entities change due to the user actively changing
+	// their solution filter. Only clears when an active solution filter is in place —
+	// prevents resetting entities typed manually in the XML editor.
 	useEffect(() => {
-		// Only validate if we have a selected entity
 		if (!selectedEntity) return;
 
-		// If available entities is empty, clear entity and tree
-		if (availableEntities.length === 0) {
-			onEntityChange(""); // Clear entity selection
-			onNewQuery(); // Reset fetch tree
-			return;
-		}
+		// Only auto-clear if the user has explicitly filtered to specific solutions.
+		// Without an active filter the entity may have been set via the XML editor;
+		// clearing it would be surprising and unwanted.
+		const hasActiveSolutionFilter =
+			(effectiveScopeMode === "publisher-solution" &&
+				publisherFilter.selectedSolutionIds.length > 0) ||
+			(effectiveScopeMode === "solution-only" && solutionFilter.selectedSolutionIds.length > 0);
 
-		// Check if selected entity is still available
+		if (!hasActiveSolutionFilter) return;
+
 		const isEntityStillAvailable = availableEntities.some(
-			(entity) => entity.LogicalName === selectedEntity
+			(entity) => entity.LogicalName === selectedEntity,
 		);
 
-		// If entity is no longer available, reset it and the fetch tree
 		if (!isEntityStillAvailable) {
-			onEntityChange(""); // Clear entity selection
-			onNewQuery(); // Reset fetch tree
+			onEntityChange("");
+			onNewQuery();
 		}
-	}, [availableEntities, selectedEntity, onEntityChange, onNewQuery]);
+	}, [
+		availableEntities,
+		selectedEntity,
+		onEntityChange,
+		onNewQuery,
+		effectiveScopeMode,
+		publisherFilter.selectedSolutionIds,
+		solutionFilter.selectedSolutionIds,
+	]);
 
 	// Entity search query with filteringhanges that would invalidate entity
 	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -444,7 +455,7 @@ export function EntitySelector({
 	useEffect(() => {
 		if (selectedEntity) {
 			const selectedEntityMetadata = availableEntities.find(
-				(e) => e.LogicalName === selectedEntity
+				(e) => e.LogicalName === selectedEntity,
 			);
 			if (selectedEntityMetadata) {
 				const displayName =
@@ -500,22 +511,24 @@ export function EntitySelector({
 	}
 
 	// Entity loading state
-	const entityLoading = effectiveScopeMode === "publisher-solution"
-		? publisherFilter.entitiesLoading
-		: effectiveScopeMode === "solution-only"
-		? solutionFilter.entitiesLoading
-		: allEntitiesLoading;
+	const entityLoading =
+		effectiveScopeMode === "publisher-solution"
+			? publisherFilter.entitiesLoading
+			: effectiveScopeMode === "solution-only"
+				? solutionFilter.entitiesLoading
+				: allEntitiesLoading;
 
-	const entityError = effectiveScopeMode === "publisher-solution"
-		? publisherFilter.entitiesError
-		: effectiveScopeMode === "solution-only"
-		? solutionFilter.entitiesError
-		: null;
+	const entityError =
+		effectiveScopeMode === "publisher-solution"
+			? publisherFilter.entitiesError
+			: effectiveScopeMode === "solution-only"
+				? solutionFilter.entitiesError
+				: null;
 
 	return (
 		<div className={styles.container}>
 			{/* Full Filter Mode: Publisher + Solution filters */}
-		{effectiveScopeMode === "publisher-solution" && (
+			{effectiveScopeMode === "publisher-solution" && (
 				<div className={styles.filtersRow}>
 					{/* Publishers */}
 					<div className={styles.field}>
@@ -572,7 +585,7 @@ export function EntitySelector({
 										<OptionGroup label="Unmanaged">
 											{unmanagedSolutions
 												.filter((sol) =>
-													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase())
+													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase()),
 												)
 												.map((sol) => (
 													<Option
@@ -589,7 +602,7 @@ export function EntitySelector({
 										<OptionGroup label="Managed">
 											{managedSolutions
 												.filter((sol) =>
-													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase())
+													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase()),
 												)
 												.map((sol) => (
 													<Option
@@ -609,8 +622,8 @@ export function EntitySelector({
 				</div>
 			)}
 
-		{/* Solution-Only Mode: Solution filter (no publisher picker) */}
-		{effectiveScopeMode === "solution-only" && (
+			{/* Solution-Only Mode: Solution filter (no publisher picker) */}
+			{effectiveScopeMode === "solution-only" && (
 				<div className={styles.filtersRow}>
 					{/* Publisher - disabled with tooltip */}
 					<div className={styles.field}>
@@ -656,7 +669,7 @@ export function EntitySelector({
 										<OptionGroup label="Unmanaged">
 											{unmanagedSolutions
 												.filter((sol) =>
-													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase())
+													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase()),
 												)
 												.map((sol) => (
 													<Option
@@ -673,7 +686,7 @@ export function EntitySelector({
 										<OptionGroup label="Managed">
 											{managedSolutions
 												.filter((sol) =>
-													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase())
+													sol.friendlyname.toLowerCase().includes(solutionQuery.toLowerCase()),
 												)
 												.map((sol) => (
 													<Option
@@ -696,8 +709,6 @@ export function EntitySelector({
 				</div>
 			)}
 
-
-
 			{/* Entity selector (all modes) */}
 			<div className={styles.entityRow}>
 				<div className={styles.field}>
@@ -717,8 +728,8 @@ export function EntitySelector({
 							<Option>Loading...</Option>
 						) : availableEntities.length === 0 ? (
 							<Option>
-							{effectiveScopeMode !== "all"
-								? "Select solutions to see entities"
+								{effectiveScopeMode !== "all"
+									? "Select solutions to see entities"
 									: "No entities available"}
 							</Option>
 						) : (

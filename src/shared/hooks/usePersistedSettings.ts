@@ -13,7 +13,11 @@ import {
 	type DisplaySettings,
 } from "../../features/fetchxml/model/displaySettings";
 
-const SETTINGS_KEY = "displaySettings";
+/**
+ * Namespaced key to avoid collisions with other PPTB-hosted tools that may
+ * also write to toolboxAPI.settings. Format: "<tool-id>:<setting-name>".
+ */
+const SETTINGS_KEY = "fetchxml-studio:displaySettings";
 
 /**
  * Merge persisted value with defaults so any newly added fields always get
