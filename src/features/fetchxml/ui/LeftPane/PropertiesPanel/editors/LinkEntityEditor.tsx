@@ -27,6 +27,7 @@ import {
 import { Info16Regular } from "@fluentui/react-icons";
 import { debugLog } from "../../../../../../shared/utils/debug";
 import type { LinkEntityNode, LinkType } from "../../../../model/nodes";
+import { sanitizeAlias } from "../../../../model/aliasUtils";
 import { RelationshipPicker } from "../../../../../../shared/components/RelationshipPicker";
 
 const useStyles = makeStyles({
@@ -116,7 +117,12 @@ export function LinkEntityEditor({ node, parentEntityName, onUpdate }: LinkEntit
 	}, [node.id, node.name, node.from, node.to, parentEntityName, shouldShowPicker]);
 
 	const handleTextChange = (field: string) => (_: unknown, data: { value: string }) => {
-		onUpdate({ [field]: data.value || undefined });
+		let value = data.value;
+		// Aliases must use only [A-Za-z0-9_] with a letter or underscore as first char
+		if (field === "alias") {
+			value = sanitizeAlias(value);
+		}
+		onUpdate({ [field]: value || undefined });
 	};
 
 	// Special handler for link-type changes that may require confirmation
@@ -360,7 +366,7 @@ export function LinkEntityEditor({ node, parentEntityName, onUpdate }: LinkEntit
 							placeholder="e.g., parent_account, created_by_user"
 						/>
 						<Tooltip
-							content="Alias for referencing this link in conditions, order-by, or nested links."
+							content="Alias for referencing this link in conditions, order-by, or nested links. May only contain letters, digits, and underscores, and must start with a letter or underscore."
 							relationship="description"
 						>
 							<Info16Regular className={styles.tooltipIcon} />

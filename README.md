@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.1-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
@@ -26,9 +26,10 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Formatted values** — Display OData formatted values or raw values (configurable)
 
 ### 📝 FetchXML Editor
-- **Monaco editor** — Full-featured XML editor with syntax highlighting and line numbers
+- **Monaco editor** — Full-featured XML editor with XML syntax highlighting and line numbers
 - **Bi-directional editing** — Edit XML directly and parse back to the visual builder
-- **Copy to clipboard** — One-click copy of generated FetchXML
+- **Copy to clipboard** — One-click copy of generated FetchXML, available in both read-only and editor modes
+- **Alias validation** — Invalid alias characters are sanitized in real time in the property editors; the parser auto-corrects aliases on Parse to Tree with a clear description of each correction
 - **LayoutXML preview** — See the column layout configuration
 
 ### 📥 Load & Save Views

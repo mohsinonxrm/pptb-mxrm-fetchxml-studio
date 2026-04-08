@@ -17,25 +17,48 @@ const useStyles = makeStyles({
 		display: "flex",
 		flexDirection: "column",
 		gap: "2px",
+		minWidth: 0, // required for flex child to clip overflow
 	},
 	lookupName: {
+		display: "block",
 		fontSize: tokens.fontSizeBase200,
 		fontWeight: tokens.fontWeightSemibold,
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
 	},
 	lookupType: {
+		display: "block",
 		fontSize: tokens.fontSizeBase100,
 		color: tokens.colorNeutralForeground3,
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
 	},
 	numberCell: {
+		display: "block",
 		textAlign: "right",
 		fontVariantNumeric: "tabular-nums",
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
 	},
 	dateCell: {
+		display: "block",
 		fontVariantNumeric: "tabular-nums",
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
 	},
 	picklistCell: {
 		display: "flex",
 		alignItems: "center",
+	},
+	truncateText: {
+		display: "block",
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
 	},
 });
 
@@ -287,6 +310,7 @@ export function TextCellRenderer({
 	value: unknown;
 	formattedValue?: unknown;
 }) {
+	const styles = useStyles();
 	// Prefer formatted value
 	const displayValue = formattedValue ?? value;
 
@@ -294,7 +318,7 @@ export function TextCellRenderer({
 		return <span>—</span>;
 	}
 
-	return <span>{String(displayValue)}</span>;
+	return <span className={styles.truncateText}>{String(displayValue)}</span>;
 }
 
 /**
@@ -312,7 +336,7 @@ export function getCellRenderer(
 	attributeType: string | undefined,
 	value: unknown,
 	formattedValue: unknown | undefined,
-	attribute?: AttributeMetadata
+	attribute?: AttributeMetadata,
 ) {
 	if (value === null || value === undefined) {
 		return <span>—</span>;

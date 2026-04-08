@@ -2,7 +2,7 @@
  * Tabbed preview panel with FetchXML editor and Results grid
  */
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import {
 	TabList,
 	Tab,
@@ -28,6 +28,7 @@ import type { RelatedEntityColumn } from "./AddColumnsPanel";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import type { FetchNode } from "../../model/nodes";
 import type { ParseResult } from "../../model/fetchxmlParser";
+import { validateFetchXmlSyntax, parseFetchXml } from "../../model/fetchxmlParser";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { WorkflowInfo } from "../../api/pptbClient";
 import type { DisplaySettings } from "../../model/displaySettings";
@@ -123,7 +124,7 @@ interface PreviewTabsProps {
 	isExecuting?: boolean;
 	/** Whether more pages are being loaded (for progress display) */
 	isLoadingMore?: boolean;
-	onExecute?: () => void;
+	onExecute?: (xmlOverride?: string) => void;
 	/** Export via Dataverse ExportToExcel API */
 	onExport?: () => void;
 	/** Export locally using exceljs */
@@ -132,6 +133,10 @@ interface PreviewTabsProps {
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null;
+	/** Error message from a failed query execution (e.g. Dataverse API error) */
+	executeError?: string;
+	/** Callback to dismiss the execute error */
+	onDismissExecuteError?: () => void;
 	/** Column layout configuration for ordering and sizing */
 	columnConfig?: LayoutXmlConfig | null;
 	/** Callback when column width changes */
@@ -235,6 +240,8 @@ export function PreviewTabs({
 	exportError,
 	onDismissExportError,
 	exportDisabledReason,
+	executeError,
+	onDismissExecuteError,
 	entityDisplayName,
 	lookupRelationships,
 	oneToManyRelationships,
@@ -264,14 +271,68 @@ export function PreviewTabs({
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
+	// Track editor mode state via ref (avoids re-renders on each keystroke)
+	// isEditorModeActive in state controls the disabled prop + renders; the ref holds the latest XML.
+	const [isEditorModeActive, setIsEditorModeActive] = useState(false);
+	const editorXmlRef = useRef<string>("");
+	const [editorValidationError, setEditorValidationError] = useState<string | null>(null);
+
+	const handleEditorStateChange = useCallback((isActive: boolean, editorXml: string) => {
+		editorXmlRef.current = editorXml;
+		setIsEditorModeActive((prev) => (prev !== isActive ? isActive : prev));
+		if (!isActive) {
+			setEditorValidationError(null);
+		}
+	}, []);
+
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
 		setSelectedTab(data.value as "xml" | "layout" | "results");
+		// Clear the editor validation error when returning to the XML tab so it
+		// doesn't linger as a banner on top of the editor.
+		if (data.value === "xml") {
+			setEditorValidationError(null);
+		}
 	};
 
 	const handleExecute = () => {
-		// Switch to Results tab when executing
-		setSelectedTab("results");
-		onExecute?.();
+		setEditorValidationError(null);
+
+		if (isEditorModeActive) {
+			const editorXml = editorXmlRef.current;
+
+			// Client-side validation before sending to Dataverse
+			const syntaxResult = validateFetchXmlSyntax(editorXml);
+			if (!syntaxResult.valid) {
+				setEditorValidationError(syntaxResult.error || "Invalid XML syntax");
+				return;
+			}
+
+			const parseResult = parseFetchXml(editorXml);
+			if (!parseResult.success) {
+				setEditorValidationError(parseResult.errors.map((e) => e.message).join(" | "));
+				return;
+			}
+
+			// Warnings (e.g. invalid aliases) will be rejected by Dataverse — block execution
+			if (parseResult.warnings.length > 0) {
+				const warningText = parseResult.warnings
+					.map((w) => {
+						const prefix = w.element ? `<${w.element}>: ` : "";
+						return `${prefix}${w.message}`;
+					})
+					.join(" | ");
+				setEditorValidationError(
+					`Fix before executing — ${warningText} Use 'Parse to Tree' to auto-correct.`,
+				);
+				return;
+			}
+
+			setSelectedTab("results");
+			onExecute?.(editorXml);
+		} else {
+			setSelectedTab("results");
+			onExecute?.();
+		}
 	};
 
 	const handleSelectionChange = useCallback(
@@ -280,7 +341,7 @@ export function PreviewTabs({
 			// Also notify parent
 			onSelectionChange?.(recordIds);
 		},
-		[onSelectionChange]
+		[onSelectionChange],
 	);
 
 	// If parent provided a getter, use ours; otherwise use internal state
@@ -356,12 +417,60 @@ export function PreviewTabs({
 					</MessageBar>
 				</div>
 			)}
+			{editorValidationError && (
+				<div className={styles.messageBarContainer}>
+					<MessageBar intent="error">
+						<MessageBarBody>
+							<MessageBarTitle>Invalid FetchXML</MessageBarTitle>
+							{editorValidationError}
+						</MessageBarBody>
+						<MessageBarActions
+							containerAction={
+								<Button
+									appearance="transparent"
+									icon={<Dismiss16Regular />}
+									onClick={() => setEditorValidationError(null)}
+									aria-label="Dismiss"
+								/>
+							}
+						/>
+					</MessageBar>
+				</div>
+			)}
+			{executeError && (
+				<div className={styles.messageBarContainer}>
+					<MessageBar intent="error">
+						<MessageBarBody>
+							<MessageBarTitle>Execution Failed</MessageBarTitle>
+							{executeError}
+						</MessageBarBody>
+						<MessageBarActions
+							containerAction={
+								<Button
+									appearance="transparent"
+									icon={<Dismiss16Regular />}
+									onClick={onDismissExecuteError}
+									aria-label="Dismiss"
+								/>
+							}
+						/>
+					</MessageBar>
+				</div>
+			)}
 			<div className={styles.tabContent}>
-				{selectedTab === "xml" && (
-					<div className={styles.codeCard}>
-						<FetchXmlEditor xml={xml} onParseToTree={onParseToTree} />
-					</div>
-				)}
+				{/* FetchXML tab — always mounted so Monaco editor state (editor mode, content,
+				    cursor position) survives tab switches. Hidden via display:none when inactive;
+				    Monaco's automaticLayout re-layouts automatically when it becomes visible. */}
+				<div
+					className={styles.codeCard}
+					style={selectedTab !== "xml" ? { display: "none" } : undefined}
+				>
+					<FetchXmlEditor
+						xml={xml}
+						onParseToTree={onParseToTree}
+						onEditorStateChange={handleEditorStateChange}
+					/>
+				</div>
 				{selectedTab === "layout" && (
 					<div className={styles.codeCard}>
 						<LayoutXmlViewer layoutXml={layoutXml || ""} />
