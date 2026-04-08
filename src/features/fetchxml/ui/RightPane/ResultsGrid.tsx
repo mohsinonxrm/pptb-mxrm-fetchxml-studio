@@ -312,7 +312,7 @@ export function ResultsGrid({
 			console.warn("Row without primary ID found - selection may not work correctly");
 			return `row_${Math.random()}`;
 		},
-		[primaryIdColumn]
+		[primaryIdColumn],
 	);
 
 	// Build set of requested attributes from FetchXML query
@@ -414,7 +414,7 @@ export function ResultsGrid({
 		// Collect from link-entities recursively
 		const collectFromLinks = (
 			links: import("../../model/nodes").LinkEntityNode[],
-			parentLookupAttr?: string
+			parentLookupAttr?: string,
 		) => {
 			links.forEach((link) => {
 				const linkAlias = link.alias || link.name;
@@ -464,8 +464,13 @@ export function ResultsGrid({
 
 	// Memoize column definitions with display names and formatted values
 	// Uses columnConfig for ordering and widths when available
-	const columns = useMemo(() => {
-		if (!result || result.columns.length === 0) return [];
+	const { columns, columnDisplayNames, columnAttributeTypes } = useMemo(() => {
+		if (!result || result.columns.length === 0)
+			return {
+				columns: [],
+				columnDisplayNames: new Map<string, string>(),
+				columnAttributeTypes: new Map<string, string | undefined>(),
+			};
 
 		// Filter out OData and CRM annotation columns
 		let displayableColumns = filterDisplayableColumns(result.columns);
@@ -515,14 +520,16 @@ export function ResultsGrid({
 			];
 		}
 
-		return displayableColumns.flatMap((col) => {
+		const displayNames = new Map<string, string>();
+		const attrTypes = new Map<string, string | undefined>();
+		const columnDefs = displayableColumns.flatMap((col) => {
 			// Get column display info from our comprehensive map
 			const displayInfo = columnDisplayMap.get(col);
 
 			// Helper to get attribute metadata from multi-entity map
 			const getAttributeMetadata = (
 				entityName: string,
-				attrName: string
+				attrName: string,
 			): AttributeMetadata | undefined => {
 				return attributeMetadata?.get(entityName)?.get(attrName);
 			};
@@ -633,8 +640,14 @@ export function ResultsGrid({
 					return formattedValue !== undefined && formattedValue !== rawValue;
 				});
 
+			// Track display name and attribute type for column sizing options
+			displayNames.set(col, displayName);
+			attrTypes.set(col, attribute?.AttributeType);
+
 			// For "both" mode with formatted values, create two columns
 			if (valueMode === "both" && hasFormattedValues) {
+				displayNames.set(`${col}__raw`, `${displayName} (Raw)`);
+				attrTypes.set(`${col}__raw`, attribute?.AttributeType);
 				// Create formatted value column
 				const formattedColumn = createTableColumn<Record<string, unknown>>({
 					columnId: col,
@@ -662,7 +675,7 @@ export function ResultsGrid({
 						const rawValue = item[col];
 						const formattedValue = getFormattedValue(item, col);
 						return (
-							<TableCellLayout>
+							<TableCellLayout truncate>
 								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
 							</TableCellLayout>
 						);
@@ -685,7 +698,7 @@ export function ResultsGrid({
 					renderCell: (item) => {
 						const rawValue = item[col];
 						return (
-							<TableCellLayout>
+							<TableCellLayout truncate>
 								{rawValue === null || rawValue === undefined ? (
 									<span>—</span>
 								) : (
@@ -730,7 +743,7 @@ export function ResultsGrid({
 					if (valueMode === "raw") {
 						// Show raw value only (skip cell renderer formatting)
 						return (
-							<TableCellLayout>
+							<TableCellLayout truncate>
 								{rawValue === null || rawValue === undefined ? (
 									<span>—</span>
 								) : (
@@ -741,7 +754,7 @@ export function ResultsGrid({
 					} else {
 						// Default: formatted (use cell renderer)
 						return (
-							<TableCellLayout>
+							<TableCellLayout truncate>
 								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
 							</TableCellLayout>
 						);
@@ -749,6 +762,11 @@ export function ResultsGrid({
 				},
 			});
 		});
+		return {
+			columns: columnDefs,
+			columnDisplayNames: displayNames,
+			columnAttributeTypes: attrTypes,
+		};
 	}, [
 		result,
 		attributeMetadata,
@@ -770,7 +788,7 @@ export function ResultsGrid({
 			const recordIds = Array.from(data.selectedItems).map(String);
 			onSelectionChange?.(recordIds);
 		},
-		[onSelectedCountChange, onSelectionChange]
+		[onSelectedCountChange, onSelectionChange],
 	);
 
 	// Sort change handler: notifies parent to update FetchXML orders
@@ -779,7 +797,7 @@ export function ResultsGrid({
 	const handleSortChange = useCallback(
 		(
 			e: React.MouseEvent,
-			data: { sortColumn: string | number | undefined; sortDirection: SortDirection }
+			data: { sortColumn: string | number | undefined; sortDirection: SortDirection },
 		) => {
 			if (!onSortChange) return;
 
@@ -806,7 +824,7 @@ export function ResultsGrid({
 				entityName: sortInfo?.entityName,
 			});
 		},
-		[onSortChange, sortStateMap]
+		[onSortChange, sortStateMap],
 	);
 
 	// Row renderer function for virtualization with scrolling indicator support
@@ -826,13 +844,33 @@ export function ResultsGrid({
 				)}
 			</DataGridRow>
 		),
-		[styles.row]
+		[styles.row],
 	);
 
 	// Build column sizing options from columnConfig or defaults
 	const columnSizingOptions = useMemo(() => {
 		const options: Record<string, { minWidth: number; defaultWidth: number; idealWidth?: number }> =
 			{};
+
+		// Minimum width implied by the attribute's data type (data content is often wider than the header)
+		const typeBasedMinWidth = (attrType: string | undefined): number => {
+			switch (attrType) {
+				case "Uniqueidentifier":
+					return 260; // GUIDs: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars)
+				case "DateTime":
+					return 160; // e.g. "Apr 3, 2026, 09:00 AM"
+				case "Boolean":
+					return 100; // switch + label
+				case "Lookup":
+				case "Customer":
+				case "Owner":
+					return 140; // formatted name, usually a person or account name
+				case "Money":
+					return 120;
+				default:
+					return 100;
+			}
+		};
 
 		// Create a map of column widths from config
 		// Also map lookup field variants (_xxx_value -> config width for xxx)
@@ -846,26 +884,43 @@ export function ResultsGrid({
 		}
 
 		// Set sizing for each column
+		// When no config width is available, estimate from the display name so headers don't overlap
 		for (const col of columns) {
 			const columnId = String(col.columnId);
 			const configWidth = configWidths.get(columnId);
-			const width = configWidth ?? 150; // Default to 150 if not in config
-			options[columnId] = {
-				minWidth: 80,
-				defaultWidth: width,
-				idealWidth: width,
-			};
+
+			if (configWidth !== undefined) {
+				// Use the layout-XML / user-resized width as-is
+				options[columnId] = {
+					minWidth: 80,
+					defaultWidth: configWidth,
+					idealWidth: configWidth,
+				};
+			} else {
+				// No config width – estimate from BOTH header display name and attribute data type.
+				// Take the larger of the two so neither the header nor typical data values overflow.
+				const displayName = columnDisplayNames.get(columnId) ?? columnId;
+				const headerEstimate = Math.ceil(displayName.length * 8) + 52;
+				const dataMin = typeBasedMinWidth(columnAttributeTypes.get(columnId));
+				const estimated = Math.max(headerEstimate, dataMin);
+				const dynamicWidth = Math.max(100, Math.min(estimated, 320));
+				options[columnId] = {
+					minWidth: Math.max(80, Math.min(dataMin, 200)),
+					defaultWidth: dynamicWidth,
+					idealWidth: dynamicWidth,
+				};
+			}
 		}
 
 		return options;
-	}, [columns, columnConfig]);
+	}, [columns, columnConfig, columnDisplayNames, columnAttributeTypes]);
 
 	// Handle column resize callback
 	// Maps lookup column names back to config names for storage
 	const handleColumnResize = useCallback(
 		(
 			_e: KeyboardEvent | TouchEvent | MouseEvent | undefined,
-			data: { columnId: string | number; width: number }
+			data: { columnId: string | number; width: number },
 		) => {
 			if (onColumnResize) {
 				let columnName = String(data.columnId);
@@ -876,7 +931,7 @@ export function ResultsGrid({
 				onColumnResize(columnName, data.width);
 			}
 		},
-		[onColumnResize]
+		[onColumnResize],
 	);
 
 	// Infinite scroll: load more when user scrolls near bottom
@@ -898,7 +953,7 @@ export function ResultsGrid({
 				onLoadMore();
 			}
 		},
-		[result, onLoadMore, isLoadingMore]
+		[result, onLoadMore, isLoadingMore],
 	);
 
 	// Note: Data is already sorted by Dataverse based on FetchXML orders
@@ -957,7 +1012,6 @@ export function ResultsGrid({
 							</DataGridRow>
 						</DataGridHeader>
 						<DataGridBody<Record<string, unknown>>
-							className={styles.body}
 							itemSize={ROW_HEIGHT}
 							height={Math.max(0, gridDimensions.height - headerHeight)}
 							listProps={{

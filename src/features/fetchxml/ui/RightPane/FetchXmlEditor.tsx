@@ -101,9 +101,15 @@ interface Message {
 interface FetchXmlEditorProps {
 	xml: string;
 	onParseToTree?: (xmlString: string) => ParseResult;
+	/**
+	 * Called whenever editor mode or its content changes.
+	 * `isActive=false` means editor mode is off (parent should use tree XML).
+	 * `isActive=true` means editor mode is on; `xml` is the current editor content.
+	 */
+	onEditorStateChange?: (isActive: boolean, xml: string) => void;
 }
 
-export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
+export function FetchXmlEditor({ xml, onParseToTree, onEditorStateChange }: FetchXmlEditorProps) {
 	const styles = useStyles();
 	const { isDark } = useTheme();
 	const editorRef = useRef<MonacoEditor.editor.IStandaloneCodeEditor | null>(null);
@@ -146,10 +152,13 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 				// Entering editor mode - copy current XML to edit buffer
 				setEditedXml(xml);
 				clearMessages();
+				onEditorStateChange?.(true, xml);
+			} else {
+				onEditorStateChange?.(false, "");
 			}
 			setIsEditorMode(checked);
 		},
-		[xml, clearMessages]
+		[xml, clearMessages, onEditorStateChange],
 	);
 
 	// Copy to clipboard
@@ -169,13 +178,14 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 			const text = await navigator.clipboard.readText();
 			if (text.trim()) {
 				setEditedXml(text);
+				onEditorStateChange?.(true, text);
 				addMessage("info", "Pasted", "Content pasted from clipboard");
 			}
 		} catch (err) {
 			console.error("Failed to paste:", err);
 			addMessage("error", "Paste failed", "Could not read from clipboard");
 		}
-	}, [addMessage]);
+	}, [addMessage, onEditorStateChange]);
 
 	// Load from file
 	const handleLoadFile = useCallback(() => {
@@ -190,6 +200,7 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 				reader.onload = (e) => {
 					const content = e.target?.result as string;
 					setEditedXml(content);
+					onEditorStateChange?.(true, content);
 					addMessage("info", "File loaded", `Loaded ${file.name}`);
 				};
 				reader.onerror = () => {
@@ -200,15 +211,16 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 			// Reset input so same file can be loaded again
 			event.target.value = "";
 		},
-		[addMessage]
+		[addMessage],
 	);
 
 	// Reset to tree-generated XML
 	const handleReset = useCallback(() => {
 		setEditedXml(xml);
+		onEditorStateChange?.(true, xml);
 		clearMessages();
 		addMessage("info", "Reset", "Reverted to tree-generated FetchXML");
-	}, [xml, clearMessages, addMessage]);
+	}, [xml, clearMessages, addMessage, onEditorStateChange]);
 
 	// Validate XML
 	const handleValidate = useCallback(() => {
@@ -230,15 +242,21 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 			return;
 		}
 
-		// Show warnings if any
+		// Warnings indicate problems that must be fixed before executing
 		if (parseResult.warnings.length > 0) {
 			parseResult.warnings.forEach((warn: ParseWarning) => {
 				const prefix = warn.element ? `<${warn.element}>: ` : "";
 				addMessage("warning", "Warning", `${prefix}${warn.message}`);
 			});
+			addMessage(
+				"warning",
+				"Action required",
+				"Fix the warnings above before executing, or use 'Parse to Tree' to auto-correct.",
+			);
+			return; // Do not show 'Valid' alongside warnings
 		}
 
-		addMessage("success", "Valid", "FetchXML is valid and ready to parse");
+		addMessage("success", "Valid", "FetchXML is valid and free of issues.");
 	}, [editedXml, clearMessages, addMessage]);
 
 	// Parse to tree
@@ -249,20 +267,21 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 		const result = onParseToTree(editedXml);
 
 		if (result.success) {
-			// Show warnings but still success
+			// Show auto-corrections as informational (not blocking warnings)
 			result.warnings.forEach((warn: ParseWarning) => {
 				const prefix = warn.element ? `<${warn.element}>: ` : "";
-				addMessage("warning", "Warning", `${prefix}${warn.message}`);
+				addMessage("info", "Auto-corrected", `${prefix}${warn.message}`);
 			});
 			addMessage("success", "Parsed", "FetchXML loaded into tree builder");
 			// Exit editor mode after successful parse
+			onEditorStateChange?.(false, "");
 			setIsEditorMode(false);
 		} else {
 			result.errors.forEach((err: ParseError) => {
 				addMessage("error", "Parse Error", err.message);
 			});
 		}
-	}, [editedXml, onParseToTree, clearMessages, addMessage]);
+	}, [editedXml, onParseToTree, clearMessages, addMessage, onEditorStateChange]);
 
 	// Handle editor mount
 	const handleEditorMount = useCallback(
@@ -272,7 +291,7 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 			registerFetchXmlIntellisense(monaco);
 			registerFetchXmlHoverProvider(monaco);
 		},
-		[]
+		[],
 	);
 
 	return (
@@ -282,6 +301,11 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 				<div className={styles.toolbarLeft}>
 					{isEditorMode ? (
 						<Toolbar size="small">
+							<Tooltip content="Copy FetchXML to clipboard" relationship="label">
+								<ToolbarButton icon={<Copy24Regular />} onClick={handleCopy}>
+									Copy
+								</ToolbarButton>
+							</Tooltip>
 							<Tooltip content="Paste from clipboard" relationship="label">
 								<ToolbarButton icon={<ClipboardPaste24Regular />} onClick={handlePaste}>
 									Paste
@@ -347,7 +371,14 @@ export function FetchXmlEditor({ xml, onParseToTree }: FetchXmlEditorProps) {
 					language="xml"
 					theme={isDark ? "vs-dark" : "vs"}
 					value={currentXml}
-					onChange={isEditorMode ? (value) => setEditedXml(value || "") : undefined}
+					onChange={
+						isEditorMode
+							? (value) => {
+									setEditedXml(value || "");
+									onEditorStateChange?.(true, value || "");
+								}
+							: undefined
+					}
 					loading={
 						<div className={styles.loadingContainer}>
 							<Spinner size="medium" label="Loading editor..." />

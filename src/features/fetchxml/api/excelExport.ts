@@ -30,7 +30,7 @@ interface ExportToExcelLocalOptions {
  * Returns the workbook buffer for download
  */
 export async function exportToExcelLocal(
-	options: ExportToExcelLocalOptions
+	options: ExportToExcelLocalOptions,
 ): Promise<{ buffer: ArrayBuffer; fileName: string }> {
 	const {
 		records,
@@ -156,7 +156,7 @@ export async function exportToExcelLocal(
 		record: Record<string, unknown>,
 		col: string,
 		isRawColumn: boolean,
-		attr: AttributeMetadata | undefined
+		attr: AttributeMetadata | undefined,
 	): unknown => {
 		const rawValue = record[col];
 		const formattedValue = getFormattedValue(record, col);
@@ -300,7 +300,17 @@ export async function exportToExcelLocal(
 /**
  * Trigger browser download of the Excel file
  */
-export function downloadExcelFile(buffer: ArrayBuffer, fileName: string): void {
+export async function downloadExcelFile(buffer: ArrayBuffer, fileName: string): Promise<void> {
+	// Use PPTB fileSystem.saveFile when running in the desktop host (opens native save dialog)
+	if (window.toolboxAPI?.fileSystem?.saveFile) {
+		const saved = await window.toolboxAPI.fileSystem.saveFile(fileName, new Uint8Array(buffer));
+		if (saved) {
+			console.log(`✅ File saved via fileSystem: ${saved}`);
+		}
+		return;
+	}
+
+	// Fallback: browser blob download (standalone / dev context)
 	const blob = new Blob([buffer], {
 		type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	});

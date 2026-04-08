@@ -10,8 +10,9 @@ import type { EntityMetadata, AttributeMetadata, RelationshipMetadata } from "..
 /**
  * Load all entities (with caching and de-duplication)
  */
-export async function loadAllEntities(advancedFindOnly: boolean = true): Promise<EntityMetadata[]> {
-	// Check cache first
+export async function loadAllEntities(): Promise<EntityMetadata[]> {
+	// Always fetch ALL entities (advancedFindOnly=false) — callers apply a local
+	// filter when needed so that toggling the setting is instant without re-fetching.
 	const cached = metadataCache.getAllEntities();
 	if (cached) {
 		return cached;
@@ -23,8 +24,8 @@ export async function loadAllEntities(advancedFindOnly: boolean = true): Promise
 		return inFlight;
 	}
 
-	// Make new request
-	const promise = pptbClient.getAllEntities(advancedFindOnly);
+	// Make new request — no server-side AF filter; filter locally at display time
+	const promise = pptbClient.getAllEntities(false);
 	metadataCache.setAllEntitiesPromise(promise);
 
 	try {
@@ -62,7 +63,7 @@ export async function loadEntityMetadata(logicalName: string): Promise<EntityMet
  */
 export async function loadEntityAttributes(
 	logicalName: string,
-	advancedFindOnly: boolean = true
+	advancedFindOnly: boolean = true,
 ): Promise<AttributeMetadata[]> {
 	// Check cache first
 	const cacheKey = `${logicalName}_${advancedFindOnly}`;
@@ -100,7 +101,7 @@ export async function loadEntityAttributes(
  */
 export async function loadAttributeWithOptionSet(
 	entityLogicalName: string,
-	attributeLogicalName: string
+	attributeLogicalName: string,
 ): Promise<AttributeMetadata> {
 	// Check cache first
 	const cacheKey = `${entityLogicalName}_${attributeLogicalName}_optionset`;
@@ -112,7 +113,7 @@ export async function loadAttributeWithOptionSet(
 	// Make request with OptionSet expansion
 	const attribute = await pptbClient.getAttributeWithOptionSet(
 		entityLogicalName,
-		attributeLogicalName
+		attributeLogicalName,
 	);
 
 	// Cache the result
@@ -130,7 +131,7 @@ export async function loadAttributeWithOptionSet(
 export async function loadAttributeDetailedMetadata(
 	entityLogicalName: string,
 	attributeLogicalName: string,
-	attributeType: string
+	attributeType: string,
 ): Promise<AttributeMetadata> {
 	// Check cache first
 	const cacheKey = `${entityLogicalName}_${attributeLogicalName}_detailed`;
@@ -143,7 +144,7 @@ export async function loadAttributeDetailedMetadata(
 	const attribute = await pptbClient.getAttributeDetailedMetadata(
 		entityLogicalName,
 		attributeLogicalName,
-		attributeType
+		attributeType,
 	);
 
 	// Cache the result
@@ -158,7 +159,7 @@ export async function loadAttributeDetailedMetadata(
  */
 export async function loadEntityRelationships(
 	logicalName: string,
-	advancedFindOnly: boolean = true
+	advancedFindOnly: boolean = true,
 ): Promise<{
 	oneToMany: RelationshipMetadata[];
 	manyToOne: RelationshipMetadata[];

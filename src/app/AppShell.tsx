@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -60,10 +60,8 @@ import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
-import {
-	defaultDisplaySettings,
-	type DisplaySettings,
-} from "../features/fetchxml/model/displaySettings";
+import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
+import { useAccessMode } from "../shared/hooks/useAccessMode";
 
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
 // but tokens will automatically update when FluentProvider theme changes
@@ -211,7 +209,7 @@ export function AppShell() {
  * Includes root entity and all link-entities (recursively)
  */
 function collectEntitiesFromFetchQuery(
-	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null
+	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null,
 ): string[] {
 	if (!fetchQuery?.entity?.name) return [];
 
@@ -219,7 +217,7 @@ function collectEntitiesFromFetchQuery(
 	entities.add(fetchQuery.entity.name);
 
 	const collectFromLinks = (
-		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined
+		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined,
 	) => {
 		links?.forEach((link) => {
 			if (link.name) {
@@ -277,6 +275,14 @@ function AppContent() {
 		privilegeChecked: false,
 	});
 
+	// Execution error (e.g. Dataverse API error surfaced to user)
+	const [executeError, setExecuteError] = useState<string | undefined>();
+
+	// The XML that was actually sent to Dataverse for the most recent execution.
+	// Used by loadAllPages / handleLoadMore so subsequent pages use the same XML
+	// (which may differ from the tree-generated fetchXml when editor mode was active).
+	const lastExecutedXmlRef = useRef<string>("");
+
 	// Record action privileges state
 	const [recordActionPrivileges, setRecordActionPrivileges] = useState<{
 		canDelete: boolean;
@@ -319,7 +325,10 @@ function AppContent() {
 
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
-	const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
+	const [displaySettings, setDisplaySettings] = usePersistedSettings();
+
+	// Access summary for constraining SettingsDrawer scope options
+	const { accessSummary } = useAccessMode();
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -536,7 +545,7 @@ function AppContent() {
 					console.error(`Failed to load attributes for ${entityName}:`, error);
 					return { entityName, attrMap: new Map<string, AttributeMetadata>() };
 				}
-			})
+			}),
 		).then((results) => {
 			const multiEntityMap = new Map<string, Map<string, AttributeMetadata>>();
 			results.forEach(({ entityName, attrMap }) => {
@@ -646,7 +655,7 @@ function AppContent() {
 	const handleSaveViewComplete = (
 		viewId: string,
 		viewType: "system" | "personal",
-		viewName: string
+		viewName: string,
 	) => {
 		// Update the builder's loaded view state so subsequent saves overwrite the same view
 		if (entityMetadata) {
@@ -666,7 +675,7 @@ function AppContent() {
 	 */
 	const buildColumnsFromResult = (
 		records: Record<string, unknown>[],
-		fetchQuery: typeof builder.fetchQuery
+		fetchQuery: typeof builder.fetchQuery,
 	): string[] => {
 		// Start with columns from the result data (these have actual values)
 		const resultKeys = records.length > 0 ? Object.keys(records[0]) : [];
@@ -711,13 +720,19 @@ function AppContent() {
 
 	/**
 	 * Execute the query and handle Retrieve All if enabled
+	 * @param xmlOverride - when provided (editor mode), use this XML instead of the tree-generated one
 	 */
-	const handleExecute = async () => {
-		if (!fetchXml) return;
+	const handleExecute = async (xmlOverride?: string) => {
+		const xmlToExecute = xmlOverride ?? fetchXml;
+		if (!xmlToExecute) return;
 
 		setIsExecuting(true);
 		setQueryResult(null);
 		setPagingState(null);
+		setExecuteError(undefined);
+
+		// Remember what XML was sent so loadAllPages / handleLoadMore use the same query
+		lastExecutedXmlRef.current = xmlToExecute;
 
 		const startTime = performance.now();
 		const entityLogicalName = builder.fetchQuery?.entity.name;
@@ -729,21 +744,22 @@ function AppContent() {
 		const pageSize = builder.fetchQuery?.options?.count;
 
 		try {
-			// Determine execution method based on loaded view state
+			// Determine execution method based on loaded view state.
+			// Only use view-based execution when using tree XML (not editor override).
 			let result;
 			const loadedView = builder.loadedView;
 			let useViewExecution = false;
 
-			if (loadedView) {
+			if (!xmlOverride && loadedView) {
 				const isUnmodified =
-					fetchXml.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
+					xmlToExecute.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
 
 				if (isUnmodified) {
 					useViewExecution = true;
 					console.log(
 						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
 							loadedView.type === "system" ? "savedQuery" : "userQuery"
-						}=${loadedView.id}`
+						}=${loadedView.id}`,
 					);
 
 					if (loadedView.type === "system") {
@@ -754,14 +770,16 @@ function AppContent() {
 				}
 			}
 
-			// If not using view execution (either no view or view was modified), use FetchXML
+			// If not using view execution (either no view, view was modified, or editor override), use FetchXML
 			if (!result) {
 				console.log(
-					loadedView
-						? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
-						: "📡 Executing FetchXML query"
+					xmlOverride
+						? "✏️ Executing editor FetchXML"
+						: loadedView
+							? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
+							: "📡 Executing FetchXML query",
 				);
-				result = await executeFetchXml(fetchXml);
+				result = await executeFetchXml(xmlToExecute);
 			}
 
 			const executionTimeMs = Math.round(performance.now() - startTime);
@@ -794,17 +812,22 @@ function AppContent() {
 			// Don't do Retrieve All if user set a 'top' limit - Dataverse handles the limit
 			if (retrieveAll && result.moreRecords && !useViewExecution && !hasTopLimit) {
 				await loadAllPages(
-					fetchXml,
+					xmlToExecute,
 					columns,
 					rows,
 					result.pagingCookie,
 					2,
 					entityLogicalName,
-					pageSize
+					pageSize,
 				);
 			}
 		} catch (error) {
 			console.error("Failed to execute FetchXML:", error);
+			const message =
+				error instanceof Error
+					? error.message
+					: "An unexpected error occurred while executing the query.";
+			setExecuteError(message);
 			setQueryResult({ columns: [], rows: [] });
 			setIsExecuting(false);
 		}
@@ -821,7 +844,7 @@ function AppContent() {
 		pagingCookie: string | undefined,
 		startPage: number,
 		entityLogicalName: string | undefined,
-		pageSize?: number
+		pageSize?: number,
 	) => {
 		let allRows = [...initialRows];
 		let currentPagingCookie = pagingCookie;
@@ -839,7 +862,7 @@ function AppContent() {
 					baseFetchXml,
 					page,
 					currentPagingCookie,
-					pageSize
+					pageSize,
 				);
 				const result = await executeFetchXml(pagedFetchXml);
 
@@ -884,7 +907,8 @@ function AppContent() {
 	 * Load more records (for infinite scroll when Retrieve All is OFF)
 	 */
 	const handleLoadMore = async () => {
-		if (!fetchXml || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
+		const xmlToPage = lastExecutedXmlRef.current || fetchXml;
+		if (!xmlToPage || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
 		if (pagingState.isRetrieveAllInProgress) return; // Don't allow manual load during Retrieve All
 
 		// Don't load more if user has set a 'top' limit
@@ -898,15 +922,15 @@ function AppContent() {
 		try {
 			const nextPage = pagingState.currentPage + 1;
 			console.log(
-				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`
+				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`,
 			);
 
 			// Add paging parameters: page number, paging cookie (required for reliable paging), and count (page size)
 			const pagedFetchXml = addPagingToFetchXml(
-				fetchXml,
+				xmlToPage,
 				nextPage,
 				pagingState.pagingCookie,
-				pageSize
+				pageSize,
 			);
 			const result = await executeFetchXml(pagedFetchXml);
 
@@ -977,7 +1001,7 @@ function AppContent() {
 
 		try {
 			console.log(
-				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`
+				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`,
 			);
 
 			// Use view name for filename
@@ -988,11 +1012,11 @@ function AppContent() {
 				builder.loadedView.type,
 				fetchXml,
 				layoutXml,
-				viewName
+				viewName,
 			);
 
 			// Trigger download
-			downloadBase64File(result.excelFile, result.filename);
+			await downloadBase64File(result.excelFile, result.filename);
 
 			console.log(`✅ Export complete: ${result.filename}`);
 
@@ -1084,7 +1108,7 @@ function AppContent() {
 			});
 
 			// Trigger download
-			downloadExcelFile(buffer, finalFileName);
+			await downloadExcelFile(buffer, finalFileName);
 
 			console.log(`✅ Local export complete: ${finalFileName}`);
 
@@ -1147,7 +1171,7 @@ function AppContent() {
 				window.open(url, "_blank");
 			}
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	/**
@@ -1173,7 +1197,7 @@ function AppContent() {
 				console.error("Failed to copy to clipboard:", error);
 			}
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	/**
@@ -1217,15 +1241,15 @@ function AppContent() {
 			const recordName =
 				recordIds.length === 1
 					? (queryResult?.rows.find(
-							(row) => row[entityMetadata?.PrimaryIdAttribute || ""] === recordIds[0]
-					  )?.[entityMetadata?.PrimaryNameAttribute || ""] as string | undefined)
+							(row) => row[entityMetadata?.PrimaryIdAttribute || ""] === recordIds[0],
+						)?.[entityMetadata?.PrimaryNameAttribute || ""] as string | undefined)
 					: undefined;
 
 			// Use batch delete for 4+ records (more efficient than sequential)
 			const isBatchDelete = recordIds.length >= 4;
 			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata]
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata],
 	);
 
 	/**
@@ -1246,7 +1270,7 @@ function AppContent() {
 				totalViewRecords: isAllRecords ? totalRecords : undefined,
 			});
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult]
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult],
 	);
 
 	/**
@@ -1264,7 +1288,7 @@ function AppContent() {
 			const result = await deleteRecordsBatch(
 				entityLogicalName, // Use logical name, API will pluralize
 				recordIds,
-				(progress) => setDeleteProgress(progress)
+				(progress) => setDeleteProgress(progress),
 			);
 
 			if (result.succeeded > 0) {
@@ -1286,7 +1310,7 @@ function AppContent() {
 				successCount++;
 			} catch (error) {
 				errors.push(
-					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`
+					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`,
 				);
 			}
 		}
@@ -1342,7 +1366,7 @@ function AppContent() {
 				entityLogicalName,
 				primaryIdAttribute,
 				recordIds,
-				jobName
+				jobName,
 			);
 
 			console.log(`📤 Bulk delete job submitted: ${result.asyncOperationId}`);
@@ -1354,7 +1378,7 @@ function AppContent() {
 			bulkDeleteDialogState.recordIds,
 			bulkDeleteDialogState.isAllRecords,
 			builder.fetchQuery,
-		]
+		],
 	);
 
 	/**
@@ -1382,14 +1406,14 @@ function AppContent() {
 		async (
 			workflowId: string,
 			recordIds: string[],
-			onProgress: (progress: WorkflowBatchProgress) => void
+			onProgress: (progress: WorkflowBatchProgress) => void,
 		): Promise<{ succeeded: number; failed: number; errors: string[] }> => {
 			if (!entityLogicalName) {
 				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
 			}
 			return executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress);
 		},
-		[entityLogicalName]
+		[entityLogicalName],
 	);
 
 	// ============ END RECORD ACTION HANDLERS ============
@@ -1404,6 +1428,8 @@ function AppContent() {
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
+						entityScopeMode={displaySettings.entityScopeMode}
+						advancedFindOnly={displaySettings.advancedFindOnly}
 						onViewLoad={(viewInfo: LoadedViewInfo) => {
 							// Load the view's FetchXML into the tree while preserving view info
 							// Pass layoutxml for column configuration if available
@@ -1415,7 +1441,7 @@ function AppContent() {
 									entitySetName: viewInfo.entitySetName,
 									name: viewInfo.name,
 								},
-								viewInfo.layoutxml
+								viewInfo.layoutxml,
 							);
 						}}
 					/>
@@ -1491,12 +1517,14 @@ function AppContent() {
 					isExporting={exportStatus.isExporting}
 					exportError={exportStatus.error}
 					onDismissExportError={() => setExportStatus((prev) => ({ ...prev, error: undefined }))}
+					executeError={executeError}
+					onDismissExecuteError={() => setExecuteError(undefined)}
 					exportDisabledReason={
 						!builder.loadedView
 							? "Save as a view first to enable export"
 							: !exportStatus.hasPrivilege
-							? "You don't have the prvExportToExcel privilege"
-							: undefined
+								? "You don't have the prvExportToExcel privilege"
+								: undefined
 					}
 					onParseToTree={builder.loadFetchXml}
 					attributeMetadata={attributeMetadata}
@@ -1603,7 +1631,7 @@ function AppContent() {
 
 							// Check if link-entity already exists for this relationship
 							const existingLinkEntity = builder.fetchQuery.entity.links.find(
-								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity
+								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity,
 							);
 
 							let linkEntityId: string;
@@ -1618,7 +1646,7 @@ function AppContent() {
 									fromAttr,
 									toAttr,
 									linkType,
-									relTypeForBuilder
+									relTypeForBuilder,
 								);
 							}
 
@@ -1649,7 +1677,7 @@ function AppContent() {
 						// FetchXML order-by uses the original attribute name, not the alias
 						if (!entityName && builder.fetchQuery?.entity?.attributes) {
 							const aliasedAttr = builder.fetchQuery.entity.attributes.find(
-								(a) => a.alias === attribute
+								(a) => a.alias === attribute,
 							);
 							if (aliasedAttr) {
 								attribute = aliasedAttr.name;
@@ -1660,7 +1688,7 @@ function AppContent() {
 							attribute,
 							data.direction === "descending",
 							data.isMultiSort,
-							entityName
+							entityName,
 						);
 					}}
 					// Record action handlers
@@ -1726,6 +1754,7 @@ function AppContent() {
 			<SettingsDrawer
 				open={settingsDrawerOpen}
 				settings={displaySettings}
+				accessSummary={accessSummary}
 				onClose={() => setSettingsDrawerOpen(false)}
 				onSettingsChange={setDisplaySettings}
 			/>

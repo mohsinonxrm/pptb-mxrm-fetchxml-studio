@@ -9,40 +9,17 @@ export interface PptbContext {
 	theme: "light" | "dark";
 	connected: boolean;
 	environmentUrl?: string;
-	organizationId?: string;
+	environment?: "Dev" | "Test" | "UAT" | "Production";
 }
 
-// PPTB Event payload structure
-interface ToolBoxEventPayload {
+// PPTB event payload type (compatible with @pptb/types ToolBoxEventPayload)
+type ToolBoxEventPayload = {
 	event: string;
 	data: unknown;
 	timestamp?: string;
-}
+};
 
-// Extend window interface for PPTB API
-declare global {
-	interface Window {
-		toolboxAPI?: {
-			utils?: {
-				getCurrentTheme?: () => Promise<"light" | "dark">;
-			};
-			connections?: {
-				getActiveConnection?: () => Promise<{
-					url?: string;
-					organizationId?: string;
-					name?: string;
-					environment?: string;
-				} | null>;
-			};
-			events?: {
-				// PPTB uses a single callback that receives all events
-				on?: (callback: (event: unknown, payload: ToolBoxEventPayload) => void) => void;
-				off?: (callback: (event: unknown, payload: ToolBoxEventPayload) => void) => void;
-				getHistory?: (count: number) => Promise<ToolBoxEventPayload[]>;
-			};
-		};
-	}
-}
+// NOTE: window.toolboxAPI global types are provided by @pptb/types (see tsconfig.app.json)
 
 /**
  * Get tool context from PPTB host
@@ -91,7 +68,7 @@ export function usePptbContext(): PptbContext {
 					...prev,
 					connected: !!connection,
 					environmentUrl: connection?.url,
-					organizationId: connection?.organizationId,
+					environment: connection?.environment,
 				}));
 			} catch (err) {
 				console.warn("❌ Failed to get active connection:", err);
@@ -134,7 +111,7 @@ export function usePptbContext(): PptbContext {
 						...prev,
 						connected: false,
 						environmentUrl: undefined,
-						organizationId: undefined,
+						environment: undefined,
 					}));
 					break;
 
