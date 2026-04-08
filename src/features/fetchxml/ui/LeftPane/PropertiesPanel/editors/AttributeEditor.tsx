@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import { Info16Regular } from "@fluentui/react-icons";
 import type { AttributeNode } from "../../../../model/nodes";
+import { sanitizeAlias } from "../../../../model/aliasUtils";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
 
 const useStyles = makeStyles({
@@ -58,9 +59,9 @@ export function AttributeEditor({
 
 	const handleTextChange = (field: string) => (_: unknown, data: { value: string }) => {
 		let value = data.value;
-		// For alias field, remove spaces (aliases cannot contain spaces)
+		// Aliases must use only [A-Za-z0-9_] with a letter or underscore as first char
 		if (field === "alias") {
-			value = value.replace(/\s/g, "");
+			value = sanitizeAlias(value);
 		}
 		onUpdate({ [field]: value || undefined });
 	};
@@ -105,7 +106,7 @@ export function AttributeEditor({
 							placeholder="e.g., account_name, total_value"
 						/>
 						<Tooltip
-							content="Optional alias for the column in results. Useful for aggregate queries or when joining multiple entities."
+							content="Optional alias for the column in results. May only contain letters, digits, and underscores, and must start with a letter or underscore."
 							relationship="description"
 						>
 							<Info16Regular className={styles.tooltipIcon} />

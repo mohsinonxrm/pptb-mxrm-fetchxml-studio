@@ -16,6 +16,7 @@ import type {
 	OperatorType,
 	NodeId,
 } from "./nodes";
+import { isValidAlias, sanitizeAlias } from "./aliasUtils";
 
 // ID generator for parsed nodes
 let parseIdCounter = 0;
@@ -366,7 +367,21 @@ function parseAttribute(attrElement: Element, warnings: ParseWarning[]): Attribu
 
 	// Optional attributes
 	const alias = attrElement.getAttribute("alias");
-	if (alias) attr.alias = alias;
+	if (alias) {
+		if (!isValidAlias(alias)) {
+			const sanitized = sanitizeAlias(alias);
+			warnings.push({
+				message: sanitized
+					? `Alias '${alias}' had invalid characters and was corrected to '${sanitized}'.`
+					: `Alias '${alias}' had no valid characters and was removed.`,
+				element: "attribute",
+				attribute: "alias",
+			});
+			if (sanitized) attr.alias = sanitized;
+		} else {
+			attr.alias = alias;
+		}
+	}
 
 	if (attrElement.getAttribute("groupby") === "true") {
 		attr.groupby = true;
@@ -629,7 +644,21 @@ function parseLinkEntity(linkElement: Element, warnings: ParseWarning[]): LinkEn
 
 	// Optional attributes
 	const alias = linkElement.getAttribute("alias");
-	if (alias) link.alias = alias;
+	if (alias) {
+		if (!isValidAlias(alias)) {
+			const sanitized = sanitizeAlias(alias);
+			warnings.push({
+				message: sanitized
+					? `Alias '${alias}' had invalid characters and was corrected to '${sanitized}'.`
+					: `Alias '${alias}' had no valid characters and was removed.`,
+				element: "link-entity",
+				attribute: "alias",
+			});
+			if (sanitized) link.alias = sanitized;
+		} else {
+			link.alias = alias;
+		}
+	}
 
 	if (linkElement.getAttribute("intersect") === "true") {
 		link.intersect = true;

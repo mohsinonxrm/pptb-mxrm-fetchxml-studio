@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -274,6 +274,14 @@ function AppContent() {
 		hasPrivilege: false,
 		privilegeChecked: false,
 	});
+
+	// Execution error (e.g. Dataverse API error surfaced to user)
+	const [executeError, setExecuteError] = useState<string | undefined>();
+
+	// The XML that was actually sent to Dataverse for the most recent execution.
+	// Used by loadAllPages / handleLoadMore so subsequent pages use the same XML
+	// (which may differ from the tree-generated fetchXml when editor mode was active).
+	const lastExecutedXmlRef = useRef<string>("");
 
 	// Record action privileges state
 	const [recordActionPrivileges, setRecordActionPrivileges] = useState<{
@@ -712,13 +720,19 @@ function AppContent() {
 
 	/**
 	 * Execute the query and handle Retrieve All if enabled
+	 * @param xmlOverride - when provided (editor mode), use this XML instead of the tree-generated one
 	 */
-	const handleExecute = async () => {
-		if (!fetchXml) return;
+	const handleExecute = async (xmlOverride?: string) => {
+		const xmlToExecute = xmlOverride ?? fetchXml;
+		if (!xmlToExecute) return;
 
 		setIsExecuting(true);
 		setQueryResult(null);
 		setPagingState(null);
+		setExecuteError(undefined);
+
+		// Remember what XML was sent so loadAllPages / handleLoadMore use the same query
+		lastExecutedXmlRef.current = xmlToExecute;
 
 		const startTime = performance.now();
 		const entityLogicalName = builder.fetchQuery?.entity.name;
@@ -730,14 +744,15 @@ function AppContent() {
 		const pageSize = builder.fetchQuery?.options?.count;
 
 		try {
-			// Determine execution method based on loaded view state
+			// Determine execution method based on loaded view state.
+			// Only use view-based execution when using tree XML (not editor override).
 			let result;
 			const loadedView = builder.loadedView;
 			let useViewExecution = false;
 
-			if (loadedView) {
+			if (!xmlOverride && loadedView) {
 				const isUnmodified =
-					fetchXml.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
+					xmlToExecute.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
 
 				if (isUnmodified) {
 					useViewExecution = true;
@@ -755,14 +770,16 @@ function AppContent() {
 				}
 			}
 
-			// If not using view execution (either no view or view was modified), use FetchXML
+			// If not using view execution (either no view, view was modified, or editor override), use FetchXML
 			if (!result) {
 				console.log(
-					loadedView
-						? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
-						: "📡 Executing FetchXML query",
+					xmlOverride
+						? "✏️ Executing editor FetchXML"
+						: loadedView
+							? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
+							: "📡 Executing FetchXML query",
 				);
-				result = await executeFetchXml(fetchXml);
+				result = await executeFetchXml(xmlToExecute);
 			}
 
 			const executionTimeMs = Math.round(performance.now() - startTime);
@@ -795,7 +812,7 @@ function AppContent() {
 			// Don't do Retrieve All if user set a 'top' limit - Dataverse handles the limit
 			if (retrieveAll && result.moreRecords && !useViewExecution && !hasTopLimit) {
 				await loadAllPages(
-					fetchXml,
+					xmlToExecute,
 					columns,
 					rows,
 					result.pagingCookie,
@@ -806,6 +823,11 @@ function AppContent() {
 			}
 		} catch (error) {
 			console.error("Failed to execute FetchXML:", error);
+			const message =
+				error instanceof Error
+					? error.message
+					: "An unexpected error occurred while executing the query.";
+			setExecuteError(message);
 			setQueryResult({ columns: [], rows: [] });
 			setIsExecuting(false);
 		}
@@ -885,7 +907,8 @@ function AppContent() {
 	 * Load more records (for infinite scroll when Retrieve All is OFF)
 	 */
 	const handleLoadMore = async () => {
-		if (!fetchXml || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
+		const xmlToPage = lastExecutedXmlRef.current || fetchXml;
+		if (!xmlToPage || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
 		if (pagingState.isRetrieveAllInProgress) return; // Don't allow manual load during Retrieve All
 
 		// Don't load more if user has set a 'top' limit
@@ -904,7 +927,7 @@ function AppContent() {
 
 			// Add paging parameters: page number, paging cookie (required for reliable paging), and count (page size)
 			const pagedFetchXml = addPagingToFetchXml(
-				fetchXml,
+				xmlToPage,
 				nextPage,
 				pagingState.pagingCookie,
 				pageSize,
@@ -1494,6 +1517,8 @@ function AppContent() {
 					isExporting={exportStatus.isExporting}
 					exportError={exportStatus.error}
 					onDismissExportError={() => setExportStatus((prev) => ({ ...prev, error: undefined }))}
+					executeError={executeError}
+					onDismissExecuteError={() => setExecuteError(undefined)}
 					exportDisabledReason={
 						!builder.loadedView
 							? "Save as a view first to enable export"
