@@ -3,7 +3,7 @@
  * Contains display preferences for FetchXML Studio
  */
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
 	DrawerBody,
 	DrawerHeader,
@@ -20,8 +20,17 @@ import {
 	Radio,
 	RadioGroup,
 	Tooltip,
+	Input,
+	Field,
 } from "@fluentui/react-components";
-import { Dismiss24Regular, Settings20Regular, Info16Regular } from "@fluentui/react-icons";
+import {
+	Dismiss24Regular,
+	Settings20Regular,
+	Info16Regular,
+	Add20Regular,
+	Dismiss16Regular,
+	PlugConnected20Regular,
+} from "@fluentui/react-icons";
 import type {
 	DisplaySettings,
 	ValueDisplayMode,
@@ -79,6 +88,42 @@ const useStyles = makeStyles({
 		color: tokens.colorNeutralForegroundDisabled,
 		fontStyle: "italic",
 	},
+	toolInputRow: {
+		display: "flex",
+		gap: tokens.spacingHorizontalS,
+		alignItems: "flex-end",
+		marginTop: tokens.spacingVerticalXS,
+	},
+	toolInput: {
+		flex: 1,
+	},
+	toolList: {
+		listStyle: "none",
+		margin: 0,
+		padding: 0,
+		display: "flex",
+		flexDirection: "column",
+		gap: tokens.spacingVerticalXS,
+		marginTop: tokens.spacingVerticalS,
+	},
+	toolListItem: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+		background: tokens.colorNeutralBackground3,
+		borderRadius: tokens.borderRadiusMedium,
+		padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
+	},
+	toolListItemId: {
+		flex: 1,
+		fontSize: tokens.fontSizeBase200,
+		color: tokens.colorNeutralForeground2,
+		overflowWrap: "anywhere" as const,
+	},
+	toolListItemIcon: {
+		color: tokens.colorBrandForeground1,
+		flexShrink: 0,
+	},
 });
 
 export interface SettingsDrawerProps {
@@ -106,6 +151,24 @@ export function SettingsDrawer({
 	accessSummary,
 }: SettingsDrawerProps) {
 	const styles = useStyles();
+	const [newToolId, setNewToolId] = useState("");
+
+	const handleAddTool = useCallback(() => {
+		const trimmed = newToolId.trim();
+		if (!trimmed || settings.targetTools.includes(trimmed)) return;
+		onSettingsChange({ ...settings, targetTools: [...settings.targetTools, trimmed] });
+		setNewToolId("");
+	}, [newToolId, settings, onSettingsChange]);
+
+	const handleRemoveTool = useCallback(
+		(toolId: string) => {
+			onSettingsChange({
+				...settings,
+				targetTools: settings.targetTools.filter((t) => t !== toolId),
+			});
+		},
+		[settings, onSettingsChange],
+	);
 
 	const handleLogicalNamesChange = useCallback(
 		(checked: boolean) => {
@@ -289,6 +352,67 @@ export function SettingsDrawer({
 							<Option value="raw">Raw</Option>
 							<Option value="both">Both (2 columns per attribute)</Option>
 						</Dropdown>
+					</div>
+				</div>
+				<Divider />
+
+				{/* ── Tool Integration Section ────────────────────────── */}
+				<div className={styles.section} style={{ marginTop: tokens.spacingVerticalL }}>
+					<Text className={styles.sectionTitle}>
+						<PlugConnected20Regular />
+						Tool Integration
+					</Text>
+
+					<div className={styles.settingItem}>
+						<Text className={styles.settingLabel}>
+							Target Tools
+							<Tooltip
+								content="npm package IDs of PPTB tools this studio can send FetchXML queries to via Tool-to-Tool invocation. Example: @linked365/pptb-bulk-data-studio"
+								relationship="description"
+							>
+								<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
+							</Tooltip>
+						</Text>
+						<Text className={styles.settingDescription} block>
+							Tools that will appear in the &ldquo;Send to Tool&rdquo; button
+						</Text>
+
+						<Field label="Tool package ID">
+							<div className={styles.toolInputRow}>
+								<Input
+									className={styles.toolInput}
+									placeholder="e.g. @linked365/pptb-bulk-data-studio"
+									value={newToolId}
+									onChange={(_e, data) => setNewToolId(data.value)}
+									onKeyDown={(e) => e.key === "Enter" && handleAddTool()}
+								/>
+								<Button
+									appearance="primary"
+									icon={<Add20Regular />}
+									onClick={handleAddTool}
+									disabled={!newToolId.trim() || settings.targetTools.includes(newToolId.trim())}
+									aria-label="Add tool"
+								/>
+							</div>
+						</Field>
+
+						{settings.targetTools.length > 0 && (
+							<ul className={styles.toolList}>
+								{settings.targetTools.map((toolId) => (
+									<li key={toolId} className={styles.toolListItem}>
+										<PlugConnected20Regular className={styles.toolListItemIcon} />
+										<span className={styles.toolListItemId}>{toolId}</span>
+										<Button
+											appearance="subtle"
+											size="small"
+											icon={<Dismiss16Regular />}
+											onClick={() => handleRemoveTool(toolId)}
+											aria-label={`Remove ${toolId}`}
+										/>
+									</li>
+								))}
+							</ul>
+						)}
 					</div>
 				</div>
 			</DrawerBody>

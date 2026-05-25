@@ -153,6 +153,8 @@ interface PreviewTabsProps {
 	onSortChange?: (data: SortChangeData) => void;
 	/** Optional SaveViewButton to render in the toolbar */
 	saveViewButton?: ReactNode;
+	/** Optional SendToToolButton to render in the toolbar */
+	sendToToolButton?: ReactNode;
 	/** Callback when user scrolls near bottom (infinite scroll) */
 	onLoadMore?: () => void;
 	/** Whether export is available (requires a saved view) */
@@ -234,6 +236,7 @@ export function PreviewTabs({
 	onRemoveColumn,
 	onSortChange,
 	saveViewButton,
+	sendToToolButton,
 	onLoadMore,
 	canExport,
 	isExporting,
@@ -370,6 +373,12 @@ export function PreviewTabs({
 						<>
 							<ToolbarDivider />
 							{saveViewButton}
+						</>
+					)}
+					{sendToToolButton && (
+						<>
+							<ToolbarDivider />
+							{sendToToolButton}
 						</>
 					)}
 					<ToolbarDivider />

@@ -5,6 +5,40 @@ All notable changes to FetchXML Studio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2-beta.1] - 2026-05-25
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) Invocation — Caller
+
+FetchXML Studio can now send the active query to any other PPTB tool that accepts a FetchXML prefill payload. Requires **PPTB host ≥ 1.2.2**.
+
+- **Send to Tool button** — A new "Send to Tool" button appears in the toolbar (alongside Save View) whenever the PPTB host exposes the `toolboxAPI.invocation` API. Three interaction modes depending on how many target tools are configured:
+  - *No tools configured* — Button is disabled with a tooltip pointing to Settings → Tool Integration.
+  - *One tool configured* — Single button; click launches the tool directly.
+  - *Multiple tools configured* — Dropdown menu listing all configured tools; click an item to launch.
+- **Settings → Tool Integration section** — New section in the Settings drawer to manage the list of target tool npm package IDs (e.g. `@linked365/pptb-bulk-data-studio`). Supports add (text input + Enter/Add button) and remove (× button per item). The list is persisted via `toolboxAPI.settings` alongside other display preferences.
+- **Active connection forwarding** — The caller automatically retrieves the currently active Dataverse connection and forwards its ID as `primaryConnectionId` when launching the target tool, so the callee opens against the same environment.
+- **`pptb.config.json`** — Added PPTB callee contract file at the repository root. Declares the prefill schema this tool accepts when *receiving* a T2T invocation from another tool (see [Callee Contract](#-callee-contract-pptbconfigjson) in the README). `viewRef` is modelled as a Dataverse EntityReference: required fields `id` (UUID string) and `entityLogicalName` (enum: `"savedquery"` | `"userquery"`).
+
+### 🏗️ Technical
+
+- `src/features/fetchxml/api/invocation.ts` — New module. Defines a local `InvocationAPI` interface (mirrors the PPTB host API not yet in `@pptb/types`) and exposes `isT2TSupported()` and `sendFetchXmlToTool(targetToolId, { fetchXml, entityLogicalName })`.
+- `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx` — New toolbar component. Handles the disabled / single / multi-tool rendering variants; calls `sendFetchXmlToTool`; surfaces errors via `toolboxAPI.utils.showNotification`.
+- `src/features/fetchxml/model/displaySettings.ts` — Added `targetTools: string[]` (default `[]`) to `DisplaySettings` interface and `defaultDisplaySettings`.
+- `src/features/fetchxml/ui/Settings/SettingsDrawer.tsx` — Added Tool Integration section with add/remove UI. Added `Input`, `Field`, `Add20Regular`, `Dismiss16Regular`, `PlugConnected20Regular` to imports.
+- `src/features/fetchxml/ui/RightPane/PreviewTabs.tsx` — Added `sendToToolButton?: ReactNode` prop; rendered unconditionally (all tabs) next to `saveViewButton`.
+- `src/app/AppShell.tsx` — Imports `SendToToolButton` + `isT2TSupported`; passes `sendToToolButton` prop to `PreviewTabs` gated on `isT2TSupported()`.
+- `package.json` — `features.minAPI` bumped from `1.2.0` → `1.2.2` to reflect the new PPTB host requirement. `scheduler` added to `devDependencies` (required peer dep of `@fluentui/react-context-selector` that was missing from the install tree).
+
+#### Packaging fixes (resolves #33)
+
+- **`icon` path corrected** — `"icon"` field in `package.json` was missing the `icons/` directory prefix (`"icon-insider.svg"` → `"icons/icon-insider.svg"`). Icon was not resolvable by PPTB at install time.
+- **`files` array expanded** — Added `"icons"`, `"index.html"`, `"LICENSE"`, `"README.md"`, `"CHANGELOG.md"`, `"SECURITY.md"` alongside the existing `"dist"` and `"npm-shrinkwrap.json"` entries. Previously the `icons/` folder (referenced by the `"icon"` field) and all root-level docs were absent from the published package.
+- **Production source maps disabled** — Added `sourcemap: false` to `vite.config.ts` `build` options. Monaco worker source maps were silently adding ~17 MB to the package; disabling them brings the published size down to ~3–4 MB.
+
+---
+
 ## [1.2.1] - 2026-04-07
 
 ### ✨ Added

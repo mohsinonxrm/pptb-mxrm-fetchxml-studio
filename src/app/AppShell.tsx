@@ -16,6 +16,8 @@ import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
+import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
+import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
@@ -1550,6 +1552,16 @@ function AppContent() {
 							onSaveComplete={handleSaveViewComplete}
 							disabled={!fetchXml || !entityMetadata}
 						/>
+					}
+					sendToToolButton={
+						isT2TSupported() ? (
+							<SendToToolButton
+								fetchXml={fetchXml}
+								entityLogicalName={builder.fetchQuery?.entity?.name || ""}
+								targetTools={displaySettings.targetTools}
+								disabled={!fetchXml || !builder.fetchQuery?.entity?.name}
+							/>
+						) : undefined
 					}
 					onReorderColumns={(columns) => {
 						// Set the column config with new order

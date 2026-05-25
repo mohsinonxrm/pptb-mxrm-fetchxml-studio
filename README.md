@@ -2,11 +2,11 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.2.2--beta.1-orange)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
-![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.0-orange)
+![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.2--beta.1-orange)
 
 ## ✨ Features
 
@@ -63,8 +63,13 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Query scope settings** — Control which entities appear in the entity picker: *Publisher + Solution* (full filter), *Solution Only*, or *All Entities* (no filter). Persisted across sessions.
 - **Advanced Find Only toggle** — When on (default), limits entities and attributes to those marked `IsValidForAdvancedFind = true`. Disable to access all entities including system and developer tables. Filter is applied locally — toggling is instant with no additional API call.
 
-### 🔒 Privilege-Aware
-- **Security checks** — Validates user privileges before every destructive or restricted operation
+### � Tool-to-Tool (T2T) Integration
+- **Send to Tool button** — Launch any other PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection. Appears automatically when running on PPTB host ≥ 1.2.2.
+- **Multi-tool picker** — Configure one or more target tools in Settings → Tool Integration. When multiple tools are configured, the button shows a dropdown menu.
+- **Active connection forwarding** — The active Dataverse connection is forwarded automatically so the target tool opens against the same environment.
+- **Inbound prefill** — FetchXML Studio also accepts incoming T2T invocations from other tools (see [Callee Contract](#-callee-contract-pptbconfigjson) below).
+
+### �🔒 Privilege-Aware
 - **Export privilege check** — Only shows Dataverse export option if user has access
 - **Delete privilege check** — Validates entity-specific delete permissions before enabling delete actions
 - **Bulk delete privilege check** — Validates `prvBulkDelete` before surfacing bulk delete
@@ -75,7 +80,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  [Entity Selector ▼]  [Load View ▼]  [Save View]           [⚙ Settings]│
+│  [Entity Selector ▼]  [Load View ▼]  [Save View] [Send to Tool ▼]  [⚙] │
 ├──────────────────────┬──────────────────────────────────────────────────┤
 │                      │  [FetchXML]  [LayoutXML]  [Results]   [▶ Execute]│
 │   Query Tree         ├──────────────────────────────────────────────────┤
@@ -169,7 +174,7 @@ disableAllDebug();
 | **Monaco Editor** | 0.54 | VS Code XML editor for FetchXML authoring |
 | **react-window** | 2 | Virtualized list rendering for large datasets |
 | **ExcelJS** | 4.4 | Native `.xlsx` generation with typed cells |
-| **@pptb/types** | 1.2.0 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
+| **@pptb/types** | 1.2.2-beta.1 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
 
 ## 📁 Project Structure
 
@@ -182,7 +187,8 @@ src/
 │   │   ├── pptbClient.ts         # window.dataverseAPI wrapper (all Dataverse ops)
 │   │   ├── dataverseMetadata.ts  # Lazy metadata loading with cache + dedup
 │   │   ├── excelExport.ts        # Local ExcelJS export with native types
-│   │   └── formattedValues.ts    # OData @FormattedValue annotation helpers
+│   │   ├── formattedValues.ts    # OData @FormattedValue annotation helpers
+│   │   └── invocation.ts         # T2T caller API (isT2TSupported, sendFetchXmlToTool)
 │   ├── model/
 │   │   ├── nodes.ts              # FetchXML node TypeScript definitions
 │   │   ├── fetchxml.ts           # FetchXML XML generation
@@ -200,7 +206,8 @@ src/
 │       │   └── PropertiesPanel/
 │       │       └── editors/      # Node-specific property editors
 │       ├── RightPane/            # Monaco editor, LayoutXML viewer, results grid
-│       ├── Toolbar/              # Entity selector, load view picker, save button
+│       ├── Toolbar/              # Entity selector, load view picker, save button,
+│       │                         # send-to-tool button
 │       ├── Dialogs/              # Save view, select attributes, delete, bulk
 │       │                         # delete, workflow picker, solution picker
 │       └── Settings/             # Settings drawer (display preferences)
@@ -237,6 +244,56 @@ src/
 | Entity name on conditions | ✅ |
 | Filter link-entity (any/all) | ✅ |
 | Query hints | ✅ |
+
+## 🔗 Callee Contract (`pptb.config.json`)
+
+FetchXML Studio declares a PPTB [Inter-Tool Invocation](https://github.com/PowerPlatformToolBox/desktop-app) callee contract in `pptb.config.json` at the repository root. Any other PPTB tool can launch FetchXML Studio and pre-populate it by passing a prefill payload that matches the following schema:
+
+```json
+{
+  "fetchXml": "<fetch><entity name=\"account\">...</entity></fetch>",
+  "entityLogicalName": "account"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `fetchXml` | `string` | Recommended | Full serialized FetchXML query string |
+| `entityLogicalName` | `string` | Recommended | Root entity logical name (e.g. `"account"`) |
+| `viewRef` | `object` | Optional | EntityReference to an existing view. Use instead of `fetchXml` + `entityLogicalName` when launching from a view context. |
+| `viewRef.id` | `string` (uuid) | Required if viewRef | GUID of the view record |
+| `viewRef.entityLogicalName` | `"savedquery"` \| `"userquery"` | Required if viewRef | Dataverse entity logical name — `savedquery` = system/public view, `userquery` = personal view |
+
+All fields are optional in the schema; at runtime FetchXML Studio expects either `viewRef` **or** both `fetchXml` + `entityLogicalName` to be present.
+
+> **Note:** Callee-side behavior (consuming an inbound prefill on launch) is planned for a future release. The contract file and schema are declared now so other tools can reference them.
+
+### Sending a query from another PPTB tool
+
+To launch FetchXML Studio from your own PPTB tool with a pre-loaded query:
+
+```typescript
+await window.toolboxAPI.invocation.launchTool(
+  "@mohsinonxrm/pptb-fetchxml-studio",
+  {
+    fetchXml: "<fetch><entity name=\"account\"><attribute name=\"name\"/></entity></fetch>",
+    entityLogicalName: "account",
+  },
+  { primaryConnectionId: connection?.id ?? null },
+);
+```
+
+### Configuring outbound targets (Send to Tool)
+
+To send FetchXML Studio queries *to* another tool:
+
+1. Open **Settings** (⚙ icon in the toolbar)
+2. Scroll to **Tool Integration**
+3. Enter the target tool's npm package ID (e.g. `@linked365/pptb-bulk-data-studio`) and click **Add**
+
+The "Send to Tool" button will appear in the toolbar. Multiple tools show a dropdown picker.
+
+---
 
 ## 🤝 Contributing
 

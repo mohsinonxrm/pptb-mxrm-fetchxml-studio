@@ -30,6 +30,11 @@ export interface DisplaySettings {
 	 * When false, all entities/attributes are shown (power-user / developer mode).
 	 */
 	advancedFindOnly: boolean;
+	/**
+	 * List of PPTB tool npm package IDs that FetchXML Studio can send queries to
+	 * via Tool-to-Tool (T2T) invocation. e.g. ["@linked365/pptb-bulk-data-studio"].
+	 */
+	targetTools: string[];
 }
 
 /** Default display settings */
@@ -38,4 +43,5 @@ export const defaultDisplaySettings: DisplaySettings = {
 	valueDisplayMode: "formatted",
 	entityScopeMode: "publisher-solution",
 	advancedFindOnly: true,
+	targetTools: [],
 };

@@ -1,0 +1,36 @@
+{
+	"invocation": {
+		"version": "1.0.0",
+		"prefill": {
+			"description": "Pass either 'viewRef' OR the combination of 'fetchXml' + 'entityLogicalName'. All fields are optional but one of these two forms must be present for the tool to pre-populate.",
+			"properties": {
+				"fetchXml": {
+					"type": "string",
+					"description": "Serialized FetchXML query string. Required when viewRef is not provided."
+				},
+				"entityLogicalName": {
+					"type": "string",
+					"description": "Root entity logical name, e.g. 'account'. Required when viewRef is not provided."
+				},
+				"viewRef": {
+					"type": "object",
+					"description": "EntityReference to an existing view. When provided, fetchXml and entityLogicalName are derived from the view. Mutually exclusive with fetchXml + entityLogicalName.",
+					"required": ["id", "entityLogicalName"],
+					"additionalProperties": false,
+					"properties": {
+						"id": {
+							"type": "string",
+							"format": "uuid",
+							"description": "GUID of the view record."
+						},
+						"entityLogicalName": {
+							"type": "string",
+							"enum": ["savedquery", "userquery"],
+							"description": "Dataverse entity logical name: savedquery = system/public view; userquery = personal view."
+						}
+					}
+				}
+			}
+		}
+	}
+}
