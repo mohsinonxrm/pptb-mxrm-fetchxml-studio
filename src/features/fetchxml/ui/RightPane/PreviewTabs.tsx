@@ -19,8 +19,14 @@ import {
 	MessageBarTitle,
 	MessageBarActions,
 } from "@fluentui/react-components";
-import { Play24Regular, Dismiss16Regular, Settings20Regular } from "@fluentui/react-icons";
+import {
+	Play24Regular,
+	Dismiss16Regular,
+	Settings20Regular,
+	Code20Regular,
+} from "@fluentui/react-icons";
 import { FetchXmlEditor } from "./FetchXmlEditor";
+import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
@@ -267,7 +273,7 @@ export function PreviewTabs({
 	displaySettings,
 }: PreviewTabsProps) {
 	const styles = useStyles();
-	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results">("xml");
+	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results" | "code">("xml");
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
@@ -286,7 +292,7 @@ export function PreviewTabs({
 	}, []);
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-		setSelectedTab(data.value as "xml" | "layout" | "results");
+		setSelectedTab(data.value as "xml" | "layout" | "results" | "code");
 		// Clear the editor validation error when returning to the XML tab so it
 		// doesn't linger as a banner on top of the editor.
 		if (data.value === "xml") {
@@ -356,6 +362,9 @@ export function PreviewTabs({
 					<Tab value="xml">FetchXML</Tab>
 					<Tab value="layout">LayoutXML</Tab>
 					<Tab value="results">Results</Tab>
+					<Tab value="code" icon={<Code20Regular />}>
+						Code
+					</Tab>
 				</TabList>
 				<Toolbar size="small">
 					<Button
@@ -474,6 +483,11 @@ export function PreviewTabs({
 				{selectedTab === "layout" && (
 					<div className={styles.codeCard}>
 						<LayoutXmlViewer layoutXml={layoutXml || ""} />
+					</div>
+				)}
+				{selectedTab === "code" && (
+					<div className={styles.codeCard}>
+						<CodePanel fetchXml={xml} />
 					</div>
 				)}
 				{selectedTab === "results" && (
