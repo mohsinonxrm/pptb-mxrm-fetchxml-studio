@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
@@ -53,6 +53,16 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Smart updates** — Adds new selections and removes deselected attributes while preserving existing order and properties
 - **Search & filter** — Real-time filtering across logical name, display name, and data type columns
 
+### 🔀 Code Generation
+- **Code tab** — New tab in the right pane that generates ready-to-use code from the current query in seven formats
+- **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`
+- **C# FetchExpression** — Simple `new FetchExpression(@"...")` wrapper using a verbatim string literal
+- **JavaScript** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
+- **pac CLI** — `pac org fetch --xml "..."` command for the Power Platform CLI
+- **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI; table name resolved from `EntityDefinitions` metadata (not a heuristic), each field individually copyable
+- **Web API** — Full OData URL with request headers, cURL snippet, and PowerShell `Invoke-RestMethod` example; entity set name resolved from metadata
+- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview)
+
 ### 🎨 User Experience
 - **Dark/Light themes** — Follows Power Platform ToolBox theme with Fluent UI tokens
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
@@ -77,7 +87,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  [Entity Selector ▼]  [Load View ▼]  [Save View]           [⚙ Settings]│
 ├──────────────────────┬──────────────────────────────────────────────────┤
-│                      │  [FetchXML]  [LayoutXML]  [Results]   [▶ Execute]│
+│                      │  [FetchXML]  [LayoutXML]  [Results]  [Code]  [▶ Execute]│
 │   Query Tree         ├──────────────────────────────────────────────────┤
 │                      │                                                   │
 │   📁 fetch           │   Results Grid / Monaco Editor                   │
@@ -192,6 +202,10 @@ src/
 │   │   ├── operators.ts          # Operator definitions by attribute type
 │   │   ├── displaySettings.ts    # Display settings types and defaults
 │   │   └── treeUtils.ts          # Tree traversal utilities
+│   ├── engine/
+│   │   ├── queryExpressionTypes.ts   # QE JSON schema interfaces (number | string enums)
+│   │   ├── queryExpressionCodegen.ts # C# SDK code emitter (resolveEnum, unwrapODataValue)
+│   │   └── fetchxmlCodeGenerators.ts # Sync generators: FetchExpr, JS, pac, PA, WebAPI
 │   ├── state/
 │   │   ├── builderStore.tsx      # React context + reducer state management
 │   │   └── cache.ts              # Per-session in-memory metadata cache
@@ -199,7 +213,8 @@ src/
 │       ├── LeftPane/             # Tree view + context-aware properties panel
 │       │   └── PropertiesPanel/
 │       │       └── editors/      # Node-specific property editors
-│       ├── RightPane/            # Monaco editor, LayoutXML viewer, results grid
+│       ├── RightPane/            # Monaco editor, LayoutXML viewer, results grid,
+│       │                         # code generation panel, Power Automate pane
 │       ├── Toolbar/              # Entity selector, load view picker, save button
 │       ├── Dialogs/              # Save view, select attributes, delete, bulk
 │       │                         # delete, workflow picker, solution picker
