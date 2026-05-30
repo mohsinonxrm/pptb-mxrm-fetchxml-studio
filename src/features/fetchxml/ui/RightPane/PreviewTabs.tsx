@@ -218,6 +218,8 @@ interface PreviewTabsProps {
 	onOpenSettings?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
+	/** Primary key attribute from Dataverse entity metadata (e.g. "activityid" for activity entities) */
+	primaryIdAttribute?: string;
 }
 
 export function PreviewTabs({
@@ -271,6 +273,7 @@ export function PreviewTabs({
 	getSelectedRecordIds,
 	onOpenSettings,
 	displaySettings,
+	primaryIdAttribute,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results" | "code">("xml");
@@ -577,6 +580,7 @@ export function PreviewTabs({
 								isLoadingMore={isLoadingMore}
 								attributeMetadata={attributeMetadata}
 								fetchQuery={fetchQuery}
+								primaryIdAttribute={primaryIdAttribute}
 								onSelectedCountChange={setToolbarSelectedCount}
 								onSelectionChange={handleSelectionChange}
 								columnConfig={columnConfig}

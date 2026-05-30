@@ -202,7 +202,7 @@ ${cells}
  */
 export function collectAttributesFromFetchXml(
 	fetchQuery: FetchNode,
-	attributeTypeMap?: Map<string, string>
+	attributeTypeMap?: Map<string, string>,
 ): LayoutColumn[] {
 	const columns: LayoutColumn[] = [];
 
@@ -267,12 +267,14 @@ export function collectAttributesFromFetchXml(
 /**
  * Generate a LayoutXmlConfig from a FetchXML query
  * Used when no layoutxml exists (custom FetchXML)
+ * @param primaryIdAttribute - The entity's real primary key attribute from Dataverse metadata.
+ *   Must be supplied by the caller from entity metadata — no guessing is performed.
  */
 export function generateLayoutFromFetchXml(
 	fetchQuery: FetchNode,
-	attributeTypeMap?: Map<string, string>
+	primaryIdAttribute?: string,
+	attributeTypeMap?: Map<string, string>,
 ): LayoutXmlConfig {
-	const entityName = fetchQuery.entity.name;
 	const columns = collectAttributesFromFetchXml(fetchQuery, attributeTypeMap);
 
 	return {
@@ -281,7 +283,7 @@ export function generateLayoutFromFetchXml(
 		enableSelection: true,
 		showIcon: true,
 		enablePreview: true,
-		primaryIdAttribute: `${entityName}id`,
+		primaryIdAttribute,
 		columns,
 	};
 }
@@ -295,7 +297,7 @@ export function generateLayoutFromFetchXml(
 export function mergeLayoutWithFetchXml(
 	existingConfig: LayoutXmlConfig,
 	fetchQuery: FetchNode,
-	attributeTypeMap?: Map<string, string>
+	attributeTypeMap?: Map<string, string>,
 ): LayoutXmlConfig {
 	const fetchColumns = collectAttributesFromFetchXml(fetchQuery, attributeTypeMap);
 	const fetchColumnNames = new Set(fetchColumns.map((c) => c.name));
@@ -303,7 +305,7 @@ export function mergeLayoutWithFetchXml(
 
 	// Keep existing columns that are still in FetchXML (preserves order and width)
 	const mergedColumns: LayoutColumn[] = existingConfig.columns.filter((col) =>
-		fetchColumnNames.has(col.name)
+		fetchColumnNames.has(col.name),
 	);
 
 	// Add new columns from FetchXML that weren't in existing layout
@@ -343,12 +345,12 @@ export function isLayoutValidForFetchXml(config: LayoutXmlConfig, fetchQuery: Fe
 export function updateColumnWidth(
 	config: LayoutXmlConfig,
 	columnName: string,
-	newWidth: number
+	newWidth: number,
 ): LayoutXmlConfig {
 	return {
 		...config,
 		columns: config.columns.map((col) =>
-			col.name === columnName ? { ...col, width: newWidth } : col
+			col.name === columnName ? { ...col, width: newWidth } : col,
 		),
 	};
 }
@@ -359,7 +361,7 @@ export function updateColumnWidth(
 export function reorderColumns(
 	config: LayoutXmlConfig,
 	fromIndex: number,
-	toIndex: number
+	toIndex: number,
 ): LayoutXmlConfig {
 	const columns = [...config.columns];
 	const [removed] = columns.splice(fromIndex, 1);

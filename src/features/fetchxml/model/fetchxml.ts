@@ -38,8 +38,12 @@ function formatValueForFetchXml(val: unknown): string {
 
 /**
  * Generate complete FetchXML from FetchNode
+ * @param primaryIdAttribute - The entity's real primary key attribute name from Dataverse metadata
+ *   (e.g. "activityid" for activity entities like email/task, "accountid" for account).
+ *   When provided, it is injected into the query so row selection and paging work correctly.
+ *   When omitted, no primary key injection occurs — callers must supply this from entity metadata.
  */
-export function generateFetchXml(fetchNode: FetchNode): string {
+export function generateFetchXml(fetchNode: FetchNode, primaryIdAttribute?: string): string {
 	const lines: string[] = [];
 
 	// Build fetch element with options
@@ -60,7 +64,7 @@ export function generateFetchXml(fetchNode: FetchNode): string {
 	lines.push(`<fetch${fetchAttrStr}>`);
 
 	// Generate entity
-	lines.push(...generateEntity(fetchNode.entity, 1));
+	lines.push(...generateEntity(fetchNode.entity, 1, primaryIdAttribute));
 
 	lines.push("</fetch>");
 
@@ -69,8 +73,9 @@ export function generateFetchXml(fetchNode: FetchNode): string {
 
 /**
  * Generate entity element
+ * @param primaryIdAttribute - Primary key attribute name from metadata; injected when absent from attributes.
  */
-function generateEntity(entity: EntityNode, indent: number): string[] {
+function generateEntity(entity: EntityNode, indent: number, primaryIdAttribute?: string): string[] {
 	const lines: string[] = [];
 	const spaces = "  ".repeat(indent);
 
@@ -81,17 +86,17 @@ function generateEntity(entity: EntityNode, indent: number): string[] {
 		lines.push(...generateAllAttributes(entity.allAttributes, indent + 1));
 	}
 
-	// CRITICAL: Always include the primary ID attribute for row selection to work
-	// The primary ID is {entityname}id (e.g., accountid, contactid)
-	const primaryIdAttrName = `${entity.name}id`;
-	const hasPrimaryId =
-		entity.attributes.some((attr) => attr.name === primaryIdAttrName) ||
-		entity.allAttributes?.enabled;
+	// Inject the primary key attribute when not already present, so row selection and paging work.
+	// We rely exclusively on the PrimaryIdAttribute from Dataverse entity metadata — no guessing.
+	if (primaryIdAttribute) {
+		const hasPrimaryId =
+			entity.attributes.some((attr) => attr.name === primaryIdAttribute) ||
+			entity.allAttributes?.enabled;
 
-	if (!hasPrimaryId) {
-		// Inject primary ID attribute at the beginning
-		const primaryIdSpaces = "  ".repeat(indent + 1);
-		lines.push(`${primaryIdSpaces}<attribute name="${primaryIdAttrName}" />`);
+		if (!hasPrimaryId) {
+			const primaryIdSpaces = "  ".repeat(indent + 1);
+			lines.push(`${primaryIdSpaces}<attribute name="${primaryIdAttribute}" />`);
+		}
 	}
 
 	// Attributes
@@ -308,7 +313,7 @@ export function addPagingToFetchXml(
 	fetchXml: string,
 	page: number,
 	pagingCookie?: string,
-	count?: number
+	count?: number,
 ): string {
 	// Parse the fetch element attributes
 	const fetchMatch = fetchXml.match(/<fetch([^>]*)>/);
