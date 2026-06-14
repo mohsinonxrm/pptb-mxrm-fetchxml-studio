@@ -247,40 +247,48 @@ src/
 
 ## 🔗 Callee Contract (`pptb.config.json`)
 
-FetchXML Studio declares a PPTB [Inter-Tool Invocation](https://github.com/PowerPlatformToolBox/desktop-app) callee contract in `pptb.config.json` at the repository root. Any other PPTB tool can launch FetchXML Studio and pre-populate it by passing a prefill payload that matches the following schema:
+FetchXML Studio declares a PPTB [Inter-Tool Invocation](https://github.com/PowerPlatformToolBox/desktop-app) callee contract in `pptb.config.json` at the repository root, and declares the `fetchxml` capability so callers can discover it. Any other PPTB tool can launch FetchXML Studio and pre-populate it by passing a prefill payload that matches the following schema:
 
 ```json
 {
-  "fetchXml": "<fetch><entity name=\"account\">...</entity></fetch>",
-  "entityLogicalName": "account"
+  "fetchXml": "<fetch><entity name=\"account\">...</entity></fetch>"
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `fetchXml` | `string` | Recommended | Full serialized FetchXML query string |
-| `entityLogicalName` | `string` | Recommended | Root entity logical name (e.g. `"account"`) |
-| `viewRef` | `object` | Optional | EntityReference to an existing view. Use instead of `fetchXml` + `entityLogicalName` when launching from a view context. |
+| `fetchXml` | `string` | One of these three | Full serialized FetchXML query string. The root entity is parsed from this. |
+| `viewRef` | `object` | One of these three | EntityReference to an existing view. The FetchXML is retrieved from the view record. |
+| `entityLogicalName` | `string` | One of these three | Root entity logical name (e.g. `"account"`). Starts a fresh query on that entity. **Ignored when `fetchXml` is present** — the root entity is then derived from the FetchXML, since a mismatched value would break this metadata-driven tool's lookups. |
 | `viewRef.id` | `string` (uuid) | Required if viewRef | GUID of the view record |
 | `viewRef.entityLogicalName` | `"savedquery"` \| `"userquery"` | Required if viewRef | Dataverse entity logical name — `savedquery` = system/public view, `userquery` = personal view |
 
-All fields are optional in the schema; at runtime FetchXML Studio expects either `viewRef` **or** both `fetchXml` + `entityLogicalName` to be present.
+Resolution priority at runtime: **`fetchXml` → `viewRef` → `entityLogicalName`**. With no prefill (a standalone launch) the tool opens empty.
 
-> **Note:** Callee-side behavior (consuming an inbound prefill on launch) is planned for a future release. The contract file and schema are declared now so other tools can reference them.
+### Returning a query to the caller
+
+When FetchXML Studio is launched by another tool, a **Return FetchXML** button appears in the FetchXML toolbar. Clicking it returns the current query to the caller:
+
+```json
+{ "fetchXml": "<fetch>...</fetch>" }
+```
+
+The caller receives this as the resolved value of `launchTool(...)`. This is distinct from the host-injected "Return to [Caller]" banner, which simply navigates back and resolves the caller's promise with `null` (no data).
 
 ### Sending a query from another PPTB tool
 
 To launch FetchXML Studio from your own PPTB tool with a pre-loaded query:
 
 ```typescript
-await window.toolboxAPI.invocation.launchTool(
+const result = await window.toolboxAPI.invocation.launchTool(
   "@mohsinonxrm/pptb-fetchxml-studio",
-  {
-    fetchXml: "<fetch><entity name=\"account\"><attribute name=\"name\"/></entity></fetch>",
-    entityLogicalName: "account",
-  },
+  { fetchXml: "<fetch><entity name=\"account\"><attribute name=\"name\"/></entity></fetch>" },
   { primaryConnectionId: connection?.id ?? null },
 );
+
+// If the user clicks "Return FetchXML", result is { fetchXml }.
+// If they close the window or click the host's back banner, result is null.
+const editedFetchXml = (result as { fetchXml?: string } | null)?.fetchXml;
 ```
 
 ### Configuring outbound targets (Send to Tool)

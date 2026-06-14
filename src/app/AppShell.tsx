@@ -17,7 +17,8 @@ import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddC
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
-import { isT2TSupported } from "../features/fetchxml/api/invocation";
+import { isT2TSupported, resolveLaunchPrefill } from "../features/fetchxml/api/invocation";
+import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
@@ -240,6 +241,47 @@ function AppContent() {
 	const styles = useStyles();
 	const builder = useBuilder();
 	const { loadAttributes, loadEntityMetadata, loadRelationships } = useLazyMetadata();
+
+	// Tool-to-Tool (T2T) launch context: detected once, shared across the app.
+	// When present, another tool launched us with a prefill payload.
+	const launch = useLaunchContext();
+	const prefillConsumedRef = useRef(false);
+
+	// Consume the inbound prefill exactly once. When a FetchXML query is supplied,
+	// load it (the root entity is derived from the FetchXML). When only an entity is
+	// supplied, start a fresh query rooted at that entity (metadata-driven).
+	useEffect(() => {
+		if (launch.loading || prefillConsumedRef.current) return;
+		prefillConsumedRef.current = true;
+
+		if (!launch.context) return;
+
+		void (async () => {
+			try {
+				const action = await resolveLaunchPrefill(launch.context);
+				if (!action) return;
+
+				if (action.kind === "entity") {
+					builder.setEntity(action.entityLogicalName);
+					return;
+				}
+
+				const result = builder.loadFetchXml(action.fetchXml);
+				if (!result.success) {
+					console.error("T2T prefill: failed to parse incoming FetchXML:", result.errors);
+					await window.toolboxAPI?.utils?.showNotification?.({
+						title: "Could not load incoming query",
+						body: "The tool that launched FetchXML Studio sent a query that couldn't be parsed.",
+						type: "error",
+					});
+				}
+			} catch (error) {
+				console.error("T2T prefill: failed to load launch context:", error);
+			}
+		})();
+		// builder is intentionally omitted — consumption is guarded to run once.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [launch.loading, launch.context]);
 
 	// State for query execution
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
@@ -1529,6 +1571,7 @@ function AppContent() {
 								: undefined
 					}
 					onParseToTree={builder.loadFetchXml}
+					isCallee={launch.isCallee}
 					attributeMetadata={attributeMetadata}
 					fetchQuery={builder.fetchQuery}
 					columnConfig={builder.columnConfig}
@@ -1554,7 +1597,7 @@ function AppContent() {
 						/>
 					}
 					sendToToolButton={
-						isT2TSupported() ? (
+						isT2TSupported() && displaySettings.targetTools.length > 0 ? (
 							<SendToToolButton
 								fetchXml={fetchXml}
 								entityLogicalName={builder.fetchQuery?.entity?.name || ""}

@@ -2,7 +2,7 @@
  * SendToToolButton – launches another PPTB tool with the current FetchXML query as prefill.
  *
  * Reads target tool IDs from displaySettings.targetTools. When no tools are configured,
- * renders as disabled with a tooltip pointing to Settings → Tool Integration.
+ * the button is hidden entirely (targets are added under Settings → Tool Integration).
  * When one tool is configured, renders as a single button. When multiple tools are
  * configured, renders a dropdown menu to choose the target.
  */
@@ -20,7 +20,7 @@ import {
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
-import { PlugConnected20Regular, PlugDisconnected20Regular } from "@fluentui/react-icons";
+import { PlugConnected20Regular } from "@fluentui/react-icons";
 import { sendFetchXmlToTool, type FetchXmlStudioT2TPrefill } from "../../api/invocation";
 
 const useStyles = makeStyles({
@@ -86,18 +86,11 @@ export function SendToToolButton({
 	const isDisabled = disabled || isSending || !fetchXml || !entityLogicalName;
 	const icon = isSending ? <Spinner size="tiny" /> : <PlugConnected20Regular />;
 
-	// No tools configured → disabled button with tooltip
+	// No tools configured → nothing to send to. The button is hidden entirely;
+	// configuration lives under Settings → Tool Integration. (AppShell also gates
+	// on this, so this is a defensive guard.)
 	if (targetTools.length === 0) {
-		return (
-			<Tooltip
-				content="No target tools configured. Add tool package IDs under Settings → Tool Integration."
-				relationship="description"
-			>
-				<Button appearance="subtle" icon={<PlugDisconnected20Regular />} disabled>
-					Send to Tool
-				</Button>
-			</Tooltip>
-		);
+		return null;
 	}
 
 	// Single tool → direct button
