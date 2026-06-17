@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2-beta.2] - 2026-06-16
+
 ### ✨ Added
 
 #### Tool-to-Tool (T2T) Invocation — Callee (prefill + return)
