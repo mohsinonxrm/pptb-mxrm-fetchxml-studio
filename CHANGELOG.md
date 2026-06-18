@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+#### Tool-to-Tool (T2T) — capability-based tool discovery
+
+The "Send to Tool" target list is now populated automatically via the PPTB capability registry instead of a manually maintained list. Requires **`@pptb/types` ≥ 1.2.3-beta.0** and a host that exposes capability discovery.
+
+- **Automatic discovery** — FetchXML Studio calls `toolboxAPI.invocation.findToolsByCapability("fetchxml")` to find installed tools that declare the `fetchxml` capability, excludes itself, and lists them in the Send to Tool button (single button for one match, dropdown for several). Hidden when no matches or when the host lacks discovery — feature-detected at runtime, so older hosts degrade gracefully.
+- **One-way send** — Launches now pass `noReturn: true`, the dedicated flag for the "Send To" pattern, which suppresses the callee's "Return to [Caller]" banner since FXS isn't waiting for data back.
+
+### 🔧 Changed
+
+- **Removed the manual "Tool Integration" settings.** The Settings → Tool Integration section and the `targetTools` display setting are gone; discovery replaces them entirely.
+
+### 🏗️ Technical
+
+- Bumped `@pptb/types` `1.2.2-beta.1` → `1.2.3-beta.0`, which now types `invocation.findToolsByCapability` / `getKnownCapabilityTags`, the `capabilities` field on `InvocationConfig`, the `CapabilityTag`/`KnownCapabilityTag` types, and `launchTool`'s `noReturn` option. Removed the local `InvocationAPI` interface in `invocation.ts` in favor of the now-published host types.
+- `src/features/fetchxml/api/invocation.ts` — Added `DiscoveredTool` + `discoverFetchXmlTools()` (feature-detected; filters out our own id; defaults `name` to `id`); added `noReturn: true` to `sendFetchXmlToTool`.
+- `src/shared/hooks/useSendToTools.ts` — New hook; discovers send targets once on mount.
+- `src/app/AppShell.tsx` — Uses `useSendToTools`; Send to Tool slot now gated on `isT2TSupported() && sendToTools.length > 0`.
+- `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx` — Prop changed from `targetTools: string[]` to `tools: DiscoveredTool[]`; labels use the discovered tool name.
+- `src/features/fetchxml/ui/Settings/SettingsDrawer.tsx` — Removed the Tool Integration section, its handlers/state/styles, and now-unused imports.
+- `src/features/fetchxml/model/displaySettings.ts` — Removed `targetTools` from `DisplaySettings` and the defaults.
+
 ## [1.2.2-beta.2] - 2026-06-16
 
 ### ✨ Added

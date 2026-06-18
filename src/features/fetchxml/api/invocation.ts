@@ -1,29 +1,16 @@
 /**
- * PPTB Tool-to-Tool (T2T) Invocation – Caller API
+ * PPTB Tool-to-Tool (T2T) Invocation helpers.
  *
- * Handles launching other PPTB tools and passing FetchXML query context as prefill data.
+ * Wraps the host invocation API (toolboxAPI.invocation) for both directions:
+ *  - Caller: launching other tools, and discovering them by capability tag.
+ *  - Callee: reading the inbound launch context and returning data.
  *
- * The invocation API (toolboxAPI.invocation) is introduced in PPTB host ≥ 1.2.2 and is not
- * yet reflected in the shipped @pptb/types declarations, so we define a local interface and
- * access it via a typed cast.
+ * The invocation API is typed by @pptb/types (≥ 1.2.3-beta.0). We still access it through a
+ * runtime guard, since an older host may not expose it (or its newer methods) at runtime.
  */
 
-/**
- * Runtime invocation API exposed by the PPTB host on toolboxAPI.invocation.
- * Mirrors the InvocationAPI described in the PPTB Inter-Tool Invocation documentation.
- */
-interface InvocationAPI {
-	launchTool(
-		targetToolId: string,
-		prefillData?: Record<string, unknown>,
-		options?: {
-			primaryConnectionId?: string | null;
-			secondaryConnectionId?: string | null;
-		},
-	): Promise<unknown>;
-	getLaunchContext(): Promise<Record<string, unknown> | null>;
-	returnData(data: Record<string, unknown>): Promise<void>;
-}
+/** The host invocation API as typed on the global window.toolboxAPI. */
+type ToolboxInvocationAPI = NonNullable<Window["toolboxAPI"]>["invocation"];
 
 /**
  * The prefill payload FetchXML Studio sends when launching another tool via T2T.
@@ -60,11 +47,11 @@ export interface FetchXmlStudioLaunchPrefill {
 	};
 }
 
-/** Safely obtain the invocation API, or undefined when unavailable. */
-function getInvocationAPI(): InvocationAPI | undefined {
+/** Safely obtain the invocation API, or undefined when unavailable at runtime. */
+function getInvocationAPI(): ToolboxInvocationAPI | undefined {
 	if (typeof window === "undefined" || !window.toolboxAPI) return undefined;
-	const extended = window.toolboxAPI as typeof window.toolboxAPI & { invocation?: InvocationAPI };
-	return extended.invocation;
+	// Typed as always-present, but may be absent on older hosts — treat as optional.
+	return (window.toolboxAPI as { invocation?: ToolboxInvocationAPI }).invocation;
 }
 
 /**
@@ -73,6 +60,47 @@ function getInvocationAPI(): InvocationAPI | undefined {
  */
 export function isT2TSupported(): boolean {
 	return getInvocationAPI() !== undefined;
+}
+
+/**
+ * A tool discovered via capability search — the subset of the host Tool manifest we use.
+ */
+export interface DiscoveredTool {
+	/** npm package id — passed as targetToolId to launchTool. */
+	id: string;
+	/** Human-readable display name (falls back to id). */
+	name: string;
+}
+
+/** Our own package id, excluded from discovery results so we don't list ourselves. */
+const SELF_TOOL_ID = "@mohsinonxrm/pptb-fetchxml-studio";
+
+/**
+ * Discover installed tools that accept FetchXML (capability tag "fetchxml"), excluding
+ * ourselves. Returns [] when the host doesn't expose capability discovery (older hosts),
+ * so callers degrade gracefully.
+ */
+export async function discoverFetchXmlTools(): Promise<DiscoveredTool[]> {
+	const invocation = getInvocationAPI();
+	if (!invocation?.findToolsByCapability) return [];
+
+	try {
+		const tools = (await invocation.findToolsByCapability("fetchxml")) as Array<{
+			id?: unknown;
+			name?: unknown;
+		}>;
+		return tools
+			.filter((t): t is { id: string; name?: unknown } => {
+				return typeof t?.id === "string" && t.id !== SELF_TOOL_ID;
+			})
+			.map((t) => ({
+				id: t.id,
+				name: typeof t.name === "string" && t.name.trim() !== "" ? t.name : t.id,
+			}));
+	} catch (error) {
+		console.error("T2T discovery: findToolsByCapability('fetchxml') failed", error);
+		return [];
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,5 +222,7 @@ export async function sendFetchXmlToTool(
 	const connection = await window.toolboxAPI.connections.getActiveConnection();
 	return invocation.launchTool(targetToolId, prefill as unknown as Record<string, unknown>, {
 		primaryConnectionId: connection?.id ?? null,
+		// "Send to Tool" is a one-way handoff — suppress the callee's "Return to FXS" banner.
+		noReturn: true,
 	});
 }

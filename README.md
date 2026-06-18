@@ -2,11 +2,11 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.2.2--beta.1-orange)
+![Version](https://img.shields.io/badge/version-1.2.3--beta.1-orange)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
-![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.2--beta.1-orange)
+![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.3--beta.0-orange)
 
 ## ✨ Features
 
@@ -64,8 +64,8 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Advanced Find Only toggle** — When on (default), limits entities and attributes to those marked `IsValidForAdvancedFind = true`. Disable to access all entities including system and developer tables. Filter is applied locally — toggling is instant with no additional API call.
 
 ### � Tool-to-Tool (T2T) Integration
-- **Send to Tool button** — Launch any other PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection. Appears automatically when running on PPTB host ≥ 1.2.2.
-- **Multi-tool picker** — Configure one or more target tools in Settings → Tool Integration. When multiple tools are configured, the button shows a dropdown menu.
+- **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).
+- **Automatic tool discovery** — Targets are discovered via the PPTB capability registry — installed tools that declare the `fetchxml` capability. A single match shows one button; several show a dropdown picker. No configuration needed.
 - **Active connection forwarding** — The active Dataverse connection is forwarded automatically so the target tool opens against the same environment.
 - **Inbound prefill** — FetchXML Studio also accepts incoming T2T invocations from other tools (see [Callee Contract](#-callee-contract-pptbconfigjson) below).
 
@@ -291,15 +291,15 @@ const result = await window.toolboxAPI.invocation.launchTool(
 const editedFetchXml = (result as { fetchXml?: string } | null)?.fetchXml;
 ```
 
-### Configuring outbound targets (Send to Tool)
+### Sending a query to another tool (Send to Tool)
 
-To send FetchXML Studio queries *to* another tool:
+FetchXML Studio discovers send targets automatically — no configuration needed. It calls the host capability registry (`toolboxAPI.invocation.findToolsByCapability("fetchxml")`) to find installed tools that declare the `fetchxml` capability in their own `pptb.config.json`, and lists them in a **Send to Tool** button (a single button for one match, a dropdown picker for several). The button is hidden when no other `fetchxml`-capable tools are installed, or on hosts that don't support capability discovery.
 
-1. Open **Settings** (⚙ icon in the toolbar)
-2. Scroll to **Tool Integration**
-3. Enter the target tool's npm package ID (e.g. `@linked365/pptb-bulk-data-studio`) and click **Add**
+The launch is one-way (`noReturn: true`) — FetchXML Studio hands the current query off and does not wait for data back. Any tool that wants to appear here only needs to declare:
 
-The "Send to Tool" button will appear in the toolbar. Multiple tools show a dropdown picker.
+```json
+{ "invocation": { "version": "1.0.0", "capabilities": ["fetchxml"], "prefill": { "properties": { "fetchXml": { "type": "string" } } } } }
+```
 
 ---
 

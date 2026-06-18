@@ -19,6 +19,7 @@ import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
 import { isT2TSupported, resolveLaunchPrefill } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
+import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
@@ -245,6 +246,9 @@ function AppContent() {
 	// Tool-to-Tool (T2T) launch context: detected once, shared across the app.
 	// When present, another tool launched us with a prefill payload.
 	const launch = useLaunchContext();
+
+	// Tools we can send the current query to, discovered via the "fetchxml" capability.
+	const { tools: sendToTools } = useSendToTools();
 	const prefillConsumedRef = useRef(false);
 
 	// Consume the inbound prefill exactly once. When a FetchXML query is supplied,
@@ -1597,11 +1601,11 @@ function AppContent() {
 						/>
 					}
 					sendToToolButton={
-						isT2TSupported() && displaySettings.targetTools.length > 0 ? (
+						isT2TSupported() && sendToTools.length > 0 ? (
 							<SendToToolButton
 								fetchXml={fetchXml}
 								entityLogicalName={builder.fetchQuery?.entity?.name || ""}
-								targetTools={displaySettings.targetTools}
+								tools={sendToTools}
 								disabled={!fetchXml || !builder.fetchQuery?.entity?.name}
 							/>
 						) : undefined

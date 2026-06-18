@@ -1,10 +1,10 @@
 /**
  * SendToToolButton – launches another PPTB tool with the current FetchXML query as prefill.
  *
- * Reads target tool IDs from displaySettings.targetTools. When no tools are configured,
- * the button is hidden entirely (targets are added under Settings → Tool Integration).
- * When one tool is configured, renders as a single button. When multiple tools are
- * configured, renders a dropdown menu to choose the target.
+ * Targets are discovered automatically via the host capability registry (tools that declare
+ * the "fetchxml" capability); see useSendToTools. When one tool is found, renders as a single
+ * button; when several are found, renders a dropdown menu to choose the target. When none are
+ * found the button is hidden entirely (AppShell gates on this).
  */
 
 import { useState, useCallback } from "react";
@@ -21,7 +21,11 @@ import {
 	tokens,
 } from "@fluentui/react-components";
 import { PlugConnected20Regular } from "@fluentui/react-icons";
-import { sendFetchXmlToTool, type FetchXmlStudioT2TPrefill } from "../../api/invocation";
+import {
+	sendFetchXmlToTool,
+	type DiscoveredTool,
+	type FetchXmlStudioT2TPrefill,
+} from "../../api/invocation";
 
 const useStyles = makeStyles({
 	menuItem: {
@@ -40,23 +44,16 @@ export interface SendToToolButtonProps {
 	fetchXml: string;
 	/** Root entity logical name */
 	entityLogicalName: string;
-	/** List of target tool npm package IDs from settings */
-	targetTools: string[];
+	/** Tools discovered via the "fetchxml" capability */
+	tools: DiscoveredTool[];
 	/** Disabled state (e.g. no query built yet) */
 	disabled?: boolean;
-}
-
-/** Extract a short display label from a scoped npm package ID. */
-function toolLabel(toolId: string): string {
-	// "@linked365/pptb-bulk-data-studio" → "pptb-bulk-data-studio"
-	const parts = toolId.split("/");
-	return parts[parts.length - 1] ?? toolId;
 }
 
 export function SendToToolButton({
 	fetchXml,
 	entityLogicalName,
-	targetTools,
+	tools,
 	disabled,
 }: SendToToolButtonProps) {
 	const styles = useStyles();
@@ -86,25 +83,24 @@ export function SendToToolButton({
 	const isDisabled = disabled || isSending || !fetchXml || !entityLogicalName;
 	const icon = isSending ? <Spinner size="tiny" /> : <PlugConnected20Regular />;
 
-	// No tools configured → nothing to send to. The button is hidden entirely;
-	// configuration lives under Settings → Tool Integration. (AppShell also gates
-	// on this, so this is a defensive guard.)
-	if (targetTools.length === 0) {
+	// No tools discovered → nothing to send to. The button is hidden entirely
+	// (AppShell also gates on this, so this is a defensive guard).
+	if (tools.length === 0) {
 		return null;
 	}
 
 	// Single tool → direct button
-	if (targetTools.length === 1) {
-		const toolId = targetTools[0];
+	if (tools.length === 1) {
+		const tool = tools[0];
 		return (
-			<Tooltip content={`Send FetchXML to ${toolId}`} relationship="description">
+			<Tooltip content={`Send FetchXML to ${tool.name}`} relationship="description">
 				<Button
 					appearance="subtle"
 					icon={icon}
 					disabled={isDisabled}
-					onClick={() => handleSend(toolId)}
+					onClick={() => handleSend(tool.id)}
 				>
-					{toolLabel(toolId)}
+					{tool.name}
 				</Button>
 			</Tooltip>
 		);
@@ -120,15 +116,15 @@ export function SendToToolButton({
 			</MenuTrigger>
 			<MenuPopover>
 				<MenuList>
-					{targetTools.map((toolId) => (
+					{tools.map((tool) => (
 						<MenuItem
-							key={toolId}
+							key={tool.id}
 							icon={<PlugConnected20Regular />}
 							className={styles.menuItem}
-							onClick={() => handleSend(toolId)}
+							onClick={() => handleSend(tool.id)}
 						>
-							{toolLabel(toolId)}
-							<span className={styles.toolIdHint}>{toolId}</span>
+							{tool.name}
+							<span className={styles.toolIdHint}>{tool.id}</span>
 						</MenuItem>
 					))}
 				</MenuList>

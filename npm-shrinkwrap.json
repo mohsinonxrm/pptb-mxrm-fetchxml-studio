@@ -1,12 +1,12 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.2.2-beta.2",
+	"version": "1.2.3-beta.1",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@mohsinonxrm/pptb-fetchxml-studio",
-			"version": "1.2.2-beta.2",
+			"version": "1.2.3-beta.1",
 			"license": "AGPL-3.0-only",
 			"dependencies": {
 				"@fluentui-contrib/react-data-grid-react-window": "^1.4.1",
@@ -23,7 +23,7 @@
 			},
 			"devDependencies": {
 				"@eslint/js": "^9.36.0",
-				"@pptb/types": "^1.2.2-beta.1",
+				"@pptb/types": "^1.2.3-beta.0",
 				"@types/node": "^24.10.4",
 				"@types/react": "^18.3.27",
 				"@types/react-dom": "^18.3.7",
@@ -2871,9 +2871,9 @@
 			}
 		},
 		"node_modules/@pptb/types": {
-			"version": "1.2.2-beta.1",
-			"resolved": "https://registry.npmjs.org/@pptb/types/-/types-1.2.2-beta.1.tgz",
-			"integrity": "sha512-SbuKNDsUFGcUOzEetkmpk5SZc0eXmPyz4jqrFcVBvI5H38Mmf7xzdCvhTXCs3QqOkrRX5f6zn2I4chpk3OWNCw==",
+			"version": "1.2.3-beta.0",
+			"resolved": "https://registry.npmjs.org/@pptb/types/-/types-1.2.3-beta.0.tgz",
+			"integrity": "sha512-KgIz66qUVdsBVWOo4ZyfazGYVurZ3lwSUB2ctx9B0UDJYSdx9L1V7oW8CvLQBxyhpe5fCrF8a2PHEUUmc+xsEw==",
 			"dev": true,
 			"license": "GPL-3.0",
 			"bin": {
