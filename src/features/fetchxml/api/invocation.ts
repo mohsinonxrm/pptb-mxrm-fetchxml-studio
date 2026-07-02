@@ -72,8 +72,22 @@ export interface DiscoveredTool {
 	name: string;
 }
 
-/** Our own package id, excluded from discovery results so we don't list ourselves. */
-const SELF_TOOL_ID = "@mohsinonxrm/pptb-fetchxml-studio";
+/** Our own npm package id — fallback for self-exclusion when the runtime id is unavailable. */
+const SELF_PACKAGE_ID = "@mohsinonxrm/pptb-fetchxml-studio";
+
+/**
+ * Best-effort read of this tool's own runtime id (e.g. "npm-mohsinonxrm-pptb-fetchxml-studio").
+ * This is the authoritative id discovery reports, and differs from the npm package name.
+ */
+async function getOwnToolId(): Promise<string | null> {
+	try {
+		const ctx = await window.toolboxAPI?.getToolContext?.();
+		if (ctx?.toolId) return ctx.toolId;
+	} catch (error) {
+		console.warn("T2T discovery: getToolContext failed", error);
+	}
+	return window.TOOLBOX_CONTEXT?.toolId ?? null;
+}
 
 /**
  * Discover installed tools that accept FetchXML (capability tag "fetchxml"), excluding
@@ -84,6 +98,8 @@ export async function discoverFetchXmlTools(): Promise<DiscoveredTool[]> {
 	const invocation = getInvocationAPI();
 	if (!invocation?.findToolsByCapability) return [];
 
+	const selfToolId = await getOwnToolId();
+
 	try {
 		const tools = (await invocation.findToolsByCapability("fetchxml")) as Array<{
 			id?: unknown;
@@ -91,7 +107,10 @@ export async function discoverFetchXmlTools(): Promise<DiscoveredTool[]> {
 		}>;
 		return tools
 			.filter((t): t is { id: string; name?: unknown } => {
-				return typeof t?.id === "string" && t.id !== SELF_TOOL_ID;
+				if (typeof t?.id !== "string") return false;
+				// Exclude ourselves — match on the runtime tool id (authoritative) and the
+				// npm package id as a fallback, since discovery may report either form.
+				return t.id !== selfToolId && t.id !== SELF_PACKAGE_ID;
 			})
 			.map((t) => ({
 				id: t.id,

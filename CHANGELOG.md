@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3-beta.2] - 2026-07-01
+
+### 🐛 Fixed
+
+- **Send to Tool no longer spins forever.** The launch is now fire-and-forget — previously the button awaited `launchTool`, whose promise doesn't resolve until the callee window closes, so the spinner stayed up for the whole session (reported when sending FXS → Bulk Data Studio). This is purely a caller-side fix; a callee does **not** need to declare a `returnTopic` to avoid it.
+- **Always shows a "Send to Tool" dropdown.** Previously a single discovered tool collapsed the toolbar control into a button labelled with that tool's name; it now consistently reads "Send to Tool" and lists the target(s) in the menu.
+- **Each target shows its tool id on its own line** beneath the display name in the menu.
+- **FetchXML Studio no longer lists itself** as a target. Self-exclusion now matches on the runtime tool id from `getToolContext()` (with the npm package id as a fallback), since discovery reports the runtime id (e.g. `npm-mohsinonxrm-pptb-fetchxml-studio`) rather than the npm package name.
+
+## [1.2.3-beta.1] - 2026-06-17
+
 ### ✨ Added
 
 #### Tool-to-Tool (T2T) — capability-based tool discovery
