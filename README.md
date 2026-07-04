@@ -65,7 +65,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 🔗 Tool-to-Tool (T2T) Integration
 - **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).
-- **Automatic tool discovery** — Targets are discovered via the PPTB capability registry — installed tools that declare the `fetchxml` capability. A single match shows one button; several show a dropdown picker. No configuration needed.
+- **Automatic tool discovery** — Targets are discovered via the PPTB capability registry — installed tools that declare the `fetchxml` capability. The Send to Tool control always renders as a dropdown listing the discovered tools (even a single match). No configuration needed.
 - **Active connection forwarding** — The active Dataverse connection is forwarded automatically so the target tool opens against the same environment.
 - **Inbound prefill** — FetchXML Studio also accepts incoming T2T invocations from other tools (see [Callee Contract](#-callee-contract-pptbconfigjson) below).
 
