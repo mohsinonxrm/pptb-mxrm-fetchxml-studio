@@ -26,9 +26,11 @@ import {
 	Dismiss16Regular,
 	Settings20Regular,
 	ArrowReply24Regular,
+	Code20Regular,
 } from "@fluentui/react-icons";
 import { returnFetchXmlToInvokingTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
+import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
@@ -267,6 +269,8 @@ interface PreviewTabsProps {
 	onOpenSettings?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
+	/** Primary key attribute from Dataverse entity metadata (e.g. "activityid" for activity entities) */
+	primaryIdAttribute?: string;
 }
 
 export function PreviewTabs({
@@ -322,9 +326,10 @@ export function PreviewTabs({
 	getSelectedRecordIds,
 	onOpenSettings,
 	displaySettings,
+	primaryIdAttribute,
 }: PreviewTabsProps) {
 	const styles = useStyles();
-	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results">("xml");
+	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results" | "code">("xml");
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
@@ -349,7 +354,7 @@ export function PreviewTabs({
 	}, []);
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-		setSelectedTab(data.value as "xml" | "layout" | "results");
+		setSelectedTab(data.value as "xml" | "layout" | "results" | "code");
 		// Clear the editor validation error when returning to the XML tab so it
 		// doesn't linger as a banner on top of the editor.
 		if (data.value === "xml") {
@@ -419,6 +424,9 @@ export function PreviewTabs({
 					<Tab value="xml">FetchXML</Tab>
 					<Tab value="layout">LayoutXML</Tab>
 					<Tab value="results">Results</Tab>
+					<Tab value="code" icon={<Code20Regular />}>
+						Code
+					</Tab>
 				</TabList>
 				<Toolbar size="small">
 					<Button
@@ -551,6 +559,11 @@ export function PreviewTabs({
 						<LayoutXmlViewer layoutXml={layoutXml || ""} />
 					</div>
 				)}
+				{selectedTab === "code" && (
+					<div className={styles.codeCard}>
+						<CodePanel fetchXml={xml} />
+					</div>
+				)}
 				{selectedTab === "results" && (
 					<div className={styles.resultsLayout}>
 						<div className={styles.toolbarCard}>
@@ -638,6 +651,7 @@ export function PreviewTabs({
 								isLoadingMore={isLoadingMore}
 								attributeMetadata={attributeMetadata}
 								fetchQuery={fetchQuery}
+								primaryIdAttribute={primaryIdAttribute}
 								onSelectedCountChange={setToolbarSelectedCount}
 								onSelectionChange={handleSelectionChange}
 								columnConfig={columnConfig}

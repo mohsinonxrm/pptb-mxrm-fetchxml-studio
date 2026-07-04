@@ -633,6 +633,51 @@ export async function whoAmI(): Promise<WhoAmIResponse | null> {
 }
 
 /**
+ * Convert a FetchXML query to Dataverse SQL using the undocumented FetchXMLToSQL
+ * Web API function.
+ *
+ * ⚠ Note: FetchXMLToSQL is an undocumented/internal API. It may change without notice.
+ *
+ * @param fetchXml  The FetchXML string to convert.
+ * @returns         The SQL string.
+ * @throws          If the API call fails or Dataverse is not available.
+ */
+export async function fetchXmlToSQL(fetchXml: string): Promise<string> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+	const result = (await window.dataverseAPI!.execute({
+		operationName: "FetchXMLToSQL",
+		operationType: "function",
+		parameters: { FetchXml: fetchXml },
+	})) as unknown as Record<string, unknown>;
+
+	// Log the raw result to assist debugging the undocumented response shape
+	console.log("FetchXMLToSQL raw result:", result);
+
+	// Try known property names first, then fall back to any non-metadata string value
+	const sql =
+		(typeof result["value"] === "string" ? result["value"] : undefined) ??
+		(typeof result["FetchXMLToSQL"] === "string" ? result["FetchXMLToSQL"] : undefined) ??
+		(typeof result["SQL"] === "string" ? result["SQL"] : undefined) ??
+		Object.entries(result)
+			.filter(([k]) => !k.startsWith("@"))
+			.map(([, v]) => v)
+			.find((v): v is string => typeof v === "string");
+
+	if (sql == null) {
+		const keys = Object.keys(result)
+			.filter((k) => !k.startsWith("@"))
+			.join(", ");
+		console.error("FetchXMLToSQL unexpected response:", result);
+		throw new Error(
+			`FetchXMLToSQL returned an unexpected response format. Non-metadata keys: [${keys || "none"}]`,
+		);
+	}
+	return sql;
+}
+
+/**
  * Check if user has a specific privilege using RetrieveUserPrivilegeByPrivilegeName
  */
 export async function checkPrivilegeByName(
@@ -2031,31 +2076,27 @@ export async function checkBulkDeletePrivilege(): Promise<boolean> {
 }
 
 /**
- * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function
- * This function must be called via GET request with URL-encoded parameters
+ * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function.
+ * Uses execute() which properly escapes string parameters (single-quote doubling + URL-encode).
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
  */
-export async function fetchXmlToQueryExpression(fetchXml: string): Promise<unknown> {
+export async function fetchXmlToQueryExpression(
+	fetchXml: string,
+): Promise<Record<string, unknown>> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
 
 	debugLog("recordAPI", `📡 Converting FetchXML to QueryExpression`);
 
-	try {
-		// FetchXmlToQueryExpression is a function - must be called via GET with URL-encoded FetchXml
-		// The parameter must be properly escaped and wrapped in single quotes
-		const encodedFetchXml = encodeURIComponent(fetchXml);
-		const functionUrl = `FetchXmlToQueryExpression(FetchXml=@p1)?@p1='${encodedFetchXml}'`;
+	const result = (await window.dataverseAPI!.execute({
+		operationName: "FetchXmlToQueryExpression",
+		operationType: "function",
+		parameters: { FetchXml: fetchXml },
+	})) as unknown as { Query: Record<string, unknown> };
 
-		const result = await window.dataverseAPI!.queryData(functionUrl);
-
-		debugLog("recordAPI", `✅ Converted FetchXML to QueryExpression`, result);
-		return (result as { Query?: unknown }).Query || result;
-	} catch (error) {
-		console.error("fetchXmlToQueryExpression: Failed:", error);
-		throw error;
-	}
+	debugLog("recordAPI", `✅ Converted FetchXML to QueryExpression`, result);
+	return result.Query ?? (result as unknown as Record<string, unknown>);
 }
 
 /**

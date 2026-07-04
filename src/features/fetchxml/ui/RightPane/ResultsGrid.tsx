@@ -121,12 +121,7 @@ const useStyles = makeStyles({
 		alignItems: "center",
 		marginLeft: "auto",
 	},
-	// Hide Fluent's default sort indicator - we render our own in renderHeaderCell
-	headerCell: {
-		"& > button > span:last-child": {
-			display: "none",
-		},
-	},
+	headerCell: {},
 });
 
 export interface QueryResult {
@@ -147,6 +142,11 @@ interface ResultsGridProps {
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null; // For extracting aliases and order state
+	/**
+	 * The entity's primary key attribute name from Dataverse metadata (e.g. "activityid" for activity
+	 * entities, "accountid" for account). Used for stable row identity and selection.
+	 */
+	primaryIdAttribute?: string;
 	onSelectedCountChange?: (count: number) => void;
 	/** Callback when selection changes, provides the selected record IDs (GUIDs) */
 	onSelectionChange?: (recordIds: string[]) => void;
@@ -168,6 +168,7 @@ export function ResultsGrid({
 	isLoadingMore,
 	attributeMetadata,
 	fetchQuery,
+	primaryIdAttribute,
 	onSelectedCountChange,
 	onSelectionChange,
 	columnConfig,
@@ -288,20 +289,13 @@ export function ResultsGrid({
 		return map;
 	}, [fetchQuery]);
 
-	// Get primary ID column name (typically {entity}id) from the FetchXML root entity
-	const primaryIdColumn = useMemo(() => {
-		// Use the root entity from FetchXML if available, otherwise fall back to result entity
-		const entityName = fetchQuery?.entity?.name || result?.entityLogicalName;
-		if (!entityName) return null;
-		return `${entityName}id`;
-	}, [fetchQuery, result]);
-
 	// Generate stable row IDs using primary key GUID
+	// primaryIdAttribute comes from Dataverse entity metadata via props — no name-guessing here.
 	const getRowId = useCallback(
 		(item: Record<string, unknown>) => {
 			// CRITICAL: Use the GUID from the primary ID column for stable row identity
-			if (primaryIdColumn && item[primaryIdColumn]) {
-				const id = item[primaryIdColumn];
+			if (primaryIdAttribute && item[primaryIdAttribute]) {
+				const id = item[primaryIdAttribute];
 				// Ensure it's a valid GUID string (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
 				if (typeof id === "string" && id.length > 0) {
 					return id;
@@ -312,7 +306,7 @@ export function ResultsGrid({
 			console.warn("Row without primary ID found - selection may not work correctly");
 			return `row_${Math.random()}`;
 		},
-		[primaryIdColumn],
+		[primaryIdAttribute],
 	);
 
 	// Build set of requested attributes from FetchXML query
@@ -975,7 +969,7 @@ export function ResultsGrid({
 		rowCount: result.rows.length,
 		columnCount: columns.length,
 		gridDimensions,
-		primaryIdColumn,
+		primaryIdAttribute,
 		firstRowId: result.rows.length > 0 ? getRowId(result.rows[0]) : "none",
 		columnIds: columns.slice(0, 5).map((c) => c.columnId),
 		sortStateMapSize: sortStateMap.size,
@@ -990,8 +984,10 @@ export function ResultsGrid({
 						items={result.rows}
 						columns={columns}
 						sortable
-						// Don't set sortState - we manage sort indicators ourselves in renderHeaderCell
-						// This avoids double arrows (Fluent's + ours) and gives us control over multi-sort display
+						// Controlled sortState with a sentinel column ID that never matches any real column.
+						// This suppresses Fluent's built-in sort indicator entirely so only our custom
+						// renderHeaderCell arrows (driven by FetchXML order state) are ever visible.
+						sortState={{ sortColumn: "__sort_managed_externally__", sortDirection: "ascending" }}
 						resizableColumns
 						resizableColumnsOptions={{ autoFitColumns: false }}
 						columnSizingOptions={columnSizingOptions}

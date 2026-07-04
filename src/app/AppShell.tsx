@@ -655,12 +655,21 @@ function AppContent() {
 					attributeTypeMap.set(name, attr.AttributeType || "");
 				});
 			}
-			builder.syncLayoutWithFetchXml(attributeTypeMap);
+			builder.syncLayoutWithFetchXml(attributeTypeMap, entityMetadata?.PrimaryIdAttribute);
 		}
-	}, [builder.layoutNeedsSync, builder.fetchQuery, builder.columnConfig, attributeMetadata]);
+	}, [
+		builder.layoutNeedsSync,
+		builder.fetchQuery,
+		builder.columnConfig,
+		attributeMetadata,
+		entityMetadata,
+	]);
 
-	// Generate FetchXML from builder state
-	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
+	// Generate FetchXML from builder state, injecting the real primary key from entity metadata.
+	// When entityMetadata is not yet loaded, no primary key is injected (no guessing).
+	const fetchXml = builder.fetchQuery
+		? generateFetchXml(builder.fetchQuery, entityMetadata?.PrimaryIdAttribute)
+		: "";
 
 	// Check if current query is an aggregate query (disables delete/workflow buttons)
 	const isAggregateQuery = builder.fetchQuery?.options?.aggregate === true;
@@ -705,13 +714,16 @@ function AppContent() {
 		viewType: "system" | "personal",
 		viewName: string,
 	) => {
-		// Update the builder's loaded view state so subsequent saves overwrite the same view
-		if (entityMetadata) {
+		// Update the builder's loaded view state so subsequent saves overwrite the same view.
+		// The caller (AppShell) has entity metadata, so we generate originalFetchXml here with the
+		// real PrimaryIdAttribute — the store never guesses the primary key itself.
+		if (entityMetadata && builder.fetchQuery) {
 			builder.setLoadedView({
 				id: viewId,
 				type: viewType,
 				entitySetName: entityMetadata.EntitySetName,
 				name: viewName,
+				originalFetchXml: generateFetchXml(builder.fetchQuery, entityMetadata.PrimaryIdAttribute),
 			});
 		}
 		console.log(`✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
@@ -1396,7 +1408,10 @@ function AppContent() {
 				if (!builder.fetchQuery) {
 					throw new Error("No FetchXML query available");
 				}
-				const currentFetchXml = generateFetchXml(builder.fetchQuery);
+				const currentFetchXml = generateFetchXml(
+					builder.fetchQuery,
+					entityMetadata.PrimaryIdAttribute,
+				);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
 				console.log(`📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
 				return result;
@@ -1488,6 +1503,7 @@ function AppContent() {
 									type: viewInfo.type,
 									entitySetName: viewInfo.entitySetName,
 									name: viewInfo.name,
+									originalFetchXml: viewInfo.originalFetchXml,
 								},
 								viewInfo.layoutxml,
 							);
@@ -1578,6 +1594,7 @@ function AppContent() {
 					isCallee={launch.isCallee}
 					attributeMetadata={attributeMetadata}
 					fetchQuery={builder.fetchQuery}
+					primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
 					onLoadMore={handleLoadMore}

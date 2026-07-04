@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-01
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) invocation
+
+FetchXML Studio now participates in PPTB Tool-to-Tool (T2T) invocation in both directions. This feature was iterated through the `1.2.2-beta.*` and `1.2.3-beta.*` prereleases (detailed below); `1.4.0` is its first stable release. All T2T behavior is capability-gated and feature-detected, so standalone use and hosts without invocation/discovery support are unaffected. `features.minAPI` stays `1.2.2`.
+
+- **Send to Tool (caller)** — Send the current FetchXML (plus root entity) to another PPTB tool. Targets are discovered automatically via the capability registry (`invocation.findToolsByCapability("fetchxml")`); the "Send to Tool" dropdown lists installed tools that declare the `fetchxml` capability, excluding FetchXML Studio itself (matched on the runtime tool id from `getToolContext()`). One-way, fire-and-forget handoff via `launchTool(..., { noReturn: true })`.
+- **Callee (inbound prefill + return)** — When launched by another tool, FetchXML Studio consumes the inbound launch context to pre-populate the builder (resolution priority `fetchXml` → `viewRef` → `entityLogicalName`; the root entity is always derived from the FetchXML). A "Return FetchXML" button (shown only when launched as a callee) returns `{ fetchXml }` to the caller via `returnData()`.
+- **Contract** — `pptb.config.json` declares `capabilities: ["fetchxml"]`, a `prefill` schema, and a `returnTopic`.
+
+### 🏗️ Technical
+
+- Depends on `@pptb/types` `1.2.3` (stable). New modules: `src/features/fetchxml/api/invocation.ts`, `src/shared/hooks/useLaunchContext.ts`, `src/shared/hooks/useSendToTools.ts`, `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx`. See the `1.2.x-beta.*` entries below for the full iteration history.
+
+## [1.3.1] - 2026-05-30
+
+### 🔧 Fixed
+
+- **Double sort arrows on results grid column headers** (#22, #35) — The Fluent UI v9 `DataGrid` component renders its own sort indicator when `sortable` is set without a controlled `sortState`. This caused both Fluent's built-in arrow and the custom `renderHeaderCell` multi-sort arrow to render simultaneously. Fixed by passing a controlled `sortState` sentinel value (`sortColumn: "__sort_managed_externally__"`) that never matches any real column ID, preventing Fluent from rendering its internal indicator. The custom FetchXML-driven sort arrows in the column headers are now the sole source of truth.
+
+- **"Parse to Tree" injects incorrect primary key for activity entities** (#37) — Standard entities follow the `${entityname}id` naming convention (e.g. `accountid`, `contactid`), but activity entities (`email`, `task`, `phonecall`, `fax`, `letter`, `appointment`, and custom activities) all inherit from `activitypointer` and use `activityid` as their primary key. The previous code hardcoded the `${entityname}id` pattern everywhere, causing `emailid`, `taskid`, etc. to be injected into the FetchXML query tree — attributes that do not exist in Dataverse. Fixed by threading `EntityMetadata.PrimaryIdAttribute` (the authoritative value from the Dataverse metadata API) through the full call chain. No fallback pattern or guessing — the primary key is only injected when the metadata is available.
+
+### 🏗️ Technical
+
+- `fetchxml.ts` — `generateFetchXml(fetchNode, primaryIdAttribute?)` accepts the PK from the caller; only injects the primary ID attribute when explicitly provided.
+- `layoutxml.ts` — `generateLayoutFromFetchXml(fetchQuery, primaryIdAttribute?, attributeTypeMap?)` — PK is now optional; stored in `LayoutXmlConfig.primaryIdAttribute` when provided.
+- `builderStore.tsx` — `ViewLoadInfo` now includes `originalFetchXml: string`; `SYNC_LAYOUT_WITH_FETCHXML` action and `syncLayoutWithFetchXml()` both accept `primaryIdAttribute?`; the store no longer derives or guesses the primary key itself.
+- `ResultsGrid.tsx` — `primaryIdAttribute` prop replaces the old `${entityName}id` `useMemo`; `sortState` sentinel eliminates the double-arrow rendering.
+- `PreviewTabs.tsx` — threads `primaryIdAttribute?` down to `ResultsGrid`.
+- `AppShell.tsx` — passes `entityMetadata.PrimaryIdAttribute` to all call sites: `generateFetchXml`, `syncLayoutWithFetchXml`, `setLoadedView` (via `originalFetchXml`), and `<PreviewTabs>`.
+
+---
+
+## [1.3.0] - 2026-05-29
+
+### ✨ Added
+
+#### Code Generation Panel (#38)
+- **Code tab** — New tab in the right pane (alongside FetchXML, LayoutXML, Results) with a tabbed panel that generates ready-to-use code from the current query in seven formats. Async formats (C# QueryExpression, SQL) run in parallel and cancel automatically when the query changes.
+
+#### C# QueryExpression (#39, #40)
+- Converts FetchXML to a full `QueryExpression` SDK object graph via the Dataverse `FetchXmlToQueryExpression` Web API function.
+- Emits `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`, `XrmAttributeExpression`, `PagingInfo`, `TopCount`, `Distinct`, and `NoLock`.
+- Full aggregate query support — `XrmAggregateType` (Count, CountColumn, Sum, Avg, Min, Max) and `XrmDateTimeGrouping` (Day, Week, Month, Quarter, Year, FiscalPeriod, FiscalYear).
+- Correctly resolves all Dataverse API enum values returned as strings (`ConditionOperator`, `JoinOperator`, `LogicalOperator`, `OrderType`, `XrmAggregateType`, `XrmDateTimeGrouping`) via a shared `resolveEnum()` helper.
+- Correctly unwraps .NET-serialized condition values (`{ "Type": "System.Int32", "Value": 0 }`) to C# integer / string / GUID literals via `unwrapODataValue()`.
+
+#### C# FetchExpression (#43)
+- Wraps the FetchXML in `new FetchExpression(@"...")` using a C# verbatim string literal for multi-line XML.
+
+#### JavaScript (#43)
+- Generates an `Xrm.WebApi.retrieveMultipleRecords` call for model-driven app JS, PCF components, and browser console.
+
+#### pac CLI (#43)
+- Generates a `pac org fetch --xml "..."` command for the Power Platform CLI.
+
+#### Power Automate (#43)
+- Field-by-field form mirroring the Dataverse "List rows" connector UI — not a plain code dump.
+- Displays Table name, Select Columns, Filter Rows, Sort By, Top Count, and Fetch Xml Query fields with individual copy buttons and flash confirmation feedback.
+- Table name resolved from `EntityDefinitions` metadata (already cached from entity selection) — accurate OData entity set name, not a heuristic pluralisation.
+
+#### Web API (#43)
+- Full OData URL with URL-encoded FetchXML, required request headers, a `curl` snippet, and a PowerShell `Invoke-RestMethod` example.
+- Entity set name resolved from the same metadata cache as the Power Automate tab.
+
+#### SQL (#39)
+- T-SQL generated via the Dataverse `FetchXMLToSQL` Web API function (undocumented — labelled "Preview" with a tooltip warning).
+- Robust response-property fallback parsing handles multiple possible response key names.
+
+### 🏗️ Technical
+
+- Added `src/features/fetchxml/engine/` — new code-generation module:
+  - `queryExpressionTypes.ts` — TypeScript interfaces mirroring the Dataverse QE JSON schema; all enum fields typed as `number | string` to match actual API wire responses.
+  - `queryExpressionCodegen.ts` — C# SDK code emitter with `resolveEnum()` and `unwrapODataValue()` helpers for robust handling of string-name enums and .NET-serialized value wrappers.
+  - `fetchxmlCodeGenerators.ts` — Sync code generators (FetchExpression, JavaScript, pac CLI, Power Automate spec, Web API); pure functions with no API calls required.
+- Added `src/features/fetchxml/ui/RightPane/PowerAutomatePane.tsx` — field-by-field form component (3-column grid: label | input | copy button) with "N of N populated" badge and "Copy all" action.
+- Added `src/features/fetchxml/ui/RightPane/CodePanel.tsx` — 7-tab code generation panel; async tabs run in parallel with abort-on-change cancellation.
+- `PreviewTabs.tsx` — Added Code tab with `Code20Regular` icon.
+- `pptbClient.ts` — Added `fetchXmlToQueryExpression` (calls `FetchXmlToQueryExpression` Dataverse function) and `fetchXmlToSQL` (calls `FetchXMLToSQL`) with multi-property fallback response parsing.
+
 ## [1.2.3-beta.3] - 2026-07-01
 
 ### 🏗️ Technical
