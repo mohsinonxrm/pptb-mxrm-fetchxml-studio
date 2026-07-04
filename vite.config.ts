@@ -10,6 +10,8 @@ export default defineConfig({
 		include: ["monaco-editor"],
 	},
 	build: {
+		// Disable source maps in production — Monaco worker maps alone add ~17 MB.
+		sourcemap: false,
 		rollupOptions: {
 			output: {
 				// Keep Monaco's large language packs in a separate chunk so the
