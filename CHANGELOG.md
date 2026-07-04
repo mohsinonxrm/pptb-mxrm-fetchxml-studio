@@ -5,6 +5,24 @@ All notable changes to FetchXML Studio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.4.0] - 2026-07-01
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) invocation
+
+FetchXML Studio now participates in PPTB Tool-to-Tool (T2T) invocation in both directions. This feature was iterated through the `1.2.2-beta.*` and `1.2.3-beta.*` prereleases (detailed below); `1.4.0` is its first stable release. All T2T behavior is capability-gated and feature-detected, so standalone use and hosts without invocation/discovery support are unaffected. `features.minAPI` stays `1.2.2`.
+
+- **Send to Tool (caller)** — Send the current FetchXML (plus root entity) to another PPTB tool. Targets are discovered automatically via the capability registry (`invocation.findToolsByCapability("fetchxml")`); the "Send to Tool" dropdown lists installed tools that declare the `fetchxml` capability, excluding FetchXML Studio itself (matched on the runtime tool id from `getToolContext()`). One-way, fire-and-forget handoff via `launchTool(..., { noReturn: true })`.
+- **Callee (inbound prefill + return)** — When launched by another tool, FetchXML Studio consumes the inbound launch context to pre-populate the builder (resolution priority `fetchXml` → `viewRef` → `entityLogicalName`; the root entity is always derived from the FetchXML). A "Return FetchXML" button (shown only when launched as a callee) returns `{ fetchXml }` to the caller via `returnData()`.
+- **Contract** — `pptb.config.json` declares `capabilities: ["fetchxml"]`, a `prefill` schema, and a `returnTopic`.
+
+### 🏗️ Technical
+
+- Depends on `@pptb/types` `1.2.3` (stable). New modules: `src/features/fetchxml/api/invocation.ts`, `src/shared/hooks/useLaunchContext.ts`, `src/shared/hooks/useSendToTools.ts`, `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx`. See the `1.2.x-beta.*` entries below for the full iteration history.
+
 ## [1.3.1] - 2026-05-30
 
 ### 🔧 Fixed
@@ -70,6 +88,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `src/features/fetchxml/ui/RightPane/CodePanel.tsx` — 7-tab code generation panel; async tabs run in parallel with abort-on-change cancellation.
 - `PreviewTabs.tsx` — Added Code tab with `Code20Regular` icon.
 - `pptbClient.ts` — Added `fetchXmlToQueryExpression` (calls `FetchXmlToQueryExpression` Dataverse function) and `fetchXmlToSQL` (calls `FetchXMLToSQL`) with multi-property fallback response parsing.
+
+## [1.2.3-beta.3] - 2026-07-01
+
+### 🏗️ Technical
+
+- Upgraded `@pptb/types` `1.2.3-beta.0` → `1.2.3` (stable) ahead of merging the T2T branch into `dev`. Types are compile-time only, so there is **no runtime change** — the API surface FetchXML Studio uses (capability discovery, `launchTool` `noReturn`, `getToolContext`) is identical in the stable release. `features.minAPI` stays at `1.2.2`; discovery remains feature-detected and degrades gracefully on older hosts.
+
+## [1.2.3-beta.2] - 2026-07-01
+
+### 🐛 Fixed
+
+- **Send to Tool no longer spins forever.** The launch is now fire-and-forget — previously the button awaited `launchTool`, whose promise doesn't resolve until the callee window closes, so the spinner stayed up for the whole session (reported when sending FXS → Bulk Data Studio). This is purely a caller-side fix; a callee does **not** need to declare a `returnTopic` to avoid it.
+- **Always shows a "Send to Tool" dropdown.** Previously a single discovered tool collapsed the toolbar control into a button labelled with that tool's name; it now consistently reads "Send to Tool" and lists the target(s) in the menu.
+- **Each target shows its tool id on its own line** beneath the display name in the menu.
+- **FetchXML Studio no longer lists itself** as a target. Self-exclusion now matches on the runtime tool id from `getToolContext()` (with the npm package id as a fallback), since discovery reports the runtime id (e.g. `npm-mohsinonxrm-pptb-fetchxml-studio`) rather than the npm package name.
+
+## [1.2.3-beta.1] - 2026-06-17
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) — capability-based tool discovery
+
+The "Send to Tool" target list is now populated automatically via the PPTB capability registry instead of a manually maintained list. Requires **`@pptb/types` ≥ 1.2.3-beta.0** and a host that exposes capability discovery.
+
+- **Automatic discovery** — FetchXML Studio calls `toolboxAPI.invocation.findToolsByCapability("fetchxml")` to find installed tools that declare the `fetchxml` capability, excludes itself, and lists them in the Send to Tool button (single button for one match, dropdown for several). Hidden when no matches or when the host lacks discovery — feature-detected at runtime, so older hosts degrade gracefully.
+- **One-way send** — Launches now pass `noReturn: true`, the dedicated flag for the "Send To" pattern, which suppresses the callee's "Return to [Caller]" banner since FXS isn't waiting for data back.
+
+### 🔧 Changed
+
+- **Removed the manual "Tool Integration" settings.** The Settings → Tool Integration section and the `targetTools` display setting are gone; discovery replaces them entirely.
+
+### 🏗️ Technical
+
+- Bumped `@pptb/types` `1.2.2-beta.1` → `1.2.3-beta.0`, which now types `invocation.findToolsByCapability` / `getKnownCapabilityTags`, the `capabilities` field on `InvocationConfig`, the `CapabilityTag`/`KnownCapabilityTag` types, and `launchTool`'s `noReturn` option. Removed the local `InvocationAPI` interface in `invocation.ts` in favor of the now-published host types.
+- `src/features/fetchxml/api/invocation.ts` — Added `DiscoveredTool` + `discoverFetchXmlTools()` (feature-detected; filters out our own id; defaults `name` to `id`); added `noReturn: true` to `sendFetchXmlToTool`.
+- `src/shared/hooks/useSendToTools.ts` — New hook; discovers send targets once on mount.
+- `src/app/AppShell.tsx` — Uses `useSendToTools`; Send to Tool slot now gated on `isT2TSupported() && sendToTools.length > 0`.
+- `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx` — Prop changed from `targetTools: string[]` to `tools: DiscoveredTool[]`; labels use the discovered tool name.
+- `src/features/fetchxml/ui/Settings/SettingsDrawer.tsx` — Removed the Tool Integration section, its handlers/state/styles, and now-unused imports.
+- `src/features/fetchxml/model/displaySettings.ts` — Removed `targetTools` from `DisplaySettings` and the defaults.
+
+## [1.2.2-beta.2] - 2026-06-16
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) Invocation — Callee (prefill + return)
+
+FetchXML Studio can now be *launched by* another PPTB tool, pre-populated with an inbound query, and hand a query back. Completes the round-trip alongside the existing caller support.
+
+- **Inbound prefill** — On launch via T2T, FetchXML Studio reads its launch context and pre-populates the builder. Resolution priority is `fetchXml` → `viewRef` → `entityLogicalName`: a `fetchXml` string is loaded directly; a `viewRef` has its FetchXML retrieved from the referenced `savedquery`/`userquery`; and a bare `entityLogicalName` starts a fresh query on that entity. When `fetchXml` is present the root entity is **derived from the FetchXML itself** and any `entityLogicalName` hint is ignored, because a mismatched value would break this metadata-driven tool's lookups.
+- **Return FetchXML button** — When launched as a callee, a "Return FetchXML" button appears in the FetchXML toolbar. It returns `{ fetchXml }` (the current editor-or-tree query) to the caller via `returnData()`, which the host resolves as the caller's `launchTool(...)` result. This is intentionally separate from the host-injected "Return to [Caller]" banner, which only navigates back and resolves the caller's promise with `null`.
+- **`pptb.config.json`** — Added the `fetchxml` capability tag (for discovery via `findToolsByCapability`) and a `returnTopic` describing the `{ fetchXml }` return shape. Relaxed the prefill contract so `entityLogicalName` is optional/hint-only.
+
+### 🏗️ Technical
+
+- `src/features/fetchxml/api/invocation.ts` — Added callee helpers: `getLaunchContext()`, `resolveLaunchPrefill(context)` (returns a `{ kind: "fetchxml" | "entity" }` action following the `fetchXml` → `viewRef` → `entityLogicalName` priority; resolves `viewRef` by reusing the `dataverseAPI.queryData` view-read route filtered to a single record), `returnDataToInvokingTool(data)`, and `returnFetchXmlToInvokingTool(fetchXml)`. Added `FetchXmlStudioLaunchPrefill` type and `LaunchPrefillAction` union.
+- `src/shared/hooks/useLaunchContext.ts` — New hook. Calls `getLaunchContext()` once on mount and exposes `{ loading, isCallee, context }` so detection happens in one place.
+- `src/app/AppShell.tsx` — Consumes the prefill exactly once on launch (loads incoming FetchXML via `builder.loadFetchXml`), and passes `isCallee` to `PreviewTabs`.
+- `src/features/fetchxml/ui/RightPane/PreviewTabs.tsx` — Added `isCallee?` prop and a `ReturnFetchXmlButton` (gated on `isCallee`) rendered next to Execute; uses a `getCurrentXml()` helper that returns the live editor buffer when in editor mode.
+
+### 🔧 Changed
+
+- **"Send to Tool" button visibility** — The caller button is now hidden entirely unless at least one target tool is configured under Settings → Tool Integration (previously it rendered as a disabled button with a tooltip). The two T2T toolbar actions are now strictly capability-gated and never change meaning by mode: **Return FetchXML** shows only when launched as a callee (`isCallee`); **Send to Tool** shows only when targets are configured.
+
+## [1.2.2-beta.1] - 2026-05-25
+
+### ✨ Added
+
+#### Tool-to-Tool (T2T) Invocation — Caller
+
+FetchXML Studio can now send the active query to any other PPTB tool that accepts a FetchXML prefill payload. Requires **PPTB host ≥ 1.2.2**.
+
+- **Send to Tool button** — A new "Send to Tool" button appears in the toolbar (alongside Save View) whenever the PPTB host exposes the `toolboxAPI.invocation` API. Three interaction modes depending on how many target tools are configured:
+  - *No tools configured* — Button is disabled with a tooltip pointing to Settings → Tool Integration.
+  - *One tool configured* — Single button; click launches the tool directly.
+  - *Multiple tools configured* — Dropdown menu listing all configured tools; click an item to launch.
+- **Settings → Tool Integration section** — New section in the Settings drawer to manage the list of target tool npm package IDs (e.g. `@linked365/pptb-bulk-data-studio`). Supports add (text input + Enter/Add button) and remove (× button per item). The list is persisted via `toolboxAPI.settings` alongside other display preferences.
+- **Active connection forwarding** — The caller automatically retrieves the currently active Dataverse connection and forwards its ID as `primaryConnectionId` when launching the target tool, so the callee opens against the same environment.
+- **`pptb.config.json`** — Added PPTB callee contract file at the repository root. Declares the prefill schema this tool accepts when *receiving* a T2T invocation from another tool (see [Callee Contract](#-callee-contract-pptbconfigjson) in the README). `viewRef` is modelled as a Dataverse EntityReference: required fields `id` (UUID string) and `entityLogicalName` (enum: `"savedquery"` | `"userquery"`).
+
+### 🏗️ Technical
+
+- `src/features/fetchxml/api/invocation.ts` — New module. Defines a local `InvocationAPI` interface (mirrors the PPTB host API not yet in `@pptb/types`) and exposes `isT2TSupported()` and `sendFetchXmlToTool(targetToolId, { fetchXml, entityLogicalName })`.
+- `src/features/fetchxml/ui/Toolbar/SendToToolButton.tsx` — New toolbar component. Handles the disabled / single / multi-tool rendering variants; calls `sendFetchXmlToTool`; surfaces errors via `toolboxAPI.utils.showNotification`.
+- `src/features/fetchxml/model/displaySettings.ts` — Added `targetTools: string[]` (default `[]`) to `DisplaySettings` interface and `defaultDisplaySettings`.
+- `src/features/fetchxml/ui/Settings/SettingsDrawer.tsx` — Added Tool Integration section with add/remove UI. Added `Input`, `Field`, `Add20Regular`, `Dismiss16Regular`, `PlugConnected20Regular` to imports.
+- `src/features/fetchxml/ui/RightPane/PreviewTabs.tsx` — Added `sendToToolButton?: ReactNode` prop; rendered unconditionally (all tabs) next to `saveViewButton`.
+- `src/app/AppShell.tsx` — Imports `SendToToolButton` + `isT2TSupported`; passes `sendToToolButton` prop to `PreviewTabs` gated on `isT2TSupported()`.
+- `package.json` — `features.minAPI` bumped from `1.2.0` → `1.2.2` to reflect the new PPTB host requirement. `scheduler` added to `devDependencies` (required peer dep of `@fluentui/react-context-selector` that was missing from the install tree).
+
+#### Packaging fixes (resolves #33)
+
+- **`icon` path corrected** — `"icon"` field in `package.json` was missing the `icons/` directory prefix (`"icon-insider.svg"` → `"icons/icon-insider.svg"`). Icon was not resolvable by PPTB at install time.
+- **`files` array expanded** — Added `"icons"`, `"index.html"`, `"LICENSE"`, `"README.md"`, `"CHANGELOG.md"`, `"SECURITY.md"` alongside the existing `"dist"` and `"npm-shrinkwrap.json"` entries. Previously the `icons/` folder (referenced by the `"icon"` field) and all root-level docs were absent from the published package.
+- **Production source maps disabled** — Added `sourcemap: false` to `vite.config.ts` `build` options. Monaco worker source maps were silently adding ~17 MB to the package; disabling them brings the published size down to ~3–4 MB.
 
 ---
 

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Variant K — "Clean hex split" / FXS
+       Same chassis; tool glyph is < /> (angle brackets + tag-slash). -->
+
+  <path d="M 18 8 L 46 8 L 60 32 L 46 56 L 18 56 L 4 32 Z" fill="#0E5A9C"/>
+  <polygon points="46,8 60,32 46,56 18,56" fill="#2B8FD9"/>
+
+  <!-- Tool glyph — < /> in white -->
+  <polyline points="24,22 16,33 24,44" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <polyline points="40,22 48,33 40,44" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="35" y1="22" x2="29" y2="44" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

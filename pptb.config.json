@@ -1,0 +1,46 @@
+{
+	"invocation": {
+		"version": "1.0.0",
+		"capabilities": ["fetchxml"],
+		"prefill": {
+			"description": "Pass 'fetchXml' (the root entity is derived from the FetchXML itself), a 'viewRef' to an existing view, or just 'entityLogicalName' to start a fresh query on that entity. All fields are optional; with no prefill the tool opens empty.",
+			"properties": {
+				"fetchXml": {
+					"type": "string",
+					"description": "Serialized FetchXML query string. The root entity is parsed from this — no separate entity name is required."
+				},
+				"entityLogicalName": {
+					"type": "string",
+					"description": "Root entity logical name, e.g. 'account'. Used to start a fresh query when no 'fetchXml' or 'viewRef' is supplied. Ignored when 'fetchXml' is present, since the root entity is then taken from the FetchXML."
+				},
+				"viewRef": {
+					"type": "object",
+					"description": "EntityReference to an existing view. When provided, the FetchXML is retrieved from the view record. Use instead of 'fetchXml'.",
+					"required": ["id", "entityLogicalName"],
+					"additionalProperties": false,
+					"properties": {
+						"id": {
+							"type": "string",
+							"format": "uuid",
+							"description": "GUID of the view record."
+						},
+						"entityLogicalName": {
+							"type": "string",
+							"enum": ["savedquery", "userquery"],
+							"description": "Dataverse entity logical name: savedquery = system/public view; userquery = personal view."
+						}
+					}
+				}
+			}
+		},
+		"returnTopic": {
+			"description": "Returns the current FetchXML query back to the invoking tool.",
+			"properties": {
+				"fetchXml": {
+					"type": "string",
+					"description": "Serialized FetchXML query currently shown in the FetchXML pane."
+				}
+			}
+		}
+	}
+}

@@ -13,6 +13,8 @@ import {
 	Toolbar,
 	ToolbarDivider,
 	ProgressBar,
+	Spinner,
+	Tooltip,
 	tokens,
 	MessageBar,
 	MessageBarBody,
@@ -23,8 +25,10 @@ import {
 	Play24Regular,
 	Dismiss16Regular,
 	Settings20Regular,
+	ArrowReply24Regular,
 	Code20Regular,
 } from "@fluentui/react-icons";
+import { returnFetchXmlToInvokingTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
@@ -122,6 +126,49 @@ const useStyles = makeStyles({
 	},
 });
 
+/**
+ * Returns the current FetchXML to the tool that launched this window (T2T callee).
+ *
+ * This is distinct from the host-injected "Return to [Caller]" banner: that banner
+ * is a plain "go back" affordance and resolves the caller's promise with null. Only
+ * an explicit returnData() call carries the query back — which is what this does.
+ */
+function ReturnFetchXmlButton({ getCurrentXml }: { getCurrentXml: () => string }) {
+	const [isReturning, setIsReturning] = useState(false);
+
+	const handleReturn = useCallback(async () => {
+		setIsReturning(true);
+		try {
+			await returnFetchXmlToInvokingTool(getCurrentXml());
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			await window.toolboxAPI?.utils?.showNotification?.({
+				title: "Cannot return FetchXML",
+				body: message,
+				type: "error",
+			});
+		} finally {
+			setIsReturning(false);
+		}
+	}, [getCurrentXml]);
+
+	return (
+		<Tooltip
+			content="Return the current FetchXML to the tool that launched this window"
+			relationship="description"
+		>
+			<Button
+				appearance="subtle"
+				icon={isReturning ? <Spinner size="tiny" /> : <ArrowReply24Regular />}
+				onClick={handleReturn}
+				disabled={isReturning}
+			>
+				Return FetchXML
+			</Button>
+		</Tooltip>
+	);
+}
+
 interface PreviewTabsProps {
 	xml: string;
 	/** LayoutXML string for the grid column configuration */
@@ -159,6 +206,10 @@ interface PreviewTabsProps {
 	onSortChange?: (data: SortChangeData) => void;
 	/** Optional SaveViewButton to render in the toolbar */
 	saveViewButton?: ReactNode;
+	/** Optional SendToToolButton to render in the toolbar */
+	sendToToolButton?: ReactNode;
+	/** True when this tool was launched by another tool via T2T — shows the Return button */
+	isCallee?: boolean;
 	/** Callback when user scrolls near bottom (infinite scroll) */
 	onLoadMore?: () => void;
 	/** Whether export is available (requires a saved view) */
@@ -242,6 +293,8 @@ export function PreviewTabs({
 	onRemoveColumn,
 	onSortChange,
 	saveViewButton,
+	sendToToolButton,
+	isCallee,
 	onLoadMore,
 	canExport,
 	isExporting,
@@ -285,6 +338,12 @@ export function PreviewTabs({
 	const [isEditorModeActive, setIsEditorModeActive] = useState(false);
 	const editorXmlRef = useRef<string>("");
 	const [editorValidationError, setEditorValidationError] = useState<string | null>(null);
+
+	// The XML currently shown to the user: the live editor buffer when in editor
+	// mode, otherwise the tree-generated XML. Used by the T2T "Return FetchXML" button.
+	const getCurrentXml = useCallback(() => {
+		return isEditorModeActive ? editorXmlRef.current || xml : xml;
+	}, [isEditorModeActive, xml]);
 
 	const handleEditorStateChange = useCallback((isActive: boolean, editorXml: string) => {
 		editorXmlRef.current = editorXml;
@@ -378,10 +437,22 @@ export function PreviewTabs({
 					>
 						{isExecuting ? "Executing..." : "Execute"}
 					</Button>
+					{isCallee && (
+						<>
+							<ToolbarDivider />
+							<ReturnFetchXmlButton getCurrentXml={getCurrentXml} />
+						</>
+					)}
 					{selectedTab === "xml" && saveViewButton && (
 						<>
 							<ToolbarDivider />
 							{saveViewButton}
+						</>
+					)}
+					{sendToToolButton && (
+						<>
+							<ToolbarDivider />
+							{sendToToolButton}
 						</>
 					)}
 					<ToolbarDivider />
