@@ -69,7 +69,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Active connection forwarding** — The active Dataverse connection is forwarded automatically so the target tool opens against the same environment.
 - **Inbound prefill** — FetchXML Studio also accepts incoming T2T invocations from other tools (see [Callee Contract](#-callee-contract-pptbconfigjson) below).
 
-### �🔒 Privilege-Aware
+### 🔒 Privilege-Aware
 - **Export privilege check** — Only shows Dataverse export option if user has access
 - **Delete privilege check** — Validates entity-specific delete permissions before enabling delete actions
 - **Bulk delete privilege check** — Validates `prvBulkDelete` before surfacing bulk delete
