@@ -63,7 +63,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Query scope settings** — Control which entities appear in the entity picker: *Publisher + Solution* (full filter), *Solution Only*, or *All Entities* (no filter). Persisted across sessions.
 - **Advanced Find Only toggle** — When on (default), limits entities and attributes to those marked `IsValidForAdvancedFind = true`. Disable to access all entities including system and developer tables. Filter is applied locally — toggling is instant with no additional API call.
 
-### � Tool-to-Tool (T2T) Integration
+### 🔗 Tool-to-Tool (T2T) Integration
 - **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).
 - **Automatic tool discovery** — Targets are discovered via the PPTB capability registry — installed tools that declare the `fetchxml` capability. A single match shows one button; several show a dropdown picker. No configuration needed.
 - **Active connection forwarding** — The active Dataverse connection is forwarded automatically so the target tool opens against the same environment.
