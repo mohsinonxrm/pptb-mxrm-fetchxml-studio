@@ -1,6 +1,6 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.2.3-beta.2",
+	"version": "1.2.3-beta.3",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
@@ -79,7 +79,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.36.0",
-		"@pptb/types": "^1.2.3-beta.0",
+		"@pptb/types": "^1.2.3",
 		"@types/node": "^24.10.4",
 		"@types/react": "^18.3.27",
 		"@types/react-dom": "^18.3.7",

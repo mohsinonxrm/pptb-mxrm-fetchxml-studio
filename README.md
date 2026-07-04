@@ -2,11 +2,11 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.2.3--beta.2-orange)
+![Version](https://img.shields.io/badge/version-1.2.3--beta.3-orange)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
-![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.3--beta.0-orange)
+![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.3-blue)
 
 ## ✨ Features
 
@@ -174,7 +174,7 @@ disableAllDebug();
 | **Monaco Editor** | 0.54 | VS Code XML editor for FetchXML authoring |
 | **react-window** | 2 | Virtualized list rendering for large datasets |
 | **ExcelJS** | 4.4 | Native `.xlsx` generation with typed cells |
-| **@pptb/types** | 1.2.3-beta.0 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
+| **@pptb/types** | 1.2.3 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
 
 ## 📁 Project Structure
 

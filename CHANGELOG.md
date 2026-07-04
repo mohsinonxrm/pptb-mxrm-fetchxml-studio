@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3-beta.3] - 2026-07-01
+
+### 🏗️ Technical
+
+- Upgraded `@pptb/types` `1.2.3-beta.0` → `1.2.3` (stable) ahead of merging the T2T branch into `dev`. Types are compile-time only, so there is **no runtime change** — the API surface FetchXML Studio uses (capability discovery, `launchTool` `noReturn`, `getToolContext`) is identical in the stable release. `features.minAPI` stays at `1.2.2`; discovery remains feature-detected and degrades gracefully on older hosts.
+
 ## [1.2.3-beta.2] - 2026-07-01
 
 ### 🐛 Fixed
