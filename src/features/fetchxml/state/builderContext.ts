@@ -9,6 +9,7 @@ import type { LayoutXmlConfig } from "../model/layoutxml";
 import type { ParseResult } from "../model/fetchxmlParser";
 import type { BuilderState, ViewLoadInfo } from "./builderStore";
 import type { SortPlan } from "../model/queryColumns";
+import type { NewCondition } from "../model/columnFilters";
 
 export interface LoadFetchXmlOptions {
 	/** Keep the current column layout, merging new attributes into it (editor sync, #102) */
@@ -69,6 +70,12 @@ export interface BuilderContextValue extends BuilderState {
 	 * When enabled, execution fetches all pages progressively.
 	 */
 	setRetrieveAllRecords: (enabled: boolean) => void;
+	/** Add a results-grid column filter's condition to the query (#23) */
+	addColumnFilter: (condition: NewCondition) => void;
+	/** Remove one column filter's condition */
+	removeColumnFilter: (conditionId: NodeId) => void;
+	/** Remove every column filter */
+	clearColumnFilters: () => void;
 }
 
 export const BuilderContext = createContext<BuilderContextValue | null>(null);

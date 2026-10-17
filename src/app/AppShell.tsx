@@ -76,6 +76,7 @@ import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
 import { planRemoveColumns, planSortByColumn, resolveColumn } from "../features/fetchxml/model/queryColumns";
 import { relationshipKey } from "../features/fetchxml/model/manyToMany";
+import { columnFilterConditions, type NewCondition } from "../features/fetchxml/model/columnFilters";
 import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
 import type { FetchNode, LinkEntityNode } from "../features/fetchxml/model/nodes";
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
@@ -948,6 +949,34 @@ function AppContent() {
 		handleExecuteRef.current = handleExecute;
 	});
 
+	// Column filters from the results grid (#23): they change the query, which then runs again.
+	// Running waits for the change to commit, so it runs the new query.
+	const columnFilters = useMemo(
+		() => columnFilterConditions(builder.fetchQuery, builder.columnFilterId),
+		[builder.fetchQuery, builder.columnFilterId],
+	);
+	const [columnFilterRunRequest, setColumnFilterRunRequest] = useState(0);
+	useEffect(() => {
+		if (columnFilterRunRequest > 0) void handleExecuteRef.current();
+	}, [columnFilterRunRequest]);
+	const { addColumnFilter, removeColumnFilter, clearColumnFilters } = builder; // stable (#65)
+	const handleAddColumnFilter = useCallback(
+		(condition: NewCondition) => {
+			addColumnFilter(condition);
+			setColumnFilterRunRequest((n) => n + 1);
+		},
+		[addColumnFilter],
+	);
+	const handleRemoveColumnFilters = useCallback(
+		(conditionIds: string[]) => {
+			if (conditionIds.length === 0) return;
+			if (conditionIds.length === columnFilters.length) clearColumnFilters();
+			else conditionIds.forEach((id) => removeColumnFilter(id));
+			setColumnFilterRunRequest((n) => n + 1);
+		},
+		[columnFilters.length, clearColumnFilters, removeColumnFilter],
+	);
+
 	/**
 	 * Fetch the page after `state` (#58, #60): saved views follow @odata.nextLink; FetchXML sets page,
 	 * the decoded paging cookie (when Dataverse returned one) and the executed query's own count.
@@ -1780,6 +1809,9 @@ function AppContent() {
 							}
 						}
 					}}
+					columnFilters={columnFilters}
+					onAddColumnFilter={handleAddColumnFilter}
+					onRemoveColumnFilters={handleRemoveColumnFilters}
 					onSortChange={(data) => {
 						// The column maps to the right <order>: alias in aggregate queries, entityname for
 						// link-entity columns, nothing for types Dataverse can't sort (queryColumns.ts, #114)

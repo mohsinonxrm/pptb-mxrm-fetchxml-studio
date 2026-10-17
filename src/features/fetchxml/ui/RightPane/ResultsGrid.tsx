@@ -6,7 +6,7 @@
  * Sort state is derived from FetchXML orders - clicking headers triggers onSortChange callback
  */
 
-import { useMemo, useCallback, useEffect, useState, useRef } from "react";
+import { useMemo, useCallback, useEffect, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import {
 	createTableColumn,
 	makeStyles,
@@ -14,6 +14,25 @@ import {
 	TableCellLayout,
 	Skeleton,
 	SkeletonItem,
+	Menu,
+	MenuPopover,
+	MenuList,
+	MenuItem,
+	MenuDivider,
+	Popover,
+	PopoverSurface,
+	Button,
+	Text,
+	Tooltip,
+	TagGroup,
+	Tag,
+	SearchBox,
+	Toaster,
+	Toast,
+	ToastTitle,
+	useToastController,
+	useId,
+	type PositioningVirtualElement,
 } from "@fluentui/react-components";
 import {
 	DataGrid,
@@ -26,16 +45,42 @@ import {
 import type { RowRenderer } from "@fluentui-contrib/react-data-grid-react-window";
 import { useScrollbarWidth, useFluent } from "@fluentui/react-components";
 import type { SortDirection } from "@fluentui/react-components";
-import { ArrowSortUp16Regular, ArrowSortDown16Regular } from "@fluentui/react-icons";
+import {
+	ArrowSortUp16Regular,
+	ArrowSortDown16Regular,
+	ArrowSortUp20Regular,
+	ArrowSortDown20Regular,
+	Copy20Regular,
+	Filter16Regular,
+	Filter20Regular,
+	FilterDismiss20Regular,
+} from "@fluentui/react-icons";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import { getCellRenderer } from "./getCellRenderer";
 import { buildRowIdentity } from "./rowIdentity";
 import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUtils";
-import type { FetchNode } from "../../model/nodes";
+import type { ConditionNode, FetchNode } from "../../model/nodes";
+import { columnFilterTarget, type ColumnFilterTarget, type NewCondition } from "../../model/columnFilters";
+import { ALL_OPERATORS, operatorRequiresValue } from "../../model/operators";
+import { collectAllLinkEntities } from "../../model/treeUtils";
+import { ConditionEditor } from "../LeftPane/PropertiesPanel/editors/ConditionEditor";
+import { HighlightText } from "./HighlightText";
+import { SearchHighlightContext } from "./searchHighlightContext";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { DisplaySettings } from "../../model/displaySettings";
 import { metadataCache } from "../../state/cache";
 import { collectQueryColumns, joinedLinkAliases, resolveColumn, sortedColumns } from "../../model/queryColumns";
+import {
+	cellText,
+	columnToText,
+	formattedText,
+	rawText,
+	rowCountLabel,
+	rowsToTsv,
+	writeClipboard,
+	type CopyColumn,
+	type CopyValueMode,
+} from "./copyResults";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -45,6 +90,47 @@ export interface SortChangeData {
 	direction: SortDirection;
 	/** Whether Shift key was held (multi-column sort) */
 	isMultiSort: boolean;
+}
+
+/** Lets the results command bar copy rows (#50) */
+export interface ResultsGridHandle {
+	copyRows: (scope: "selected" | "all", mode: CopyValueMode) => void;
+}
+
+/** What a raw value is, for the cell menu's "Copy raw value" */
+function rawValueKind(attributeType: string | undefined): string | undefined {
+	switch (attributeType) {
+		case "Lookup":
+		case "Customer":
+		case "Owner":
+		case "Uniqueidentifier":
+			return "GUID";
+		case "DateTime":
+			return "ISO date";
+		case "Picklist":
+		case "State":
+		case "Status":
+			return "option value";
+		case "Boolean":
+			return "true/false";
+		case "Integer":
+		case "BigInt":
+		case "Decimal":
+		case "Double":
+		case "Money":
+			return "number";
+		default:
+			return undefined;
+	}
+}
+
+/** A right-clicked cell */
+interface CellMenuState {
+	open: boolean;
+	/** The mouse position (or the cell, for the keyboard's context menu key) */
+	target?: PositioningVirtualElement | HTMLElement;
+	item?: Record<string, unknown>;
+	columnId?: string;
 }
 
 const ROW_HEIGHT = 42;
@@ -122,7 +208,68 @@ const useStyles = makeStyles({
 		marginLeft: "auto",
 	},
 	headerCell: {},
+	filterIndicator: {
+		flexShrink: 0,
+		color: tokens.colorBrandForeground1,
+	},
+	filterBar: {
+		display: "flex",
+		alignItems: "center",
+		flexWrap: "wrap",
+		gap: tokens.spacingHorizontalS,
+		padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
+		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+	},
+	search: {
+		marginLeft: "auto",
+		minWidth: "140px",
+		width: "240px",
+		flexShrink: 1,
+	},
+	filterSurface: {
+		display: "flex",
+		flexDirection: "column",
+		gap: tokens.spacingVerticalS,
+		width: "320px",
+		maxWidth: "calc(100vw - 32px)",
+	},
+	filterNote: {
+		color: tokens.colorNeutralForeground3,
+	},
+	filterActions: {
+		display: "flex",
+		justifyContent: "flex-end",
+		gap: tokens.spacingHorizontalS,
+	},
 });
+
+/** Header menu sort labels, by the attribute's type (as model-driven app grids word them) */
+function sortLabels(attributeType: string | undefined): [string, string] {
+	switch (attributeType) {
+		case "DateTime":
+			return ["Oldest to newest", "Newest to oldest"];
+		case "Integer":
+		case "BigInt":
+		case "Decimal":
+		case "Double":
+		case "Money":
+			return ["Smallest to largest", "Largest to smallest"];
+		default:
+			return ["A to Z", "Z to A"];
+	}
+}
+
+/** Whether a condition has the value(s) its operator needs */
+function hasRequiredValue(condition: ConditionNode): boolean {
+	if (!condition.operator) return false;
+	if (!operatorRequiresValue(condition.operator)) return true;
+	const { value } = condition;
+	if (Array.isArray(value)) return value.length > 0 && value.every((v) => v !== "" && v !== undefined && v !== null);
+	return value !== undefined && value !== null && value !== "";
+}
+
+const sameTarget = (c: ConditionNode, t: ColumnFilterTarget) =>
+	c.attribute === t.attribute && (c.entityname || undefined) === t.entityname;
 
 export interface QueryResult {
 	columns: string[];
@@ -160,9 +307,20 @@ interface ResultsGridProps {
 	onLoadMore?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
+	/** Quick search over the loaded rows (#23) */
+	searchText?: string;
+	onSearchTextChange?: (text: string) => void;
+	/** The column filters' conditions (#23, columnFilters.ts) */
+	columnFilters?: ConditionNode[];
+	/** Add a column filter's condition and run the query again */
+	onAddColumnFilter?: (condition: NewCondition) => void;
+	/** Remove column filters' conditions and run the query again */
+	onRemoveColumnFilters?: (conditionIds: string[]) => void;
+	/** Rows shown after the quick search (for the Copy menu) */
+	onVisibleCountChange?: (count: number) => void;
 }
 
-export function ResultsGrid({
+export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(function ResultsGrid({
 	result,
 	isLoading,
 	isLoadingMore,
@@ -176,7 +334,13 @@ export function ResultsGrid({
 	onSortChange,
 	onLoadMore,
 	displaySettings,
-}: ResultsGridProps) {
+	searchText = "",
+	onSearchTextChange,
+	columnFilters,
+	onAddColumnFilter,
+	onRemoveColumnFilters,
+	onVisibleCountChange,
+}: ResultsGridProps, ref) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
 	const scrollbarWidth = useScrollbarWidth({ targetDocument });
@@ -343,12 +507,13 @@ export function ResultsGrid({
 
 	// Memoize column definitions with display names and formatted values
 	// Uses columnConfig for ordering and widths when available
-	const { columns, columnDisplayNames, columnAttributeTypes } = useMemo(() => {
+	const { columns, columnDisplayNames, columnAttributeTypes, copyColumns } = useMemo(() => {
 		if (!result || result.columns.length === 0)
 			return {
 				columns: [],
 				columnDisplayNames: new Map<string, string>(),
 				columnAttributeTypes: new Map<string, string | undefined>(),
+				copyColumns: [] as CopyColumn[],
 			};
 
 		// Filter out OData and CRM annotation columns
@@ -401,6 +566,8 @@ export function ResultsGrid({
 
 		const displayNames = new Map<string, string>();
 		const attrTypes = new Map<string, string | undefined>();
+		// The grid's columns as copied, in grid order (#50)
+		const copyCols: CopyColumn[] = [];
 		const columnDefs = displayableColumns.flatMap((col) => {
 			// Get column display info from our comprehensive map
 			const displayInfo = columnDisplayMap.get(col);
@@ -507,6 +674,10 @@ export function ResultsGrid({
 
 			// Check if this column is sorted (from FetchXML orders)
 			const sortInfo = sortStateMap.get(col);
+			// Whether a column filter targets this column (#23)
+			const filterTarget = fetchQuery ? columnFilterTarget(fetchQuery, col) : undefined;
+			const isFiltered =
+				!!filterTarget && !("reason" in filterTarget) && !!columnFilters?.some((c) => sameTarget(c, filterTarget));
 			const valueMode = displaySettings?.valueDisplayMode ?? "formatted";
 
 			// For "both" mode, check if this column has formatted values in the result set
@@ -525,6 +696,10 @@ export function ResultsGrid({
 
 			// For "both" mode with formatted values, create two columns
 			if (valueMode === "both" && hasFormattedValues) {
+				copyCols.push(
+					{ id: col, header: displayName, sourceCol: col, showsRaw: false },
+					{ id: `${col}__raw`, header: `${displayName} (Raw)`, sourceCol: col, showsRaw: true },
+				);
 				displayNames.set(`${col}__raw`, `${displayName} (Raw)`);
 				attrTypes.set(`${col}__raw`, attribute?.AttributeType);
 				// Create formatted value column
@@ -538,6 +713,7 @@ export function ResultsGrid({
 					renderHeaderCell: () => (
 						<span className={styles.headerCellContent}>
 							<span style={{ fontWeight: 600 }}>{displayName}</span>
+							{isFiltered && <Filter16Regular className={styles.filterIndicator} aria-label="Filtered" />}
 							{/* Show sort indicator based on FetchXML order state */}
 							{sortInfo && (
 								<span className={styles.sortIndicator}>
@@ -581,7 +757,9 @@ export function ResultsGrid({
 								{rawValue === null || rawValue === undefined ? (
 									<span>—</span>
 								) : (
-									<span>{String(rawValue)}</span>
+									<span>
+										<HighlightText text={String(rawValue)} />
+									</span>
 								)}
 							</TableCellLayout>
 						);
@@ -592,6 +770,7 @@ export function ResultsGrid({
 			}
 
 			// Standard single column (formatted or raw mode)
+			copyCols.push({ id: col, header: displayName, sourceCol: col, showsRaw: valueMode === "raw" });
 			return createTableColumn<Record<string, unknown>>({
 				columnId: col,
 				compare: (a, b) => {
@@ -602,6 +781,7 @@ export function ResultsGrid({
 				renderHeaderCell: () => (
 					<span className={styles.headerCellContent}>
 						<span style={{ fontWeight: 600 }}>{displayName}</span>
+						{isFiltered && <Filter16Regular className={styles.filterIndicator} aria-label="Filtered" />}
 						{/* Show sort indicator based on FetchXML order state */}
 						{sortInfo && (
 							<span className={styles.sortIndicator}>
@@ -626,7 +806,9 @@ export function ResultsGrid({
 								{rawValue === null || rawValue === undefined ? (
 									<span>—</span>
 								) : (
-									<span>{String(rawValue)}</span>
+									<span>
+										<HighlightText text={String(rawValue)} />
+									</span>
 								)}
 							</TableCellLayout>
 						);
@@ -645,6 +827,7 @@ export function ResultsGrid({
 			columns: columnDefs,
 			columnDisplayNames: displayNames,
 			columnAttributeTypes: attrTypes,
+			copyColumns: copyCols,
 		};
 	}, [
 		result,
@@ -656,6 +839,7 @@ export function ResultsGrid({
 		styles,
 		sortStateMap,
 		displaySettings,
+		columnFilters,
 	]);
 
 	// Selection handlers
@@ -669,19 +853,35 @@ export function ResultsGrid({
 		[onSelectedCountChange, onSelectionChange, rowIdentity],
 	);
 
-	// Sort change handler: notifies parent to update FetchXML orders
-	// Shift+click adds/toggles column in multi-sort, regular click replaces all
+	// ---- Header menu: sort and column filters (#23) ----
+	const [headerMenu, setHeaderMenu] = useState<{ open: boolean; anchor?: HTMLElement; columnId?: string }>({
+		open: false,
+	});
+	const [filterFor, setFilterFor] = useState<{
+		anchor: HTMLElement;
+		header: string;
+		target: ColumnFilterTarget;
+	} | null>(null);
+	const [draftCondition, setDraftCondition] = useState<ConditionNode | null>(null);
+
+	// Header clicks open the header menu; Shift+click still adds a sort directly.
 	// We calculate direction ourselves based on FetchXML state, not Fluent's sortDirection
 	const handleSortChange = useCallback(
 		(
 			e: React.MouseEvent,
 			data: { sortColumn: string | number | undefined; sortDirection: SortDirection },
 		) => {
+			const columnKey = String(data.sortColumn);
+			if (!e.shiftKey) {
+				const anchor = (e.target as HTMLElement).closest<HTMLElement>('[role="columnheader"]');
+				setHeaderMenu({ open: true, anchor: anchor ?? (e.currentTarget as HTMLElement), columnId: columnKey });
+				return;
+			}
 			if (!onSortChange) return;
 
 			// The "(Raw)" twin column sorts like its column
-			const columnId = String(data.sortColumn).replace(/__raw$/, "");
-			const isMultiSort = e.shiftKey;
+			const columnId = columnKey.replace(/__raw$/, "");
+			const isMultiSort = true;
 
 			// Get current sort info for this column from FetchXML state
 			const sortInfo = sortStateMap.get(columnId);
@@ -701,12 +901,257 @@ export function ResultsGrid({
 		[onSortChange, sortStateMap],
 	);
 
+	// ---- Quick search over the loaded rows (#23) ----
+	const search = searchText.trim();
+	const visibleRows = useMemo(() => {
+		const rows = result?.rows ?? [];
+		if (!search) return rows;
+		const q = search.toLowerCase();
+		// Matches the values as shown, in any column
+		return rows.filter((r) => copyColumns.some((c) => cellText(r, c).toLowerCase().includes(q)));
+	}, [result, search, copyColumns]);
+
+	useEffect(() => {
+		onVisibleCountChange?.(visibleRows.length);
+	}, [visibleRows.length, onVisibleCountChange]);
+
+	// Rows the search hides don't stay selected: record actions work on the selection
+	useEffect(() => {
+		if (!search || selectedItems.size === 0) return;
+		const visible = new Set<string | number>(visibleRows.map((r) => getRowId(r)));
+		const kept = new Set([...selectedItems].filter((id) => visible.has(id)));
+		if (kept.size !== selectedItems.size) handleSelectionChange(undefined, { selectedItems: kept });
+	}, [search, visibleRows, selectedItems, getRowId, handleSelectionChange]);
+
+	// ---- Copy (#50) ----
+	const toasterId = useId("results-toaster");
+	const { dispatchToast } = useToastController(toasterId);
+	const [cellMenu, setCellMenu] = useState<CellMenuState>({ open: false });
+	/** The cell with keyboard focus, for Ctrl+C */
+	const focusedCellRef = useRef<{ item: Record<string, unknown>; columnId: string } | null>(null);
+
+	const copyColumnById = useCallback(
+		(columnId: string) => copyColumns.find((c) => c.id === columnId),
+		[copyColumns],
+	);
+
+	const selectedRecords = useCallback(
+		() => (result?.rows ?? []).filter((r) => selectedItems.has(getRowId(r))),
+		[result, selectedItems, getRowId],
+	);
+
+	const copy = useCallback(
+		async (text: string, what: string) => {
+			const ok = await writeClipboard(text);
+			dispatchToast(
+				<Toast>
+					<ToastTitle>{ok ? `${what} copied` : "Couldn't copy to the clipboard"}</ToastTitle>
+				</Toast>,
+				{ intent: ok ? "success" : "error", timeout: ok ? 2000 : 4000 },
+			);
+		},
+		[dispatchToast],
+	);
+
+	const copyRecords = useCallback(
+		(records: Record<string, unknown>[], mode: CopyValueMode) => {
+			if (records.length === 0) return;
+			void copy(rowsToTsv(records, copyColumns, mode), rowCountLabel(records.length));
+		},
+		[copy, copyColumns],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			copyRows: (scope, mode) => copyRecords(scope === "all" ? visibleRows : selectedRecords(), mode),
+		}),
+		[copyRecords, visibleRows, selectedRecords],
+	);
+
+	const openCellMenu = useCallback((e: React.MouseEvent<HTMLElement>, item: Record<string, unknown>, columnId: string) => {
+		e.preventDefault();
+		// Open at the mouse; the context menu key reports (0, 0), so open at the cell instead
+		const { clientX: x, clientY: y } = e;
+		const target: PositioningVirtualElement | HTMLElement =
+			x === 0 && y === 0
+				? e.currentTarget
+				: { getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0 }) };
+		setCellMenu({ open: true, target, item, columnId });
+	}, []);
+
+	// Ctrl+C copies the selected rows, or else the focused cell, as shown. Text the user has
+	// highlighted copies as usual.
+	const handleGridKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c" || e.altKey || e.shiftKey) return;
+			if (window.getSelection()?.toString()) return;
+			if (selectedItems.size > 0) {
+				e.preventDefault();
+				copyRecords(selectedRecords(), "shown");
+				return;
+			}
+			const focused = focusedCellRef.current;
+			const column = focused && copyColumnById(focused.columnId);
+			if (focused && column) {
+				e.preventDefault();
+				void copy(cellText(focused.item, column), column.header);
+			}
+		},
+		[selectedItems, copyRecords, selectedRecords, copyColumnById, copy],
+	);
+
+	// The right-clicked cell's values, for the cell menu
+	const cellMenuContent = useMemo(() => {
+		const { item, columnId } = cellMenu;
+		const column = columnId ? copyColumnById(columnId) : undefined;
+		if (!item || !column) return undefined;
+		return {
+			item,
+			column,
+			shown: cellText(item, column),
+			raw: rawText(item, column.sourceCol),
+			rawKind: rawValueKind(columnAttributeTypes.get(column.id)),
+		};
+	}, [cellMenu, copyColumnById, columnAttributeTypes]);
+
+	// ---- Column filters (#23) ----
+	const headerMenuColumnKey = headerMenu.columnId?.replace(/__raw$/, "");
+	const headerMenuTarget = useMemo(
+		() => (fetchQuery && headerMenuColumnKey ? columnFilterTarget(fetchQuery, headerMenuColumnKey) : undefined),
+		[fetchQuery, headerMenuColumnKey],
+	);
+	const headerMenuFilters =
+		headerMenuTarget && !("reason" in headerMenuTarget)
+			? (columnFilters ?? []).filter((c) => sameTarget(c, headerMenuTarget))
+			: [];
+	const [sortAscLabel, sortDescLabel] = sortLabels(
+		headerMenu.columnId ? columnAttributeTypes.get(headerMenu.columnId) : undefined,
+	);
+
+	const sortFromMenu = (direction: SortDirection) => {
+		if (headerMenuColumnKey) onSortChange?.({ columnId: headerMenuColumnKey, direction, isMultiSort: false });
+	};
+
+	const openFilter = () => {
+		if (!headerMenu.anchor || !headerMenuColumnKey || !headerMenuTarget || "reason" in headerMenuTarget) return;
+		setFilterFor({
+			anchor: headerMenu.anchor,
+			header: copyColumnById(headerMenuColumnKey)?.header ?? headerMenuTarget.attribute,
+			target: headerMenuTarget,
+		});
+		setDraftCondition({
+			id: "column-filter-draft",
+			type: "condition",
+			attribute: headerMenuTarget.attribute,
+			entityname: headerMenuTarget.entityname,
+			operator: "" as ConditionNode["operator"],
+		});
+	};
+
+	const applyFilter = () => {
+		if (!draftCondition || !hasRequiredValue(draftCondition)) return;
+		const { attribute, entityname, operator, value } = draftCondition;
+		onAddColumnFilter?.({ attribute, entityname, operator, value });
+		setFilterFor(null);
+	};
+
+	const linkEntities = useMemo(() => collectAllLinkEntities(fetchQuery ?? null), [fetchQuery]);
+
+	// "Annual Revenue greater than 100000", "Status Reason equals Active"
+	const filterLabel = useCallback(
+		(c: ConditionNode): string => {
+			const link = c.entityname ? linkEntities.find((l) => (l.alias || l.name) === c.entityname) : undefined;
+			const entityName = link?.name ?? fetchQuery?.entity.name ?? "";
+			const attribute = attributeMetadata?.get(entityName)?.get(c.attribute);
+			const name = displaySettings?.useLogicalNames
+				? `${c.entityname ? `${c.entityname}.` : ""}${c.attribute}`
+				: `${attribute?.DisplayName?.UserLocalizedLabel?.Label ?? c.attribute}${c.entityname ? ` (${c.entityname})` : ""}`;
+			const operator = (ALL_OPERATORS.find((o) => o.value === c.operator)?.label ?? c.operator).toLowerCase();
+			const values = c.value === undefined || c.value === null ? [] : Array.isArray(c.value) ? c.value : [c.value];
+			// Choice values show as their labels, taken from a loaded row with the same value
+			const column = copyColumns.find((col) => {
+				const target = fetchQuery ? columnFilterTarget(fetchQuery, col.sourceCol) : undefined;
+				return !!target && !("reason" in target) && sameTarget(c, target);
+			});
+			const valueText = (v: unknown) => {
+				const row = column && result?.rows.find((r) => rawText(r, column.sourceCol) === String(v));
+				return row && column ? formattedText(row, column.sourceCol) : String(v);
+			};
+			return [name, operator, values.map(valueText).join(", ")].filter(Boolean).join(" ");
+		},
+		[linkEntities, fetchQuery, attributeMetadata, displaySettings, copyColumns, result],
+	);
+
+	// Above the grid: the column filters (left) and the quick search (right)
+	const hasFilters = !!columnFilters && columnFilters.length > 0;
+	const showSearch = !!onSearchTextChange && ((result?.rows.length ?? 0) > 0 || !!searchText);
+	const filterBar =
+		hasFilters || showSearch ? (
+			<div className={styles.filterBar}>
+				{hasFilters && (
+					<>
+						<Text size={200} weight="semibold">
+							Filters
+						</Text>
+						<TagGroup
+							size="small"
+							aria-label="Column filters"
+							onDismiss={(_, data) => onRemoveColumnFilters?.([String(data.value)])}
+						>
+							{columnFilters.map((c) => {
+								const label = filterLabel(c);
+								return (
+									<Tag key={c.id} value={c.id} dismissible dismissIcon={{ "aria-label": `Remove filter: ${label}` }}>
+										{label}
+									</Tag>
+								);
+							})}
+						</TagGroup>
+						{columnFilters.length > 1 && (
+							<Button
+								size="small"
+								appearance="transparent"
+								onClick={() => onRemoveColumnFilters?.(columnFilters.map((c) => c.id))}
+							>
+								Clear all
+							</Button>
+						)}
+					</>
+				)}
+				{showSearch && (
+					<Tooltip
+						content="Searches the loaded rows. To search every record, use Filter by… in a column header."
+						relationship="description"
+					>
+						<SearchBox
+							className={styles.search}
+							size="small"
+							placeholder="Search loaded rows"
+							aria-label="Search loaded rows"
+							value={searchText}
+							onChange={(_, data) => onSearchTextChange?.(data.value)}
+						/>
+					</Tooltip>
+				)}
+			</div>
+		) : null;
+
 	// Row renderer function for virtualization with scrolling indicator support
 	const renderRow: RowRenderer<Record<string, unknown>> = useCallback(
 		({ item, rowId }, style, _index, isScrolling) => (
 			<DataGridRow<Record<string, unknown>> key={rowId} style={style} className={styles.row}>
-				{({ renderCell }) => (
-					<DataGridCell focusMode="group">
+				{({ renderCell, columnId }) => (
+					<DataGridCell
+						focusMode="group"
+						onContextMenu={(e: React.MouseEvent<HTMLElement>) => openCellMenu(e, item, String(columnId))}
+						onFocus={() => {
+							focusedCellRef.current = { item, columnId: String(columnId) };
+						}}
+						onBlur={() => {
+							focusedCellRef.current = null;
+						}}
+					>
 						{isScrolling ? (
 							<Skeleton style={{ width: "100%" }}>
 								<SkeletonItem shape="rectangle" animation="pulse" appearance="translucent" />
@@ -718,7 +1163,7 @@ export function ResultsGrid({
 				)}
 			</DataGridRow>
 		),
-		[styles.row],
+		[styles.row, openCellMenu],
 	);
 
 	// Build column sizing options from columnConfig or defaults
@@ -811,7 +1256,8 @@ export function ResultsGrid({
 	// Infinite scroll: load more when user scrolls near bottom
 	const handleItemsRendered = useCallback(
 		({ visibleStopIndex }: { visibleStartIndex: number; visibleStopIndex: number }) => {
-			if (!result || !onLoadMore || isLoadingMore) return;
+			// While searching, the visible rows aren't the loaded rows: don't load pages behind the user's back
+			if (!result || !onLoadMore || isLoadingMore || search) return;
 
 			// If user has scrolled to within 10 rows of the end, and there are more records
 			const rowCount = result.rows.length;
@@ -827,22 +1273,33 @@ export function ResultsGrid({
 				onLoadMore();
 			}
 		},
-		[result, onLoadMore, isLoadingMore],
+		[result, onLoadMore, isLoadingMore, search],
 	);
 
 	// Note: Data is already sorted by Dataverse based on FetchXML orders
 	// No local sorting needed - we display rows as returned
 
+	// The column filters stay visible (and removable) while loading and when they leave no rows
+	const withFilterBar = (content: React.ReactNode) =>
+		filterBar ? (
+			<div className={styles.container}>
+				{filterBar}
+				{content}
+			</div>
+		) : (
+			content
+		);
+
 	if (isLoading) {
-		return <div className={styles.emptyState}>Loading results...</div>;
+		return withFilterBar(<div className={styles.emptyState}>Loading results...</div>);
 	}
 
 	if (!result) {
-		return <div className={styles.emptyState}>Click Execute to run the query</div>;
+		return withFilterBar(<div className={styles.emptyState}>Click Execute to run the query</div>);
 	}
 
 	if (result.rows.length === 0) {
-		return <div className={styles.emptyState}>No records found</div>;
+		return withFilterBar(<div className={styles.emptyState}>No records found</div>);
 	}
 
 	console.log("[ResultsGrid] Rendering grid:", {
@@ -857,52 +1314,55 @@ export function ResultsGrid({
 
 	return (
 		<div className={styles.container}>
-			<div className={styles.gridWrapper}>
+			{filterBar}
+			<div className={styles.gridWrapper} onKeyDown={handleGridKeyDown}>
 				<div ref={containerRef} className={styles.gridContent}>
-					<DataGrid
-						aria-label={result?.entityLogicalName ?? "Results"}
-						items={result.rows}
-						columns={columns}
-						sortable
-						// Controlled sortState with a sentinel column ID that never matches any real column.
-						// This suppresses Fluent's built-in sort indicator entirely so only our custom
-						// renderHeaderCell arrows (driven by FetchXML order state) are ever visible.
-						sortState={{ sortColumn: "__sort_managed_externally__", sortDirection: "ascending" }}
-						resizableColumns
-						resizableColumnsOptions={{ autoFitColumns: false }}
-						columnSizingOptions={columnSizingOptions}
-						onColumnResize={handleColumnResize}
-						onSortChange={handleSortChange}
-						selectionMode="multiselect"
-						selectedItems={selectedItems}
-						onSelectionChange={handleSelectionChange}
-						getRowId={getRowId}
-					>
-						<DataGridHeader ref={headerRef} style={{ paddingRight: scrollbarWidth }}>
-							<DataGridRow style={{ minHeight: "43px", maxHeight: "43px" }}>
-								{({ renderHeaderCell }) => (
-									<DataGridHeaderCell className={styles.headerCell}>
-										{renderHeaderCell()}
-									</DataGridHeaderCell>
-								)}
-							</DataGridRow>
-						</DataGridHeader>
-						<DataGridBody<Record<string, unknown>>
-							itemSize={ROW_HEIGHT}
-							height={Math.max(0, gridDimensions.height - headerHeight)}
-							listProps={{
-								useIsScrolling: true,
-								className: styles.body,
-								onItemsRendered: handleItemsRendered,
-							}}
+					<SearchHighlightContext.Provider value={search}>
+						<DataGrid
+							aria-label={result?.entityLogicalName ?? "Results"}
+							items={visibleRows}
+							columns={columns}
+							sortable
+							// Controlled sortState with a sentinel column ID that never matches any real column.
+							// This suppresses Fluent's built-in sort indicator entirely so only our custom
+							// renderHeaderCell arrows (driven by FetchXML order state) are ever visible.
+							sortState={{ sortColumn: "__sort_managed_externally__", sortDirection: "ascending" }}
+							resizableColumns
+							resizableColumnsOptions={{ autoFitColumns: false }}
+							columnSizingOptions={columnSizingOptions}
+							onColumnResize={handleColumnResize}
+							onSortChange={handleSortChange}
+							selectionMode="multiselect"
+							selectedItems={selectedItems}
+							onSelectionChange={handleSelectionChange}
+							getRowId={getRowId}
 						>
-							{renderRow}
-						</DataGridBody>
-					</DataGrid>
+							<DataGridHeader ref={headerRef} style={{ paddingRight: scrollbarWidth }}>
+								<DataGridRow style={{ minHeight: "43px", maxHeight: "43px" }}>
+									{({ renderHeaderCell }) => (
+										<DataGridHeaderCell className={styles.headerCell}>
+											{renderHeaderCell()}
+										</DataGridHeaderCell>
+									)}
+								</DataGridRow>
+							</DataGridHeader>
+							<DataGridBody<Record<string, unknown>>
+								itemSize={ROW_HEIGHT}
+								height={Math.max(0, gridDimensions.height - headerHeight)}
+								listProps={{
+									useIsScrolling: true,
+									className: styles.body,
+									onItemsRendered: handleItemsRendered,
+								}}
+							>
+								{renderRow}
+							</DataGridBody>
+						</DataGrid>
+					</SearchHighlightContext.Provider>
 				</div>
 				<div className={styles.infoBar}>
 					<span>
-						Rows: {result.rows.length}
+						Rows: {search ? `${visibleRows.length} of ${result.rows.length} loaded match the search` : result.rows.length}
 						{result.moreRecords && !isLoadingMore && " (more available)"}
 						{isLoadingMore && " (loading more...)"}
 						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
@@ -919,6 +1379,112 @@ export function ResultsGrid({
 					</span>
 				</div>
 			</div>
+			{cellMenuContent && (
+				<Menu
+					open={cellMenu.open}
+					onOpenChange={(_, data) => setCellMenu((m) => ({ ...m, open: data.open }))}
+					positioning={{ target: cellMenu.target, position: "below", align: "start" }}
+				>
+					<MenuPopover>
+						<MenuList>
+							<MenuItem
+								icon={<Copy20Regular />}
+								onClick={() => void copy(cellMenuContent.shown, cellMenuContent.column.header)}
+							>
+								Copy value
+							</MenuItem>
+							{cellMenuContent.raw !== "" && cellMenuContent.raw !== cellMenuContent.shown && (
+								<MenuItem onClick={() => void copy(cellMenuContent.raw, `${cellMenuContent.column.header} (raw)`)}>
+									Copy raw value{cellMenuContent.rawKind ? ` (${cellMenuContent.rawKind})` : ""}
+								</MenuItem>
+							)}
+							<MenuDivider />
+							<MenuItem onClick={() => copyRecords([cellMenuContent.item], "shown")}>Copy row</MenuItem>
+							<MenuItem disabled={selectedItems.size === 0} onClick={() => copyRecords(selectedRecords(), "shown")}>
+								Copy selected rows ({selectedItems.size})
+							</MenuItem>
+							<MenuItem
+								onClick={() =>
+									void copy(columnToText(result.rows, cellMenuContent.column), `${cellMenuContent.column.header} column`)
+								}
+							>
+								Copy column
+							</MenuItem>
+						</MenuList>
+					</MenuPopover>
+				</Menu>
+			)}
+			<Menu
+				open={headerMenu.open}
+				onOpenChange={(_, data) => setHeaderMenu((m) => ({ ...m, open: data.open }))}
+				positioning={{ target: headerMenu.anchor, position: "below", align: "start" }}
+			>
+				<MenuPopover>
+					<MenuList>
+						<MenuItem icon={<ArrowSortUp20Regular />} disabled={!onSortChange} onClick={() => sortFromMenu("ascending")}>
+							{sortAscLabel}
+						</MenuItem>
+						<MenuItem icon={<ArrowSortDown20Regular />} disabled={!onSortChange} onClick={() => sortFromMenu("descending")}>
+							{sortDescLabel}
+						</MenuItem>
+						<MenuDivider />
+						{headerMenuTarget && "reason" in headerMenuTarget ? (
+							<Tooltip content={headerMenuTarget.reason} relationship="description" positioning="after">
+								<MenuItem icon={<Filter20Regular />} disabled>
+									Filter by…
+								</MenuItem>
+							</Tooltip>
+						) : (
+							<MenuItem icon={<Filter20Regular />} disabled={!onAddColumnFilter || !headerMenuTarget} onClick={openFilter}>
+								Filter by…
+							</MenuItem>
+						)}
+						{headerMenuFilters.length > 0 && (
+							<MenuItem
+								icon={<FilterDismiss20Regular />}
+								onClick={() => onRemoveColumnFilters?.(headerMenuFilters.map((c) => c.id))}
+							>
+								Clear filter
+							</MenuItem>
+						)}
+					</MenuList>
+				</MenuPopover>
+			</Menu>
+			<Popover
+				open={!!filterFor}
+				onOpenChange={(_, data) => {
+					if (!data.open) setFilterFor(null);
+				}}
+				positioning={{ target: filterFor?.anchor, position: "below", align: "start" }}
+				withArrow
+				trapFocus
+			>
+				<PopoverSurface className={styles.filterSurface} aria-label={filterFor ? `Filter by ${filterFor.header}` : undefined}>
+					{filterFor && draftCondition && fetchQuery && (
+						<>
+							<Text weight="semibold">Filter by {filterFor.header}</Text>
+							<ConditionEditor
+								columnFilter
+								node={draftCondition}
+								entityName={filterFor.target.entityName}
+								fetchQuery={fetchQuery}
+								findings={[]}
+								onUpdate={(updates) => setDraftCondition((d) => (d ? { ...d, ...updates } : d))}
+							/>
+							<Text size={200} className={styles.filterNote}>
+								Adds a condition to the query and runs it again, so it covers every record.
+							</Text>
+							<div className={styles.filterActions}>
+								<Button onClick={() => setFilterFor(null)}>Cancel</Button>
+								<Button appearance="primary" disabled={!hasRequiredValue(draftCondition)} onClick={applyFilter}>
+									Apply
+								</Button>
+							</div>
+						</>
+					)}
+				</PopoverSurface>
+			</Popover>
+			<Toaster toasterId={toasterId} position="bottom-end" />
 		</div>
 	);
-}
+});

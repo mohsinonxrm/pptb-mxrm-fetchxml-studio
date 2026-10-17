@@ -27,6 +27,14 @@ import {
 import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
 import type { SortPlan } from "../model/queryColumns";
 import { collectLinkEntityAliases, generateUniqueAlias } from "../model/aliasUtils";
+import {
+	addColumnFilter,
+	clearColumnFilters,
+	relocateColumnFilterGroup,
+	relocateColumnFilterWrapper,
+	removeColumnFilter,
+	type NewCondition,
+} from "../model/columnFilters";
 
 // Temporary ID generator
 let idCounter = 0;
@@ -72,6 +80,10 @@ export interface BuilderState {
 	layoutNeedsSync: boolean;
 	/** When enabled, execution fetches all pages of results progressively */
 	retrieveAllRecords: boolean;
+	/** The <filter> holding the results grid's column filters, if any (#23, columnFilters.ts) */
+	columnFilterId: NodeId | null;
+	/** The "and" filter the column filters wrapped around an "or" root filter, to unwrap it later */
+	columnFilterWrapperId: NodeId | null;
 }
 
 type BuilderAction =
@@ -125,7 +137,10 @@ type BuilderAction =
 			descending: boolean;
 			isMultiSort: boolean;
 	  }
-	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean };
+	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean }
+	| { type: "ADD_COLUMN_FILTER"; condition: NewCondition }
+	| { type: "REMOVE_COLUMN_FILTER"; conditionId: NodeId }
+	| { type: "CLEAR_COLUMN_FILTERS" };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
@@ -135,7 +150,28 @@ const initialState: BuilderState = {
 	columnConfig: null,
 	layoutNeedsSync: false,
 	retrieveAllRecords: false,
+	columnFilterId: null,
+	columnFilterWrapperId: null,
 };
+
+/** State with a changed query from the results grid's column filters: selection kept if still there */
+function withColumnFilterQuery(
+	state: BuilderState,
+	fetchQuery: FetchNode,
+	columnFilterId: NodeId | null,
+	columnFilterWrapperId: NodeId | null,
+): BuilderState {
+	const selectedNode = state.selectedNodeId ? findNodeById(fetchQuery, state.selectedNodeId) : null;
+	return {
+		...state,
+		fetchQuery,
+		columnFilterId,
+		columnFilterWrapperId: columnFilterId ? columnFilterWrapperId : null,
+		selectedNodeId: selectedNode ? state.selectedNodeId : fetchQuery.entity.id,
+		selectedNode: selectedNode ?? fetchQuery.entity,
+		loadedView: null, // Query modified
+	};
+}
 
 // Helper to find node by ID in the tree
 function findNodeById(node: unknown, targetId: NodeId): SelectedNode {
@@ -290,6 +326,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// new attributes afterwards. Otherwise generate the initial layout from the FetchXML.
 			const keepLayout = action.preserveLayout === true && state.columnConfig !== null;
 			const newConfig = keepLayout ? state.columnConfig : generateLayoutFromFetchXml(fetchNode);
+			// Every node has a new ID: keep the column filters if they're still there (#23)
+			const columnFilterId = relocateColumnFilterGroup(state.fetchQuery, fetchNode, state.columnFilterId);
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
@@ -298,6 +336,13 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId,
+				columnFilterWrapperId: relocateColumnFilterWrapper(
+					state.fetchQuery,
+					fetchNode,
+					state.columnFilterWrapperId,
+					columnFilterId,
+				),
 			};
 		}
 
@@ -327,6 +372,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId: null,
+				columnFilterWrapperId: null,
 			};
 		}
 
@@ -376,6 +423,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId: null,
+				columnFilterWrapperId: null,
 			};
 		}
 
@@ -808,6 +857,29 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 		}
 
+		case "ADD_COLUMN_FILTER": {
+			if (!state.fetchQuery) return state;
+			const result = addColumnFilter(state.fetchQuery, state.columnFilterId, action.condition, generateId);
+			return withColumnFilterQuery(state, result.fetch, result.groupId, result.wrapperId ?? state.columnFilterWrapperId);
+		}
+
+		case "REMOVE_COLUMN_FILTER": {
+			if (!state.fetchQuery) return state;
+			const result = removeColumnFilter(
+				state.fetchQuery,
+				state.columnFilterId,
+				action.conditionId,
+				state.columnFilterWrapperId,
+			);
+			return withColumnFilterQuery(state, result.fetch, result.groupId, state.columnFilterWrapperId);
+		}
+
+		case "CLEAR_COLUMN_FILTERS": {
+			if (!state.fetchQuery) return state;
+			const fetch = clearColumnFilters(state.fetchQuery, state.columnFilterId, state.columnFilterWrapperId);
+			return withColumnFilterQuery(state, fetch, null, null);
+		}
+
 		case "REMOVE_NODE": {
 			if (!state.fetchQuery) return state;
 
@@ -1089,6 +1161,9 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 				dispatch({ type: "SET_SORT", plan, descending, isMultiSort }),
 			setRetrieveAllRecords: (enabled: boolean) =>
 				dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
+			addColumnFilter: (condition: NewCondition) => dispatch({ type: "ADD_COLUMN_FILTER", condition }),
+			removeColumnFilter: (conditionId: NodeId) => dispatch({ type: "REMOVE_COLUMN_FILTER", conditionId }),
+			clearColumnFilters: () => dispatch({ type: "CLEAR_COLUMN_FILTERS" }),
 		}),
 		[],
 	);

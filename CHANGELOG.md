@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2-beta.3] - 2026-10-17
+
+### ✨ Added
+
+- **Column filters that write FetchXML (#23).**
+  - Clicking a column header opens a menu: Sort (A to Z / Z to A; smallest to largest for numbers; oldest to newest for dates), **Filter by…**, and **Clear filter** when the column is filtered. Shift+click still adds the column to a multi-column sort.
+  - **Filter by…** opens the property panel's condition editor for that column: operators and values from the attribute's metadata.
+  - **Apply** adds a `<condition>` to the query and runs it again, so the filter covers every record.
+  - Filtered columns show a filter icon. Active filters show as tags above the grid ("Annual Revenue greater than 200000"; choice values by label). Dismiss a tag, or use **Clear all**, to remove filters and run the query again.
+- **Quick search over the loaded rows (#23).**
+  - The search box above the grid filters the loaded rows as you type, matching any column's value as shown, with matches highlighted.
+  - The info bar shows how many loaded rows match.
+  - The Copy menu's "All loaded rows" becomes "All matching rows".
+  - Rows the search hides are deselected, and scrolling doesn't load more pages while searching.
+
+### 🔧 Changed
+
+- **Clicking a column header opens the header menu instead of sorting straight away.** Sort is the menu's first item. Shift+click still sorts directly.
+
+### 🏗️ Technical
+
+- New `model/columnFilters.ts`, with tests. Column filters live in their own `<filter type="and">`:
+  - FetchXML allows one `<filter>` per entity, so the group nests inside the root filter. With no root filter, the group becomes the root filter.
+  - An `or` root filter is wrapped in an `and` filter, and unwrapped again when the last column filter is removed. The store keeps the wrapper's ID (`columnFilterWrapperId`), so an `and` filter the user wrote is never unwrapped.
+  - Link-entity columns use `entityname` (the alias, or the link-entity's name), per "Filters on link-entity" on Microsoft Learn.
+- The builder store tracks the group in `columnFilterId`, with actions `ADD_COLUMN_FILTER`, `REMOVE_COLUMN_FILTER` and `CLEAR_COLUMN_FILTERS`.
+  - A FetchXML load (editor sync) relocates the group by position when its conditions match.
+  - Loading a view, changing the entity or starting a new query drops the group.
+- AppShell runs the query once the filter change has committed.
+- `ConditionEditor` takes a `columnFilter` option: the column fixes the attribute, so the Entity, Attribute and Compare-to fields are hidden.
+- Search highlighting reads the search text from a context (`SearchHighlightContext`), so typing doesn't rebuild the grid's columns. The text cell renderers wrap their text in `HighlightText`.
+
+## [1.4.2-beta.2] - 2026-10-17
+
+### ✨ Added
+
+- **Copy results to the clipboard (#50).**
+  - **Right-click a cell** for: Copy value; Copy raw value (GUID, number, ISO date, option value or true/false, when it differs from what's shown); Copy row; Copy selected rows; Copy column. Copy column gives one value per line, e.g. to paste into an `in` condition.
+  - **Ctrl+C** copies the selected rows, or the focused cell when no rows are selected. Text you've highlighted copies as usual.
+  - The command bar's new **Copy** menu copies the selected rows or all loaded rows, with values **as shown** or **raw** (GUIDs, numbers, ISO dates).
+  - Rows copy as tab-separated values with the grid's headers, in the grid's column order, so they paste into Excel as cells. Values with tabs, line breaks or quotes are quoted the way Excel writes them.
+  - A toast confirms what was copied, or says the clipboard couldn't be written.
+
+### 🏗️ Technical
+
+- New `copyResults.ts` (TSV building, value text, clipboard write with a fallback to `toolboxAPI.utils.copyToClipboard`), with tests.
+- `ResultsGrid` is now a `forwardRef` exposing `copyRows(scope, mode)`; `PreviewTabs` connects it to the command bar's Copy menu.
+- The cell menu is a single controlled Fluent `Menu`, positioned at the mouse. When opened with the keyboard's context menu key, it's positioned at the cell.
+
+## [1.4.2-beta.1] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Selecting a node in the tree jumped to the bottom (#25).** After every selection, the tree scrolled to its *last* item, assuming the selected node was always the newest one. It now scrolls to the selected node, only within the tree, and only when the node is off-screen. Selecting a visible node no longer moves the tree.
+- **A node added from the Add menu wasn't selected (#24).**
+  - The builder selected the new attribute, order, filter or link-entity, but the menu click also reached the tree row behind it, which selected the row again.
+  - The new node is now selected, its properties open, and the tree scrolls to it.
+
+### 🏗️ Technical
+
+- `TreeView.tsx`:
+  - the scroll targets `[data-fui-tree-item-value=<node id>]` inside the tree container, with `block: "nearest"`, and its timer is cleared on the next selection;
+  - the Add menus' `MenuPopover`s stop click propagation, because React events bubble through portals to the row's `onClick`.
+
 ## [1.4.1] - 2026-10-17
 
 The v1.4.1 milestone: correctness against Dataverse, a complete properties panel, and the open bugs. It was iterated through `1.4.1-beta.1` to `1.4.1-beta.20` (detailed below). Every behaviour was checked against Microsoft Learn and a live Dataverse environment: valid FetchXML is never refused, only queries Dataverse rejects are blocked, and warnings are reserved for what can't be determined.
