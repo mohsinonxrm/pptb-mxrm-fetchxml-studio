@@ -1,160 +1,220 @@
 /**
- * Property editor for Order nodes
- * Controls sorting/ordering of query results
+ * Property editor for <order>: attribute (normal queries), alias (aggregate queries), descending
+ * and entityname (#90b). https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/order
+ *
+ * Aggregate queries can only sort by an alias defined in the order's own entity / link-entity, or
+ * in the link-entity named by `entityname` (verified live: anything else fails with 0x8004110a).
  */
 
-import {
-	Field,
-	Dropdown,
-	Option,
-	Radio,
-	RadioGroup,
-	Label,
-	Tooltip,
-	makeStyles,
-	tokens,
-} from "@fluentui/react-components";
-import { Info16Regular } from "@fluentui/react-icons";
-import type { OrderNode, FetchNode } from "../../../../model/nodes";
+import { Dropdown, Option, Radio, RadioGroup } from "@fluentui/react-components";
+import type { AttributeNode, EntityNode, FetchNode, LinkEntityNode, OrderNode } from "../../../../model/nodes";
+import type { RuleFinding } from "../../../../model/fetchxmlRules";
+import { getOrderMetadataIssue } from "../../../../model/attributeCapabilities";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
-import { collectLinkEntityReferences } from "../../../../model/treeUtils";
-import { useMemo } from "react";
+import { DOCS } from "../docLinks";
+import { useEditorStyles } from "../editorStyles";
+import { Info, InfoField, LeftoverSetting, SectionHeading } from "../fields";
+import { findingFor, worst } from "../ruleFindings";
+import { useAttributeTypeInfo } from "../useEditorMetadata";
 
-const useStyles = makeStyles({
-	container: {
-		display: "flex",
-		flexDirection: "column",
-		gap: tokens.spacingVerticalM,
-		padding: tokens.spacingVerticalM,
-	},
-	section: {
-		display: "flex",
-		flexDirection: "column",
-		gap: tokens.spacingVerticalS,
-	},
-	fieldWithTooltip: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalXS,
-	},
-	tooltipIcon: {
-		color: tokens.colorNeutralForeground3,
-		cursor: "help",
-	},
-});
+/** AttributeType values Dataverse can sort by: multi-select option sets, images and files can't (§9A). */
+const ORDERABLE_TYPES = [
+	"String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime", "Boolean",
+	"Picklist", "State", "Status", "Lookup", "Customer", "Owner", "Uniqueidentifier", "EntityName",
+];
+const ROOT = "__root";
+
+const joinedLinks = (container: EntityNode | LinkEntityNode): LinkEntityNode[] =>
+	container.links.flatMap((link) => [link, ...joinedLinks(link)]);
+
+const roleText = (attr: AttributeNode) =>
+	attr.groupby
+		? `Group by${attr.dategrouping ? ` · ${attr.dategrouping}` : ""}`
+		: attr.aggregate
+			? { count: "Count records", countcolumn: "Count values", sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum" }[attr.aggregate]
+			: "";
 
 interface OrderEditorProps {
 	node: OrderNode;
-	entityName: string;
-	fetchQuery: FetchNode | null;
+	/** The entity or link-entity that holds this order */
+	container: EntityNode | LinkEntityNode;
+	isRootEntity: boolean;
+	fetchQuery: FetchNode;
+	/** Query-rule findings for this node (fetchxmlRules.ts) */
+	findings: readonly RuleFinding[];
+	/** Findings on the <fetch> node, for aggregatelimit + order */
+	fetchFindings: readonly RuleFinding[];
 	onUpdate: (updates: Record<string, unknown>) => void;
 }
 
-export function OrderEditor({ node, entityName, fetchQuery, onUpdate }: OrderEditorProps) {
-	const styles = useStyles();
+export function OrderEditor({ node, container, isRootEntity, fetchQuery, findings, fetchFindings, onUpdate }: OrderEditorProps) {
+	const styles = useEditorStyles();
+	const isAggregate = fetchQuery.options.aggregate === true;
+	// Joined link-entities (not the any / not any links inside filters, which return no rows to sort)
+	const links = joinedLinks(fetchQuery.entity);
+	// Link-entities an order can target: by alias, or by name when the name is unique and there's no alias
+	const nameCounts = links.reduce<Record<string, number>>((acc, l) => ({ ...acc, [l.name]: (acc[l.name] ?? 0) + 1 }), {});
+	const targets = links
+		.map((l) => ({ link: l, key: l.alias ?? (nameCounts[l.name] === 1 ? l.name : undefined) }))
+		.filter((t): t is { link: LinkEntityNode; key: string } => !!t.key);
+	const targetLink = node.entityname
+		? (targets.find((t) => t.key === node.entityname)?.link ?? links.find((l) => l.name === node.entityname))
+		: undefined;
+	const scope: EntityNode | LinkEntityNode = isRootEntity ? (targetLink ?? container) : container;
+	const scopeLabel = scope.type === "entity" ? `the root entity (${scope.name})` : `${scope.alias ?? scope.name} (${scope.name})`;
 
-	// Collect all link-entity references for the entity dropdown
-	const linkEntityOptions = useMemo(() => {
-		const refs = collectLinkEntityReferences(fetchQuery);
-		return refs;
-	}, [fetchQuery]);
+	const aliases = scope.attributes.filter((a) => a.alias && (a.groupby || a.aggregate));
+	const aliasInScope = !!node.alias && aliases.some((a) => a.alias === node.alias);
+	const typeInfo = useAttributeTypeInfo(scope.name, !isAggregate ? node.attribute : undefined);
+	const orderTypeIssue = getOrderMetadataIssue(typeInfo);
+	const limitConflict = findingFor(fetchFindings, "aggregatelimit");
 
-	// Determine which entity's attributes to show
-	// If entityname is set, find the matching link-entity's logical name
-	const attributeEntityName = useMemo(() => {
-		if (!node.entityname) {
-			// No entityname = root entity
-			return entityName;
-		}
-		// Find the link-entity with matching alias/identifier
-		const linkRef = linkEntityOptions.find(
-			(ref) => ref.identifier === node.entityname || ref.alias === node.entityname
-		);
-		return linkRef?.entityName ?? entityName;
-	}, [node.entityname, entityName, linkEntityOptions]);
-
-	const handleRadioChange = (_: unknown, data: { value: string }) => {
-		onUpdate({ descending: data.value === "desc" });
-	};
-
-	const handleEntityChange = (_: unknown, data: { optionValue?: string }) => {
-		const value = data.optionValue;
-		if (value === "__root__") {
-			// Root entity selected - clear entityname and attribute
-			onUpdate({ entityname: undefined, attribute: "" });
-		} else {
-			// Link-entity selected - set entityname and clear attribute
-			onUpdate({ entityname: value || undefined, attribute: "" });
-		}
-	};
-
-	// Get selected entity option value
-	const selectedEntityValue = node.entityname ?? "__root__";
+	const entityValue = node.entityname
+		? targetLink
+			? `${targetLink.alias ?? targetLink.name} (${targetLink.name})`
+			: node.entityname
+		: `Root: ${fetchQuery.entity.name}`;
 
 	return (
 		<div className={styles.container}>
-			{/* Basic Properties */}
 			<div className={styles.section}>
-				<Label weight="semibold">Order By Properties</Label>
+				<SectionHeading>Sort</SectionHeading>
 
-				<Field label="Entity" hint="Select root entity or a link-entity to sort by">
-					<div className={styles.fieldWithTooltip}>
+				{isRootEntity && targets.length > 0 && (
+					<InfoField
+						label="Entity"
+						validation={findingFor(findings, "entityname")}
+						info={
+							<Info
+								text="Choose a link-entity to apply its sort before the root entity's sorts. Otherwise link-entity sorts are applied last."
+								href={DOCS.linkOrdersFirst}
+							/>
+						}
+					>
 						<Dropdown
-							value={
-								selectedEntityValue === "__root__"
-									? `Root: ${entityName}`
-									: linkEntityOptions.find((o) => o.identifier === selectedEntityValue)
-											?.displayLabel ?? selectedEntityValue
+							value={entityValue}
+							selectedOptions={[node.entityname ?? ROOT]}
+							onOptionSelect={(_, data) =>
+								onUpdate({ entityname: data.optionValue === ROOT ? undefined : data.optionValue, attribute: undefined, alias: undefined })
 							}
-							selectedOptions={[selectedEntityValue]}
-							onOptionSelect={handleEntityChange}
 						>
-							<Option text={`Root: ${entityName}`} value="__root__">
-								Root: {entityName}
-							</Option>
-							{linkEntityOptions.map((ref) => (
-								<Option key={ref.identifier} text={ref.displayLabel} value={ref.identifier}>
-									{ref.displayLabel}
+							<Option value={ROOT}>{`Root: ${fetchQuery.entity.name}`}</Option>
+							{targets.map(({ link, key }) => (
+								<Option key={link.id} value={key}>{`${link.alias ?? link.name} (${link.name})`}</Option>
+							))}
+						</Dropdown>
+					</InfoField>
+				)}
+
+				{!isAggregate ? (
+					<InfoField
+						label="Attribute"
+						required
+						validation={worst(
+							!node.attribute && !node.alias ? { state: "error", message: "Choose an attribute to sort by." } : undefined,
+							orderTypeIssue ? { state: "error", message: orderTypeIssue } : undefined,
+						)}
+						info={<Info text="The logical name of the attribute to sort by. It doesn't need to be a selected attribute." href={DOCS.orderRows} />}
+					>
+						<AttributePicker
+							entityLogicalName={scope.name}
+							filterByTypes={ORDERABLE_TYPES}
+							value={node.attribute ?? ""}
+							onChange={(attribute) => onUpdate({ attribute: attribute || undefined })}
+							placeholder="Select an attribute"
+						/>
+					</InfoField>
+				) : (
+					<InfoField
+						label="Sort by"
+						required
+						validation={worst(
+							!node.alias
+								? {
+										state: "error",
+										message: aliases.length === 0
+											? `Add an alias to a Group by or Aggregate attribute of ${scopeLabel} first.`
+											: "Choose an alias to sort by.",
+									}
+								: undefined,
+							findingFor(findings, "alias"),
+							limitConflict,
+						)}
+						info={
+							<Info
+								text="Aggregate queries sort by an attribute alias. Only aliases of Group by or Aggregate attributes of the chosen entity are listed."
+								href={DOCS.order}
+							/>
+						}
+					>
+						<Dropdown
+							placeholder="Choose an alias"
+							value={node.alias ?? ""}
+							selectedOptions={node.alias ? [node.alias] : []}
+							onOptionSelect={(_, data) => onUpdate({ alias: data.optionValue, attribute: undefined })}
+						>
+							{node.alias && !aliasInScope && (
+								<Option value={node.alias} text={node.alias}>
+									<span className={styles.optionText}>
+										{node.alias}
+										<span className={styles.optionSecondary}>Not defined on this entity</span>
+									</span>
+								</Option>
+							)}
+							{aliases.map((attr) => (
+								<Option key={attr.id} value={attr.alias!} text={attr.alias!}>
+									<span className={styles.optionText}>
+										{attr.alias}
+										<span className={styles.optionSecondary}>
+											{attr.name} · {roleText(attr)}
+										</span>
+									</span>
 								</Option>
 							))}
 						</Dropdown>
-						<Tooltip
-							content="Select the root entity or a link-entity to sort by its attributes."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+					</InfoField>
+				)}
 
-				<Field label="Attribute Name" required>
-					<div className={styles.fieldWithTooltip}>
-						<AttributePicker
-							entityLogicalName={attributeEntityName}
-							value={node.attribute}
-							onChange={(logicalName) => onUpdate({ attribute: logicalName })}
-							placeholder="Select or type attribute name"
+				{/* Values that don't apply in this mode (parsed XML or after a mode change) */}
+				{!isAggregate && node.alias && (
+					<LeftoverSetting
+						text={`Alias: ${node.alias}`}
+						validation={findingFor(findings, "alias") ?? { state: "error", message: "Only aggregate queries sort by alias." }}
+						onRemove={() => onUpdate({ alias: undefined })}
+					/>
+				)}
+				{isAggregate && node.attribute && (
+					<LeftoverSetting
+						text={`Attribute: ${node.attribute}`}
+						validation={findingFor(findings, "attribute") ?? { state: "error", message: "Aggregate queries sort by alias." }}
+						onRemove={() => onUpdate({ attribute: undefined })}
+					/>
+				)}
+				{!isRootEntity && node.entityname && (
+					<LeftoverSetting
+						text={`Entity: ${node.entityname}`}
+						validation={findingFor(findings, "entityname") ?? { state: "error", message: "Not allowed on an order inside a link-entity." }}
+						onRemove={() => onUpdate({ entityname: undefined })}
+					/>
+				)}
+
+				<InfoField
+					label="Direction"
+					info={
+						<Info
+							text="Option set attributes sort by label unless 'Sort option sets by value' is on for the query. Lookups sort by the related record's primary name."
+							href={DOCS.orderRows}
 						/>
-						<Tooltip content="Logical name of the attribute to sort by." relationship="description">
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
-
-				<Field label="Sort Direction">
-					<div className={styles.fieldWithTooltip}>
-						<RadioGroup value={node.descending ? "desc" : "asc"} onChange={handleRadioChange}>
-							<Radio value="asc" label="Ascending (A-Z, 0-9, oldest first)" />
-							<Radio value="desc" label="Descending (Z-A, 9-0, newest first)" />
-						</RadioGroup>
-						<Tooltip
-							content="Sort order: ascending (default) or descending. Multiple order nodes are applied in sequence."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+					}
+				>
+					<RadioGroup
+						value={node.descending ? "desc" : "asc"}
+						onChange={(_, data) => onUpdate({ descending: data.value === "desc" ? true : undefined })}
+					>
+						<Radio value="asc" label="Ascending" />
+						<Radio value="desc" label="Descending" />
+					</RadioGroup>
+				</InfoField>
 			</div>
 		</div>
 	);

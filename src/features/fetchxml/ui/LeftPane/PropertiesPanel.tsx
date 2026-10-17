@@ -1,9 +1,11 @@
 /**
- * Properties panel that displays editors for the selected tree node
+ * Properties panel: the editor for the selected tree node. Query-rule findings (fetchxmlRules.ts)
+ * are computed once per tree change and handed to each editor, so the panel shows the same problems
+ * Validate and Execute report (#90b).
  */
 
+import { useMemo } from "react";
 import { makeStyles, tokens } from "@fluentui/react-components";
-import { debugLog } from "../../../../shared/utils/debug";
 import type {
 	FetchNode,
 	EntityNode,
@@ -15,7 +17,16 @@ import type {
 	LinkEntityNode,
 	NodeId,
 } from "../../model/nodes";
+import { validateQueryRules } from "../../model/fetchxmlRules";
+import {
+	collectAllFilters,
+	findNodeContainer,
+	findParentEntityForNode,
+} from "../../model/treeUtils";
+import { useBuilder } from "../../state/builderContext";
 import { FetchOptionsEditor } from "./PropertiesPanel/editors/FetchOptionsEditor";
+import { EntityEditor } from "./PropertiesPanel/editors/EntityEditor";
+import { AllAttributesEditor } from "./PropertiesPanel/editors/AllAttributesEditor";
 import { AttributeEditor } from "./PropertiesPanel/editors/AttributeEditor";
 import { OrderEditor } from "./PropertiesPanel/editors/OrderEditor";
 import { FilterEditor } from "./PropertiesPanel/editors/FilterEditor";
@@ -30,20 +41,10 @@ const useStyles = makeStyles({
 		scrollbarGutter: "stable",
 	},
 	emptyState: {
-		padding: "16px",
+		padding: tokens.spacingHorizontalL,
 		color: tokens.colorNeutralForeground3,
-		fontSize: "13px",
+		fontSize: tokens.fontSizeBase300,
 		fontStyle: "italic",
-	},
-	section: {
-		padding: "16px",
-	},
-	label: {
-		display: "block",
-		fontSize: "13px",
-		fontWeight: 600,
-		marginBottom: "8px",
-		color: tokens.colorNeutralForeground2,
 	},
 });
 
@@ -66,125 +67,61 @@ interface PropertiesPanelProps {
 
 export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: PropertiesPanelProps) {
 	const styles = useStyles();
+	const { removeNode } = useBuilder();
+	const findings = useMemo(() => (fetchQuery ? validateQueryRules(fetchQuery) : []), [fetchQuery]);
 
-	// Helper to find the parent entity/link-entity for a node
-	const findParentEntity = (nodeId: NodeId): string | null => {
-		if (!fetchQuery) return null;
-
-		const findInNode = (
-			node: unknown,
-			targetId: NodeId,
-			parentEntityName: string | null
-		): string | null => {
-			if (!node || typeof node !== "object") return null;
-
-			const n = node as Record<string, unknown>;
-
-			// If this is the target node, return the current parent entity name
-			if (n.id === targetId) {
-				debugLog("propertiesPanel", "Found target node:", {
-					targetId,
-					nodeType: n.type,
-					nodeName: n.name,
-					resolvedParentEntityName: parentEntityName,
-				});
-				return parentEntityName;
-			}
-
-			// If this is an entity or link-entity, update parent name
-			// BUT only if it has a valid entity name (not a placeholder like "new_entity")
-			let currentEntityName = parentEntityName;
-			if (n.type === "entity" || n.type === "link-entity") {
-				const entityName = n.name as string;
-				// Only use the entity name if it's not a placeholder
-				if (entityName && entityName !== "new_entity") {
-					currentEntityName = entityName;
-					debugLog("propertiesPanel", "Traversing entity/link-entity:", {
-						nodeId: n.id,
-						nodeType: n.type,
-						entityName,
-						updatedCurrentEntityName: currentEntityName,
-					});
-				}
-			}
-
-			// Search in arrays
-			const arrayProps = ["attributes", "orders", "filters", "conditions", "subfilters", "links"];
-			for (const prop of arrayProps) {
-				if (Array.isArray(n[prop])) {
-					for (const item of n[prop]) {
-						const found = findInNode(item, targetId, currentEntityName);
-						if (found) return found;
-					}
-				}
-			}
-
-			// Search in nested objects
-			if (n.entity) {
-				const found = findInNode(n.entity, targetId, currentEntityName);
-				if (found) return found;
-			}
-
-			return null;
-		};
-
-		return findInNode(fetchQuery, nodeId, fetchQuery.entity.name);
-	};
-
-	if (!selectedNode) {
+	if (!selectedNode || !fetchQuery) {
 		return (
 			<div className={styles.container}>
-				<div className={styles.emptyState}>Select a node in the tree to view its properties</div>
+				<div className={styles.emptyState}>Select a node in the tree to view its properties.</div>
 			</div>
 		);
 	}
 
-	const renderProperties = () => {
+	const nodeFindings = findings.filter((f) => f.nodeId === selectedNode.id);
+	const isAggregateQuery = fetchQuery.options.aggregate === true;
+	const update = (updates: Record<string, unknown>) => onNodeUpdate(selectedNode.id, updates);
+	const location = findNodeContainer(fetchQuery, selectedNode.id);
+	const missing = <div className={styles.emptyState}>This node is no longer in the query.</div>;
+
+	const renderEditor = () => {
 		switch (selectedNode.type) {
 			case "fetch":
-				return (
-					<FetchOptionsEditor
-						node={selectedNode}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
-					/>
-				);
+				return <FetchOptionsEditor node={selectedNode} findings={nodeFindings} onUpdate={update} />;
 
 			case "entity":
-				return (
-					<div className={styles.section}>
-						<div className={styles.label}>Entity: {selectedNode.name}</div>
-						<div className={styles.emptyState}>
-							Entity properties editor (Phase 5)
-							<br />- enableprefiltering, prefilterparametername
-						</div>
-					</div>
-				);
+				return <EntityEditor node={selectedNode} onUpdate={update} />;
 
 			case "all-attributes":
 				return (
-					<div className={styles.section}>
-						<div className={styles.label}>All Attributes</div>
-						<div className={styles.emptyState}>All-attributes toggle (Phase 5)</div>
-					</div>
+					<AllAttributesEditor isAggregateQuery={isAggregateQuery} onRemove={() => removeNode(selectedNode.id)} />
 				);
 
 			case "attribute":
+				if (!location) return missing;
 				return (
 					<AttributeEditor
 						node={selectedNode}
-						entityName={findParentEntity(selectedNode.id) ?? ""}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
-						isAggregateQuery={fetchQuery?.options.aggregate ?? false}
+						container={location.container}
+						isRootEntity={location.isRoot}
+						isAggregateQuery={isAggregateQuery}
+						fetchQuery={fetchQuery}
+						findings={nodeFindings}
+						onUpdate={update}
 					/>
 				);
 
 			case "order":
+				if (!location) return missing;
 				return (
 					<OrderEditor
 						node={selectedNode}
-						entityName={findParentEntity(selectedNode.id) ?? ""}
-						fetchQuery={fetchQuery ?? null}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
+						container={location.container}
+						isRootEntity={location.isRoot}
+						fetchQuery={fetchQuery}
+						findings={nodeFindings}
+						fetchFindings={findings.filter((f) => f.nodeId === fetchQuery.id)}
+						onUpdate={update}
 					/>
 				);
 
@@ -192,7 +129,9 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<FilterEditor
 						node={selectedNode}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
+						unionElsewhere={collectAllFilters(fetchQuery).some((f) => f.id !== selectedNode.id && f.hint === "union")}
+						findings={nodeFindings}
+						onUpdate={update}
 					/>
 				);
 
@@ -200,10 +139,10 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<ConditionEditor
 						node={selectedNode}
-						entityName={findParentEntity(selectedNode.id) ?? ""}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
-						isAggregateQuery={fetchQuery?.options.aggregate ?? false}
+						entityName={location?.container.name ?? findParentEntityForNode(fetchQuery, selectedNode.id) ?? ""}
 						fetchQuery={fetchQuery}
+						findings={nodeFindings}
+						onUpdate={update}
 					/>
 				);
 
@@ -211,15 +150,22 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<LinkEntityEditor
 						node={selectedNode}
-						parentEntityName={findParentEntity(selectedNode.id) ?? ""}
-						onUpdate={(updates) => onNodeUpdate(selectedNode.id, updates)}
+						parentEntityName={findParentEntityForNode(fetchQuery, selectedNode.id) ?? fetchQuery.entity.name}
+						inFilter={collectAllFilters(fetchQuery).some((f) => f.links?.some((l) => l.id === selectedNode.id))}
+						findings={nodeFindings}
+						onUpdate={update}
 					/>
 				);
 
 			default:
-				return <div className={styles.emptyState}>Unknown node type</div>;
+				return <div className={styles.emptyState}>Unknown node type.</div>;
 		}
 	};
 
-	return <div className={styles.container}>{renderProperties()}</div>;
+	// Keyed by node id, so per-node UI state resets when the selection changes
+	return (
+		<div className={styles.container} key={selectedNode.id}>
+			{renderEditor()}
+		</div>
+	);
 }

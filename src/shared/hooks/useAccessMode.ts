@@ -7,7 +7,7 @@
 import { useState, useEffect } from "react";
 import {
 	getAccessSummary,
-	getAllAdvancedFindEntities,
+	getAllEntitiesForScopes,
 	type AccessSummary,
 } from "../../features/fetchxml/api/pptbClient";
 
@@ -29,16 +29,17 @@ export function useAccessMode() {
 				if (mounted) {
 					setAccessSummary(summary);
 
-					// Preload the AF-valid entity metadata cache so publisher-solution and
-					// solution-only modes have instant access via filterCachedEntitiesByNames.
+					// Preload the entity metadata cache so publisher-solution and solution-only
+					// modes have instant access via filterCachedEntitiesByNames (the picker
+					// applies "Advanced Find only" locally, #57).
 					// The "All Entities" cache is loaded lazily by EntitySelector when that
 					// scope mode is actually selected — no need to fetch it unconditionally.
 					if (summary && !summary.noAccessMode) {
-						console.log("[useAccessMode] Preloading AF-valid entity metadata...");
-						getAllAdvancedFindEntities()
+						console.log("[useAccessMode] Preloading entity metadata...");
+						getAllEntitiesForScopes()
 							.then((entities) => {
 								console.log(
-									"[useAccessMode] AF-valid entity metadata preloaded:",
+									"[useAccessMode] Entity metadata preloaded:",
 									entities.length,
 									"entities",
 								);

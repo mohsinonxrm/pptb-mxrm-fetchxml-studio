@@ -28,7 +28,8 @@ const useStyles = makeStyles({
 		flexDirection: "column",
 		gap: "4px",
 		flex: 1,
-		minWidth: "200px",
+		// Shrinks with a narrow left pane (#53)
+		minWidth: 0,
 		maxWidth: "350px",
 	},
 	label: {
@@ -37,6 +38,12 @@ const useStyles = makeStyles({
 		color: tokens.colorNeutralForeground2,
 	},
 	combobox: {
+		width: "100%",
+		// Overrides Fluent's built-in Combobox minimum width (#53)
+		minWidth: 0,
+	},
+	comboboxInput: {
+		minWidth: 0,
 		width: "100%",
 	},
 	loadingOption: {
@@ -211,6 +218,7 @@ export function LoadViewPicker({
 			<label className={styles.label}>Load View</label>
 			<Combobox
 				className={styles.combobox}
+				input={{ className: styles.comboboxInput }}
 				placeholder={loading ? "Loading views..." : "Select a view to load"}
 				disabled={disabled || loading || !hasViews}
 				value={inputValue}

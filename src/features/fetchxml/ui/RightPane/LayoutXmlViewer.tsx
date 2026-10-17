@@ -8,7 +8,7 @@ import Editor from "@monaco-editor/react";
 import type * as MonacoEditor from "monaco-editor";
 import { makeStyles, Spinner, tokens, Toolbar, ToolbarButton } from "@fluentui/react-components";
 import { Copy24Regular } from "@fluentui/react-icons";
-import { useTheme } from "../../../../shared/contexts/ThemeContext";
+import { useTheme } from "../../../../shared/contexts/useTheme";
 
 const useStyles = makeStyles({
 	container: {

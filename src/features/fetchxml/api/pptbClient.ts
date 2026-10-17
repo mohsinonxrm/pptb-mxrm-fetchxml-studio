@@ -14,12 +14,16 @@ interface DataverseFetchXmlResponse {
 	"@Microsoft.Dynamics.CRM.totalrecordcount"?: number;
 	"@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"?: boolean;
 	"@Microsoft.Dynamics.CRM.morerecords"?: boolean;
+	/** Not sent by the Web API (verified); kept only as a defensive fallback */
 	"@Microsoft.Dynamics.CRM.pagingcookie"?: string;
+	/** Saved views (?savedQuery= / ?userQuery=) page with nextLink instead */
+	"@odata.nextLink"?: string;
 }
 
 import { debugLog } from "../../../shared/utils/debug";
 import { responseHasFormattedValues } from "./formattedValues";
 import { metadataCache } from "../state/cache";
+import { nextLinkToQueryPath, parseFetchXmlPagingCookie } from "./paging";
 
 export interface EntityMetadata {
 	LogicalName: string;
@@ -31,6 +35,10 @@ export interface EntityMetadata {
 	IsValidForAdvancedFind?: boolean;
 	MetadataId: string;
 	ObjectTypeCode: number;
+	/** Lower-case collection name; routes when a few system entities' EntitySetName doesn't (#61) */
+	LogicalCollectionName?: string;
+	/** Long-term retention is enabled: datasource="retained" can query it (#90b) */
+	IsRetentionEnabled?: boolean;
 }
 
 export interface AttributeMetadata {
@@ -41,6 +49,11 @@ export interface AttributeMetadata {
 	AttributeTypeName?: { Value?: string };
 	MetadataId: string;
 	IsValidForAdvancedFind?: { Value: boolean };
+	/** False: the value can't be retrieved, so any query using the attribute fails (#57) */
+	IsValidForRead?: boolean;
+	/** Logical attributes include composite ones (address1_composite), which can't be grouped or aggregated */
+	IsLogical?: boolean;
+	IsPrimaryId?: boolean;
 	MaxLength?: number;
 	Precision?: number;
 	// For Integer, BigInt, Decimal, Double attributes
@@ -86,6 +99,11 @@ export interface RelationshipMetadata {
 	Entity1IntersectAttribute?: string;
 	Entity2IntersectAttribute?: string;
 	IntersectEntityName?: string;
+	/**
+	 * Set by FetchXML Studio on the many-to-one joins it derives for an intersect entity: which side of
+	 * its many-to-many relationship the join goes to (#57). Not Dataverse metadata.
+	 */
+	IntersectSide?: 1 | 2;
 }
 
 export interface FetchXmlResult {
@@ -93,7 +111,23 @@ export interface FetchXmlResult {
 	totalRecordCount?: number;
 	totalRecordCountLimitExceeded?: boolean;
 	moreRecords?: boolean;
+	/** Decoded paging cookie for the next page; undefined when Dataverse returned none (simple paging) */
 	pagingCookie?: string;
+	/** Saved views: the link to the next page */
+	nextLink?: string;
+}
+
+/** Paging fields of a Web API response (#58): the documented annotations, cookie decoded. */
+function pagingFromResponse(result: DataverseFetchXmlResponse): Pick<FetchXmlResult, "moreRecords" | "pagingCookie" | "nextLink"> {
+	const fromAnnotation = parseFetchXmlPagingCookie(result["@Microsoft.Dynamics.CRM.fetchxmlpagingcookie"]);
+	const legacy = result["@Microsoft.Dynamics.CRM.pagingcookie"];
+	const nextLink = result["@odata.nextLink"];
+	return {
+		// An empty page ends paging even if more is claimed, so a loop can never spin on it
+		moreRecords: (result["@Microsoft.Dynamics.CRM.morerecords"] === true || !!nextLink) && (result.value?.length ?? 0) > 0,
+		pagingCookie: fromAnnotation.cookie ?? (typeof legacy === "string" && legacy ? legacy : undefined),
+		nextLink: typeof nextLink === "string" ? nextLink : undefined,
+	};
 }
 
 export interface WhoAmIResponse {
@@ -230,7 +264,7 @@ export async function getEntityAttributes(
 	}
 
 	// Build OData query with server-side filtering
-	let query = `EntityDefinitions(LogicalName='${logicalName}')/Attributes?$select=LogicalName,SchemaName,DisplayName,AttributeType,AttributeTypeName,MetadataId,IsValidForAdvancedFind`;
+	let query = `EntityDefinitions(LogicalName='${logicalName}')/Attributes?$select=LogicalName,SchemaName,DisplayName,AttributeType,AttributeTypeName,MetadataId,IsValidForAdvancedFind,IsValidForRead,IsLogical,IsPrimaryId`;
 
 	// Add server-side filter for IsValidForAdvancedFind
 	if (advancedFindOnly) {
@@ -273,7 +307,7 @@ export async function getAttributeWithOptionSet(
 	}
 
 	// First, get the basic attribute to determine its type
-	const basicQuery = `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes(LogicalName='${attributeLogicalName}')?$select=AttributeType,LogicalName,SchemaName,DisplayName,MetadataId`;
+	const basicQuery = `EntityDefinitions(LogicalName='${entityLogicalName}')/Attributes(LogicalName='${attributeLogicalName}')?$select=AttributeType,AttributeTypeName,LogicalName,SchemaName,DisplayName,MetadataId`;
 
 	debugLog("metadataAPI", `📡 GET Attribute type for '${attributeLogicalName}': ${basicQuery}`);
 
@@ -295,6 +329,9 @@ export async function getAttributeWithOptionSet(
 		typeCast = "Microsoft.Dynamics.CRM.StatusAttributeMetadata";
 	} else if (basicAttr.AttributeType === "Picklist") {
 		typeCast = "Microsoft.Dynamics.CRM.PicklistAttributeMetadata";
+	} else if (basicAttr.AttributeTypeName?.Value === "MultiSelectPicklistType") {
+		// Multi-select choices: contain-values / not-contain-values take their option values (#87)
+		typeCast = "Microsoft.Dynamics.CRM.MultiSelectPicklistAttributeMetadata";
 	} else {
 		// For non-optionset attributes, return the basic metadata
 		debugLog(
@@ -488,8 +525,63 @@ export async function getEntityRelationships(
 }
 
 /**
+ * Root <entity> logical name of a FetchXML string, or undefined when it can't be determined
+ * (malformed XML is left for Dataverse to report).
+ */
+export function getFetchXmlEntityName(fetchXml: string): string | undefined {
+	const doc = new DOMParser().parseFromString(fetchXml, "text/xml");
+	if (doc.getElementsByTagName("parsererror").length > 0) return undefined;
+	const root = doc.documentElement;
+	if (root?.nodeName !== "fetch") return undefined;
+	for (const child of Array.from(root.children)) {
+		if (child.nodeName === "entity") return child.getAttribute("name") || undefined;
+	}
+	return undefined;
+}
+
+/**
+ * EntitySetName from metadata (cached) for the FetchXML's root entity (#61). Microsoft: the entity
+ * set name must be the one for the table in the FetchXML entity element. The host's fetchXmlQuery
+ * guesses it with an English pluralizer, which fails for entities such as `feedback` (verified live).
+ */
+async function resolveFetchXmlEntitySet(
+	fetchXml: string,
+): Promise<{ entitySetName: string; logicalCollectionName?: string } | undefined> {
+	const logicalName = getFetchXmlEntityName(fetchXml);
+	if (!logicalName) return undefined;
+	let metadata = metadataCache.getEntityMetadata(logicalName);
+	if (!metadata) {
+		metadata = await getEntityMetadata(logicalName);
+		metadataCache.setEntityMetadata(logicalName, metadata);
+	}
+	if (!metadata.EntitySetName) return undefined;
+	return { entitySetName: metadata.EntitySetName, logicalCollectionName: metadata.LogicalCollectionName };
+}
+
+/** Dataverse's answer when the URL's entity set segment doesn't exist (0x80060888). */
+const isUnknownSegmentError = (error: unknown) =>
+	error instanceof Error && /Resource not found for the segment/i.test(error.message);
+
+/**
+ * Whether the entity has a hierarchical relationship (a self-referencing one-to-many relationship
+ * with IsHierarchical = true). Count child records (rowaggregate) only works on these entities
+ * (verified: 7 of 7 hierarchical entities accept it, 5 of 5 others reject it with 0x80047020).
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/query-hierarchical-data
+ */
+export async function getIsHierarchical(logicalName: string): Promise<boolean> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+	const result = await window.dataverseAPI!.queryData(
+		`EntityDefinitions(LogicalName='${logicalName}')/OneToManyRelationships?$select=SchemaName&$filter=IsHierarchical eq true`,
+	);
+	return result.value.length > 0;
+}
+
+/**
  * Execute FetchXML query with formatted values
  * Formatted values are returned with @OData.Community.Display.V1.FormattedValue annotations
+ * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/fetchxml/retrieve-data?tabs=webapi
  */
 export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult> {
 	if (!isDataverseAvailable()) {
@@ -499,14 +591,36 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 	debugLog("fetchXmlAPI", `📡 Executing FetchXML query...`);
 	debugLog("fetchXmlAPI", `FetchXML:\n${fetchXml}`);
 
-	const result = (await window.dataverseAPI!.fetchXmlQuery(
-		fetchXml,
-	)) as unknown as DataverseFetchXmlResponse;
+	// queryData sends the same request as fetchXmlQuery (GET with Prefer: odata.include-annotations="*"),
+	// but with the metadata EntitySetName. fetchXmlQuery is only the fallback when metadata is unavailable.
+	let entitySet: Awaited<ReturnType<typeof resolveFetchXmlEntitySet>>;
+	try {
+		entitySet = await resolveFetchXmlEntitySet(fetchXml);
+	} catch (error) {
+		console.warn("executeFetchXml: entity set name lookup failed, using fetchXmlQuery:", error);
+	}
 
-	// Log the raw response to console for inspection
-	console.log("🔍 Raw FetchXML Response:", result);
-	console.log("🔍 Sample Record (first):", result.value[0]);
-	console.log("🔍 All Record Keys:", result.value[0] ? Object.keys(result.value[0]) : []);
+	const query = (set: string) =>
+		window.dataverseAPI!.queryData(`${set}?fetchXml=${encodeURIComponent(fetchXml)}`);
+	let response: unknown;
+	if (!entitySet) {
+		response = await window.dataverseAPI!.fetchXmlQuery(fetchXml);
+	} else {
+		try {
+			response = await query(entitySet.entitySetName);
+		} catch (error) {
+			// A few system entities (e.g. archivecleanupinfo) report an EntitySetName the service doesn't
+			// route; their LogicalCollectionName does (verified live). Retry once with it.
+			const fallback = entitySet.logicalCollectionName;
+			if (!fallback || fallback === entitySet.entitySetName || !isUnknownSegmentError(error)) throw error;
+			response = await query(fallback);
+		}
+	}
+	const result = response as DataverseFetchXmlResponse;
+
+	// Raw response for inspection (debug only: logging every page of a large Retrieve All keeps all
+	// rows alive in the console)
+	debugLog("fetchXmlAPI", "Raw FetchXML response:", result);
 
 	// Check if formatted values are included
 	const hasFormatted = responseHasFormattedValues(result.value);
@@ -543,8 +657,25 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 		records: result.value,
 		totalRecordCount: result["@Microsoft.Dynamics.CRM.totalrecordcount"],
 		totalRecordCountLimitExceeded: result["@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"],
-		moreRecords: result["@Microsoft.Dynamics.CRM.morerecords"],
-		pagingCookie: result["@Microsoft.Dynamics.CRM.pagingcookie"],
+		...pagingFromResponse(result),
+	};
+}
+
+/**
+ * Fetch the next page of a saved view from its @odata.nextLink (#60). Verified live: following the
+ * link through queryData returns the next page without overlap and the following nextLink.
+ */
+export async function executeNextLink(nextLink: string): Promise<FetchXmlResult> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+	const path = nextLinkToQueryPath(nextLink);
+	if (!path) throw new Error(`Unexpected next page link: ${nextLink}`);
+	const result = (await window.dataverseAPI!.queryData(path)) as DataverseFetchXmlResponse;
+	return {
+		records: result.value,
+		totalRecordCount: result["@Microsoft.Dynamics.CRM.totalrecordcount"],
+		...pagingFromResponse(result),
 	};
 }
 
@@ -566,16 +697,15 @@ export async function executeSystemView(
 	// Use queryData with savedQuery parameter (OData query, not FetchXML)
 	// GET [Organization URI]/api/data/v9.2/{entitySetName}?savedQuery={savedQueryId}
 	const query = `${entitySetName}?savedQuery=${savedQueryId}`;
-	const result = await window.dataverseAPI!.queryData(query);
+	const result = (await window.dataverseAPI!.queryData(query)) as DataverseFetchXmlResponse;
 
 	debugLog("fetchXmlAPI", `✅ System View executed: ${result.value.length} records retrieved`);
 
+	// Views page with @odata.nextLink (verified), not the FetchXML paging cookie
 	return {
 		records: result.value,
-		// savedQuery execution doesn't return paging metadata in the same way
 		totalRecordCount: undefined,
-		moreRecords: undefined,
-		pagingCookie: undefined,
+		...pagingFromResponse(result),
 	};
 }
 
@@ -597,16 +727,15 @@ export async function executePersonalView(
 	// Use queryData with userQuery parameter (OData query, not FetchXML)
 	// GET [Organization URI]/api/data/v9.2/{entitySetName}?userQuery={userQueryId}
 	const query = `${entitySetName}?userQuery=${userQueryId}`;
-	const result = await window.dataverseAPI!.queryData(query);
+	const result = (await window.dataverseAPI!.queryData(query)) as DataverseFetchXmlResponse;
 
 	debugLog("fetchXmlAPI", `✅ Personal View executed: ${result.value.length} records retrieved`);
 
+	// Views page with @odata.nextLink (verified), not the FetchXML paging cookie
 	return {
 		records: result.value,
-		// userQuery execution doesn't return paging metadata in the same way
 		totalRecordCount: undefined,
-		moreRecords: undefined,
-		pagingCookie: undefined,
+		...pagingFromResponse(result),
 	};
 }
 
@@ -978,44 +1107,32 @@ export async function getSolutionComponents(solutionIds: string[]): Promise<Solu
 }
 
 /**
- * Get ALL EntityDefinitions that are valid for Advanced Find
- * This is called once on startup and cached globally for the session
+ * Get every entity's metadata for the Publisher/Solution and Solution scopes (cached, de-duplicated).
+ * Not filtered for Advanced Find: the entity picker applies the "Advanced Find only" setting
+ * locally in every scope (#57), so toggling it doesn't refetch.
  */
-export async function getAllAdvancedFindEntities(): Promise<EntityMetadata[]> {
+export async function getAllEntitiesForScopes(): Promise<EntityMetadata[]> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
 
-	// Check cache first
 	const cached = metadataCache.getAllEntityMetadata();
-	if (cached) {
-		console.log("[API] getAllAdvancedFindEntities - Cache hit:", cached.length, "entities");
-		return cached;
-	}
+	if (cached) return cached;
 
-	// Check for in-flight promise
 	const inFlight = metadataCache.getAllEntityMetadataPromise();
-	if (inFlight) {
-		console.log("[API] getAllAdvancedFindEntities - Returning in-flight promise");
-		return inFlight;
-	}
-
-	console.log("[API] getAllAdvancedFindEntities - Fetching all AF-valid entities");
+	if (inFlight) return inFlight;
 
 	try {
-		const promise = getAllEntities(true);
+		const promise = getAllEntities(false);
 		metadataCache.setAllEntityMetadataPromise(promise);
-
 		const entities = await promise;
-		console.log("[API] getAllAdvancedFindEntities - Fetched:", entities.length, "entities");
-
+		debugLog("metadataAPI", `getAllEntitiesForScopes - Fetched: ${entities.length} entities`);
 		metadataCache.setAllEntityMetadata(entities);
 		metadataCache.clearAllEntityMetadataPromise();
-
 		return entities;
 	} catch (error) {
 		metadataCache.clearAllEntityMetadataPromise();
-		console.error("[API] getAllAdvancedFindEntities - Failed:", error);
+		console.error("[API] getAllEntitiesForScopes - Failed:", error);
 		throw error;
 	}
 }
@@ -1042,78 +1159,6 @@ export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetad
 	});
 
 	return filtered;
-}
-
-/**
- * Get EntityDefinitions filtered by logical names and IsValidForAdvancedFind
- */
-export async function getAdvancedFindEntitiesByNames(
-	logicalNames: string[],
-): Promise<EntityMetadata[]> {
-	if (!isDataverseAvailable()) {
-		throw new Error("PPTB Dataverse API not available");
-	}
-
-	if (!logicalNames.length) {
-		console.log(
-			"[API] getAdvancedFindEntitiesByNames - Empty logical names, returning all AF entities",
-		);
-		// Return all AF-valid entities
-		return getAllEntities(true);
-	}
-
-	console.log("[API] getAdvancedFindEntitiesByNames - Input:", {
-		count: logicalNames.length,
-		names: logicalNames,
-	});
-
-	try {
-		const SELECT =
-			"$select=LogicalName,SchemaName,DisplayName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute,IsValidForAdvancedFind,MetadataId,ObjectTypeCode";
-
-		// Chunk logical names to avoid URL length limits
-		const chunkSize = 15;
-		const chunks: string[][] = [];
-		for (let i = 0; i < logicalNames.length; i += chunkSize) {
-			chunks.push(logicalNames.slice(i, i + chunkSize));
-		}
-
-		const allEntities = await Promise.all(
-			chunks.map(async (chunk) => {
-				const nameFilter = chunk.map((name) => `LogicalName eq '${name}'`).join(" or ");
-				const query = `EntityDefinitions?${SELECT}&$filter=IsValidForAdvancedFind eq true and (${nameFilter})`;
-
-				console.log("[API] getAdvancedFindEntitiesByNames - Query:", query);
-				debugLog("metadataAPI", `📡 GET Entities by names: ${chunk.length} names`);
-				const result = await window.dataverseAPI!.queryData(query);
-				const entities = result.value as unknown as EntityMetadata[];
-				console.log("[API] getAdvancedFindEntitiesByNames - Result:", {
-					requestedNames: chunk,
-					returnedCount: entities.length,
-					returnedEntities: entities.map((e) => e.LogicalName),
-				});
-				return entities;
-			}),
-		);
-
-		// Flatten and dedupe
-		const entityMap = new Map<string, EntityMetadata>();
-		allEntities.flat().forEach((e) => entityMap.set(e.LogicalName, e));
-		const entities = Array.from(entityMap.values());
-
-		// Sort by display name
-		entities.sort((a, b) => {
-			const nameA = a.DisplayName?.UserLocalizedLabel?.Label || a.LogicalName;
-			const nameB = b.DisplayName?.UserLocalizedLabel?.Label || b.LogicalName;
-			return nameA.localeCompare(nameB);
-		});
-
-		debugLog("metadataAPI", `✅ Entities retrieved: ${entities.length}`);
-		return entities;
-	} catch (error) {
-		console.error("getAdvancedFindEntitiesByNames: API call failed:", error);
-		throw error;
-	}
 }
 
 // =============================================================================

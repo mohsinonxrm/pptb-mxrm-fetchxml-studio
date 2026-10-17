@@ -3,7 +3,8 @@ logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*pnpm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
@@ -21,6 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local Claude Code workspace (reviews, prototypes, settings)
+.claude/
 
 # Instructions for GitHub Copilot
 

@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -12,6 +12,8 @@ import {
 } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
+import { loadAllEntityAttributes } from "../features/fetchxml/api/dataverseMetadata";
+import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
@@ -22,13 +24,15 @@ import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
-import { BuilderProvider, useBuilder } from "../features/fetchxml/state/builderStore";
+import { BuilderProvider } from "../features/fetchxml/state/builderStore";
+import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
 import { DeleteConfirmDialog } from "../features/fetchxml/ui/Dialogs/DeleteConfirmDialog";
 import { BulkDeleteDialog } from "../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
 import { WorkflowPickerDialog } from "../features/fetchxml/ui/Dialogs/WorkflowPickerDialog";
 import {
 	executeFetchXml,
+	executeNextLink,
 	executeSystemView,
 	executePersonalView,
 	whoAmI,
@@ -60,6 +64,20 @@ import type {
 	WorkflowBatchProgress,
 } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/model/fetchxml";
+import {
+	advancePaging,
+	hasNextPage,
+	readFetchPagingOptions,
+	type PagingNotice,
+	type PagingState,
+} from "../features/fetchxml/api/paging";
+import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
+import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
+import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
+import { planRemoveColumns, planSortByColumn, resolveColumn } from "../features/fetchxml/model/queryColumns";
+import { relationshipKey } from "../features/fetchxml/model/manyToMany";
+import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
+import type { FetchNode, LinkEntityNode } from "../features/fetchxml/model/nodes";
 import { generateLayoutXml } from "../features/fetchxml/model/layoutxml";
 import { collectAttributesFromFetchXml } from "../features/fetchxml/model/layoutxml";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
@@ -67,11 +85,19 @@ import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer"
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
 
+const SIMPLE_PAGING_MESSAGE =
+	"Dataverse didn't return a paging cookie for this query (for example, it's sorted by a link-entity attribute or uses distinct), so pages are fetched with page numbers only. Microsoft recommends paging cookies; this works, but is slower for large result sets.";
+
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
 // but tokens will automatically update when FluentProvider theme changes
 // because Fluent UI v9 uses CSS variables under the hood
 const useStyles = makeStyles({
 	root: {
+		// The theme background covers the whole tool; without it, surfaces with no background of
+		// their own showed the page's white canvas in dark mode (#67). (Not on the FluentProvider:
+		// Fluent copies its className onto portal containers.)
+		backgroundColor: tokens.colorNeutralBackground1,
+		color: tokens.colorNeutralForeground1,
 		display: "flex",
 		flexDirection: "row",
 		height: "100%",
@@ -187,15 +213,13 @@ const useStyles = makeStyles({
 
 export function AppShell() {
 	const { theme } = usePptbContext();
-	// Use theme from PPTB host context
+	// The PPTB host's theme (light / dark), resolved by the host (#67)
 	const isDark = theme === "dark";
 
-	console.log("🎨 AppShell rendering:");
-	console.log("  - theme from context:", theme);
-	console.log("  - isDark:", isDark);
-	console.log("  - will use Fluent theme:", isDark ? "webDarkTheme" : "webLightTheme");
-	console.log("  - tokens.colorNeutralBackground1:", tokens.colorNeutralBackground1);
-	console.log("  - tokens.colorNeutralForeground1:", tokens.colorNeutralForeground1);
+	// Native controls (scrollbars, date inputs, autofill) follow the theme too
+	useEffect(() => {
+		document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+	}, [isDark]);
 
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
@@ -208,35 +232,6 @@ export function AppShell() {
 	);
 }
 
-/**
- * Collect all unique entity logical names from a FetchXML query
- * Includes root entity and all link-entities (recursively)
- */
-function collectEntitiesFromFetchQuery(
-	fetchQuery: import("../features/fetchxml/model/nodes").FetchNode | null,
-): string[] {
-	if (!fetchQuery?.entity?.name) return [];
-
-	const entities = new Set<string>();
-	entities.add(fetchQuery.entity.name);
-
-	const collectFromLinks = (
-		links: import("../features/fetchxml/model/nodes").LinkEntityNode[] | undefined,
-	) => {
-		links?.forEach((link) => {
-			if (link.name) {
-				entities.add(link.name);
-			}
-			if (link.links) {
-				collectFromLinks(link.links);
-			}
-		});
-	};
-
-	collectFromLinks(fetchQuery.entity.links);
-
-	return Array.from(entities);
-}
 
 function AppContent() {
 	const styles = useStyles();
@@ -296,20 +291,27 @@ function AppContent() {
 		Map<string, Map<string, AttributeMetadata>>
 	>(new Map());
 	// State for entity metadata (for layoutxml generation)
-	const [entityMetadata, setEntityMetadata] = useState<EntityMetadata | null>(null);
+	const [loadedEntityMetadata, setLoadedEntityMetadata] = useState<EntityMetadata | null>(null);
 	// State for lookup relationships (many-to-one) and one-to-many relationships
 	const [lookupRelationships, setLookupRelationships] = useState<RelationshipMetadata[]>([]);
 	const [oneToManyRelationships, setOneToManyRelationships] = useState<RelationshipMetadata[]>([]);
 	const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
 
-	// Paging state for infinite scroll / Retrieve All
-	// Kept separate from queryResult to track progress across page fetches
-	const [pagingState, setPagingState] = useState<{
-		currentPage: number;
-		pagingCookie?: string;
-		moreRecords: boolean;
-		isRetrieveAllInProgress: boolean;
-	} | null>(null);
+	// Paging for infinite scroll / Retrieve All (#58, #60). The ref is what the async page loops read
+	// (no stale closures); the state mirrors it for rendering.
+	const pagingRef = useRef<PagingState | null>(null);
+	const [pagingState, setPagingStateValue] = useState<PagingState | null>(null);
+	const setPaging = (next: PagingState | null) => {
+		pagingRef.current = next;
+		setPagingStateValue(next);
+	};
+	// What happened to paging that the user should know about: a failed page, Stop, simple paging
+	const [pagingNotice, setPagingNotice] = useState<PagingNotice | null>(null);
+	// Run tokens (#60): results from an older execution, or pages from a stopped loop, are dropped.
+	// resultRun changes with every execution and when the results are cleared (entity change, view,
+	// New); pageRun also changes on Stop, which keeps the loaded rows.
+	const resultRunRef = useRef(0);
+	const pageRunRef = useRef(0);
 
 	// Export to Excel state
 	const [exportStatus, setExportStatus] = useState<{
@@ -326,10 +328,8 @@ function AppContent() {
 	// Execution error (e.g. Dataverse API error surfaced to user)
 	const [executeError, setExecuteError] = useState<string | undefined>();
 
-	// The XML that was actually sent to Dataverse for the most recent execution.
-	// Used by loadAllPages / handleLoadMore so subsequent pages use the same XML
-	// (which may differ from the tree-generated fetchXml when editor mode was active).
-	const lastExecutedXmlRef = useRef<string>("");
+	// Entity node of the tree the current results were produced for (see the clearing effect below)
+	const resultEntityIdRef = useRef<string | undefined>(undefined);
 
 	// Record action privileges state
 	const [recordActionPrivileges, setRecordActionPrivileges] = useState<{
@@ -374,6 +374,12 @@ function AppContent() {
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
 	const [displaySettings, setDisplaySettings] = usePersistedSettings();
+	// The pickers follow "Advanced Find only" (#57). A layout effect, so the scope is set before the
+	// children's effects load metadata.
+	useLayoutEffect(() => {
+		metadataScope.setAdvancedFindOnly(displaySettings.advancedFindOnly);
+	}, [displaySettings.advancedFindOnly]);
+	const advancedFindOnly = useAdvancedFindOnly();
 
 	// Access summary for constraining SettingsDrawer scope options
 	const { accessSummary } = useAccessMode();
@@ -560,30 +566,37 @@ function AppContent() {
 		checkRecordPrivileges();
 	}, [entityLogicalName]);
 
-	// Collect entities from FetchXML and memoize to avoid unnecessary reloads
-	const entitiesInQuery = useMemo(() => {
-		return collectEntitiesFromFetchQuery(builder.fetchQuery);
-	}, [builder.fetchQuery]);
+	// Root entity + all link-entity names. The root always comes from the query's <entity>
+	// element, never from a position in a sorted list (#54).
+	const queryEntities = useMemo(() => getQueryEntities(builder.fetchQuery), [builder.fetchQuery]);
+	const rootEntityName = queryEntities.rootEntityName;
 
-	// Create a stable key for the entities list to minimize effect re-runs
-	const entitiesKey = useMemo(() => entitiesInQuery.sort().join(","), [entitiesInQuery]);
+	// Only trust root metadata that belongs to the current root entity. While a new root's
+	// metadata is loading (or after a stale response), this is null rather than another table's.
+	const entityMetadata =
+		loadedEntityMetadata && loadedEntityMetadata.LogicalName === rootEntityName
+			? loadedEntityMetadata
+			: null;
 
 	// Load attribute metadata for all entities in the FetchXML query
 	// This includes the root entity and all link-entities
 	useEffect(() => {
-		if (entitiesInQuery.length === 0) {
+		const { rootEntityName, entityNames } = queryEntities;
+		if (!rootEntityName) {
 			setAttributeMetadata(new Map());
-			setEntityMetadata(null);
+			setLoadedEntityMetadata(null);
 			return;
 		}
 
-		const rootEntityName = entitiesInQuery[0];
+		// Ignore responses that arrive after the query's entities have changed.
+		let cancelled = false;
 
-		// Load attributes for all entities in the query
+		// Metadata of every attribute of the query's entities, for looking up the attributes in the
+		// query (grid formatting, columns, export); not filtered by "Advanced Find only" (#57)
 		Promise.all(
-			entitiesInQuery.map(async (entityName) => {
+			entityNames.map(async (entityName) => {
 				try {
-					const attributes = await loadAttributes(entityName);
+					const attributes = await loadAllEntityAttributes(entityName);
 					const attrMap = new Map<string, AttributeMetadata>();
 					attributes.forEach((attr) => {
 						attrMap.set(attr.LogicalName, attr);
@@ -595,6 +608,7 @@ function AppContent() {
 				}
 			}),
 		).then((results) => {
+			if (cancelled) return;
 			const multiEntityMap = new Map<string, Map<string, AttributeMetadata>>();
 			results.forEach(({ entityName, attrMap }) => {
 				multiEntityMap.set(entityName, attrMap);
@@ -602,20 +616,22 @@ function AppContent() {
 			setAttributeMetadata(multiEntityMap);
 		});
 
-		// Load entity metadata (for ObjectTypeCode and PrimaryIdAttribute)
+		// Load root entity metadata (ObjectTypeCode, PrimaryIdAttribute, EntitySetName, ...)
 		loadEntityMetadata(rootEntityName)
 			.then((entity) => {
-				setEntityMetadata(entity);
+				if (!cancelled) setLoadedEntityMetadata(entity);
 			})
 			.catch((error) => {
 				console.error("Failed to load entity metadata:", error);
-				setEntityMetadata(null);
+				if (!cancelled) setLoadedEntityMetadata(null);
 			});
 
-		// Load relationships (many-to-one and one-to-many) for the Add Columns panel
+		// Load relationships (many-to-one and one-to-many) for the Add Columns panel, per the
+		// "Advanced Find only" setting (#57)
 		setIsLoadingRelationships(true);
 		loadRelationships(rootEntityName)
 			.then((relationships) => {
+				if (cancelled) return;
 				// Store lookup relationships (many-to-one)
 				setLookupRelationships(relationships.manyToOne);
 				// Store one-to-many relationships for 1-N column support
@@ -623,23 +639,42 @@ function AppContent() {
 			})
 			.catch((error) => {
 				console.error("Failed to load relationships:", error);
+				if (cancelled) return;
 				setLookupRelationships([]);
 				setOneToManyRelationships([]);
 			})
 			.finally(() => {
-				setIsLoadingRelationships(false);
+				if (!cancelled) setIsLoadingRelationships(false);
 			});
+
+		return () => {
+			cancelled = true;
+		};
+		// queryEntities.key changes whenever the root or the set of entities changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [entitiesKey, loadAttributes, loadEntityMetadata, loadRelationships]);
+	}, [queryEntities.key, loadEntityMetadata, loadRelationships, advancedFindOnly]);
 
 	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
-	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared
+	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared.
+	// Results produced for the new tree are kept: an editor-mode Execute loads the editor's FetchXML
+	// into the tree and runs it straight away, and a fast response can arrive first (#102).
 	useEffect(() => {
+		const entityId = builder.fetchQuery?.entity?.id;
+		if (entityId !== undefined && entityId === resultEntityIdRef.current) return;
+		// Pages still loading for the old results must not bring them back (#60)
+		resultRunRef.current++;
+		pageRunRef.current++;
 		setQueryResult(null);
+		setPaging(null);
+		setPagingNotice(null);
+		setIsLoadingMore(false);
+		// A first page still loading for the old results is dropped, so it can't end the spinner
+		setIsExecuting(false);
 	}, [builder.fetchQuery?.entity?.id]);
 
 	// Sync layout with FetchXML when needed (e.g., after adding/removing attributes)
 	// Also sync when columnConfig is null but there are attributes (ensures columns button works)
+	const { syncLayoutWithFetchXml } = builder; // stable: builder actions are created once (#65)
 	useEffect(() => {
 		const hasAttributes = (builder.fetchQuery?.entity?.attributes?.length ?? 0) > 0;
 		const needsSync = builder.layoutNeedsSync || (hasAttributes && !builder.columnConfig);
@@ -655,7 +690,7 @@ function AppContent() {
 					attributeTypeMap.set(name, attr.AttributeType || "");
 				});
 			}
-			builder.syncLayoutWithFetchXml(attributeTypeMap, entityMetadata?.PrimaryIdAttribute);
+			syncLayoutWithFetchXml(attributeTypeMap, entityMetadata?.PrimaryIdAttribute);
 		}
 	}, [
 		builder.layoutNeedsSync,
@@ -663,13 +698,11 @@ function AppContent() {
 		builder.columnConfig,
 		attributeMetadata,
 		entityMetadata,
+		syncLayoutWithFetchXml,
 	]);
 
-	// Generate FetchXML from builder state, injecting the real primary key from entity metadata.
-	// When entityMetadata is not yet loaded, no primary key is injected (no guessing).
-	const fetchXml = builder.fetchQuery
-		? generateFetchXml(builder.fetchQuery, entityMetadata?.PrimaryIdAttribute)
-		: "";
+	// Generate FetchXML from builder state — exactly what the user built, nothing injected (#59).
+	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 
 	// Check if current query is an aggregate query (disables delete/workflow buttons)
 	const isAggregateQuery = builder.fetchQuery?.options?.aggregate === true;
@@ -679,7 +712,7 @@ function AppContent() {
 	const hasOneToManyRelationship = useMemo(() => {
 		if (!builder.fetchQuery?.entity?.links) return false;
 
-		const checkLinks = (links: typeof builder.fetchQuery.entity.links): boolean => {
+		const checkLinks = (links: LinkEntityNode[]): boolean => {
 			for (const link of links) {
 				// Check if this link-entity is a 1-N or N-N relationship
 				if (link.relationshipType === "1N" || link.relationshipType === "NN") {
@@ -695,6 +728,24 @@ function AppContent() {
 
 		return checkLinks(builder.fetchQuery.entity.links);
 	}, [builder.fetchQuery]);
+
+	// Record actions need the root table's primary key in the results. Dataverse returns it for
+	// normal queries even when not selected; aggregate and distinct results don't include it (#59).
+	// Decide from the rows actually returned rather than from the query shape.
+	const primaryIdAttribute = entityMetadata?.PrimaryIdAttribute;
+	const isDistinctQuery = builder.fetchQuery?.options?.distinct === true;
+	const recordActionsDisabledReason = useMemo(() => {
+		const rows = queryResult?.rows;
+		if (!rows || rows.length === 0 || !primaryIdAttribute) return undefined;
+		if (rows.some((row) => typeof row[primaryIdAttribute] === "string")) return undefined;
+		if (isAggregateQuery) {
+			return "Aggregate query results don't contain record IDs, so record actions aren't available.";
+		}
+		if (isDistinctQuery) {
+			return "Distinct query results don't contain record IDs (Dataverse doesn't return the primary key for distinct queries), so record actions aren't available.";
+		}
+		return "These results don't include the table's primary key, so record actions aren't available.";
+	}, [queryResult, primaryIdAttribute, isAggregateQuery, isDistinctQuery]);
 
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
@@ -715,15 +766,13 @@ function AppContent() {
 		viewName: string,
 	) => {
 		// Update the builder's loaded view state so subsequent saves overwrite the same view.
-		// The caller (AppShell) has entity metadata, so we generate originalFetchXml here with the
-		// real PrimaryIdAttribute — the store never guesses the primary key itself.
 		if (entityMetadata && builder.fetchQuery) {
 			builder.setLoadedView({
 				id: viewId,
 				type: viewType,
 				entitySetName: entityMetadata.EntitySetName,
 				name: viewName,
-				originalFetchXml: generateFetchXml(builder.fetchQuery, entityMetadata.PrimaryIdAttribute),
+				originalFetchXml: generateFetchXml(builder.fetchQuery),
 			});
 		}
 		console.log(`✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
@@ -779,38 +828,45 @@ function AppContent() {
 	};
 
 	/**
-	 * Execute the query and handle Retrieve All if enabled
-	 * @param xmlOverride - when provided (editor mode), use this XML instead of the tree-generated one
+	 * Execute the tree's query and handle Retrieve All if enabled.
+	 * @param synced - in editor mode the editor's FetchXML is loaded into the tree first (#102);
+	 *   the new tree and its XML are passed here because builder state updates on the next render.
 	 */
-	const handleExecute = async (xmlOverride?: string) => {
-		const xmlToExecute = xmlOverride ?? fetchXml;
+	const handleExecute = async (synced?: { xml: string; fetchQuery: FetchNode }) => {
+		const query = synced?.fetchQuery ?? builder.fetchQuery;
+		const xmlToExecute = synced?.xml ?? fetchXml;
 		if (!xmlToExecute) return;
 
+		// A new run: anything still loading for the previous one is dropped (#60)
+		const run = ++resultRunRef.current;
+		pageRunRef.current++;
+
 		setIsExecuting(true);
+		setIsLoadingMore(false);
 		setQueryResult(null);
-		setPagingState(null);
+		setPaging(null);
+		setPagingNotice(null);
 		setExecuteError(undefined);
 
-		// Remember what XML was sent so loadAllPages / handleLoadMore use the same query
-		lastExecutedXmlRef.current = xmlToExecute;
+		resultEntityIdRef.current = query?.entity.id;
 
 		const startTime = performance.now();
-		const entityLogicalName = builder.fetchQuery?.entity.name;
+		const entityLogicalName = query?.entity.name;
 		const retrieveAll = builder.retrieveAllRecords;
 
-		// Check if user has set a 'top' limit in FetchXML - if so, we respect it and don't enable paging
-		const hasTopLimit = builder.fetchQuery?.options?.top !== undefined;
-		// Get page size from fetch options (count), default to 5000 if not set
-		const pageSize = builder.fetchQuery?.options?.count;
+		// Paging follows the FetchXML that runs, not the tree (#60). Microsoft: don't page a query that
+		// uses top; Dataverse applies the limit.
+		const options = readFetchPagingOptions(xmlToExecute);
+		const hasTopLimit = options.top !== undefined;
 
 		try {
-			// Determine execution method based on loaded view state.
-			// Only use view-based execution when using tree XML (not editor override).
-			let result;
-			const loadedView = builder.loadedView;
+			// Determine execution method based on loaded view state. A synced editor query
+			// replaced the tree (and cleared the loaded view), so it always runs as FetchXML.
+			let result: FetchXmlResult | undefined;
+			const loadedView = synced ? null : builder.loadedView;
 			let useViewExecution = false;
 
-			if (!xmlOverride && loadedView) {
+			if (loadedView) {
 				const isUnmodified =
 					xmlToExecute.replace(/\s+/g, "") === loadedView.originalFetchXml.replace(/\s+/g, "");
 
@@ -833,55 +889,47 @@ function AppContent() {
 			// If not using view execution (either no view, view was modified, or editor override), use FetchXML
 			if (!result) {
 				console.log(
-					xmlOverride
-						? "✏️ Executing editor FetchXML"
+					synced
+						? "✏️ Executing editor FetchXML (loaded into the tree)"
 						: loadedView
-							? `📝 View "${loadedView.name}" was modified - executing via fetchXmlQuery`
+							? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
 							: "📡 Executing FetchXML query",
 				);
 				result = await executeFetchXml(xmlToExecute);
 			}
+			if (run !== resultRunRef.current) return; // superseded while the first page was loading
 
 			const executionTimeMs = Math.round(performance.now() - startTime);
-			const columns = buildColumnsFromResult(result.records, builder.fetchQuery);
-			const rows = result.records.map((record) => ({ ...record }));
+			const columns = buildColumnsFromResult(result.records, query);
+			const moreRecords = !hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
+			const firstPage = options.page ?? 1;
 
-			// Set initial result
 			setQueryResult({
 				columns,
-				rows,
+				rows: result.records.map((record) => ({ ...record })),
 				totalRecordCount: result.totalRecordCount,
-				moreRecords: result.moreRecords,
+				moreRecords,
 				pagingCookie: result.pagingCookie,
 				entityLogicalName,
 				executionTimeMs,
 			});
-
-			// Initialize paging state
-			setPagingState({
-				currentPage: 1,
+			setPaging({
+				mode: useViewExecution ? "view" : "fetchxml",
+				xml: xmlToExecute,
+				pageSize: options.count,
+				currentPage: firstPage,
+				nextPage: firstPage + 1,
 				pagingCookie: result.pagingCookie,
-				moreRecords: result.moreRecords ?? false,
-				isRetrieveAllInProgress: retrieveAll && (result.moreRecords ?? false) && !hasTopLimit,
+				nextLink: result.nextLink,
+				moreRecords,
+				isRetrieveAllInProgress: retrieveAll && moreRecords,
+				retrieveAll,
 			});
-
 			setIsExecuting(false);
 
-			// If Retrieve All is enabled and there are more records, start progressive loading
-			// Only for FetchXML execution, not for view execution (which doesn't support paging)
-			// Don't do Retrieve All if user set a 'top' limit - Dataverse handles the limit
-			if (retrieveAll && result.moreRecords && !useViewExecution && !hasTopLimit) {
-				await loadAllPages(
-					xmlToExecute,
-					columns,
-					rows,
-					result.pagingCookie,
-					2,
-					entityLogicalName,
-					pageSize,
-				);
-			}
+			if (retrieveAll && moreRecords) await loadAllPages(run);
 		} catch (error) {
+			if (run !== resultRunRef.current) return;
 			console.error("Failed to execute FetchXML:", error);
 			const message =
 				error instanceof Error
@@ -893,131 +941,127 @@ function AppContent() {
 		}
 	};
 
+	// The latest handleExecute, for callbacks that re-run the query after an await (record deletes):
+	// they call the current version instead of listing a function that changes every render (#65)
+	const handleExecuteRef = useRef(handleExecute);
+	useLayoutEffect(() => {
+		handleExecuteRef.current = handleExecute;
+	});
+
 	/**
-	 * Progressive loading of all pages (Retrieve All)
-	 * Updates results as each page is fetched
+	 * Fetch the page after `state` (#58, #60): saved views follow @odata.nextLink; FetchXML sets page,
+	 * the decoded paging cookie (when Dataverse returned one) and the executed query's own count.
 	 */
-	const loadAllPages = async (
-		baseFetchXml: string,
-		columns: string[],
-		initialRows: Record<string, unknown>[],
-		pagingCookie: string | undefined,
-		startPage: number,
-		entityLogicalName: string | undefined,
-		pageSize?: number,
-	) => {
-		let allRows = [...initialRows];
-		let currentPagingCookie = pagingCookie;
-		let page = startPage;
-		let hasMore = true;
+	const fetchNextPage = async (state: PagingState): Promise<{ result: FetchXmlResult; next: PagingState }> => {
+		const result =
+			state.mode === "view"
+				? await executeNextLink(state.nextLink ?? "")
+				: await executeFetchXml(addPagingToFetchXml(state.xml, state.nextPage, state.pagingCookie, state.pageSize));
+		return { result, next: advancePaging(state, result) };
+	};
 
+	/** Add a fetched page to the results of run `run` (ignored if the results changed meanwhile). */
+	const appendPage = (run: number, state: PagingState, result: FetchXmlResult, next: PagingState) => {
+		if (run !== resultRunRef.current) return false;
+		setQueryResult((prev) =>
+			prev
+				? { ...prev, rows: prev.rows.concat(result.records), moreRecords: next.moreRecords, pagingCookie: next.pagingCookie }
+				: prev,
+		);
+		// A page loaded, so an earlier failure or Stop notice no longer applies. A FetchXML page
+		// requested without a cookie means Dataverse returned none for this query: say so once.
+		const simple: PagingNotice | null =
+			state.mode === "fetchxml" && !state.pagingCookie ? { kind: "simple", message: SIMPLE_PAGING_MESSAGE } : null;
+		setPagingNotice((prev) => (prev && prev.kind !== "error" && prev.kind !== "stopped" ? prev : simple));
+		return true;
+	};
+
+	/**
+	 * Retrieve All: fetch the remaining pages one after another (#60). Stops when there are no more
+	 * pages, when Stop is pressed (pageRun changes) or when the results change (resultRun changes).
+	 */
+	const loadAllPages = async (run: number) => {
+		const pageRun = ++pageRunRef.current;
+		const isCurrent = () => run === resultRunRef.current && pageRun === pageRunRef.current;
+		let state = pagingRef.current;
+		if (!state) return;
+		state = { ...state, isRetrieveAllInProgress: true, retrieveAll: true };
 		setIsLoadingMore(true);
-
+		setPaging(state);
 		try {
-			while (hasMore) {
-				console.log(`📄 Retrieve All: Fetching page ${page}...`);
-
-				// Add paging parameters to FetchXML (page, paging-cookie, and count for page size)
-				const pagedFetchXml = addPagingToFetchXml(
-					baseFetchXml,
-					page,
-					currentPagingCookie,
-					pageSize,
-				);
-				const result = await executeFetchXml(pagedFetchXml);
-
-				// Append new rows
-				allRows = [...allRows, ...result.records];
-
-				// Update the grid progressively
-				setQueryResult((prev) => ({
-					columns: prev?.columns || columns,
-					rows: allRows,
-					totalRecordCount: prev?.totalRecordCount,
-					moreRecords: result.moreRecords,
-					pagingCookie: result.pagingCookie,
-					entityLogicalName,
-					executionTimeMs: prev?.executionTimeMs,
-				}));
-
-				// Update paging state
-				currentPagingCookie = result.pagingCookie;
-				hasMore = result.moreRecords ?? false;
-
-				setPagingState({
-					currentPage: page,
-					pagingCookie: currentPagingCookie,
-					moreRecords: hasMore,
-					isRetrieveAllInProgress: hasMore,
-				});
-
-				page++;
+			while (state?.moreRecords) {
+				const { result, next } = await fetchNextPage(state);
+				if (!isCurrent()) return;
+				appendPage(run, state, result, next);
+				state = { ...next, isRetrieveAllInProgress: next.moreRecords };
+				setPaging(state);
 			}
-
-			console.log(`✅ Retrieve All complete: ${allRows.length} total records`);
+			console.log("✅ Retrieve All complete");
 		} catch (error) {
+			if (!isCurrent()) return;
 			console.error("Failed during Retrieve All:", error);
+			setPagingNotice({
+				kind: "error",
+				page: state?.nextPage,
+				message: error instanceof Error ? error.message : String(error),
+			});
 		} finally {
-			setIsLoadingMore(false);
-			setPagingState((prev) => (prev ? { ...prev, isRetrieveAllInProgress: false } : null));
+			if (isCurrent()) {
+				setIsLoadingMore(false);
+				if (pagingRef.current) setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
+			}
 		}
+	};
+
+	/** Stop Retrieve All (#60): the page in flight is discarded; the loaded rows stay. */
+	const handleStopRetrieveAll = () => {
+		const state = pagingRef.current;
+		if (!state?.isRetrieveAllInProgress) return;
+		pageRunRef.current++;
+		setIsLoadingMore(false);
+		// Further pages load one at a time from here (scrolling, or Retry after a failed page)
+		setPaging({ ...state, isRetrieveAllInProgress: false, retrieveAll: false });
+		setPagingNotice({ kind: "stopped", message: "" });
 	};
 
 	/**
 	 * Load more records (for infinite scroll when Retrieve All is OFF)
 	 */
 	const handleLoadMore = async () => {
-		const xmlToPage = lastExecutedXmlRef.current || fetchXml;
-		if (!xmlToPage || !pagingState || !pagingState.moreRecords || isLoadingMore) return;
-		if (pagingState.isRetrieveAllInProgress) return; // Don't allow manual load during Retrieve All
+		const state = pagingRef.current;
+		if (!state || !state.moreRecords || state.isRetrieveAllInProgress || isLoadingMore) return;
 
-		// Don't load more if user has set a 'top' limit
-		if (builder.fetchQuery?.options?.top !== undefined) return;
-
+		const run = resultRunRef.current;
+		const pageRun = ++pageRunRef.current;
+		const isCurrent = () => run === resultRunRef.current && pageRun === pageRunRef.current;
 		setIsLoadingMore(true);
 
-		// Get page size from fetch options to maintain consistent page sizes
-		const pageSize = builder.fetchQuery?.options?.count;
-
 		try {
-			const nextPage = pagingState.currentPage + 1;
-			console.log(
-				`📄 Loading page ${nextPage}${pagingState.pagingCookie ? " with paging cookie" : ""}...`,
-			);
-
-			// Add paging parameters: page number, paging cookie (required for reliable paging), and count (page size)
-			const pagedFetchXml = addPagingToFetchXml(
-				xmlToPage,
-				nextPage,
-				pagingState.pagingCookie,
-				pageSize,
-			);
-			const result = await executeFetchXml(pagedFetchXml);
-
-			// Append new rows to existing result
-			setQueryResult((prev) => {
-				if (!prev) return prev;
-				return {
-					...prev,
-					rows: [...prev.rows, ...result.records],
-					moreRecords: result.moreRecords,
-					pagingCookie: result.pagingCookie,
-				};
-			});
-
-			setPagingState({
-				currentPage: nextPage,
-				pagingCookie: result.pagingCookie,
-				moreRecords: result.moreRecords ?? false,
-				isRetrieveAllInProgress: false,
-			});
-
-			console.log(`✅ Page ${nextPage} loaded: ${result.records.length} records`);
+			const { result, next } = await fetchNextPage(state);
+			if (!isCurrent()) return;
+			appendPage(run, state, result, next);
+			setPaging(next);
+			console.log(`✅ Page ${next.currentPage} loaded: ${result.records.length} records`);
 		} catch (error) {
+			if (!isCurrent()) return;
 			console.error("Failed to load more records:", error);
+			setPagingNotice({
+				kind: "error",
+				page: state.nextPage,
+				message: error instanceof Error ? error.message : String(error),
+			});
 		} finally {
-			setIsLoadingMore(false);
+			if (isCurrent()) setIsLoadingMore(false);
 		}
+	};
+
+	/** Retry the page that failed: continue Retrieve All, or load the one page (#60). */
+	const handleRetryPaging = () => {
+		setPagingNotice(null);
+		const state = pagingRef.current;
+		if (!state) return;
+		if (state.retrieveAll) void loadAllPages(resultRunRef.current);
+		else void handleLoadMore();
 	};
 
 	/**
@@ -1354,7 +1398,7 @@ function AppContent() {
 			if (result.succeeded > 0) {
 				console.log(`✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`);
 				// Re-execute query to refresh results
-				handleExecute();
+				void handleExecuteRef.current();
 			}
 
 			return result;
@@ -1378,7 +1422,7 @@ function AppContent() {
 		if (successCount > 0) {
 			console.log(`✅ Deleted ${successCount} of ${recordIds.length} records`);
 			// Re-execute query to refresh results
-			handleExecute();
+			void handleExecuteRef.current();
 		}
 
 		if (errors.length > 0) {
@@ -1389,7 +1433,6 @@ function AppContent() {
 		entityLogicalName,
 		deleteDialogState.recordIds,
 		deleteDialogState.isBatchDelete,
-		handleExecute,
 	]);
 
 	/**
@@ -1408,10 +1451,7 @@ function AppContent() {
 				if (!builder.fetchQuery) {
 					throw new Error("No FetchXML query available");
 				}
-				const currentFetchXml = generateFetchXml(
-					builder.fetchQuery,
-					entityMetadata.PrimaryIdAttribute,
-				);
+				const currentFetchXml = generateFetchXml(builder.fetchQuery);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
 				console.log(`📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
 				return result;
@@ -1598,6 +1638,11 @@ function AppContent() {
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
 					onLoadMore={handleLoadMore}
+					pagingNotice={pagingNotice}
+					isRetrieveAllInProgress={pagingState?.isRetrieveAllInProgress ?? false}
+					onStopRetrieveAll={handleStopRetrieveAll}
+					onRetryPaging={handleRetryPaging}
+					onDismissPagingNotice={() => setPagingNotice(null)}
 					entityDisplayName={
 						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityMetadata?.LogicalName
 					}
@@ -1636,15 +1681,12 @@ function AppContent() {
 							});
 						}
 					}}
-					onRemoveColumn={(columnName) => {
-						// Remove the attribute from the FetchXML
-						if (builder.fetchQuery?.entity.id) {
-							// Find the attribute node by name and remove it
-							const attr = builder.fetchQuery.entity.attributes.find((a) => a.name === columnName);
-							if (attr) {
-								builder.removeNode(attr.id);
-							}
-						}
+					onRemoveColumns={(columnKeys) => {
+						// Each column maps to its attribute (root or link-entity, aliased or not); sorts on a
+						// removed alias and outer link-entities left empty go too (queryColumns.ts, #114)
+						if (!builder.fetchQuery) return;
+						const plan = planRemoveColumns(builder.fetchQuery, columnKeys);
+						plan.removeNodeIds.forEach((id) => builder.removeNode(id));
 					}}
 					onAddColumn={(attributeName) => {
 						// Add the attribute to the root entity
@@ -1659,7 +1701,8 @@ function AppContent() {
 						// Group by relationship to create link-entities
 						const byRelationship = new Map<string, RelatedEntityColumn[]>();
 						for (const col of relatedColumns) {
-							const key = col.relationship.SchemaName;
+							// An intersect entity's two joins share a schema name (#57)
+							const key = relationshipKey(col.relationship);
 							if (!byRelationship.has(key)) {
 								byRelationship.set(key, []);
 							}
@@ -1705,9 +1748,14 @@ function AppContent() {
 								relTypeForBuilder = "1N";
 							}
 
-							// Check if link-entity already exists for this relationship
+							// Reuse a link-entity for this relationship, unless its type returns no attributes
+							// (exists / in / any / not any / all / not all reject them: 0x80041121)
 							const existingLinkEntity = builder.fetchQuery.entity.links.find(
-								(le) => le.from === fromAttr && le.to === toAttr && le.name === relatedEntity,
+								(le) =>
+									le.from === fromAttr &&
+									le.to === toAttr &&
+									le.name === relatedEntity &&
+									!NON_RETURNING_LINK_TYPES.has(le.linkType),
 							);
 
 							let linkEntityId: string;
@@ -1733,39 +1781,27 @@ function AppContent() {
 						}
 					}}
 					onSortChange={(data) => {
-						// Extract attribute name from columnId (may have entityName prefix or be an alias)
-						let attribute = data.columnId;
-						let entityName = data.entityName;
-
-						// If columnId contains a dot, it's a link-entity column (alias.attribute)
-						if (attribute.includes(".")) {
-							const parts = attribute.split(".");
-							entityName = parts[0];
-							attribute = parts[1];
-						}
-
-						// Handle lookup field naming (_attributename_value -> attributename)
-						if (attribute.startsWith("_") && attribute.endsWith("_value")) {
-							attribute = attribute.slice(1, -6);
-						}
-
-						// Check if this is an aliased column on root entity - need to find original attribute name
-						// FetchXML order-by uses the original attribute name, not the alias
-						if (!entityName && builder.fetchQuery?.entity?.attributes) {
-							const aliasedAttr = builder.fetchQuery.entity.attributes.find(
-								(a) => a.alias === attribute,
-							);
-							if (aliasedAttr) {
-								attribute = aliasedAttr.name;
-							}
-						}
-
-						builder.setSort(
-							attribute,
-							data.direction === "descending",
-							data.isMultiSort,
-							entityName,
+						// The column maps to the right <order>: alias in aggregate queries, entityname for
+						// link-entity columns, nothing for types Dataverse can't sort (queryColumns.ts, #114)
+						if (!builder.fetchQuery) return;
+						const column = resolveColumn(builder.fetchQuery, data.columnId);
+						const metadata = column
+							? attributeMetadata?.get(column.container.name)?.get(column.attribute.name)
+							: undefined;
+						const plan = planSortByColumn(
+							builder.fetchQuery,
+							data.columnId,
+							metadata ? toAttributeTypeInfo(metadata) : undefined,
 						);
+						if ("reason" in plan) {
+							void window.toolboxAPI?.utils?.showNotification?.({
+								title: "Can't sort by this column",
+								body: plan.reason,
+								type: "warning",
+							});
+							return;
+						}
+						builder.setSort(plan, data.direction === "descending", data.isMultiSort);
 					}}
 					// Record action handlers
 					onOpenRecord={handleOpenRecord}
@@ -1779,6 +1815,7 @@ function AppContent() {
 					onFetchWorkflows={handleFetchWorkflows}
 					isAggregateQuery={isAggregateQuery}
 					hasOneToManyRelationship={hasOneToManyRelationship}
+					recordActionsDisabledReason={recordActionsDisabledReason}
 					onSelectionChange={handleSelectionChange}
 					getSelectedRecordIds={getSelectedRecordIds}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}

@@ -28,6 +28,8 @@ import {
 	ColumnTriple20Regular,
 	Play20Regular,
 	DocumentBulletList20Regular,
+	Info20Regular,
+	Stop20Regular,
 } from "@fluentui/react-icons";
 import { ExcelIcon } from "../../../../shared/components/ExcelIcon";
 import { EditColumnsPanel } from "./EditColumnsPanel";
@@ -70,6 +72,11 @@ export interface CommandBarProps {
 	canRunWorkflow?: boolean;
 	/** Whether workflow action is disabled (e.g., aggregate query or 1-N relationship) */
 	workflowDisabled?: boolean;
+	/**
+	 * When set, the results have no record IDs (e.g. aggregate or distinct queries), so all record
+	 * actions are disabled and this text explains why.
+	 */
+	recordActionsDisabledReason?: string;
 	/** Fetch available workflows for the entity */
 	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
 	/** Export to Excel via Dataverse ExportToExcel API (requires saved view) */
@@ -91,7 +98,7 @@ export interface CommandBarProps {
 	/** Callback when columns are reordered */
 	onReorderColumns?: (columns: LayoutColumn[]) => void;
 	/** Callback when columns are removed */
-	onRemoveColumn?: (columnName: string) => void;
+	onRemoveColumns?: (columnKeys: string[]) => void;
 	/** Available attributes from metadata for adding columns */
 	availableAttributes?: AttributeMetadata[];
 	/** Currently selected attributes in the query */
@@ -108,8 +115,16 @@ export interface CommandBarProps {
 	isLoadingRelationships?: boolean;
 	/** Callback to load attributes for a related entity */
 	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
+	/** Why columns can't be added (e.g. aggregate queries), if they can't */
+	addColumnsDisabledReason?: string;
+	/** Related columns already returned: "entity|from|to|attribute" (Add columns leaves them out) */
+	existingRelatedColumns?: ReadonlySet<string>;
 	/** Callback to reset columns to default */
 	onResetToDefault?: () => void;
+	/** Retrieve All is fetching pages (#60) */
+	isRetrieveAllInProgress?: boolean;
+	/** Stop Retrieve All; the loaded rows stay (#60) */
+	onStopRetrieveAll?: () => void;
 }
 
 export function ResultsCommandBar({
@@ -126,6 +141,7 @@ export function ResultsCommandBar({
 	onRunSpecificWorkflow,
 	canRunWorkflow = false,
 	workflowDisabled = false,
+	recordActionsDisabledReason,
 	onFetchWorkflows,
 	onExport,
 	onExportLocal,
@@ -136,20 +152,27 @@ export function ResultsCommandBar({
 	entityDisplayName,
 	columns,
 	onReorderColumns,
-	onRemoveColumn,
+	onRemoveColumns,
 	availableAttributes,
 	selectedAttributes,
 	onAddColumn,
 	onAddRelatedColumns,
+	addColumnsDisabledReason,
+	existingRelatedColumns,
 	lookupRelationships,
 	oneToManyRelationships,
 	isLoadingRelationships,
 	onLoadRelatedAttributes,
 	onResetToDefault,
+	isRetrieveAllInProgress = false,
+	onStopRetrieveAll,
 }: CommandBarProps) {
 	const styles = useStyles();
 	const hasSelection = selectedCount > 0;
 	const singleSelection = selectedCount === 1;
+	const recordActionsUnavailable = !!recordActionsDisabledReason;
+	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable;
+	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
 
@@ -188,20 +211,17 @@ export function ResultsCommandBar({
 
 	const handleEditApply = useCallback(
 		(updatedColumns: LayoutColumn[]) => {
-			// Detect removed columns
-			if (columns && onRemoveColumn) {
+			// Remove the attributes behind removed columns, all at once
+			if (columns && onRemoveColumns) {
 				const updatedNames = new Set(updatedColumns.map((c) => c.name));
-				for (const col of columns) {
-					if (!updatedNames.has(col.name)) {
-						onRemoveColumn(col.name);
-					}
-				}
+				const removed = columns.filter((col) => !updatedNames.has(col.name)).map((col) => col.name);
+				if (removed.length > 0) onRemoveColumns(removed);
 			}
 			// Apply reordering
 			onReorderColumns?.(updatedColumns);
 			setEditPanelOpen(false);
 		},
-		[columns, onReorderColumns, onRemoveColumn]
+		[columns, onReorderColumns, onRemoveColumns]
 	);
 
 	const handleAddApply = useCallback(
@@ -226,10 +246,18 @@ export function ResultsCommandBar({
 	return (
 		<>
 			<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
+				{isRetrieveAllInProgress && onStopRetrieveAll && (
+					<>
+						<ToolbarButton appearance="subtle" icon={<Stop20Regular />} onClick={onStopRetrieveAll}>
+							Stop
+						</ToolbarButton>
+						<ToolbarDivider />
+					</>
+				)}
 				<ToolbarButton
 					appearance="subtle"
 					icon={<Open20Regular />}
-					disabled={!singleSelection}
+					disabled={!singleSelection || recordActionsUnavailable}
 					onClick={onOpen}
 					aria-label="Open record"
 				>
@@ -239,12 +267,23 @@ export function ResultsCommandBar({
 				<ToolbarButton
 					appearance="subtle"
 					icon={<Link20Regular />}
-					disabled={!singleSelection}
+					disabled={!singleSelection || recordActionsUnavailable}
 					onClick={onCopyUrl}
 					aria-label="Copy record URL"
 				>
 					Copy URL
 				</ToolbarButton>
+
+				{recordActionsDisabledReason && (
+					<Tooltip content={recordActionsDisabledReason} relationship="description" withArrow>
+						<ToolbarButton
+							appearance="transparent"
+							icon={<Info20Regular />}
+						>
+							Record actions unavailable
+						</ToolbarButton>
+					</Tooltip>
+				)}
 
 				<ToolbarDivider />
 
@@ -280,9 +319,9 @@ export function ResultsCommandBar({
 									menuButton={triggerProps}
 									primaryActionButton={{
 										onClick: onDelete,
-										disabled: deleteDisabled,
+										disabled: isDeleteDisabled,
 									}}
-									disabled={deleteDisabled}
+									disabled={isDeleteDisabled}
 									icon={<Delete20Regular />}
 									aria-label={
 										hasSelection ? "Delete selected records" : "Delete all records from view"
@@ -294,14 +333,14 @@ export function ResultsCommandBar({
 						</MenuTrigger>
 						<MenuPopover>
 							<MenuList>
-								<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={deleteDisabled}>
+								<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={isDeleteDisabled}>
 									Delete{hasSelection ? ` (${selectedCount})` : " All"}
 								</MenuItem>
 								{canBulkDelete && (
 									<MenuItem
 										icon={<DocumentBulletList20Regular />}
 										onClick={onBulkDelete}
-										disabled={deleteDisabled}
+										disabled={isDeleteDisabled}
 									>
 										Bulk Delete (Job)
 									</MenuItem>
@@ -320,7 +359,7 @@ export function ResultsCommandBar({
 							<MenuButton
 								appearance="subtle"
 								icon={<Play20Regular />}
-								disabled={!hasSelection || workflowDisabled}
+								disabled={!hasSelection || isWorkflowDisabled}
 								aria-label="Run workflow on selected records"
 							>
 								Run Workflow
@@ -409,6 +448,7 @@ export function ResultsCommandBar({
 				onApply={handleEditApply}
 				onAddColumns={handleOpenAddFromEdit}
 				onResetToDefault={onResetToDefault}
+				addColumnsDisabledReason={addColumnsDisabledReason}
 			/>
 
 			{/* Add Columns Panel */}
@@ -422,6 +462,7 @@ export function ResultsCommandBar({
 				oneToManyRelationships={oneToManyRelationships}
 				isLoadingRelationships={isLoadingRelationships}
 				onLoadRelatedAttributes={onLoadRelatedAttributes}
+				existingRelatedColumns={existingRelatedColumns}
 				onClose={handleAddPanelClose}
 				onApply={handleAddApply}
 			/>

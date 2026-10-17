@@ -3,7 +3,8 @@
  * Manages FetchXML query structure and tree operations
  */
 
-import { createContext, useContext, useReducer, type ReactNode } from "react";
+import { useMemo, useReducer, type ReactNode } from "react";
+import { BuilderContext, type BuilderContextValue, type LoadFetchXmlOptions } from "./builderContext";
 import type {
 	FetchNode,
 	EntityNode,
@@ -24,6 +25,8 @@ import {
 	parseLayoutXml,
 } from "../model/layoutxml";
 import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
+import type { SortPlan } from "../model/queryColumns";
+import { collectLinkEntityAliases, generateUniqueAlias } from "../model/aliasUtils";
 
 // Temporary ID generator
 let idCounter = 0;
@@ -57,7 +60,7 @@ interface LoadedViewState {
 	name: string;
 }
 
-interface BuilderState {
+export interface BuilderState {
 	fetchQuery: FetchNode | null;
 	selectedNodeId: NodeId | null;
 	selectedNode: SelectedNode;
@@ -96,7 +99,12 @@ type BuilderAction =
 	| { type: "REMOVE_NODE"; nodeId: NodeId }
 	| { type: "UPDATE_NODE"; nodeId: NodeId; updates: Record<string, unknown> }
 	| { type: "NEW_QUERY" }
-	| { type: "LOAD_FETCHXML"; fetchNode: FetchNode }
+	| {
+			type: "LOAD_FETCHXML";
+			fetchNode: FetchNode;
+			/** Keep the current column layout and merge new attributes into it (editor sync, #102) */
+			preserveLayout?: boolean;
+	  }
 	| { type: "LOAD_VIEW"; fetchNode: FetchNode; viewInfo: LoadedViewState; layoutXml?: string }
 	| { type: "CLEAR_LOADED_VIEW" }
 	| {
@@ -113,10 +121,9 @@ type BuilderAction =
 	  }
 	| {
 			type: "SET_SORT";
-			attribute: string;
+			plan: SortPlan;
 			descending: boolean;
 			isMultiSort: boolean;
-			entityName?: string;
 	  }
 	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean };
 
@@ -160,73 +167,6 @@ function findNodeById(node: unknown, targetId: NodeId): SelectedNode {
 	}
 
 	return null;
-}
-
-/**
- * Helper to collect all link-entity aliases from the tree
- * Used to generate unique aliases when adding new link-entities
- */
-function collectLinkEntityAliases(node: unknown): Set<string> {
-	const aliases = new Set<string>();
-
-	function traverse(n: unknown): void {
-		if (!n || typeof n !== "object") return;
-
-		const record = n as Record<string, unknown>;
-
-		// If this is a link-entity with an alias, add it
-		if (record.type === "link-entity" && typeof record.alias === "string") {
-			aliases.add(record.alias);
-		}
-
-		// Traverse entity
-		if (record.entity) {
-			traverse(record.entity);
-		}
-
-		// Traverse links array
-		if (Array.isArray(record.links)) {
-			for (const link of record.links) {
-				traverse(link);
-			}
-		}
-	}
-
-	traverse(node);
-	return aliases;
-}
-
-/**
- * Generate a unique alias for a link-entity
- * Appends a short alphanumeric suffix if the base alias already exists
- */
-function generateUniqueAlias(baseName: string, existingAliases: Set<string>): string {
-	// If the base name isn't taken, use it
-	if (!existingAliases.has(baseName)) {
-		return baseName;
-	}
-
-	// Generate a unique suffix (e.g., contact_a1, contact_b2, etc.)
-	const chars = "abcdefghijklmnopqrstuvwxyz";
-	let suffix = 1;
-
-	while (true) {
-		// Generate suffixes like: _a1, _b1, ..., _z1, _a2, _b2, etc.
-		const charIndex = (suffix - 1) % 26;
-		const numPart = Math.floor((suffix - 1) / 26) + 1;
-		const candidate = `${baseName}_${chars[charIndex]}${numPart}`;
-
-		if (!existingAliases.has(candidate)) {
-			return candidate;
-		}
-
-		suffix++;
-
-		// Safety limit to prevent infinite loops
-		if (suffix > 1000) {
-			return `${baseName}_${Date.now()}`;
-		}
-	}
 }
 
 // Helper to update a node in the tree immutably
@@ -346,15 +286,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// Load a pre-parsed FetchNode tree (from parser or editor)
 			// This clears loadedView since it's a manual load, not from a saved view
 			const fetchNode = action.fetchNode;
-			// Generate initial layout from the FetchXML
-			const newConfig = generateLayoutFromFetchXml(fetchNode);
+			// Editor sync keeps the user's column widths and order; the layout is merged with the
+			// new attributes afterwards. Otherwise generate the initial layout from the FetchXML.
+			const keepLayout = action.preserveLayout === true && state.columnConfig !== null;
+			const newConfig = keepLayout ? state.columnConfig : generateLayoutFromFetchXml(fetchNode);
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
 				loadedView: null, // Clear view info - this was manual edit
 				columnConfig: newConfig,
-				layoutNeedsSync: false,
+				layoutNeedsSync: keepLayout,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
 			};
 		}
@@ -988,57 +930,42 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 
 		case "SET_SORT": {
 			if (!state.fetchQuery?.entity) return state;
-
-			const { attribute, descending, isMultiSort, entityName } = action;
-
-			// Create new order node
+			const { plan, descending, isMultiSort } = action;
+			const sameOrder = (o: OrderNode) =>
+				(o.attribute ?? undefined) === (plan.spec.attribute ?? undefined) &&
+				(o.alias ?? undefined) === (plan.spec.alias ?? undefined) &&
+				(o.entityname ?? undefined) === (plan.spec.entityname ?? undefined);
 			const newOrder: OrderNode = {
 				id: generateId(),
 				type: "order",
-				attribute,
+				...(plan.spec.attribute ? { attribute: plan.spec.attribute } : {}),
+				...(plan.spec.alias ? { alias: plan.spec.alias } : {}),
+				...(plan.spec.entityname ? { entityname: plan.spec.entityname } : {}),
 				descending: descending || undefined,
-				entityname: entityName,
 			};
-
-			// Get current orders
-			const currentOrders = state.fetchQuery.entity.orders || [];
-
-			let newOrders: OrderNode[];
-
-			if (isMultiSort) {
-				// Multi-sort: check if this attribute already has an order
-				const existingIndex = currentOrders.findIndex(
-					(o) =>
-						o.attribute === attribute && (o.entityname || undefined) === (entityName || undefined),
+			const withOrder = (orders: OrderNode[]) => {
+				const existing = orders.findIndex(sameOrder);
+				return existing >= 0
+					? orders.map((o, i) => (i === existing ? { ...o, descending: descending || undefined } : o))
+					: [...orders, newOrder];
+			};
+			// A single-column sort replaces every order in the query, including orders inside
+			// link-entities, so the results are sorted by that column only (#114)
+			const clearLinkOrders = (links: LinkEntityNode[]): LinkEntityNode[] =>
+				links.map((l) => ({ ...l, orders: [], links: clearLinkOrders(l.links) }));
+			const targetId = plan.insideLink?.id;
+			const placeInLinks = (links: LinkEntityNode[]): LinkEntityNode[] =>
+				links.map((l) =>
+					l.id === targetId
+						? { ...l, orders: isMultiSort ? withOrder(l.orders) : [newOrder], links: placeInLinks(l.links) }
+						: { ...l, links: placeInLinks(l.links) },
 				);
-
-				if (existingIndex >= 0) {
-					// Update existing order's direction
-					newOrders = currentOrders.map((o, i) =>
-						i === existingIndex ? { ...o, descending: descending || undefined } : o,
-					);
-				} else {
-					// Add new order to the end
-					newOrders = [...currentOrders, newOrder];
-				}
-			} else {
-				// Single sort: replace all orders with just this one
-				newOrders = [newOrder];
-			}
-
-			// Update the entity with new orders
-			const newFetchQuery: FetchNode = {
-				...state.fetchQuery,
-				entity: {
-					...state.fetchQuery.entity,
-					orders: newOrders,
-				},
-			};
-
-			return {
-				...state,
-				fetchQuery: newFetchQuery,
-			};
+			let entity = state.fetchQuery.entity;
+			if (!isMultiSort) entity = { ...entity, orders: [], links: clearLinkOrders(entity.links) };
+			entity = targetId
+				? { ...entity, links: placeInLinks(entity.links) }
+				: { ...entity, orders: isMultiSort ? withOrder(entity.orders) : [newOrder] };
+			return { ...state, fetchQuery: { ...state.fetchQuery, entity } };
 		}
 
 		case "SET_RETRIEVE_ALL_RECORDS": {
@@ -1054,7 +981,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 }
 
 /** View info for load operations */
-interface ViewLoadInfo {
+export interface ViewLoadInfo {
 	id: string;
 	type: "system" | "personal";
 	entitySetName: string;
@@ -1063,171 +990,109 @@ interface ViewLoadInfo {
 	originalFetchXml: string;
 }
 
-interface BuilderContextValue extends BuilderState {
-	setEntity: (entityName: string) => void;
-	selectNode: (nodeId: NodeId) => void;
-	addAttribute: (parentId: NodeId) => void;
-	/** Add a specific attribute by name to an entity or link-entity */
-	addAttributeByName: (parentId: NodeId, attributeName: string) => void;
-	/** Update attributes for an entity or link-entity (bulk add/remove) */
-	updateAttributes: (parentId: NodeId, attributeNames: string[]) => void;
-	addAllAttributes: (parentId: NodeId) => void;
-	addOrder: (parentId: NodeId) => void;
-	addFilter: (parentId: NodeId) => void;
-	addSubfilter: (filterId: NodeId) => void;
-	addCondition: (filterId: NodeId) => void;
-	addLinkEntity: (parentId: NodeId) => void;
-	/** Add a link-entity with specific configuration, returns the new link-entity's ID */
-	addLinkEntityWithConfig: (
-		parentId: NodeId,
-		name: string,
-		from: string,
-		to: string,
-		linkType: "inner" | "outer",
-		relationshipType?: "N1" | "1N" | "NN",
-	) => NodeId;
-	removeNode: (nodeId: NodeId) => void;
-	updateNode: (nodeId: NodeId, updates: Record<string, unknown>) => void;
-	newQuery: () => void;
-	loadFetchXml: (xmlString: string) => ParseResult;
-	/** Load a view's FetchXML while preserving view info for execution optimization */
-	loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string) => ParseResult;
-	/** Clear the loaded view info (called when FetchXML is manually edited) */
-	clearLoadedView: () => void;
-	/** Update loaded view info after save (without re-parsing FetchXML) */
-	setLoadedView: (viewInfo: ViewLoadInfo) => void;
-	/** Set the column configuration (from parsed layoutxml or generated) */
-	setColumnConfig: (config: LayoutXmlConfig) => void;
-	/** Update a single column's width */
-	updateColumnWidth: (columnName: string, width: number) => void;
-	/** Reorder columns by moving one from fromIndex to toIndex */
-	reorderColumns: (fromIndex: number, toIndex: number) => void;
-	/** Sync layout with current FetchXML (regenerate/merge as needed) */
-	syncLayoutWithFetchXml: (
-		attributeTypeMap?: Map<string, string>,
-		primaryIdAttribute?: string,
-	) => void;
-	/**
-	 * Set sort order on an attribute. If isMultiSort is true, adds to existing sorts.
-	 * If false, replaces all existing sorts.
-	 */
-	setSort: (
-		attribute: string,
-		descending: boolean,
-		isMultiSort: boolean,
-		entityName?: string,
-	) => void;
-	/**
-	 * Enable or disable "Retrieve All Records" mode.
-	 * When enabled, execution fetches all pages progressively.
-	 */
-	setRetrieveAllRecords: (enabled: boolean) => void;
-}
-
-const BuilderContext = createContext<BuilderContextValue | null>(null);
-
 export function BuilderProvider({ children }: { children: ReactNode }) {
 	const [state, dispatch] = useReducer(builderReducer, initialState);
 
-	const contextValue: BuilderContextValue = {
-		...state,
-		setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
-		selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
-		addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
-		addAttributeByName: (parentId: NodeId, attributeName: string) =>
-			dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),
-		updateAttributes: (parentId: NodeId, attributeNames: string[]) =>
-			dispatch({ type: "UPDATE_ATTRIBUTES", parentId, attributeNames }),
-		addAllAttributes: (parentId: NodeId) => dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
-		addOrder: (parentId: NodeId) => dispatch({ type: "ADD_ORDER", parentId }),
-		addFilter: (parentId: NodeId) => dispatch({ type: "ADD_FILTER", parentId }),
-		addSubfilter: (filterId: NodeId) => dispatch({ type: "ADD_SUBFILTER", filterId }),
-		addCondition: (filterId: NodeId) => dispatch({ type: "ADD_CONDITION", filterId }),
-		addLinkEntity: (parentId: NodeId) => dispatch({ type: "ADD_LINK_ENTITY", parentId }),
-		addLinkEntityWithConfig: (
-			parentId: NodeId,
-			name: string,
-			from: string,
-			to: string,
-			linkType: "inner" | "outer",
-			relationshipType?: "N1" | "1N" | "NN",
-		): NodeId => {
-			const id = generateId();
-			dispatch({
-				type: "ADD_LINK_ENTITY_WITH_CONFIG",
-				id,
-				parentId,
-				name,
-				from,
-				to,
-				linkType,
-				relationshipType,
-			});
-			return id;
-		},
-		removeNode: (nodeId: NodeId) => dispatch({ type: "REMOVE_NODE", nodeId }),
-		updateNode: (nodeId: NodeId, updates: Record<string, unknown>) =>
-			dispatch({ type: "UPDATE_NODE", nodeId, updates }),
-		newQuery: () => dispatch({ type: "NEW_QUERY" }),
-		loadFetchXml: (xmlString: string): ParseResult => {
-			const result = parseFetchXml(xmlString);
-			if (result.success && result.fetchNode) {
-				dispatch({ type: "LOAD_FETCHXML", fetchNode: result.fetchNode });
-			}
-			return result;
-		},
-		loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string): ParseResult => {
-			const result = parseFetchXml(xmlString);
-			if (result.success && result.fetchNode) {
+	// The actions are created once (dispatch never changes) and the context value only changes with the
+	// state, so consumers can list builder actions as hook dependencies without re-running every render (#65)
+	const actions = useMemo(
+		() => ({
+			setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
+			selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
+			addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
+			addAttributeByName: (parentId: NodeId, attributeName: string) =>
+				dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),
+			updateAttributes: (parentId: NodeId, attributeNames: string[]) =>
+				dispatch({ type: "UPDATE_ATTRIBUTES", parentId, attributeNames }),
+			addAllAttributes: (parentId: NodeId) => dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
+			addOrder: (parentId: NodeId) => dispatch({ type: "ADD_ORDER", parentId }),
+			addFilter: (parentId: NodeId) => dispatch({ type: "ADD_FILTER", parentId }),
+			addSubfilter: (filterId: NodeId) => dispatch({ type: "ADD_SUBFILTER", filterId }),
+			addCondition: (filterId: NodeId) => dispatch({ type: "ADD_CONDITION", filterId }),
+			addLinkEntity: (parentId: NodeId) => dispatch({ type: "ADD_LINK_ENTITY", parentId }),
+			addLinkEntityWithConfig: (
+				parentId: NodeId,
+				name: string,
+				from: string,
+				to: string,
+				linkType: "inner" | "outer",
+				relationshipType?: "N1" | "1N" | "NN",
+			): NodeId => {
+				const id = generateId();
 				dispatch({
-					type: "LOAD_VIEW",
-					fetchNode: result.fetchNode,
+					type: "ADD_LINK_ENTITY_WITH_CONFIG",
+					id,
+					parentId,
+					name,
+					from,
+					to,
+					linkType,
+					relationshipType,
+				});
+				return id;
+			},
+			removeNode: (nodeId: NodeId) => dispatch({ type: "REMOVE_NODE", nodeId }),
+			updateNode: (nodeId: NodeId, updates: Record<string, unknown>) =>
+				dispatch({ type: "UPDATE_NODE", nodeId, updates }),
+			newQuery: () => dispatch({ type: "NEW_QUERY" }),
+			loadFetchXml: (xmlString: string, options?: LoadFetchXmlOptions): ParseResult => {
+				const result = parseFetchXml(xmlString);
+				if (result.success && result.fetchNode) {
+					dispatch({
+						type: "LOAD_FETCHXML",
+						fetchNode: result.fetchNode,
+						preserveLayout: options?.preserveLayout,
+					});
+				}
+				return result;
+			},
+			loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string): ParseResult => {
+				const result = parseFetchXml(xmlString);
+				if (result.success && result.fetchNode) {
+					dispatch({
+						type: "LOAD_VIEW",
+						fetchNode: result.fetchNode,
+						viewInfo: {
+							id: viewInfo.id,
+							type: viewInfo.type,
+							originalFetchXml: xmlString,
+							entitySetName: viewInfo.entitySetName,
+							name: viewInfo.name,
+						},
+						layoutXml,
+					});
+				}
+				return result;
+			},
+			clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
+			setLoadedView: (viewInfo: ViewLoadInfo) =>
+				dispatch({
+					type: "SET_LOADED_VIEW",
 					viewInfo: {
 						id: viewInfo.id,
 						type: viewInfo.type,
-						originalFetchXml: xmlString,
+						// originalFetchXml is supplied by the caller, which has entity metadata available.
+						// The store never derives/guesses the primary key itself.
+						originalFetchXml: viewInfo.originalFetchXml,
 						entitySetName: viewInfo.entitySetName,
 						name: viewInfo.name,
 					},
-					layoutXml,
-				});
-			}
-			return result;
-		},
-		clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
-		setLoadedView: (viewInfo: ViewLoadInfo) =>
-			dispatch({
-				type: "SET_LOADED_VIEW",
-				viewInfo: {
-					id: viewInfo.id,
-					type: viewInfo.type,
-					// originalFetchXml is supplied by the caller, which has entity metadata available.
-					// The store never derives/guesses the primary key itself.
-					originalFetchXml: viewInfo.originalFetchXml,
-					entitySetName: viewInfo.entitySetName,
-					name: viewInfo.name,
-				},
-			}),
-		setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
-		updateColumnWidth: (columnName: string, width: number) =>
-			dispatch({ type: "UPDATE_COLUMN_WIDTH", columnName, width }),
-		reorderColumns: (fromIndex: number, toIndex: number) =>
-			dispatch({ type: "REORDER_COLUMNS", fromIndex, toIndex }),
-		syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>, primaryIdAttribute?: string) =>
-			dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap, primaryIdAttribute }),
-		setSort: (attribute: string, descending: boolean, isMultiSort: boolean, entityName?: string) =>
-			dispatch({ type: "SET_SORT", attribute, descending, isMultiSort, entityName }),
-		setRetrieveAllRecords: (enabled: boolean) =>
-			dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
-	};
+				}),
+			setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
+			updateColumnWidth: (columnName: string, width: number) =>
+				dispatch({ type: "UPDATE_COLUMN_WIDTH", columnName, width }),
+			reorderColumns: (fromIndex: number, toIndex: number) =>
+				dispatch({ type: "REORDER_COLUMNS", fromIndex, toIndex }),
+			syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>, primaryIdAttribute?: string) =>
+				dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap, primaryIdAttribute }),
+			setSort: (plan: SortPlan, descending: boolean, isMultiSort: boolean) =>
+				dispatch({ type: "SET_SORT", plan, descending, isMultiSort }),
+			setRetrieveAllRecords: (enabled: boolean) =>
+				dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
+		}),
+		[],
+	);
+	const contextValue = useMemo<BuilderContextValue>(() => ({ ...state, ...actions }), [state, actions]);
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;
-}
-
-export function useBuilder() {
-	const context = useContext(BuilderContext);
-	if (!context) {
-		throw new Error("useBuilder must be used within BuilderProvider");
-	}
-	return context;
 }

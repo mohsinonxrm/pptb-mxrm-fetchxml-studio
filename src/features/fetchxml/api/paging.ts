@@ -1,0 +1,136 @@
+/**
+ * Paging helpers (#58, #60). Pure functions, verified against a live org (2026-10-16):
+ *
+ * - FetchXML through the Web API returns `@Microsoft.Dynamics.CRM.fetchxmlpagingcookie` (the
+ *   `@Microsoft.Dynamics.CRM.pagingcookie` key FetchXML Studio used to read is never sent) and
+ *   `@Microsoft.Dynamics.CRM.morerecords`. On the last page neither is sent.
+ * - The annotation is an element: <cookie pagenumber="2" pagingcookie="…" istracking="False" />.
+ *   `pagingcookie` is URL-encoded twice. `pagenumber` isn't used: with an empty cookie it stays at 2
+ *   for every page (verified), so the next page is always the requested page + 1.
+ * - Some queries (sorted by a link-entity attribute, distinct) return the annotation with an empty
+ *   `pagingcookie`: they page with page + count only ("simple paging").
+ * - Saved views run with ?savedQuery= / ?userQuery= return `@odata.nextLink` instead.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
+ */
+
+export interface PagingCookieInfo {
+	/** The decoded cookie for the next request's paging-cookie attribute, if Dataverse returned one */
+	cookie?: string;
+}
+
+const attributeOf = (element: string, name: string): string | undefined => {
+	try {
+		const doc = new DOMParser().parseFromString(element, "application/xml");
+		if (doc.querySelector("parsererror")) return undefined;
+		return doc.documentElement.getAttribute(name) ?? undefined;
+	} catch {
+		return undefined;
+	}
+};
+
+const decodeTwice = (value: string): string | undefined => {
+	try {
+		return decodeURIComponent(decodeURIComponent(value));
+	} catch {
+		return undefined;
+	}
+};
+
+/**
+ * Read the paging cookie from the `@Microsoft.Dynamics.CRM.fetchxmlpagingcookie` annotation: the
+ * `pagingcookie` attribute, URL-decoded twice. Empty or missing means simple paging.
+ */
+export function parseFetchXmlPagingCookie(annotation: unknown): PagingCookieInfo {
+	if (typeof annotation !== "string" || !annotation.trim()) return {};
+	const encoded = attributeOf(annotation, "pagingcookie");
+	const cookie = encoded ? decodeTwice(encoded) : undefined;
+	return cookie ? { cookie } : {};
+}
+
+export interface FetchPagingOptions {
+	top?: number;
+	count?: number;
+	page?: number;
+}
+
+/**
+ * The paging attributes of the FetchXML that actually ran (not the tree's, which can differ),
+ * from the <fetch> start tag. Attribute values may use either quote style.
+ */
+export function readFetchPagingOptions(fetchXml: string): FetchPagingOptions {
+	const tag = /<fetch\b[^>]*>/i.exec(fetchXml)?.[0] ?? "";
+	const read = (name: string) => {
+		const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i").exec(tag);
+		const value = Number((match?.[1] ?? match?.[2] ?? "").trim());
+		return match && Number.isInteger(value) ? value : undefined;
+	};
+	const options: FetchPagingOptions = {};
+	const top = read("top");
+	const count = read("count");
+	const page = read("page");
+	if (top !== undefined) options.top = top;
+	if (count !== undefined) options.count = count;
+	if (page !== undefined) options.page = page;
+	return options;
+}
+
+/**
+ * The path queryData expects for an @odata.nextLink (everything after /api/data/v9.x/); the host
+ * prefixes the connection's URL and API version itself.
+ */
+export function nextLinkToQueryPath(nextLink: string): string | undefined {
+	const match = /^https?:\/\/[^/]+\/api\/data\/v[\d.]+\/(.+)$/i.exec(nextLink.trim());
+	return match?.[1];
+}
+
+/** The paging fields of one page's response (what pptbClient returns). */
+export interface PageResponse {
+	moreRecords?: boolean;
+	pagingCookie?: string;
+	nextLink?: string;
+}
+
+/** Paging position after the last loaded page (#58, #60). */
+export interface PagingState {
+	/** FetchXML pages with page + paging cookie; saved views follow @odata.nextLink */
+	mode: "fetchxml" | "view";
+	/** The FetchXML that ran (pages repeat it with paging attributes) */
+	xml: string;
+	/** The executed query's own count, kept for every page */
+	pageSize?: number;
+	currentPage: number;
+	nextPage: number;
+	pagingCookie?: string;
+	nextLink?: string;
+	moreRecords: boolean;
+	isRetrieveAllInProgress: boolean;
+	/** Pages are being retrieved with Retrieve All (Retry continues it) */
+	retrieveAll: boolean;
+}
+
+/** Whether there's a page after `response`: saved views only page with @odata.nextLink. */
+export function hasNextPage(mode: PagingState["mode"], response: PageResponse): boolean {
+	return mode === "view" ? !!response.moreRecords && !!response.nextLink : !!response.moreRecords;
+}
+
+/**
+ * The position after fetching page `state.nextPage`. The next page is always that page + 1:
+ * Dataverse's `pagenumber` hint stays at 2 for queries without a paging cookie (verified), and
+ * following it repeated page 2 forever.
+ */
+export function advancePaging(state: PagingState, response: PageResponse): PagingState {
+	return {
+		...state,
+		currentPage: state.nextPage,
+		nextPage: state.nextPage + 1,
+		pagingCookie: response.pagingCookie,
+		nextLink: response.nextLink,
+		moreRecords: hasNextPage(state.mode, response),
+	};
+}
+
+/** What the results pane tells the user about paging (#60). */
+export type PagingNotice =
+	| { kind: "error"; page?: number; message: string }
+	| { kind: "stopped"; message: string }
+	| { kind: "simple"; message: string };

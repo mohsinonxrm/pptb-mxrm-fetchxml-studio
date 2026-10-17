@@ -6,6 +6,9 @@
  *   - First character must be a letter or underscore: [A-Za-z_]
  */
 
+import type { FetchNode } from "./nodes";
+import { collectAllLinkEntities } from "./treeUtils";
+
 const ALIAS_INVALID_CHARS = /[^A-Za-z0-9_]/g;
 const ALIAS_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -33,4 +36,45 @@ export function sanitizeAlias(raw: string): string {
 	}
 
 	return sanitized;
+}
+
+/**
+ * Every link-entity alias in the query, including link-entities inside filters (#94: those were
+ * skipped, so a generated alias could collide with one).
+ */
+export function collectLinkEntityAliases(fetch: FetchNode): Set<string> {
+	return new Set(collectAllLinkEntities(fetch).flatMap((link) => (link.alias ? [link.alias] : [])));
+}
+
+/**
+ * Generate a unique alias for a link-entity
+ * Appends a short alphanumeric suffix if the base alias already exists
+ */
+export function generateUniqueAlias(baseName: string, existingAliases: Set<string>): string {
+	// If the base name isn't taken, use it
+	if (!existingAliases.has(baseName)) {
+		return baseName;
+	}
+
+	// Generate a unique suffix (e.g., contact_a1, contact_b2, etc.)
+	const chars = "abcdefghijklmnopqrstuvwxyz";
+	let suffix = 1;
+
+	while (true) {
+		// Generate suffixes like: _a1, _b1, ..., _z1, _a2, _b2, etc.
+		const charIndex = (suffix - 1) % 26;
+		const numPart = Math.floor((suffix - 1) / 26) + 1;
+		const candidate = `${baseName}_${chars[charIndex]}${numPart}`;
+
+		if (!existingAliases.has(candidate)) {
+			return candidate;
+		}
+
+		suffix++;
+
+		// Safety limit to prevent infinite loops
+		if (suffix > 1000) {
+			return `${baseName}_${Date.now()}`;
+		}
+	}
 }

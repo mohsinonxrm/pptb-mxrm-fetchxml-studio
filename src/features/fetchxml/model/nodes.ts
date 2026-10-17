@@ -6,6 +6,14 @@
 export type NodeId = string;
 
 /**
+ * Attributes the tree has no dedicated field for, kept verbatim so Parse to Tree never loses them
+ * (#90): unknown attributes and namespaced attributes (Dataverse ignores both), namespace
+ * declarations such as xmlns:generator, and legacy attributes from Advanced Find / saved views
+ * (version, output-format, mapping, uiname, uitype, …). Keys are qualified attribute names.
+ */
+export type ExtraAttributes = Record<string, string>;
+
+/**
  * Root fetch node - top level query configuration
  */
 export interface FetchNode {
@@ -22,19 +30,22 @@ export interface FetchNode {
 		returnTotalRecordCount?: boolean;
 		noLock?: boolean;
 		utcOffset?: number;
+		/** latematerialize: break the query into parts and reassemble the results */
 		latematerialize?: boolean;
-		// Query optimization hints
-		hints?: {
-			forceOrder?: boolean;
-			disableRowGoal?: boolean;
-			enableOptimizerHotfixes?: boolean;
-			loopJoin?: boolean;
-			mergeJoin?: boolean;
-			hashJoin?: boolean;
-			noPerformanceSpool?: boolean;
-			enableHistAmendmentForAscKeys?: boolean;
-		};
+		/** aggregatelimit: per-query aggregate record limit (1–50,000) */
+		aggregateLimit?: number;
+		/** datasource: "retained" (long-term retention, documented) or "bin" (accepted by Dataverse) */
+		dataSource?: string;
+		/** useraworderby: sort choice columns by integer value instead of label */
+		useRawOrderBy?: boolean;
+		/**
+		 * options: SQL query hints, kept exactly as written (e.g. ["HashJoin", "DisableRowGoal"]).
+		 * Documented names: ForceOrder, DisableRowGoal, EnableOptimizerHotfixes, LoopJoin, MergeJoin,
+		 * HashJoin, NO_PERFORMANCE_SPOOL, ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS.
+		 */
+		queryHints?: string[];
 	};
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -51,6 +62,7 @@ export interface EntityNode {
 	orders: OrderNode[];
 	filters: FilterNode[];
 	links: LinkEntityNode[];
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -71,9 +83,14 @@ export interface AttributeNode {
 	name: string; // logical attribute name
 	alias?: string;
 	groupby?: boolean;
-	aggregate?: "sum" | "count" | "countcolumn" | "min" | "max" | "avg" | "rowaggregate";
+	aggregate?: "sum" | "count" | "countcolumn" | "min" | "max" | "avg";
 	usertimezone?: boolean;
 	dategrouping?: "day" | "week" | "month" | "quarter" | "year" | "fiscal-period" | "fiscal-year";
+	/** distinct: with aggregate="countcolumn", count only unique values */
+	distinct?: boolean;
+	/** rowaggregate: "CountChildren" returns the number of hierarchical child records (casing kept) */
+	rowAggregate?: string;
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -82,9 +99,13 @@ export interface AttributeNode {
 export interface OrderNode {
 	id: NodeId;
 	type: "order";
-	attribute: string; // logical attribute name
+	/** Logical attribute name. Used by non-aggregate queries (Dataverse rejects alias there). */
+	attribute?: string;
+	/** Attribute alias to sort by. Required by aggregate queries (Dataverse rejects attribute there). */
+	alias?: string;
 	descending?: boolean;
 	entityname?: string; // for link-entity attributes, references the link alias
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -95,9 +116,16 @@ export interface FilterNode {
 	type: "filter";
 	conjunction: "and" | "or"; // filter type
 	hint?: "union"; // optimization hint for multi-table filters
+	/** isquickfindfields: run as a quick find query */
+	isQuickFindFields?: boolean;
+	/** overridequickfindrecordlimitenabled: apply the quick find record limit */
+	overrideQuickFindRecordLimitEnabled?: boolean;
+	/** overridequickfindrecordlimitdisabled: bypass the quick find record limit */
+	overrideQuickFindRecordLimitDisabled?: boolean;
 	conditions: ConditionNode[];
 	subfilters: FilterNode[]; // nested filters
 	links: LinkEntityNode[]; // link-entities inside filter (for any/not any/all/not all)
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -112,6 +140,7 @@ export interface ConditionNode {
 	aggregate?: "sum" | "count" | "countcolumn" | "min" | "max" | "avg"; // for aggregate filtering
 	entityname?: string; // for link-entity filters, references the entity/link alias
 	valueof?: string; // for cross-table column comparisons (references another attribute)
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -121,8 +150,10 @@ export interface LinkEntityNode {
 	id: NodeId;
 	type: "link-entity";
 	name: string; // related entity logical name
-	from: string; // attribute on related entity
-	to: string; // attribute on current entity
+	/** Attribute on the related entity. Empty = omitted (Dataverse infers it for system N:N only). */
+	from: string;
+	/** Attribute on the parent entity. Empty = omitted (Dataverse infers it for system N:N only). */
+	to: string;
 	linkType: LinkType;
 	alias?: string;
 	intersect?: boolean; // for N:N relationships
@@ -133,6 +164,7 @@ export interface LinkEntityNode {
 	orders: OrderNode[];
 	filters: FilterNode[];
 	links: LinkEntityNode[]; // nested link-entities (max 15 total depth)
+	extraAttributes?: ExtraAttributes;
 }
 
 /**
@@ -141,13 +173,14 @@ export interface LinkEntityNode {
 export type LinkType =
 	| "inner" // Inner join (default)
 	| "outer" // Left outer join
-	| "any" // Exists with ANY match in related
-	| "not any" // NOT EXISTS with any match
-	| "all" // ALL records match
-	| "not all" // NOT ALL records match
-	| "exists" // EXISTS (semi-join)
-	| "in" // IN (similar to exists)
-	| "matchfirstrowusingcrossapply"; // CROSS APPLY for first match
+	| "any" // Related records exist that match the link's filter
+	| "not any" // No related record matches the link's filter
+	| "all" // Related records exist, none match the link's filter (use with an inverted filter)
+	| "not all" // Same as any, despite the name
+	| "exists" // Inner variant using EXISTS; returns no link attributes
+	| "in" // Inner variant using IN; returns no link attributes
+	| "matchfirstrowusingcrossapply" // Inner variant matching one related row
+	| "natural"; // Undocumented, but accepted by Dataverse (verified)
 
 /**
  * FetchXML operators (60+ supported)

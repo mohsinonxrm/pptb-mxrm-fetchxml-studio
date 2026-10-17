@@ -52,7 +52,8 @@ export function MultiValuePicker({
 	const isPicklist =
 		attribute.AttributeType === "Picklist" ||
 		attribute.AttributeType === "State" ||
-		attribute.AttributeType === "Status";
+		attribute.AttributeType === "Status" ||
+		attribute.AttributeTypeName?.Value === "MultiSelectPicklistType";
 
 	// Load picklist options when needed
 	useEffect(() => {

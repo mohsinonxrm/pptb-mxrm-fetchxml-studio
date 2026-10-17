@@ -176,10 +176,9 @@ export function generatePowerAutomateSpec(
 	entitySetName?: string,
 ): PowerAutomateActionSpec {
 	const derivedEntitySet = entitySetName ?? deriveEntitySetName(fetchXml);
-	// Extract top/count attribute if present
-	const topMatch =
-		fetchXml.match(/\bcount=["'](\d+)["']/i) ?? fetchXml.match(/\btop=["'](\d+)["']/i);
-	const topCount = topMatch ? topMatch[1] : "";
+	// Top Count is a limit: only the fetch element's top maps to it. count is a page size (#94).
+	const fetchTag = fetchXml.match(/<fetch\b[^>]*>/i)?.[0] ?? "";
+	const topCount = fetchTag.match(/\stop=["'](\d+)["']/i)?.[1] ?? "";
 
 	return {
 		actionName: "List rows",
@@ -210,7 +209,7 @@ export function generatePowerAutomateSpec(
 			{
 				label: "Top Count",
 				value: topCount,
-				hint: "Optional total rows cap (extracted from FetchXML count/top attribute)",
+				hint: "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
 			},
 			{
 				label: "Fetch Xml Query",
@@ -254,12 +253,20 @@ function generateWebApi(fetchXml: string, orgUrl?: string, entitySetName?: strin
 		"// Full URL (with encoded FetchXML):",
 		fullUrl,
 		"",
-		"// ─── Required Headers ────────────────────────────────────────────────────────",
+		"// ─── Headers ─────────────────────────────────────────────────────────────────",
 		"OData-MaxVersion: 4.0",
 		"OData-Version: 4.0",
 		"Accept: application/json",
-		"Content-Type: application/json; charset=utf-8",
 		"Authorization: Bearer <your-access-token>",
+		"// Formatted values, plus the paging cookie and more-records annotations:",
+		'Prefer: odata.include-annotations="*"',
+		"",
+		"// ─── Paging (https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results) ───",
+		"// Set count (page size) and page=\"1\" on <fetch>; don't use top with paging.",
+		"// While the response has \"@Microsoft.Dynamics.CRM.morerecords\": true:",
+		"//   1. Read the pagingcookie attribute of \"@Microsoft.Dynamics.CRM.fetchxmlpagingcookie\".",
+		"//   2. URL-decode it twice, XML-encode it, and set it as paging-cookie on <fetch>.",
+		"//   3. Increment page, URL-encode the FetchXML again, and send the next request.",
 		"",
 		"// ─── cURL ────────────────────────────────────────────────────────────────────",
 		`curl -X GET \\`,
@@ -267,6 +274,7 @@ function generateWebApi(fetchXml: string, orgUrl?: string, entitySetName?: strin
 		`  -H "OData-MaxVersion: 4.0" \\`,
 		`  -H "OData-Version: 4.0" \\`,
 		`  -H "Accept: application/json" \\`,
+		`  -H "Prefer: odata.include-annotations=\\"*\\"" \\`,
 		`  -H "Authorization: Bearer <your-access-token>"`,
 		"",
 		"// ─── PowerShell ──────────────────────────────────────────────────────────────",
@@ -274,6 +282,7 @@ function generateWebApi(fetchXml: string, orgUrl?: string, entitySetName?: strin
 		'    "OData-MaxVersion" = "4.0"',
 		'    "OData-Version"    = "4.0"',
 		'    "Accept"           = "application/json"',
+		'    "Prefer"           = \'odata.include-annotations="*"\'',
 		'    "Authorization"    = "Bearer <your-access-token>"',
 		"}",
 		`$url = "${fullUrl}"`,

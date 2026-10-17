@@ -4,7 +4,7 @@
  * Handles both System Views (savedquery) and Personal Views (userquery)
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
 	Menu,
 	MenuTrigger,
@@ -19,6 +19,7 @@ import {
 } from "@fluentui/react-components";
 import { SaveRegular, SaveArrowRightRegular, SendRegular } from "@fluentui/react-icons";
 import { SaveViewDialog, type SaveViewDialogMode } from "../Dialogs/SaveViewDialog";
+import { useEditorSync } from "../RightPane/editorSync";
 
 const useStyles = makeStyles({
 	splitButton: {
@@ -73,23 +74,46 @@ export function SaveViewButton({
 	const [dialogMode, setDialogMode] = useState<SaveViewDialogMode>("save");
 	const [shouldPublish, setShouldPublish] = useState(false);
 
-	const handleSave = useCallback(() => {
-		setShouldPublish(false);
-		setDialogMode("save");
+	const { sync, editorHasContent } = useEditorSync();
+	// Editor FetchXML just loaded into the tree (#102): open the dialog once the new tree and its
+	// root entity metadata have reached these props, so the view is saved with the right entity.
+	const [pendingOpen, setPendingOpen] = useState<{ entity: string; xml: string } | null>(null);
+
+	const openDialog = useCallback((mode: SaveViewDialogMode, publish: boolean) => {
+		setShouldPublish(publish);
+		setDialogMode(mode);
 		setDialogOpen(true);
 	}, []);
 
-	const handleSaveAs = useCallback(() => {
-		setShouldPublish(false);
-		setDialogMode("saveAs");
-		setDialogOpen(true);
-	}, []);
+	const requestOpen = useCallback(
+		async (mode: SaveViewDialogMode, publish: boolean) => {
+			const synced = await sync("save");
+			if (synced.status === "cancelled") return;
+			if (synced.status === "unchanged") {
+				openDialog(mode, publish);
+				return;
+			}
+			// The tree was replaced, which clears the loaded view like any tree edit: save as a new view
+			setPendingOpen({ entity: synced.fetchQuery.entity.name, xml: synced.fetchXml });
+		},
+		[sync, openDialog],
+	);
 
-	const handleSaveAndPublish = useCallback(() => {
-		setShouldPublish(true);
-		setDialogMode("save");
-		setDialogOpen(true);
-	}, []);
+	useEffect(() => {
+		if (!pendingOpen) return;
+		const ready =
+			fetchXml === pendingOpen.xml &&
+			entityLogicalName === pendingOpen.entity &&
+			objectTypeCode > 0 &&
+			primaryIdAttribute !== "";
+		if (!ready) return;
+		setPendingOpen(null);
+		openDialog("saveAs", false);
+	}, [pendingOpen, fetchXml, entityLogicalName, objectTypeCode, primaryIdAttribute, openDialog]);
+
+	const handleSave = useCallback(() => void requestOpen("save", false), [requestOpen]);
+	const handleSaveAs = useCallback(() => void requestOpen("saveAs", false), [requestOpen]);
+	const handleSaveAndPublish = useCallback(() => void requestOpen("save", true), [requestOpen]);
 
 	const handleDialogClose = useCallback(() => {
 		setDialogOpen(false);
@@ -124,7 +148,7 @@ export function SaveViewButton({
 								primaryActionButton={{
 									onClick: loadedView ? handleSave : handleSaveAs,
 								}}
-								disabled={disabled}
+								disabled={disabled && !editorHasContent}
 							>
 								{primaryText}
 							</SplitButton>

@@ -220,18 +220,18 @@ export function SettingsDrawer({
 								<Text className={styles.settingLabel}>
 									Advanced Find Only
 									<Tooltip
-										content="When on, entities and attributes are limited to those marked IsValidForAdvancedFind — the same set exposed by Advanced Find in Model-Driven Apps. Turn off to access all entities and attributes."
+										content="When on, entities, attributes and relationships are limited to the ones Advanced Find shows (IsValidForAdvancedFind). Turn off to build queries Advanced Find can't: system and customization entities, intersect entities, and hidden attributes and relationships. Attributes that can't be read (IsValidForRead = false) are never listed."
 										relationship="description"
 									>
 										<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
 									</Tooltip>
 								</Text>
 								<Text className={styles.settingDescription} block>
-									Limit entities &amp; attributes to Advanced Find–eligible ones
+									Limit entities, attributes &amp; relationships to the ones Advanced Find shows
 								</Text>
 								{!settings.advancedFindOnly && (
 									<Text className={styles.disabledHint} block>
-										All entities and attributes are shown — including non-queryable ones
+										All entities, attributes and relationships are shown. A few system entities can&apos;t be queried; Dataverse returns an error for those.
 									</Text>
 								)}
 							</div>

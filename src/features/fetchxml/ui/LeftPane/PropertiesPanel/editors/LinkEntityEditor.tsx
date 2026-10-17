@@ -1,434 +1,378 @@
 /**
- * Property editor for Link-Entity nodes
- * Controls joins/relationships to related entities
+ * Property editor for <link-entity>: name, from / to, link-type, alias and intersect (#90b, #86).
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/link-entity
+ *
+ * Verified live (2026-10-14): a link-entity inside a filter must be any / not any / all / not all;
+ * joined link-entities accept all nine types; exists, in and the four filter types return nothing,
+ * so attribute, all-attributes and order fail there (0x80041121). Filters and nested link-entities
+ * are fine with every type.
  */
 
 import { useState, useEffect } from "react";
 import {
-	Field,
-	Input,
-	Dropdown,
-	Option,
-	Checkbox,
-	Label,
-	Tooltip,
-	MessageBar,
-	MessageBarBody,
+	Button,
 	Dialog,
+	DialogActions,
+	DialogBody,
+	DialogContent,
 	DialogSurface,
 	DialogTitle,
-	DialogContent,
-	DialogBody,
-	DialogActions,
-	Button,
-	makeStyles,
-	tokens,
+	Dropdown,
+	Input,
+	Option,
+	OptionGroup,
 } from "@fluentui/react-components";
-import { Info16Regular } from "@fluentui/react-icons";
 import { debugLog } from "../../../../../../shared/utils/debug";
 import type { LinkEntityNode, LinkType } from "../../../../model/nodes";
+import type { RuleFinding } from "../../../../model/fetchxmlRules";
+import { NON_RETURNING_LINK_TYPES } from "../../../../model/fetchxmlRules";
 import { sanitizeAlias } from "../../../../model/aliasUtils";
-import { RelationshipPicker } from "../../../../../../shared/components/RelationshipPicker";
+import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
+import { RelationshipPicker, type RelationshipOption } from "../../../../../../shared/components/RelationshipPicker";
+import { planManyToManyJoin } from "../../../../model/manyToMany";
+import { loadEntityMetadata } from "../../../../api/dataverseMetadata";
+import { useBuilder } from "../../../../state/builderContext";
+import { collectLinkEntityAliases, generateUniqueAlias } from "../../../../model/aliasUtils";
+import { DOCS } from "../docLinks";
+import { useEditorStyles } from "../editorStyles";
+import { Info, InfoCheckbox, InfoField, LeftoverSetting, SectionHeading, type Validation } from "../fields";
+import { findingFor } from "../ruleFindings";
 
-const useStyles = makeStyles({
-	container: {
-		display: "flex",
-		flexDirection: "column",
-		gap: tokens.spacingVerticalM,
-		padding: tokens.spacingVerticalM,
+/** Descriptions follow the link-entity reference and filter-rows (including the inverted all / not all). */
+const LINK_TYPES: Record<LinkType, { label: string; description: string }> = {
+	inner: { label: "Inner", description: "Default. Only records with a matching related record." },
+	outer: { label: "Outer", description: "Also records without a matching related record." },
+	exists: { label: "Exists", description: "Like inner, using EXISTS: each record once, no related attributes." },
+	in: { label: "In", description: "Like inner, using IN: each record once, no related attributes." },
+	matchfirstrowusingcrossapply: {
+		label: "Match first row",
+		description: "Like inner, matching only one related record: each record once.",
 	},
-	section: {
-		display: "flex",
-		flexDirection: "column",
-		gap: tokens.spacingVerticalS,
+	any: { label: "Any", description: "Records with at least one related record matching this link-entity's filter." },
+	"not any": { label: "Not any", description: "Records with no related record matching this link-entity's filter." },
+	all: {
+		label: "All",
+		description: "Records with related records, none of which match the filter. Invert the filter to require every related record to match.",
 	},
-	fieldWithTooltip: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalXS,
-	},
-	tooltipIcon: {
-		color: tokens.colorNeutralForeground3,
-		cursor: "help",
-	},
-});
-
-const LINK_TYPES: { value: LinkType; label: string; description: string }[] = [
-	{
-		value: "inner",
-		label: "Inner Join",
-		description: "Only records with matching related records",
-	},
-	{
-		value: "outer",
-		label: "Left Outer Join",
-		description: "All parent records, even without related records",
-	},
-	{
-		value: "any",
-		label: "Any (EXISTS)",
-		description: "At least one related record matches conditions",
-	},
-	{
-		value: "not any",
-		label: "Not Any (NOT EXISTS)",
-		description: "No related records match conditions",
-	},
-	{ value: "all", label: "All", description: "All related records match conditions" },
-	{ value: "not all", label: "Not All", description: "Not all related records match" },
-	{ value: "exists", label: "Exists", description: "Semi-join existence check" },
-	{ value: "in", label: "In", description: "Similar to exists" },
-	{
-		value: "matchfirstrowusingcrossapply",
-		label: "Match First Row (CROSS APPLY)",
-		description: "Performance: match only first related record",
-	},
-];
+	"not all": { label: "Not all", description: "The same as Any, despite the name." },
+	// Kept when parsed, not offered: not in the reference, but Dataverse accepts it
+	natural: { label: "Natural", description: "Not in the FetchXML reference; Dataverse accepts it." },
+};
+const JOIN_TYPES: LinkType[] = ["inner", "outer", "exists", "in", "matchfirstrowusingcrossapply"];
+const RELATED_TYPES: LinkType[] = ["any", "not any", "all", "not all"];
 
 interface LinkEntityEditorProps {
 	node: LinkEntityNode;
+	/** The entity / link-entity this link-entity joins from */
 	parentEntityName: string;
+	/** The link-entity is inside a filter (any / not any / all / not all only) */
+	inFilter: boolean;
+	/** Query-rule findings for this node (fetchxmlRules.ts) */
+	findings: readonly RuleFinding[];
 	onUpdate: (updates: Record<string, unknown>) => void;
 }
 
-export function LinkEntityEditor({ node, parentEntityName, onUpdate }: LinkEntityEditorProps) {
-	const styles = useStyles();
-
-	// Dialog state for confirming link-type change
-	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, onUpdate }: LinkEntityEditorProps) {
+	const styles = useEditorStyles();
+	const { addLinkEntityWithConfig, fetchQuery } = useBuilder();
 	const [pendingLinkType, setPendingLinkType] = useState<LinkType | null>(null);
+	const [relationshipError, setRelationshipError] = useState<string | null>(null);
 
-	// Determine if we should show the relationship picker
-	// Show it if the node has a placeholder name or hasn't been properly configured
+	// Offer the relationship picker until the link-entity has been set up
 	const shouldShowPicker = node.name === "new_entity" || (!node.name && !node.from && !node.to);
 	const [useRelationshipPicker, setUseRelationshipPicker] = useState(shouldShowPicker);
+	useEffect(() => setUseRelationshipPicker(shouldShowPicker), [node.id, shouldShowPicker]);
 
-	// Reset picker state when switching to a different node or when node properties change
-	useEffect(() => {
-		debugLog("linkEntityEditor", "Node changed or props updated:", {
-			nodeId: node.id,
-			nodeName: node.name,
-			from: node.from,
-			to: node.to,
-			parentEntityName,
-			shouldShowPicker,
-		});
-		setUseRelationshipPicker(shouldShowPicker);
-	}, [node.id, node.name, node.from, node.to, parentEntityName, shouldShowPicker]);
+	const returned = [
+		node.attributes.length > 0 && `${node.attributes.length} attribute${node.attributes.length === 1 ? "" : "s"}`,
+		node.allAttributes?.enabled && "all attributes",
+		node.orders.length > 0 && `${node.orders.length} sort${node.orders.length === 1 ? "" : "s"}`,
+	].filter((x): x is string => !!x);
+	const returnedCount = node.attributes.length + (node.allAttributes?.enabled ? 1 : 0) + node.orders.length;
 
-	const handleTextChange = (field: string) => (_: unknown, data: { value: string }) => {
-		let value = data.value;
-		// Aliases must use only [A-Za-z0-9_] with a letter or underscore as first char
-		if (field === "alias") {
-			value = sanitizeAlias(value);
-		}
-		onUpdate({ [field]: value || undefined });
-	};
-
-	// Special handler for link-type changes that may require confirmation
-	const handleLinkTypeChange = (_: unknown, data: { optionValue?: string }) => {
-		const newLinkType = data.optionValue as LinkType | undefined;
-		if (!newLinkType) return;
-
-		// Check if switching to "not any" or "not all" and there are children that would need to be removed
-		const isRestrictiveLinkType = newLinkType === "not any" || newLinkType === "not all";
-		const hasChildren =
-			node.attributes.length > 0 ||
-			node.filters.length > 0 ||
-			node.links.length > 0 ||
-			node.allAttributes?.enabled;
-
-		if (isRestrictiveLinkType && hasChildren) {
-			// Show confirmation dialog
-			setPendingLinkType(newLinkType);
-			setShowConfirmDialog(true);
+	const handleLinkTypeChange = (linkType: LinkType) => {
+		if (NON_RETURNING_LINK_TYPES.has(linkType) && returned.length > 0) {
+			setPendingLinkType(linkType);
 		} else {
-			// Safe to change directly
-			onUpdate({ linkType: newLinkType });
+			onUpdate({ linkType });
 		}
 	};
 
-	// Handle dialog confirmation - proceed with change and remove children
-	const handleConfirmLinkTypeChange = () => {
+	const confirmLinkTypeChange = (removeReturned: boolean) => {
 		if (pendingLinkType) {
-			// Update link type and clear children
-			onUpdate({
-				linkType: pendingLinkType,
-				attributes: [],
-				allAttributes: undefined, // Remove all-attributes completely
-				filters: [],
-				links: [],
-			});
+			onUpdate(
+				removeReturned
+					? { linkType: pendingLinkType, attributes: [], allAttributes: undefined, orders: [] }
+					: { linkType: pendingLinkType },
+			);
 		}
-		setShowConfirmDialog(false);
 		setPendingLinkType(null);
 	};
 
-	// Handle dialog cancellation - revert to current link type
-	const handleCancelLinkTypeChange = () => {
-		setShowConfirmDialog(false);
-		setPendingLinkType(null);
-		// No need to update anything - just close the dialog
+	/**
+	 * N:N (#85): join through the intersect entity with two nested link-entities, as documented
+	 * (join-tables#many-to-many-relationships). This link-entity becomes the intersect entity and the
+	 * related entity is added inside it, with the alias, so its attributes go there.
+	 */
+	const applyManyToMany = async (relationship: RelationshipOption) => {
+		setRelationshipError(null);
+		try {
+			if (!relationship.intersectEntity) throw new Error("the relationship has no intersect entity.");
+			const target =
+				relationship.referencingEntity === parentEntityName ? relationship.referencedEntity : relationship.referencingEntity;
+			const [parentMetadata, targetMetadata] = await Promise.all([
+				loadEntityMetadata(parentEntityName),
+				loadEntityMetadata(target),
+			]);
+			const join = planManyToManyJoin(
+				parentEntityName,
+				parentMetadata.PrimaryIdAttribute,
+				{
+					Entity1LogicalName: relationship.referencingEntity,
+					Entity2LogicalName: relationship.referencedEntity,
+					Entity1IntersectAttribute: relationship.referencingAttribute,
+					Entity2IntersectAttribute: relationship.referencedAttribute,
+					IntersectEntityName: relationship.intersectEntity,
+				},
+				() => targetMetadata.PrimaryIdAttribute,
+			);
+			if (!join) throw new Error(`${parentEntityName} isn't part of ${relationship.schemaName}.`);
+			onUpdate({
+				name: join.intersect.name,
+				from: join.intersect.from,
+				to: join.intersect.to,
+				intersect: true,
+				alias: undefined,
+				relationshipType: "NN",
+			});
+			addLinkEntityWithConfig(node.id, join.target.name, join.target.from, join.target.to, "inner", "NN");
+			setUseRelationshipPicker(false);
+		} catch (error) {
+			setRelationshipError(
+				`Couldn't build the many-to-many join: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 	};
 
-	const handleCheckboxChange =
-		(field: string) => (_: unknown, data: { checked: boolean | "mixed" }) => {
-			onUpdate({ [field]: data.checked === true ? true : undefined });
-		};
+	const handleRelationshipSelect = (relationship: RelationshipOption) => {
+		if (relationship.type === "NN") {
+			void applyManyToMany(relationship);
+			return;
+		}
+		debugLog("linkEntityEditor", "Relationship selected:", { nodeId: node.id, parentEntityName, relationship });
+		const updates: Record<string, unknown> = { name: "", from: "", to: "", relationshipType: relationship.type };
 
-	const handleRelationshipSelect = (relationship: {
-		schemaName: string;
-		referencedEntity: string;
-		referencingEntity: string;
-		referencedAttribute: string;
-		referencingAttribute: string;
-		type: "1N" | "N1" | "NN";
-	}) => {
-		debugLog("linkEntityEditor", "Relationship selected:", {
-			nodeId: node.id,
-			parentEntityName,
-			relationship,
-		});
-
-		// Auto-populate from/to based on relationship type and direction
-		const updates: Record<string, unknown> = {
-			name: "",
-			from: "",
-			to: "",
-			relationshipType: relationship.type,
-		};
-
-		// Determine which entity is the related/target entity
-		// For 1:N - parent is ReferencedEntity, child is ReferencingEntity
-		// For N:1 - parent is ReferencedEntity, child is ReferencingEntity
-		// For N:N - both are referenced in the relationship
-
+		// from = the related entity's attribute, to = the parent's attribute
 		if (relationship.type === "1N") {
-			// Parent (current) → Child (related)
-			// from = child's FK attribute, to = parent's PK attribute
 			if (relationship.referencedEntity === parentEntityName) {
-				// We're the referenced (parent), linking to referencing (child)
 				updates.name = relationship.referencingEntity;
 				updates.from = relationship.referencingAttribute;
 				updates.to = relationship.referencedAttribute;
 			} else {
-				// Reverse direction
 				updates.name = relationship.referencedEntity;
 				updates.from = relationship.referencedAttribute;
 				updates.to = relationship.referencingAttribute;
 			}
 		} else if (relationship.type === "N1") {
-			// Child (current) → Parent (related)
-			// from = parent's PK attribute, to = child's FK attribute
 			if (relationship.referencingEntity === parentEntityName) {
-				// We're the referencing (child), linking to referenced (parent)
 				updates.name = relationship.referencedEntity;
 				updates.from = relationship.referencedAttribute;
 				updates.to = relationship.referencingAttribute;
 			} else {
-				// Reverse direction
 				updates.name = relationship.referencingEntity;
 				updates.from = relationship.referencingAttribute;
 				updates.to = relationship.referencedAttribute;
 			}
-		} else if (relationship.type === "NN") {
-			// Many-to-Many
-			// Determine target entity (the one that's not parentEntityName)
-			const targetEntity =
-				relationship.referencedEntity === parentEntityName
-					? relationship.referencingEntity
-					: relationship.referencedEntity;
-
-			updates.name = targetEntity;
-			updates.from = relationship.referencingAttribute;
-			updates.to = relationship.referencedAttribute;
-			updates.intersect = true;
 		}
-
-		debugLog("linkEntityEditor", "Applying updates:", updates);
+		// A new link-entity's placeholder alias ("new_entity…") becomes one for the related entity
+		if (node.alias?.startsWith("new_entity") && typeof updates.name === "string" && updates.name && fetchQuery) {
+			const otherAliases = collectLinkEntityAliases(fetchQuery);
+			otherAliases.delete(node.alias);
+			updates.alias = generateUniqueAlias(updates.name, otherAliases);
+		}
 		onUpdate(updates);
-		setUseRelationshipPicker(false); // Switch to manual mode after selection
+		setUseRelationshipPicker(false);
 	};
+
+	const offered = inFilter ? RELATED_TYPES : [...JOIN_TYPES, ...RELATED_TYPES];
+	const linkTypeOption = (type: LinkType, secondary = LINK_TYPES[type]?.description) => (
+		<Option key={type} value={type} text={LINK_TYPES[type]?.label ?? type}>
+			<span className={styles.optionText}>
+				{LINK_TYPES[type]?.label ?? type}
+				<span className={styles.optionSecondary}>{secondary}</span>
+			</span>
+		</Option>
+	);
+
+	const fromToAdvice: Validation =
+		!node.from && !node.to
+			? {
+					state: "warning",
+					message: "Neither attribute is set: Dataverse uses the system many-to-many relationship between the entities, and fails (0x80041102) if there isn't one.",
+				}
+			: !node.from || !node.to
+				? {
+						state: "warning",
+						message: "Set both attributes. With only one, Dataverse tries to work out the other from the relationship definitions.",
+					}
+				: undefined;
 
 	return (
 		<div className={styles.container}>
-			{/* Relationship Picker Section */}
 			{useRelationshipPicker && parentEntityName && (
 				<div className={styles.section}>
-					<Label weight="semibold">Select Relationship</Label>
-					<Field
-						label="Choose a relationship to auto-populate link details"
-						hint="Or skip this and manually configure the link below"
+					<SectionHeading>Relationship</SectionHeading>
+					<InfoField
+						label="Relationship"
+						hint="Fills in the entity and the attributes to match. A many-to-many relationship adds its intersect entity with the related entity inside it. Or set them below."
+						validation={relationshipError ? { state: "error", message: relationshipError } : undefined}
+						info={<Info text={`The relationships of ${parentEntityName}.`} href={DOCS.joinTables} />}
 					>
 						<RelationshipPicker
 							entityLogicalName={parentEntityName}
 							onChange={handleRelationshipSelect}
-							placeholder="Select a relationship..."
+							placeholder="Select a relationship"
 						/>
-					</Field>
+					</InfoField>
 				</div>
 			)}
 
-			{/* Basic Properties */}
 			<div className={styles.section}>
-				<Label weight="semibold">Link-Entity Properties</Label>
+				<SectionHeading>Link-entity</SectionHeading>
 
-				<Field label="Related Entity Name" required>
-					<div className={styles.fieldWithTooltip}>
-						<Input
-							value={node.name}
-							onChange={handleTextChange("name")}
-							placeholder="e.g., contact, account, systemuser"
+				<InfoField
+					label="Entity"
+					required
+					validation={!node.name ? { state: "error", message: "Enter the logical name of the related entity." } : undefined}
+					info={<Info text="The logical name of the related entity." href={DOCS.linkEntity} />}
+				>
+					<Input
+						className={styles.mono}
+						value={node.name}
+						onChange={(_, data) => onUpdate({ name: data.value })}
+						placeholder="e.g. contact"
+					/>
+				</InfoField>
+
+				<InfoField
+					label="From attribute"
+					validation={fromToAdvice}
+					info={
+						<Info
+							text={`The ${node.name || "related entity"} attribute that matches the To attribute. Not technically required, but usually set. Both attributes should have the same type.`}
+							href={DOCS.linkEntityFromTo}
 						/>
-						<Tooltip
-							content="Logical name of the related entity to join."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+					}
+				>
+					<AttributePicker
+						entityLogicalName={node.name}
+						value={node.from ?? ""}
+						onChange={(logicalName) => onUpdate({ from: logicalName || undefined })}
+						placeholder="Select an attribute"
+						disabled={!node.name}
+					/>
+				</InfoField>
 
-				<Field label="From Attribute" required>
-					<div className={styles.fieldWithTooltip}>
-						<Input
-							value={node.from}
-							onChange={handleTextChange("from")}
-							placeholder="e.g., contactid, accountid"
+				<InfoField
+					label="To attribute"
+					info={
+						<Info
+							text={`The ${parentEntityName || "parent"} attribute that matches the From attribute. Not technically required, but usually set.`}
+							href={DOCS.linkEntityFromTo}
 						/>
-						<Tooltip
-							content="Attribute on the related entity (the entity being joined)."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+					}
+				>
+					<AttributePicker
+						entityLogicalName={parentEntityName}
+						value={node.to ?? ""}
+						onChange={(logicalName) => onUpdate({ to: logicalName || undefined })}
+						placeholder="Select an attribute"
+						disabled={!parentEntityName}
+					/>
+				</InfoField>
 
-				<Field label="To Attribute" required>
-					<div className={styles.fieldWithTooltip}>
-						<Input
-							value={node.to}
-							onChange={handleTextChange("to")}
-							placeholder="e.g., parentcustomerid, createdby"
+				<InfoField
+					label="Link type"
+					validation={findingFor(findings, "link-type")}
+					hint={inFilter ? "Inside a filter, a link-entity checks related records and returns nothing." : undefined}
+					info={<Info text={LINK_TYPES[node.linkType]?.description ?? "How the related records are matched."} href={DOCS.linkEntity} />}
+				>
+					<Dropdown
+						value={LINK_TYPES[node.linkType]?.label ?? node.linkType}
+						selectedOptions={[node.linkType]}
+						onOptionSelect={(_, data) => data.optionValue && handleLinkTypeChange(data.optionValue as LinkType)}
+					>
+						{!offered.includes(node.linkType) &&
+							linkTypeOption(node.linkType, inFilter ? "Not allowed inside a filter" : undefined)}
+						{inFilter ? (
+							RELATED_TYPES.map((t) => linkTypeOption(t))
+						) : (
+							<>
+								<OptionGroup label="Join">{JOIN_TYPES.map((t) => linkTypeOption(t))}</OptionGroup>
+								<OptionGroup label="Filter on related records">{RELATED_TYPES.map((t) => linkTypeOption(t))}</OptionGroup>
+							</>
+						)}
+					</Dropdown>
+				</InfoField>
+
+				<InfoField
+					label="Alias"
+					validation={findingFor(findings, "alias")}
+					info={
+						<Info
+							text="The name to use for this link-entity in conditions (entity, compare to) and sorts. Without one, Dataverse generates a name ({name}{N}) that the query can't reference. Letters, digits and underscores; starts with a letter or underscore."
+							href={DOCS.linkEntity}
 						/>
-						<Tooltip
-							content="Attribute on the parent entity (the entity being joined from)."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+					}
+				>
+					<Input
+						className={styles.mono}
+						value={node.alias ?? ""}
+						onChange={(_, data) => onUpdate({ alias: sanitizeAlias(data.value) || undefined })}
+						placeholder="e.g. parent_account"
+					/>
+				</InfoField>
 
-				<Field label="Join Type" required>
-					<div className={styles.fieldWithTooltip}>
-						<Dropdown
-							value={node.linkType}
-							selectedOptions={[node.linkType]}
-							onOptionSelect={handleLinkTypeChange}
-						>
-							{LINK_TYPES.map((type) => (
-								<Option key={type.value} value={type.value} text={type.description}>
-									{type.label}
-								</Option>
-							))}
-						</Dropdown>
-						<Tooltip
-							content="Type of join. Inner = matching only. Outer = include parent records without match. EXISTS variations for existence checks."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
+				<InfoCheckbox
+					label="Intersect"
+					checked={!!node.intersect}
+					onChange={(checked) => onUpdate({ intersect: checked ? true : undefined })}
+					info={
+						<Info
+							text="Shows that this link-entity only joins (typically the intersect entity of a many-to-many relationship) and returns no attributes on purpose. It doesn't change how the query runs."
+							href={DOCS.linkEntity}
+						/>
+					}
+				/>
 
-				{/* Warning for "not any" and "not all" link types */}
-				{(node.linkType === "not any" || node.linkType === "not all") && (
-					<MessageBar intent="warning">
-						<MessageBarBody>
-							<strong>Note:</strong> The "{node.linkType}" link type does not support attributes.
-							Attributes added to this link-entity will cause query execution errors.
-						</MessageBarBody>
-					</MessageBar>
+				{node.visible !== undefined && (
+					<LeftoverSetting
+						text={`Visible: ${node.visible}`}
+						validation={{
+							state: "none",
+							message: findingFor(findings, "visible")?.message ?? "Dataverse ignores visible.",
+						}}
+						onRemove={() => onUpdate({ visible: undefined })}
+					/>
 				)}
 			</div>
 
-			{/* Optional Properties */}
-			<div className={styles.section}>
-				<Label weight="semibold">Optional Properties</Label>
-
-				<Field label="Alias">
-					<div className={styles.fieldWithTooltip}>
-						<Input
-							value={node.alias ?? ""}
-							onChange={handleTextChange("alias")}
-							placeholder="e.g., parent_account, created_by_user"
-						/>
-						<Tooltip
-							content="Alias for referencing this link in conditions, order-by, or nested links. May only contain letters, digits, and underscores, and must start with a letter or underscore."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
-
-				<Field>
-					<div className={styles.fieldWithTooltip}>
-						<Checkbox
-							checked={node.intersect ?? false}
-							onChange={handleCheckboxChange("intersect")}
-							label="Intersect (Many-to-Many)"
-						/>
-						<Tooltip
-							content="Use intersect entity for N:N relationships. Dataverse automatically handles the intersect table."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
-
-				<Field>
-					<div className={styles.fieldWithTooltip}>
-						<Checkbox
-							checked={node.visible ?? true}
-							onChange={handleCheckboxChange("visible")}
-							label="Visible in Results"
-						/>
-						<Tooltip
-							content="Include linked entity data in query results. Set to false to use link only for filtering."
-							relationship="description"
-						>
-							<Info16Regular className={styles.tooltipIcon} />
-						</Tooltip>
-					</div>
-				</Field>
-			</div>
-
-			{/* Confirmation Dialog for Link Type Change */}
-			<Dialog
-				open={showConfirmDialog}
-				onOpenChange={(_, data) => !data.open && handleCancelLinkTypeChange()}
-			>
+			<Dialog modalType="alert" open={pendingLinkType !== null} onOpenChange={(_, data) => !data.open && setPendingLinkType(null)}>
 				<DialogSurface>
 					<DialogBody>
-						<DialogTitle>Confirm Link Type Change</DialogTitle>
+						<DialogTitle>Change the link type to {pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""}?</DialogTitle>
 						<DialogContent>
-							<p>
-								Changing the link type to <strong>"{pendingLinkType}"</strong> will remove all
-								attributes, filters, and nested link-entities from this link-entity because these
-								link types do not support child elements.
-							</p>
-							<p>This action cannot be undone. Do you want to proceed?</p>
+							The {pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""} link type returns no attributes, so
+							Dataverse rejects this link-entity&apos;s {returned.join(" and ")}. Remove {returnedCount === 1 ? "it" : "them"}{" "}
+							now? Its filters and nested link-entities are kept.
 						</DialogContent>
-						<DialogActions>
-							<Button appearance="primary" onClick={handleConfirmLinkTypeChange}>
-								Yes, Change Link Type
-							</Button>
-							<Button appearance="secondary" onClick={handleCancelLinkTypeChange}>
-								Cancel
+						<DialogActions position="start">
+							<Button onClick={() => confirmLinkTypeChange(false)}>Change only</Button>
+						</DialogActions>
+						<DialogActions position="end">
+							<Button onClick={() => setPendingLinkType(null)}>Cancel</Button>
+							<Button appearance="primary" onClick={() => confirmLinkTypeChange(true)}>
+								Change and remove
 							</Button>
 						</DialogActions>
 					</DialogBody>

@@ -35,6 +35,7 @@ import {
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import { metadataCache } from "../../state/cache";
+import { relationshipKey } from "../../model/manyToMany";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -184,6 +185,8 @@ export interface AddColumnsPanelProps {
 	isLoadingRelationships?: boolean;
 	/** Callback to load attributes for a related entity */
 	onLoadRelatedAttributes?: (entityLogicalName: string) => Promise<AttributeMetadata[]>;
+	/** Related columns already returned: "entity|from|to|attribute" (left out of the list, #114) */
+	existingRelatedColumns?: ReadonlySet<string>;
 	/** Called when panel is closed */
 	onClose: () => void;
 	/** Called when columns are selected and Apply is clicked */
@@ -200,6 +203,7 @@ export function AddColumnsPanel({
 	oneToManyRelationships = [],
 	isLoadingRelationships,
 	onLoadRelatedAttributes,
+	existingRelatedColumns,
 	onClose,
 	onApply,
 }: AddColumnsPanelProps) {
@@ -330,6 +334,16 @@ export function AddColumnsPanel({
 		};
 	}, [lookupRelationships, oneToManyRelationships, availableAttributes, searchText]);
 
+	// The link-entity Add columns would reuse already returns this attribute (#114)
+	const isAlreadyReturned = (rel: RelationshipWithType, attribute: string) => {
+		const r = rel.relationship;
+		const key =
+			rel.type === "N1"
+				? `${r.ReferencedEntity}|${r.ReferencedAttribute}|${r.ReferencingAttribute}|${attribute}`
+				: `${r.ReferencingEntity}|${r.ReferencingAttribute}|${r.ReferencedAttribute}|${attribute}`;
+		return existingRelatedColumns?.has(key) ?? false;
+	};
+
 	const handleTabSelect = useCallback((_e: SelectTabEvent, data: SelectTabData) => {
 		setActiveTab(data.value as "entity" | "related");
 	}, []);
@@ -348,7 +362,7 @@ export function AddColumnsPanel({
 
 	const handleExpandRelationship = useCallback(
 		async (relationship: RelationshipMetadata, relatedEntity: string) => {
-			const relKey = relationship.SchemaName;
+			const relKey = relationshipKey(relationship);
 
 			setExpandedRelationships((prev) => {
 				const next = new Set(prev);
@@ -416,7 +430,7 @@ export function AddColumnsPanel({
 				// Check if already selected
 				const existingIndex = prev.findIndex(
 					(col) =>
-						col.relationship.SchemaName === relationship.SchemaName &&
+						relationshipKey(col.relationship) === relationshipKey(relationship) &&
 						col.attribute.LogicalName === attribute.LogicalName
 				);
 
@@ -436,7 +450,7 @@ export function AddColumnsPanel({
 		(relationship: RelationshipMetadata, attribute: AttributeMetadata) => {
 			return selectedRelatedCols.some(
 				(col) =>
-					col.relationship.SchemaName === relationship.SchemaName &&
+					relationshipKey(col.relationship) === relationshipKey(relationship) &&
 					col.attribute.LogicalName === attribute.LogicalName
 			);
 		},
@@ -571,12 +585,12 @@ export function AddColumnsPanel({
 												<Tree aria-label="Lookup relationships">
 													{filteredN1Relationships.map((relItem) => {
 														const rel = relItem.relationship;
-														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const isExpanded = expandedRelationships.has(relationshipKey(rel));
 														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
 														const isLoading = loadingEntities.has(relItem.relatedEntity);
 
 														return (
-															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+															<TreeItem key={relationshipKey(rel)} itemType="branch" open={isExpanded}>
 																<TreeItemLayout
 																	onClick={() =>
 																		handleExpandRelationship(rel, relItem.relatedEntity)
@@ -603,7 +617,7 @@ export function AddColumnsPanel({
 																			</TreeItem>
 																		) : relatedAttrs && relatedAttrs.length > 0 ? (
 																			relatedAttrs
-																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.filter((attr) => attr.AttributeType !== "Virtual" && !isAlreadyReturned(relItem, attr.LogicalName))
 																				.sort((a, b) => {
 																					const aName =
 																						a.DisplayName?.UserLocalizedLabel?.Label ||
@@ -688,12 +702,12 @@ export function AddColumnsPanel({
 												<Tree aria-label="One-to-many relationships">
 													{filtered1NRelationships.map((relItem) => {
 														const rel = relItem.relationship;
-														const isExpanded = expandedRelationships.has(rel.SchemaName);
+														const isExpanded = expandedRelationships.has(relationshipKey(rel));
 														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
 														const isLoading = loadingEntities.has(relItem.relatedEntity);
 
 														return (
-															<TreeItem key={rel.SchemaName} itemType="branch" open={isExpanded}>
+															<TreeItem key={relationshipKey(rel)} itemType="branch" open={isExpanded}>
 																<TreeItemLayout
 																	onClick={() =>
 																		handleExpandRelationship(rel, relItem.relatedEntity)
@@ -720,7 +734,7 @@ export function AddColumnsPanel({
 																			</TreeItem>
 																		) : relatedAttrs && relatedAttrs.length > 0 ? (
 																			relatedAttrs
-																				.filter((attr) => attr.AttributeType !== "Virtual")
+																				.filter((attr) => attr.AttributeType !== "Virtual" && !isAlreadyReturned(relItem, attr.LogicalName))
 																				.sort((a, b) => {
 																					const aName =
 																						a.DisplayName?.UserLocalizedLabel?.Label ||

@@ -5,6 +5,7 @@
  */
 
 import type * as Monaco from "monaco-editor";
+import { KNOWN_OPERATORS } from "./operators";
 
 /**
  * Attribute definition types
@@ -23,245 +24,172 @@ interface ElementDef {
 	children: string[];
 }
 
+const LEGACY = "Not in the FetchXML reference; accepted by Dataverse (verified).";
+const SAVED_VIEW = "Written by Advanced Find / saved views; Dataverse ignores it.";
+const QUERY_HINTS = [
+	"ForceOrder",
+	"DisableRowGoal",
+	"EnableOptimizerHotfixes",
+	"LoopJoin",
+	"MergeJoin",
+	"HashJoin",
+	"NO_PERFORMANCE_SPOOL",
+	"ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS",
+];
+
 /**
- * FetchXML element definitions with their allowed attributes and children
- * Derived from Fetch.xsd schema
+ * FetchXML element definitions with their allowed attributes and children, synced with the FetchXML
+ * reference (https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/).
+ * Undocumented attributes are listed only when verified against Dataverse, and say so (#94).
  */
-const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
+export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 	elements: {
 		fetch: {
 			description: "Root element for a FetchXML query",
 			attributes: {
-				version: { description: "FetchXML version" },
+				aggregate: { description: "Return aggregate values", type: "boolean" },
+				aggregatelimit: { description: "Aggregate record limit below the standard 50,000", type: "integer" },
 				count: { description: "Number of records per page", type: "integer" },
-				page: { description: "Page number to retrieve", type: "integer" },
-				"paging-cookie": { description: "Paging cookie for subsequent pages" },
-				"utc-offset": { description: "UTC offset in minutes", type: "integer" },
-				aggregate: { description: "Enable aggregate queries", type: "boolean" },
-				distinct: { description: "Return only distinct records", type: "boolean" },
-				top: { description: "Maximum number of records to return", type: "integer" },
-				mapping: { description: "Data mapping type", values: ["internal", "logical"] },
-				"min-active-row-version": { description: "Minimum active row version", type: "boolean" },
-				"output-format": {
-					description: "Output format",
-					values: ["xml-ado", "xml-auto", "xml-elements", "xml-raw", "xml-platform"],
+				datasource: { description: "'retained' queries long-term retained rows only", values: ["retained"] },
+				distinct: { description: "Leave out duplicate rows", type: "boolean" },
+				latematerialize: { description: "Break the query into smaller parts (performance)", type: "boolean" },
+				"no-lock": { description: "Legacy setting to prevent shared locks; no longer necessary", type: "boolean" },
+				options: {
+					description: "SQL Server query hints, comma-separated (only when Microsoft support recommends them)",
+					values: QUERY_HINTS,
 				},
-				returntotalrecordcount: { description: "Return total record count", type: "boolean" },
-				"no-lock": { description: "Disable row locking", type: "boolean" },
+				page: { description: "Page number to return", type: "integer" },
+				"paging-cookie": { description: "Paging cookie from the previous page" },
+				returntotalrecordcount: { description: "Return the total number of matching records", type: "boolean" },
+				top: {
+					description: "Number of records to return (at most 5,000; not with page, count or returntotalrecordcount)",
+					type: "integer",
+				},
+				useraworderby: { description: "Sort choice columns by their integer value instead of the label", type: "boolean" },
+				"utc-offset": { description: `UTC offset in minutes. ${LEGACY}`, type: "integer" },
+				version: { description: LEGACY },
+				mapping: { description: LEGACY, values: ["logical", "internal"] },
+				"output-format": { description: LEGACY, values: ["xml-platform"] },
+				"min-active-row-version": { description: LEGACY, type: "boolean" },
 			},
-			children: ["entity", "order"],
+			children: ["entity"],
 		},
 		entity: {
-			description: "Primary entity for the query",
+			description: "The entity the query is based on (one per query)",
 			attributes: {
 				name: { description: "Logical name of the entity", required: true },
-				enableprefiltering: { description: "Enable pre-filtering for reports", type: "boolean" },
-				prefilterparametername: { description: "Pre-filter parameter name" },
+				enableprefiltering: { description: "Report prefiltering (SQL Server Reporting Services reports)", type: "boolean" },
+				prefilterparametername: { description: "Report prefiltering parameter name (start it with CRM_)" },
 			},
 			children: ["all-attributes", "attribute", "order", "filter", "link-entity"],
 		},
 		"link-entity": {
-			description: "Join to a related entity",
+			description: "Join a related entity, or filter on related records inside a filter",
 			attributes: {
-				name: { description: "Logical name of the linked entity", required: true },
-				from: { description: "Attribute on the linked entity to join from" },
-				to: { description: "Attribute on the parent entity to join to" },
-				alias: { description: "Alias for the linked entity" },
+				name: { description: "Logical name of the related entity", required: true },
+				from: { description: "Attribute of the related entity that matches 'to' (usually set)" },
+				to: { description: "Attribute of the parent entity that matches 'from' (usually set)" },
+				alias: { description: "Name to reference this link-entity in conditions, valueof and orders" },
 				"link-type": {
-					description: "Type of join",
-					values: [
-						"inner",
-						"outer",
-						"any",
-						"not any",
-						"all",
-						"not all",
-						"exists",
-						"in",
-						"matchfirstrowusingcrossapply",
-					],
+					description:
+						"inner (default), outer, exists, in, matchfirstrowusingcrossapply; inside a filter: any, not any, all, not all. natural: " +
+						LEGACY,
+					values: ["inner", "outer", "exists", "in", "matchfirstrowusingcrossapply", "any", "not any", "all", "not all", "natural"],
 				},
-				visible: { description: "Include in results", type: "boolean" },
-				intersect: { description: "Used for N:N relationships", type: "boolean" },
-				enableprefiltering: { description: "Enable pre-filtering for reports", type: "boolean" },
-				prefilterparametername: { description: "Pre-filter parameter name" },
+				intersect: {
+					description: "Shows the link-entity only joins and returns no attributes (doesn't change how the query runs)",
+					type: "boolean",
+				},
+				visible: { description: `${LEGACY} Dataverse ignores it.`, type: "boolean" },
+				enableprefiltering: { description: `Report prefiltering. ${LEGACY}`, type: "boolean" },
+				prefilterparametername: { description: `Report prefiltering parameter name. ${LEGACY}` },
 			},
 			children: ["all-attributes", "attribute", "order", "filter", "link-entity"],
 		},
 		"all-attributes": {
-			description: "Select all attributes from the entity",
+			description: "Return every attribute with a value (not recommended for most queries)",
 			attributes: {},
 			children: [],
 		},
 		attribute: {
-			description: "Select a specific attribute",
+			description: "An attribute to return",
 			attributes: {
 				name: { description: "Logical name of the attribute", required: true },
-				alias: { description: "Alias for the attribute in results" },
+				alias: { description: "Name of the returned column (required in aggregate queries)" },
 				aggregate: {
 					description: "Aggregate function",
 					values: ["count", "countcolumn", "sum", "avg", "min", "max"],
 				},
-				groupby: { description: "Group by this attribute", type: "boolean" },
+				groupby: { description: "Group by this attribute (aggregate queries)", type: "boolean" },
 				dategrouping: {
-					description: "Date grouping",
+					description: "Date part to group by",
 					values: ["day", "week", "month", "quarter", "year", "fiscal-period", "fiscal-year"],
 				},
-				usertimezone: { description: "Use user timezone", type: "boolean" },
-				distinct: { description: "Distinct values only", type: "boolean" },
+				usertimezone: { description: "Group dates in the user's time zone (default true); false uses UTC", type: "boolean" },
+				distinct: { description: "With countcolumn, count only unique values", type: "boolean" },
+				rowaggregate: { description: "CountChildren returns the number of hierarchical child records", values: ["CountChildren"] },
 			},
 			children: [],
 		},
 		order: {
-			description: "Sort order specification",
+			description: "Sort order",
 			attributes: {
-				attribute: { description: "Attribute to sort by" },
-				alias: { description: "Alias of attribute to sort by (for aggregates)" },
+				attribute: { description: "Attribute to sort by (non-aggregate queries)" },
+				alias: { description: "Attribute alias to sort by (aggregate queries)" },
 				descending: { description: "Sort in descending order", type: "boolean" },
+				entityname: { description: "Alias of a link-entity, to apply its sort first (orders in the entity only)" },
 			},
 			children: [],
 		},
 		filter: {
-			description: "Filter criteria (WHERE clause)",
+			description: "Conditions that must be true",
 			attributes: {
-				type: { description: "Logical operator", values: ["and", "or"], default: "and" },
-				isquickfindfields: { description: "Quick find filter", type: "boolean" },
+				type: { description: "All (and) or any (or) of the conditions", values: ["and", "or"], default: "and" },
+				hint: { description: "union: can improve performance of an 'or' filter (one per query)", values: ["union"] },
+				isquickfindfields: { description: "Run as a quick find query", type: "boolean" },
+				overridequickfindrecordlimitenabled: { description: "Apply the quick find record limit (testing)", type: "boolean" },
+				overridequickfindrecordlimitdisabled: { description: "Bypass the quick find record limit (testing)", type: "boolean" },
 			},
 			children: ["condition", "filter", "link-entity"],
 		},
 		condition: {
-			description: "Filter condition",
+			description: "A condition on an attribute value",
 			attributes: {
-				attribute: { description: "Attribute to filter on", required: true },
+				// The reference lists attribute as optional, but Dataverse rejects a condition without it (0x8004111e)
+				attribute: { description: "Attribute to filter on (Dataverse requires it)", required: true },
 				operator: {
 					description: "Comparison operator",
 					required: true,
-					values: [
-						// Comparison
-						"eq",
-						"ne",
-						"neq",
-						"gt",
-						"ge",
-						"lt",
-						"le",
-						// String
-						"like",
-						"not-like",
-						"begins-with",
-						"not-begin-with",
-						"ends-with",
-						"not-end-with",
-						// Collection
-						"in",
-						"not-in",
-						"between",
-						"not-between",
-						"contain-values",
-						"not-contain-values",
-						// Null
-						"null",
-						"not-null",
-						// Date relative
-						"yesterday",
-						"today",
-						"tomorrow",
-						"last-seven-days",
-						"next-seven-days",
-						"last-week",
-						"this-week",
-						"next-week",
-						"last-month",
-						"this-month",
-						"next-month",
-						"last-year",
-						"this-year",
-						"next-year",
-						"on",
-						"on-or-before",
-						"on-or-after",
-						// Date X
-						"last-x-hours",
-						"next-x-hours",
-						"last-x-days",
-						"next-x-days",
-						"last-x-weeks",
-						"next-x-weeks",
-						"last-x-months",
-						"next-x-months",
-						"last-x-years",
-						"next-x-years",
-						"olderthan-x-minutes",
-						"olderthan-x-hours",
-						"olderthan-x-days",
-						"olderthan-x-weeks",
-						"olderthan-x-months",
-						"olderthan-x-years",
-						// Fiscal
-						"this-fiscal-year",
-						"this-fiscal-period",
-						"next-fiscal-year",
-						"next-fiscal-period",
-						"last-fiscal-year",
-						"last-fiscal-period",
-						"last-x-fiscal-years",
-						"last-x-fiscal-periods",
-						"next-x-fiscal-years",
-						"next-x-fiscal-periods",
-						"in-fiscal-year",
-						"in-fiscal-period",
-						"in-fiscal-period-and-year",
-						"in-or-before-fiscal-period-and-year",
-						"in-or-after-fiscal-period-and-year",
-						// User/Business
-						"eq-userid",
-						"ne-userid",
-						"eq-userteams",
-						"eq-useroruserteams",
-						"eq-useroruserhierarchy",
-						"eq-useroruserhierarchyandteams",
-						"eq-businessid",
-						"ne-businessid",
-						"eq-userlanguage",
-						// Hierarchy
-						"under",
-						"eq-or-under",
-						"not-under",
-						"above",
-						"eq-or-above",
-					],
+					values: [...KNOWN_OPERATORS],
 				},
-				value: { description: "Value to compare against" },
-				valueof: { description: "Compare to another attribute value" },
-				entityname: { description: "Entity alias for link-entity conditions" },
-				aggregate: {
-					description: "Aggregate function for HAVING clause",
-					values: ["count", "countcolumn", "sum", "avg", "min", "max"],
+				value: { description: "Value for operators that take one value (use <value> elements for several)" },
+				valueof: {
+					description: "Compare to another attribute: name, or alias.name for a link-entity (eq, ne, gt, ge, lt, le only)",
 				},
-				alias: { description: "Alias for the condition" },
-				uiname: { description: "UI display name" },
-				uitype: { description: "UI type" },
-				uihidden: { description: "Hide in UI", values: ["0", "1"] },
+				entityname: { description: "Alias or name of a link-entity: apply the condition after the join" },
+				uiname: { description: SAVED_VIEW },
+				uitype: { description: SAVED_VIEW },
+				uihidden: { description: SAVED_VIEW, values: ["0", "1"] },
 			},
 			children: ["value"],
 		},
 		value: {
-			description: "Value element for multi-value operators (in, not-in, etc.)",
+			description: "A value for operators that take several values (in, between, ...)",
 			attributes: {
-				uiname: { description: "UI display name" },
-				uitype: { description: "UI type" },
+				uiname: { description: SAVED_VIEW },
+				uitype: { description: SAVED_VIEW },
 			},
 			children: [],
 		},
 	},
-} as const;
+};
 
 type ElementName = keyof typeof FETCHXML_SCHEMA.elements;
 
 /**
  * Get the current element context from cursor position
  */
-function getElementContext(
+export function getElementContext(
 	model: Monaco.editor.ITextModel,
 	position: Monaco.Position
 ): {
@@ -305,7 +233,8 @@ function getElementContext(
 	const textBeforeCursor = lineText.substring(0, position.column - 1);
 
 	// Check if inside attribute value (after = and inside quotes)
-	const attrValueMatch = textBeforeCursor.match(/(\w+)\s*=\s*["']([^"']*)$/);
+	// Attribute names can contain hyphens (link-type, paging-cookie, no-lock, utc-offset) (#94)
+	const attrValueMatch = textBeforeCursor.match(/([\w-]+)\s*=\s*["']([^"']*)$/);
 	if (attrValueMatch) {
 		return {
 			element: currentElement,

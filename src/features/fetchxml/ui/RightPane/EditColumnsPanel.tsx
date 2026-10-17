@@ -93,6 +93,16 @@ const useStyles = makeStyles({
 		borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
 		marginTop: "auto",
 	},
+	hint: {
+		display: "block",
+		color: tokens.colorNeutralForeground3,
+		marginTop: tokens.spacingVerticalXS,
+	},
+	footerHint: {
+		flex: 1,
+		alignSelf: "center",
+		color: tokens.colorPaletteRedForeground1,
+	},
 	emptyState: {
 		display: "flex",
 		flexDirection: "column",
@@ -119,6 +129,8 @@ export interface EditColumnsPanelProps {
 	onAddColumns: () => void;
 	/** Called to reset columns to default */
 	onResetToDefault?: () => void;
+	/** Why columns can't be added here (e.g. aggregate queries), if they can't */
+	addColumnsDisabledReason?: string;
 }
 
 export function EditColumnsPanel({
@@ -129,6 +141,7 @@ export function EditColumnsPanel({
 	onApply,
 	onAddColumns,
 	onResetToDefault,
+	addColumnsDisabledReason,
 }: EditColumnsPanelProps) {
 	const styles = useStyles();
 	const [localColumns, setLocalColumns] = useState<LayoutColumn[]>([]);
@@ -137,9 +150,9 @@ export function EditColumnsPanel({
 	const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 	const dragNodeRef = useRef<HTMLDivElement | null>(null);
 
-	// Initialize local state when panel opens or columns change
+	// Initialize local state when panel opens or columns change (also when there are none)
 	useEffect(() => {
-		if (open && columns.length > 0) {
+		if (open) {
 			setLocalColumns([...columns]);
 			setSelectedIndex(null);
 		}
@@ -264,7 +277,12 @@ export function EditColumnsPanel({
 			</DrawerHeader>
 			<DrawerBody>
 				<Toolbar size="small">
-					<ToolbarButton icon={<Add20Regular />} onClick={onAddColumns} aria-label="Add columns">
+					<ToolbarButton
+						icon={<Add20Regular />}
+						onClick={onAddColumns}
+						aria-label="Add columns"
+						disabled={!!addColumnsDisabledReason}
+					>
 						Add columns
 					</ToolbarButton>
 					{onResetToDefault && (
@@ -277,6 +295,12 @@ export function EditColumnsPanel({
 						</ToolbarButton>
 					)}
 				</Toolbar>
+
+				{addColumnsDisabledReason && (
+					<Text size={200} className={styles.hint}>
+						{addColumnsDisabledReason}
+					</Text>
+				)}
 
 				{localColumns.length === 0 ? (
 					<div className={styles.emptyState}>
@@ -359,10 +383,20 @@ export function EditColumnsPanel({
 				)}
 
 				<div className={styles.footer}>
+					{columns.length > 0 && localColumns.length === 0 && (
+						// A query with no attributes at all returns every attribute (#114)
+						<Text size={200} className={styles.footerHint}>
+							Keep at least one column: a query without columns returns every attribute.
+						</Text>
+					)}
 					<Button appearance="secondary" onClick={onClose}>
 						Cancel
 					</Button>
-					<Button appearance="primary" onClick={handleApply}>
+					<Button
+						appearance="primary"
+						onClick={handleApply}
+						disabled={columns.length > 0 && localColumns.length === 0}
+					>
 						Apply
 					</Button>
 				</div>

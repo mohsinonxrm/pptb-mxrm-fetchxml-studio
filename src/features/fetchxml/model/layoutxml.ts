@@ -12,7 +12,8 @@
  * </grid>
  */
 
-import type { FetchNode, AttributeNode, LinkEntityNode } from "./nodes";
+import type { FetchNode } from "./nodes";
+import { collectQueryColumns } from "./queryColumns";
 
 /**
  * Column configuration for a single column in the grid
@@ -197,71 +198,23 @@ ${cells}
 }
 
 /**
- * Collect all attributes from a FetchXML query into column configs
- * Traverses root entity and all link-entities recursively
+ * Collect all attributes from a FetchXML query into column configs, keyed as Dataverse names the
+ * result columns (queryColumns.ts: alias, name, "linkalias.name" or "{name}{N}.name", #114).
  */
 export function collectAttributesFromFetchXml(
 	fetchQuery: FetchNode,
 	attributeTypeMap?: Map<string, string>,
 ): LayoutColumn[] {
-	const columns: LayoutColumn[] = [];
-
-	// Helper to get the column key for an attribute
-	const getColumnKey = (attr: AttributeNode, linkAlias?: string): string => {
-		// If attribute has an alias, use it
-		if (attr.alias) return attr.alias;
-		// If from link-entity with alias, prefix with alias
-		if (linkAlias) return `${linkAlias}.${attr.name}`;
-		// Otherwise just the attribute name
-		return attr.name;
-	};
-
-	// Collect from root entity
-	if (fetchQuery.entity.attributes) {
-		for (const attr of fetchQuery.entity.attributes) {
-			const columnKey = getColumnKey(attr);
-			const attrType = attributeTypeMap?.get(attr.name);
-			columns.push({
-				name: columnKey,
-				width: getDefaultWidthForType(attrType),
-			});
-		}
-	}
-
-	// Recursive function to collect from link-entities
-	const collectFromLinkEntity = (link: LinkEntityNode) => {
-		// Determine the alias for this link-entity
-		const linkAlias = link.alias || link.name;
-
-		// Collect attributes
-		if (link.attributes) {
-			for (const attr of link.attributes) {
-				const columnKey = getColumnKey(attr, linkAlias);
-				const attrType = attributeTypeMap?.get(`${link.name}.${attr.name}`);
-				columns.push({
-					name: columnKey,
-					width: getDefaultWidthForType(attrType),
-					linkEntityAlias: linkAlias,
-				});
-			}
-		}
-
-		// Recurse into nested link-entities
-		if (link.links) {
-			for (const nestedLink of link.links) {
-				collectFromLinkEntity(nestedLink);
-			}
-		}
-	};
-
-	// Collect from all link-entities
-	if (fetchQuery.entity.links) {
-		for (const link of fetchQuery.entity.links) {
-			collectFromLinkEntity(link);
-		}
-	}
-
-	return columns;
+	return collectQueryColumns(fetchQuery).map((column) => {
+		const attrType = column.isRoot
+			? attributeTypeMap?.get(column.attribute.name)
+			: attributeTypeMap?.get(`${column.container.name}.${column.attribute.name}`);
+		return {
+			name: column.key,
+			width: getDefaultWidthForType(attrType),
+			...(column.linkAlias ? { linkEntityAlias: column.linkAlias } : {}),
+		};
+	});
 }
 
 /**

@@ -28,6 +28,7 @@ import {
 	type DiscoveredTool,
 	type FetchXmlStudioT2TPrefill,
 } from "../../api/invocation";
+import { useEditorSync } from "../RightPane/editorSync";
 
 const useStyles = makeStyles({
 	menuItemContent: {
@@ -60,11 +61,17 @@ export function SendToToolButton({
 	disabled,
 }: SendToToolButtonProps) {
 	const styles = useStyles();
+	const { sync, editorHasContent } = useEditorSync();
 
 	const handleSend = useCallback(
-		(targetToolId: string) => {
-			if (!fetchXml || !entityLogicalName) return;
-			const prefill: FetchXmlStudioT2TPrefill = { fetchXml, entityLogicalName };
+		async (targetToolId: string) => {
+			// Editor mode: load the editor's FetchXML into the tree first, then send that (#102)
+			const synced = await sync("send");
+			if (synced.status === "cancelled") return;
+			const xmlToSend = synced.status === "synced" ? synced.fetchXml : fetchXml;
+			const entityToSend = synced.status === "synced" ? synced.fetchQuery.entity.name : entityLogicalName;
+			if (!xmlToSend || !entityToSend) return;
+			const prefill: FetchXmlStudioT2TPrefill = { fetchXml: xmlToSend, entityLogicalName: entityToSend };
 			// Fire-and-forget — do not await (see file header). Errors are surfaced async.
 			void sendFetchXmlToTool(targetToolId, prefill).catch(async (err) => {
 				const message = err instanceof Error ? err.message : String(err);
@@ -78,10 +85,11 @@ export function SendToToolButton({
 				});
 			});
 		},
-		[fetchXml, entityLogicalName],
+		[fetchXml, entityLogicalName, sync],
 	);
 
-	const isDisabled = disabled || !fetchXml || !entityLogicalName;
+	// With content in the editor, sending is available even before the tree has a query
+	const isDisabled = !editorHasContent && (disabled || !fetchXml || !entityLogicalName);
 
 	// No tools discovered → nothing to send to. The button is hidden entirely
 	// (AppShell also gates on this, so this is a defensive guard).
@@ -102,7 +110,7 @@ export function SendToToolButton({
 						<MenuItem
 							key={tool.id}
 							icon={<PlugConnected20Regular />}
-							onClick={() => handleSend(tool.id)}
+							onClick={() => void handleSend(tool.id)}
 						>
 							<div className={styles.menuItemContent}>
 								<span>{tool.name}</span>

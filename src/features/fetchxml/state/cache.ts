@@ -14,6 +14,8 @@ import type {
 
 interface CachedEntityData {
 	metadata?: EntityMetadata;
+	/** Has a hierarchical relationship (rowaggregate support, #90b) */
+	isHierarchical?: boolean;
 	attributes?: AttributeMetadata[];
 	relationships?: {
 		oneToMany: RelationshipMetadata[];
@@ -173,6 +175,23 @@ class MetadataCache {
 		if (!entry.data) entry.data = {};
 		entry.data.metadata = metadata;
 		entry.timestamp = Date.now();
+	}
+
+	/**
+	 * Get / set whether the entity has a hierarchical relationship
+	 */
+	getEntityHierarchical(logicalName: string): boolean | undefined {
+		const entry = this.entities.get(logicalName);
+		if (!entry || this.isStale(entry.timestamp)) {
+			return undefined;
+		}
+		return entry.data?.isHierarchical;
+	}
+
+	setEntityHierarchical(logicalName: string, isHierarchical: boolean): void {
+		const entry = this.getEntityEntry(logicalName);
+		if (!entry.data) entry.data = {};
+		entry.data.isHierarchical = isHierarchical;
 	}
 
 	/**

@@ -28,23 +28,23 @@ import { useScrollbarWidth, useFluent } from "@fluentui/react-components";
 import type { SortDirection } from "@fluentui/react-components";
 import { ArrowSortUp16Regular, ArrowSortDown16Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata } from "../../api/pptbClient";
-import { getCellRenderer } from "./DataGridCellRenderers";
+import { getCellRenderer } from "./getCellRenderer";
+import { buildRowIdentity } from "./rowIdentity";
 import { getFormattedValue, filterDisplayableColumns } from "./FormattedValueUtils";
-import type { FetchNode, AttributeNode, OrderNode } from "../../model/nodes";
+import type { FetchNode } from "../../model/nodes";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { DisplaySettings } from "../../model/displaySettings";
 import { metadataCache } from "../../state/cache";
+import { collectQueryColumns, joinedLinkAliases, resolveColumn, sortedColumns } from "../../model/queryColumns";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
-	/** Column being sorted (may include entityname prefix for link-entity attributes) */
+	/** Result column key (queryColumns.ts); the caller maps it to an order */
 	columnId: string;
 	/** New sort direction */
 	direction: SortDirection;
 	/** Whether Shift key was held (multi-column sort) */
 	isMultiSort: boolean;
-	/** The entityname for link-entity attributes, undefined for root entity */
-	entityName?: string;
 }
 
 const ROW_HEIGHT = 42;
@@ -228,140 +228,33 @@ export function ResultsGrid({
 		setSelectedItems(new Set());
 	}, [result]);
 
-	// Derive sort state from FetchXML orders (entity + link-entity orders)
-	// This builds a map from column name to sort direction
+	// Sort arrows: the result columns the query's orders sort by (queryColumns.ts, #114)
 	const sortStateMap = useMemo(() => {
-		const map = new Map<string, { direction: SortDirection; entityName?: string }>();
+		const map = new Map<string, { direction: SortDirection }>();
 		if (!fetchQuery?.entity) return map;
-
-		// Build a reverse map from attribute name to alias for root entity
-		const attrToAliasMap = new Map<string, string>();
-		fetchQuery.entity.attributes?.forEach((attr) => {
-			if (attr.alias) {
-				attrToAliasMap.set(attr.name, attr.alias);
-			}
-		});
-
-		// Process root entity orders
-		// Orders with entityname refer to link-entity attributes
-		fetchQuery.entity.orders?.forEach((order: OrderNode) => {
-			const direction: SortDirection = order.descending ? "descending" : "ascending";
-			if (order.entityname) {
-				// This order references a link-entity attribute
-				// The column in results might be: alias.attributeName or _attributeName_value for lookups
-				map.set(`${order.entityname}.${order.attribute}`, {
-					direction,
-					entityName: order.entityname,
-				});
-				// Also map just the attribute name in case it appears that way
-				map.set(order.attribute, { direction, entityName: order.entityname });
-			} else {
-				// Root entity attribute
-				map.set(order.attribute, { direction });
-				// Also check for lookup field naming convention
-				map.set(`_${order.attribute}_value`, { direction });
-				// Also map by alias if this attribute has one
-				const alias = attrToAliasMap.get(order.attribute);
-				if (alias) {
-					map.set(alias, { direction });
-				}
-			}
-		});
-
-		// Process link-entity orders (orders defined inside link-entity)
-		const processLinkOrders = (links: typeof fetchQuery.entity.links) => {
-			links?.forEach((link) => {
-				const alias = link.alias || link.name;
-				link.orders?.forEach((order: OrderNode) => {
-					const direction: SortDirection = order.descending ? "descending" : "ascending";
-					// Link-entity attribute columns appear as alias.attributeName or entityname.attributeName
-					map.set(`${alias}.${order.attribute}`, { direction, entityName: alias });
-					map.set(`${link.name}.${order.attribute}`, { direction, entityName: alias });
-				});
-				// Recurse into nested link-entities
-				if (link.links) {
-					processLinkOrders(link.links);
-				}
-			});
-		};
-		processLinkOrders(fetchQuery.entity.links);
-
+		for (const [key, direction] of sortedColumns(fetchQuery)) {
+			map.set(key, { direction });
+			// Root lookups also come back as _name_value
+			const column = resolveColumn(fetchQuery, key);
+			if (column?.isRoot && !column.attribute.alias) map.set(`_${column.attribute.name}_value`, { direction });
+		}
 		return map;
 	}, [fetchQuery]);
 
-	// Generate stable row IDs using primary key GUID
-	// primaryIdAttribute comes from Dataverse entity metadata via props — no name-guessing here.
-	const getRowId = useCallback(
-		(item: Record<string, unknown>) => {
-			// CRITICAL: Use the GUID from the primary ID column for stable row identity
-			if (primaryIdAttribute && item[primaryIdAttribute]) {
-				const id = item[primaryIdAttribute];
-				// Ensure it's a valid GUID string (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-				if (typeof id === "string" && id.length > 0) {
-					return id;
-				}
-			}
-			// Fallback: this should NOT happen if FetchXML includes the primary ID
-			// Use index as last resort (will break selection if data changes)
-			console.warn("Row without primary ID found - selection may not work correctly");
-			return `row_${Math.random()}`;
-		},
-		[primaryIdAttribute],
+	// Unique, stable row IDs; selection is translated back to real record IDs (#59).
+	const rowIdentity = useMemo(
+		() => buildRowIdentity(result?.rows ?? [], primaryIdAttribute),
+		[result?.rows, primaryIdAttribute],
 	);
+	const getRowId = rowIdentity.getRowId;
 
-	// Build set of requested attributes from FetchXML query
+	// Result columns the query asks for, keyed as Dataverse returns them (queryColumns.ts, #114).
+	// Link-entities without an alias come back as "{name}{N}.attribute".
 	const requestedAttributes = useMemo(() => {
-		const attrs = new Set<string>();
-		if (!fetchQuery) return attrs;
-
-		// Collect from root entity attributes
-		const collectAttributes = (attributes: Array<AttributeNode>) => {
-			attributes.forEach((attr) => {
-				// Add both the original attribute name and alias (if exists)
-				attrs.add(attr.name);
-				if (attr.alias) {
-					attrs.add(attr.alias);
-				}
-			});
-		};
-
-		if (fetchQuery.entity.attributes) {
-			collectAttributes(fetchQuery.entity.attributes);
-		}
-
-		// Collect from link-entities recursively
-		const collectFromLinks = (links: Array<any>, linkAlias?: string) => {
-			links.forEach((link) => {
-				const currentAlias = link.alias || linkAlias;
-				if (link.attributes) {
-					link.attributes.forEach((attr: AttributeNode) => {
-						// For link-entity attributes, the column name in results may be:
-						// 1. attr.alias (if explicitly aliased)
-						// 2. linkAlias.attributeName (if link has alias)
-						// 3. entityname.attributeName (Dataverse default)
-						attrs.add(attr.name); // Base attribute name
-						if (attr.alias) {
-							attrs.add(attr.alias); // Explicit alias
-						}
-						if (currentAlias) {
-							attrs.add(`${currentAlias}.${attr.name}`); // link-entity prefixed
-						}
-						if (link.name) {
-							attrs.add(`${link.name}.${attr.name}`); // entity name prefixed
-						}
-					});
-				}
-				if (link.links) {
-					collectFromLinks(link.links, currentAlias);
-				}
-			});
-		};
-
-		if (fetchQuery.entity.links) {
-			collectFromLinks(fetchQuery.entity.links);
-		}
-
-		return attrs;
+		const keys = new Set<string>();
+		if (!fetchQuery) return keys;
+		for (const column of collectQueryColumns(fetchQuery)) keys.add(column.key);
+		return keys;
 	}, [fetchQuery]);
 
 	// Build comprehensive column metadata map from FetchXML query structure
@@ -405,13 +298,14 @@ export function ResultsGrid({
 			});
 		}
 
-		// Collect from link-entities recursively
+		// Collect from link-entities recursively; Dataverse names an unaliased link-entity "{name}{N}" (#114)
+		const linkAliases = joinedLinkAliases(fetchQuery);
 		const collectFromLinks = (
 			links: import("../../model/nodes").LinkEntityNode[],
 			parentLookupAttr?: string,
 		) => {
 			links.forEach((link) => {
-				const linkAlias = link.alias || link.name;
+				const linkAlias = linkAliases.get(link.id) ?? link.alias ?? link.name;
 				// For N:1 relationships, 'to' is the lookup attribute on the parent entity (e.g., primarycontactid)
 				// For 1:N relationships, 'to' is the PK on the parent entity
 				// We use 'to' as it represents the attribute on the parent that links to this entity
@@ -431,15 +325,6 @@ export function ResultsGrid({
 							lookupAttribute: lookupAttr,
 						});
 
-						// Also map entityname.attributeName variant
-						if (link.name !== linkAlias) {
-							map.set(`${link.name}.${attr.name}`, {
-								attributeName: attr.name,
-								entityName: link.name,
-								linkEntityAlias: linkAlias,
-								lookupAttribute: lookupAttr,
-							});
-						}
 					});
 				}
 
@@ -778,11 +663,10 @@ export function ResultsGrid({
 		(_e: unknown, data: { selectedItems: Set<string | number> }) => {
 			setSelectedItems(data.selectedItems);
 			onSelectedCountChange?.(data.selectedItems.size);
-			// Convert Set to array of string IDs for the callback
-			const recordIds = Array.from(data.selectedItems).map(String);
-			onSelectionChange?.(recordIds);
+			// Record actions receive primary key values only — never synthetic row IDs.
+			onSelectionChange?.(rowIdentity.toRecordIds(data.selectedItems));
 		},
-		[onSelectedCountChange, onSelectionChange],
+		[onSelectedCountChange, onSelectionChange, rowIdentity],
 	);
 
 	// Sort change handler: notifies parent to update FetchXML orders
@@ -795,7 +679,8 @@ export function ResultsGrid({
 		) => {
 			if (!onSortChange) return;
 
-			const columnId = String(data.sortColumn);
+			// The "(Raw)" twin column sorts like its column
+			const columnId = String(data.sortColumn).replace(/__raw$/, "");
 			const isMultiSort = e.shiftKey;
 
 			// Get current sort info for this column from FetchXML state
@@ -811,12 +696,7 @@ export function ResultsGrid({
 				direction = "ascending";
 			}
 
-			onSortChange({
-				columnId,
-				direction,
-				isMultiSort,
-				entityName: sortInfo?.entityName,
-			});
+			onSortChange({ columnId, direction, isMultiSort });
 		},
 		[onSortChange, sortStateMap],
 	);
@@ -998,7 +878,7 @@ export function ResultsGrid({
 						onSelectionChange={handleSelectionChange}
 						getRowId={getRowId}
 					>
-						<DataGridHeader ref={headerRef as any} style={{ paddingRight: scrollbarWidth }}>
+						<DataGridHeader ref={headerRef} style={{ paddingRight: scrollbarWidth }}>
 							<DataGridRow style={{ minHeight: "43px", maxHeight: "43px" }}>
 								{({ renderHeaderCell }) => (
 									<DataGridHeaderCell className={styles.headerCell}>

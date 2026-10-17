@@ -3,8 +3,9 @@
  * Displays hierarchical structure: Entity -> Attributes, Orders, Filters, Link-Entities
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
+	Badge,
 	Tree,
 	TreeItem,
 	TreeItemLayout,
@@ -39,6 +40,7 @@ import type {
 	NodeId,
 } from "../../model/nodes";
 import { operatorRequiresValue } from "../../model/operators";
+import { NON_RETURNING_LINK_TYPES, validateQueryRules } from "../../model/fetchxmlRules";
 import { debugLog, debugWarn } from "../../../../shared/utils/debug";
 import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
 import { metadataCache } from "../../state/cache";
@@ -96,7 +98,26 @@ const useStyles = makeStyles({
 			opacity: 1,
 		},
 	},
+	badges: {
+		display: "flex",
+		gap: tokens.spacingHorizontalXXS,
+		alignItems: "center",
+	},
 });
+
+type NodeBadge = { text: string; color?: "danger" | "brand" | "informative"; title?: string };
+
+/** The badges whose condition holds */
+const badgeList = (...items: (NodeBadge | false | undefined)[]): NodeBadge[] => items.filter((b): b is NodeBadge => !!b);
+
+const FUNCTION_TEXT: Record<string, string> = {
+	count: "Count",
+	countcolumn: "Count values",
+	sum: "Sum",
+	avg: "Average",
+	min: "Min",
+	max: "Max",
+};
 
 interface TreeViewProps {
 	fetchQuery: FetchNode;
@@ -128,6 +149,31 @@ export function TreeView({
 	onUpdateAttributes,
 }: TreeViewProps) {
 	const styles = useStyles();
+
+	// Query-rule errors per node, the same ones the properties panel and Validate show (#90b)
+	const errorsByNode = useMemo(() => {
+		const map = new Map<NodeId, string[]>();
+		for (const f of validateQueryRules(fetchQuery)) {
+			if (f.severity !== "error") continue;
+			map.set(f.nodeId, [...(map.get(f.nodeId) ?? []), f.message]);
+		}
+		return map;
+	}, [fetchQuery]);
+
+	const renderBadges = (nodeId: NodeId, badges: NodeBadge[] = []) => {
+		const errors = errorsByNode.get(nodeId);
+		const all = errors ? [...badges, { text: "Error", color: "danger" as const, title: errors.join(" ") }] : badges;
+		if (all.length === 0) return undefined;
+		return (
+			<span className={styles.badges}>
+				{all.map((b) => (
+					<Badge key={b.text} size="small" appearance="tint" color={b.color ?? "informative"} title={b.title}>
+						{b.text}
+					</Badge>
+				))}
+			</span>
+		);
+	};
 
 	// Dialog state
 	const [selectAttrsDialogOpen, setSelectAttrsDialogOpen] = useState(false);
@@ -237,7 +283,10 @@ export function TreeView({
 				}
 			}, 250);
 		}
-	}, [selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+		// Only a new selection expands and scrolls: findPathToNode reads the current tree, and re-running
+		// on every tree edit would keep re-expanding and scrolling while the user works (#65)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedNodeId]);
 
 	// Handle opening the Select Attributes dialog
 	const handleOpenSelectAttributes = useCallback(
@@ -250,22 +299,17 @@ export function TreeView({
 			// Get currently selected attribute names
 			const currentAttributeNames = entityNode.attributes.map((attr) => attr.name);
 
-			// Get all attributes for this entity
-			let attributes = metadataCache.getEntityAttributes(entityName);
-			if (!attributes) {
-				// Fetch from API
-				try {
-					attributes = await loadEntityAttributes(entityName);
-					metadataCache.setEntityAttributes(entityName, attributes);
-				} catch (error) {
-					console.error("Failed to load attributes:", error);
-					attributes = [];
-				}
+			// The attributes to offer, per the "Advanced Find only" setting (#57; cached by the loader)
+			let attributes: AttributeMetadata[] = [];
+			try {
+				attributes = await loadEntityAttributes(entityName);
+			} catch (error) {
+				console.error("Failed to load attributes:", error);
 			}
 
 			setSelectAttrsEntityId(entityNode.id);
 			setSelectAttrsDisplayName(entityDisplayName);
-			setSelectAttrsAttributes(attributes || []);
+			setSelectAttrsAttributes(attributes);
 			setSelectAttrsCurrentNames(currentAttributeNames);
 			setSelectAttrsDialogOpen(true);
 		},
@@ -301,7 +345,19 @@ export function TreeView({
 				value={fetch.id}
 				className={styles.treeItemWithActions}
 			>
-				<TreeItemLayout iconBefore={<Table20Regular />} onClick={() => onNodeSelect(fetch.id)}>
+				<TreeItemLayout
+					iconBefore={<Table20Regular />}
+					aside={renderBadges(
+						fetch.id,
+						badgeList(
+							fetch.options.aggregate === true && { text: "Aggregate", color: "brand" },
+							fetch.options.distinct && { text: "Distinct" },
+							fetch.options.dataSource === "retained" && { text: "Retained" },
+							(fetch.options.queryHints?.length ?? 0) > 0 && { text: "Hints" },
+						),
+					)}
+					onClick={() => onNodeSelect(fetch.id)}
+				>
 					Fetch Query
 				</TreeItemLayout>
 
@@ -360,6 +416,7 @@ export function TreeView({
 							)}
 						</div>
 					}
+					aside={renderBadges(entity.id)}
 					onClick={() => onNodeSelect(entity.id)}
 				>
 					{entity.name}
@@ -402,6 +459,7 @@ export function TreeView({
 							title="Remove"
 						/>
 					}
+					aside={renderBadges(node.id)}
 					onClick={() => onNodeSelect(node.id)}
 				>
 					All Attributes
@@ -412,7 +470,11 @@ export function TreeView({
 
 	const renderAttributeNode = (attr: AttributeNode) => {
 		const label = attr.alias ? `${attr.name} (as ${attr.alias})` : attr.name;
-		const suffix = attr.aggregate ? ` [${attr.aggregate}]` : "";
+		const badges: NodeBadge[] = [];
+		if (attr.groupby) badges.push({ text: attr.dategrouping ? `Group by · ${attr.dategrouping}` : "Group by", color: "brand" });
+		if (attr.aggregate) badges.push({ text: FUNCTION_TEXT[attr.aggregate] ?? attr.aggregate, color: "brand" });
+		if (attr.aggregate === "countcolumn" && attr.distinct) badges.push({ text: "Unique" });
+		if (attr.rowAggregate) badges.push({ text: "Child count" });
 
 		return (
 			<TreeItem
@@ -437,10 +499,10 @@ export function TreeView({
 							/>
 						</div>
 					}
+					aside={renderBadges(attr.id, badges)}
 					onClick={() => onNodeSelect(attr.id)}
 				>
 					{label}
-					{suffix}
 				</TreeItemLayout>
 			</TreeItem>
 		);
@@ -448,10 +510,9 @@ export function TreeView({
 
 	const renderOrderNode = (order: OrderNode) => {
 		const direction = order.descending ? "↓" : "↑";
-		// Show entityname prefix for link-entity orders
-		const displayName = order.entityname
-			? `${order.entityname}.${order.attribute}`
-			: order.attribute;
+		// Aggregate queries sort by alias (#90); show entityname prefix for link-entity orders
+		const target = order.alias ? `${order.alias} (alias)` : (order.attribute ?? "");
+		const displayName = order.entityname ? `${order.entityname}.${target}` : target;
 		return (
 			<TreeItem
 				key={order.id}
@@ -475,6 +536,7 @@ export function TreeView({
 							/>
 						</div>
 					}
+					aside={renderBadges(order.id)}
 					onClick={() => onNodeSelect(order.id)}
 				>
 					{displayName} {direction}
@@ -521,6 +583,13 @@ export function TreeView({
 							/>
 						</div>
 					}
+					aside={renderBadges(
+						filter.id,
+						badgeList(
+							filter.hint === "union" && { text: "Union" },
+							filter.isQuickFindFields && { text: "Quick find" },
+						),
+					)}
 					onClick={() => onNodeSelect(filter.id)}
 				>
 					Filter ({filter.conjunction})
@@ -540,7 +609,10 @@ export function TreeView({
 		const requiresValue = operatorRequiresValue(condition.operator);
 		let displayText = `${condition.attribute} ${condition.operator}`;
 
-		if (
+		if (requiresValue && condition.valueof) {
+			// Compared to another attribute
+			displayText += ` → ${condition.valueof}`;
+		} else if (
 			requiresValue &&
 			condition.value !== undefined &&
 			condition.value !== null &&
@@ -571,6 +643,7 @@ export function TreeView({
 							/>
 						</div>
 					}
+					aside={renderBadges(condition.id)}
 					onClick={() => onNodeSelect(condition.id)}
 				>
 					{displayText}
@@ -580,8 +653,8 @@ export function TreeView({
 	};
 
 	const renderLinkEntityNode = (link: LinkEntityNode) => {
-		// Attributes are not allowed in "not any" and "not all" link types
-		const canHaveAttributes = link.linkType !== "not any" && link.linkType !== "not all";
+		// exists / in / any / not any / all / not all return nothing: attributes and orders fail (0x80041121)
+		const canHaveAttributes = !NON_RETURNING_LINK_TYPES.has(link.linkType);
 		// Only allow one top-level filter per link-entity
 		const hasFilter = link.filters.length > 0;
 
@@ -617,7 +690,9 @@ export function TreeView({
 										>
 											Select Attributes
 										</MenuItem>
-										<MenuItem onClick={() => onAddOrder(link.id)}>Order By</MenuItem>
+										<MenuItem onClick={() => onAddOrder(link.id)} disabled={!canHaveAttributes}>
+											Order By
+										</MenuItem>
 										<MenuItem onClick={() => onAddFilter(link.id)} disabled={hasFilter}>
 											Filter
 										</MenuItem>
@@ -637,6 +712,7 @@ export function TreeView({
 							/>
 						</div>
 					}
+					aside={renderBadges(link.id)}
 					onClick={() => onNodeSelect(link.id)}
 				>
 					{link.alias || link.name} ({link.linkType})

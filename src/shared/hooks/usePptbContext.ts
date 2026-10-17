@@ -26,38 +26,47 @@ type ToolBoxEventPayload = {
  * Returns theme and connection status
  * Subscribes to PPTB events for dynamic updates (theme, connection changes)
  */
+/** The OS colour scheme as the webview sees it. */
+const systemTheme = (): "light" | "dark" =>
+	typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
 export function usePptbContext(): PptbContext {
 	const [context, setContext] = useState<PptbContext>({
-		theme: "light", // Default to light theme
+		theme: typeof window !== "undefined" && window.toolboxAPI ? "light" : systemTheme(),
 		connected: false,
 	});
 
 	useEffect(() => {
-		console.log("🔄 usePptbContext: Initializing...");
+		const colorScheme = window.matchMedia?.("(prefers-color-scheme: dark)");
 
-		// Check if running in PPTB host
+		// Standalone (dev server): follow the OS colour scheme
 		if (typeof window === "undefined" || !window.toolboxAPI) {
-			console.log("💡 Running standalone - using default light theme");
-			return;
+			const onSchemeChange = () => setContext((prev) => ({ ...prev, theme: systemTheme() }));
+			colorScheme?.addEventListener("change", onSchemeChange);
+			return () => colorScheme?.removeEventListener("change", onSchemeChange);
 		}
 
 		const toolboxAPI = window.toolboxAPI;
 
 		// ============ THEME ============
+		// Always ask the host: it resolves the "system" setting to light or dark (#67). Only the latest
+		// request applies, so a slow earlier answer can't overwrite a newer one.
+		let themeRequest = 0;
 		const updateTheme = async () => {
+			const request = ++themeRequest;
 			try {
 				const hostTheme = await toolboxAPI.utils?.getCurrentTheme?.();
-				console.log("🎨 getCurrentTheme() returned:", hostTheme);
-				const normalizedTheme =
-					hostTheme && String(hostTheme).toLowerCase() === "dark" ? "dark" : "light";
-				setContext((prev) => ({
-					...prev,
-					theme: normalizedTheme,
-				}));
+				if (request !== themeRequest) return;
+				const theme = hostTheme && String(hostTheme).toLowerCase() === "dark" ? "dark" : "light";
+				setContext((prev) => (prev.theme === theme ? prev : { ...prev, theme }));
 			} catch (err) {
-				console.warn("❌ Failed to get theme from host:", err);
+				console.warn("Failed to get the theme from the host:", err);
 			}
 		};
+		// The host sends no event when the OS theme changes while PPTB is set to System; the webview's
+		// colour scheme follows the OS, so ask the host again when it changes.
+		const onSchemeChange = () => void updateTheme();
+		colorScheme?.addEventListener("change", onSchemeChange);
 
 		// ============ CONNECTION ============
 		const updateConnection = async () => {
@@ -82,19 +91,9 @@ export function usePptbContext(): PptbContext {
 
 			switch (payload.event) {
 				case "settings:updated":
-					// Settings changed - check if theme was updated
-					if (payload.data && typeof payload.data === "object" && "theme" in payload.data) {
-						const themeValue = (payload.data as { theme: string }).theme;
-						console.log("🎨 Theme changed via settings:updated:", themeValue);
-						const normalizedTheme = String(themeValue).toLowerCase() === "dark" ? "dark" : "light";
-						setContext((prev) => ({
-							...prev,
-							theme: normalizedTheme,
-						}));
-					} else {
-						// Theme might have changed, refetch it
-						updateTheme();
-					}
+					// The payload holds only the changed settings, and theme can be "system": never read it
+					// directly, ask the host for the resolved theme (#67)
+					void updateTheme();
 					break;
 
 				case "connection:updated":
@@ -136,6 +135,7 @@ export function usePptbContext(): PptbContext {
 
 		// ============ CLEANUP ============
 		return () => {
+			colorScheme?.removeEventListener("change", onSchemeChange);
 			if (toolboxAPI.events?.off) {
 				console.log("🧹 Unsubscribing from PPTB events...");
 				toolboxAPI.events.off(handlePptbEvent);

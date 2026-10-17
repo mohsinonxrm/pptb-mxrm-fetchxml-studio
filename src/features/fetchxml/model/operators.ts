@@ -1,8 +1,14 @@
 /**
- * FetchXML operator definitions and filtering based on attribute type
+ * FetchXML operator definitions and filtering based on attribute metadata.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators
+ *
+ * Which operators each attribute offers is the documented data types per operator, checked against a
+ * live matrix of every operator × every Advanced Find attribute type (2026-10-15, #87). Combinations
+ * Dataverse rejects aren't offered (e.g. contain-values on single-choice columns, user / team operators
+ * on Customer lookups, hierarchy operators on anything but the primary key).
  */
 
-import type { OperatorType } from "./nodes";
+import type { ConditionNode, OperatorType } from "./nodes";
 
 export interface OperatorDefinition {
 	value: OperatorType;
@@ -10,8 +16,19 @@ export interface OperatorDefinition {
 	requiresValue: boolean; // Does it need any value?
 	requiresTwoValues?: boolean; // Does it need exactly TWO values? (e.g., between, in-fiscal-period-and-year)
 	requiresMultipleValues?: boolean; // Does it accept multiple values? (e.g., in, contain-values)
-	valueType?: "string" | "number" | "date" | "guid" | "boolean"; // What type of value(s)?
-	applicableTypes: string[]; // AttributeType values
+	/**
+	 * What value(s) it takes, where that isn't the attribute's own type:
+	 * - integer: a whole number above 0 in the value attribute (verified: 0, negative, decimal or a date
+	 *   fail with 0x80040203 / 0x80041139);
+	 * - year: a four-digit fiscal year (verified: "23" fails);
+	 * - fiscalPeriodYear: two <value> elements, period then year.
+	 */
+	valueType?: "string" | "number" | "date" | "guid" | "boolean" | "integer" | "year" | "fiscalPeriodYear";
+	applicableTypes: string[]; // AttributeType values ("MultiSelectPicklist" for multi-select choices)
+	/** Hierarchy operators: only the primary key of a hierarchical entity (verified: 0x80040203 otherwise) */
+	hierarchyPrimaryKeyOnly?: boolean;
+	/** Needs hours or minutes: not for date-only behaviour (verified: 0x80048415) */
+	needsTime?: boolean;
 }
 
 /**
@@ -39,6 +56,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 			"Customer",
 			"Owner",
 			"Uniqueidentifier",
+			"Virtual",
 		],
 	},
 	{
@@ -67,25 +85,25 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "lt",
 		label: "Less Than",
 		requiresValue: true,
-		applicableTypes: ["Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
 	},
 	{
 		value: "le",
 		label: "Less Than or Equal",
 		requiresValue: true,
-		applicableTypes: ["Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
 	},
 	{
 		value: "gt",
 		label: "Greater Than",
 		requiresValue: true,
-		applicableTypes: ["Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
 	},
 	{
 		value: "ge",
 		label: "Greater Than or Equal",
 		requiresValue: true,
-		applicableTypes: ["Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
 	},
 
 	// String operators
@@ -93,7 +111,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "like",
 		label: "Like (pattern)",
 		requiresValue: true,
-		applicableTypes: ["String", "Memo"],
+		applicableTypes: ["String", "Memo", "Virtual"],
 	},
 	{
 		value: "not-like",
@@ -193,7 +211,15 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "null",
 		label: "Is Null",
 		requiresValue: false,
+		// Virtual (the "...name" label attributes), Image, File, ManagedProperty and EntityName only
+		// appear with "Advanced Find only" off; null / not-null verified on each (#57)
 		applicableTypes: [
+			"Virtual",
+			"Image",
+			"File",
+			"ManagedProperty",
+			"EntityName",
+			"MultiSelectPicklist",
 			"String",
 			"Memo",
 			"Integer",
@@ -217,6 +243,12 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		label: "Is Not Null",
 		requiresValue: false,
 		applicableTypes: [
+			"Virtual",
+			"Image",
+			"File",
+			"ManagedProperty",
+			"EntityName",
+			"MultiSelectPicklist",
 			"String",
 			"Memo",
 			"Integer",
@@ -243,7 +275,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresValue: true,
 		requiresMultipleValues: true,
 		valueType: "number",
-		applicableTypes: ["Picklist", "State", "Status"],
+		applicableTypes: ["MultiSelectPicklist"],
 	},
 	{
 		value: "not-contain-values",
@@ -251,7 +283,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresValue: true,
 		requiresMultipleValues: true,
 		valueType: "number",
-		applicableTypes: ["Picklist", "State", "Status"],
+		applicableTypes: ["MultiSelectPicklist"],
 	},
 
 	// Date/Time operators (relative dates)
@@ -283,60 +315,72 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "last-x-hours",
 		label: "Last X Hours",
 		requiresValue: true,
+		valueType: "integer",
+		needsTime: true,
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "next-x-hours",
 		label: "Next X Hours",
 		requiresValue: true,
+		valueType: "integer",
+		needsTime: true,
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "last-x-days",
 		label: "Last X Days",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "next-x-days",
 		label: "Next X Days",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "last-x-weeks",
 		label: "Last X Weeks",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "next-x-weeks",
 		label: "Next X Weeks",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "last-x-months",
 		label: "Last X Months",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "next-x-months",
 		label: "Next X Months",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "last-x-years",
 		label: "Last X Years",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "next-x-years",
 		label: "Next X Years",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{ value: "on", label: "On (specific date)", requiresValue: true, applicableTypes: ["DateTime"] },
@@ -356,36 +400,44 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "olderthan-x-minutes",
 		label: "Older Than X Minutes",
 		requiresValue: true,
+		valueType: "integer",
+		needsTime: true,
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "olderthan-x-hours",
 		label: "Older Than X Hours",
 		requiresValue: true,
+		valueType: "integer",
+		needsTime: true,
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "olderthan-x-days",
 		label: "Older Than X Days",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "olderthan-x-weeks",
 		label: "Older Than X Weeks",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "olderthan-x-months",
 		label: "Older Than X Months",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "olderthan-x-years",
 		label: "Older Than X Years",
 		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 
@@ -430,14 +482,42 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "in-fiscal-year",
 		label: "In Fiscal Year",
 		requiresValue: true,
-		valueType: "number",
+		valueType: "year",
 		applicableTypes: ["DateTime"],
 	},
 	{
 		value: "in-fiscal-period",
 		label: "In Fiscal Period",
 		requiresValue: true,
-		valueType: "number",
+		valueType: "integer",
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "last-x-fiscal-years",
+		label: "Last X Fiscal Years",
+		requiresValue: true,
+		valueType: "integer",
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "last-x-fiscal-periods",
+		label: "Last X Fiscal Periods",
+		requiresValue: true,
+		valueType: "integer",
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "next-x-fiscal-years",
+		label: "Next X Fiscal Years",
+		requiresValue: true,
+		valueType: "integer",
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "next-x-fiscal-periods",
+		label: "Next X Fiscal Periods",
+		requiresValue: true,
+		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
 	{
@@ -445,7 +525,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		label: "In Fiscal Period and Year",
 		requiresValue: true,
 		requiresTwoValues: true,
-		valueType: "number",
+		valueType: "fiscalPeriodYear",
 		applicableTypes: ["DateTime"],
 	},
 	{
@@ -453,7 +533,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		label: "In or Before Fiscal Period and Year",
 		requiresValue: true,
 		requiresTwoValues: true,
-		valueType: "number",
+		valueType: "fiscalPeriodYear",
 		applicableTypes: ["DateTime"],
 	},
 	{
@@ -461,7 +541,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		label: "In or After Fiscal Period and Year",
 		requiresValue: true,
 		requiresTwoValues: true,
-		valueType: "number",
+		valueType: "fiscalPeriodYear",
 		applicableTypes: ["DateTime"],
 	},
 
@@ -470,13 +550,13 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "eq-userid",
 		label: "Equals Current User",
 		requiresValue: false,
-		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
 	},
 	{
 		value: "ne-userid",
 		label: "Not Equals Current User",
 		requiresValue: false,
-		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
 	},
 	{
 		value: "eq-businessid",
@@ -494,13 +574,13 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "eq-userteams",
 		label: "Equals User Teams",
 		requiresValue: false,
-		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
 	},
 	{
 		value: "eq-useroruserteams",
 		label: "Equals User or User Teams",
 		requiresValue: false,
-		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
 	},
 	{
 		value: "eq-useroruserhierarchy",
@@ -512,7 +592,7 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "eq-useroruserhierarchyandteams",
 		label: "Equals User or User Hierarchy and Teams",
 		requiresValue: false,
-		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
 	},
 	{
 		value: "eq-userlanguage",
@@ -526,57 +606,120 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "under",
 		label: "Under (hierarchy)",
 		requiresValue: true,
-		applicableTypes: ["Lookup", "Uniqueidentifier"],
+		valueType: "guid",
+		applicableTypes: ["Uniqueidentifier"],
+		hierarchyPrimaryKeyOnly: true,
 	},
 	{
 		value: "not-under",
 		label: "Not Under (hierarchy)",
 		requiresValue: true,
-		applicableTypes: ["Lookup", "Uniqueidentifier"],
+		valueType: "guid",
+		applicableTypes: ["Uniqueidentifier"],
+		hierarchyPrimaryKeyOnly: true,
 	},
 	{
 		value: "above",
 		label: "Above (hierarchy)",
 		requiresValue: true,
-		applicableTypes: ["Lookup", "Uniqueidentifier"],
+		valueType: "guid",
+		applicableTypes: ["Uniqueidentifier"],
+		hierarchyPrimaryKeyOnly: true,
 	},
 	{
 		value: "eq-or-under",
 		label: "Equals or Under (hierarchy)",
 		requiresValue: true,
-		applicableTypes: ["Lookup", "Uniqueidentifier"],
+		valueType: "guid",
+		applicableTypes: ["Uniqueidentifier"],
+		hierarchyPrimaryKeyOnly: true,
 	},
 	{
 		value: "eq-or-above",
 		label: "Equals or Above (hierarchy)",
 		requiresValue: true,
-		applicableTypes: ["Lookup", "Uniqueidentifier"],
+		valueType: "guid",
+		applicableTypes: ["Uniqueidentifier"],
+		hierarchyPrimaryKeyOnly: true,
 	},
 ];
 
+/** The attribute metadata operator filtering needs (AttributeMetadata subset). */
+export interface OperatorAttributeInfo {
+	AttributeType?: string;
+	AttributeTypeName?: { Value?: string };
+	IsPrimaryId?: boolean;
+	/** DateTimeAttributeMetadata.DateTimeBehavior.Value */
+	DateTimeBehavior?: { Value?: string };
+}
+
 /**
- * Get operators applicable to a specific attribute type
- * @param attributeType - The AttributeType from metadata (e.g., 'String', 'Integer', 'DateTime')
- * @returns Array of operator definitions applicable to this type
+ * Operators for an attribute, from its metadata:
+ * - multi-select choices (AttributeTypeName MultiSelectPicklistType) get the multi-select operators;
+ * - hierarchy operators only for the primary key, and not when the entity is known not to be
+ *   hierarchical (isHierarchical false);
+ * - operators that need hours / minutes aren't offered for date-only behaviour (a date-only format
+ *   with user-local behaviour accepts them, verified).
+ * Without metadata every operator is offered, because the type can't be determined.
  */
-export function getOperatorsForAttributeType(
-	attributeType: string | undefined
+export function getOperatorsForAttribute(
+	attribute: OperatorAttributeInfo | undefined,
+	isHierarchical?: boolean,
 ): OperatorDefinition[] {
-	if (!attributeType) {
-		// No type info - return all operators as fallback
-		return ALL_OPERATORS;
-	}
+	if (!attribute?.AttributeType) return ALL_OPERATORS;
+	// Virtual covers several types: AttributeTypeName tells multi-select choices, images and files
+	// apart from the "...name" label attributes (VirtualType)
+	const typeName = attribute.AttributeTypeName?.Value;
+	const byTypeName = !!typeName && (attribute.AttributeType === "Virtual" || typeName === "MultiSelectPicklistType");
+	const type = (byTypeName ? typeName : attribute.AttributeType)
+		.replace(/Type$/, "")
+		.toLowerCase();
+	const dateOnly = attribute.DateTimeBehavior?.Value === "DateOnly";
+	return ALL_OPERATORS.filter((op) => {
+		if (op.hierarchyPrimaryKeyOnly) return !!attribute.IsPrimaryId && isHierarchical !== false;
+		if (op.needsTime && dateOnly) return false;
+		return op.applicableTypes.some((t) => t.toLowerCase() === type);
+	});
+}
 
-	// Normalize type name (handle both 'String' and 'StringType' formats)
-	const normalizedType = attributeType.replace(/Type$/, "");
+/**
+ * Get operators applicable to an AttributeType (no other metadata).
+ * @deprecated Use getOperatorsForAttribute, which also handles multi-select, primary keys and
+ * date-only behaviour.
+ */
+export function getOperatorsForAttributeType(attributeType: string | undefined): OperatorDefinition[] {
+	return getOperatorsForAttribute(attributeType ? { AttributeType: attributeType } : undefined);
+}
 
-	// Filter operators that support this attribute type
-	const filtered = ALL_OPERATORS.filter((op) =>
-		op.applicableTypes.some((type) => type.toLowerCase() === normalizedType.toLowerCase())
-	);
+/** The shape of value an operator takes. */
+export type OperatorValueShape = "none" | "single" | "integer" | "year" | "two" | "fiscalPeriodYear" | "multiple";
 
-	// If no matches found (unknown type), return all as fallback
-	return filtered.length > 0 ? filtered : ALL_OPERATORS;
+export function operatorValueShape(operator: string): OperatorValueShape {
+	const op = ALL_OPERATORS.find((o) => o.value === operator);
+	if (!op) return "single";
+	if (!op.requiresValue) return "none";
+	if (op.valueType === "fiscalPeriodYear") return "fiscalPeriodYear";
+	if (op.valueType === "integer") return "integer";
+	if (op.valueType === "year") return "year";
+	if (op.requiresTwoValues) return "two";
+	if (op.requiresMultipleValues) return "multiple";
+	return "single";
+}
+
+/**
+ * The value to keep when the operator changes: kept when the shape is the same (and still fits),
+ * otherwise cleared, so the condition never holds a value Dataverse rejects (#87).
+ */
+export function adaptValueForOperator(
+	previousOperator: string,
+	nextOperator: string,
+	value: ConditionNode["value"],
+): ConditionNode["value"] {
+	const before = operatorValueShape(previousOperator);
+	const after = operatorValueShape(nextOperator);
+	if (after === "none") return undefined;
+	if (before !== after) return undefined;
+	return value;
 }
 
 /**
@@ -622,3 +765,10 @@ export function getCommonOperators(): OperatorDefinition[] {
 
 	return ALL_OPERATORS.filter((op) => commonValues.includes(op.value));
 }
+
+/**
+ * Every condition operator Dataverse accepts: the documented operators (all selectable since #87)
+ * plus the deprecated "neq" (verified: works like "ne"). Shared by the parser and the editor's
+ * intellisense. https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators
+ */
+export const KNOWN_OPERATORS: ReadonlySet<string> = new Set<string>([...ALL_OPERATORS.map((o) => o.value), "neq"]);
