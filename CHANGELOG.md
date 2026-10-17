@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2-beta.1] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Selecting a node in the tree jumped to the bottom (#25).** After every selection, the tree scrolled to its *last* item, assuming the selected node was always the newest one. It now scrolls to the selected node, only within the tree, and only when the node is off-screen. Selecting a visible node no longer moves the tree.
+- **A node added from the Add menu wasn't selected (#24).**
+  - The builder selected the new attribute, order, filter or link-entity, but the menu click also reached the tree row behind it, which selected the row again.
+  - The new node is now selected, its properties open, and the tree scrolls to it.
+
+### 🏗️ Technical
+
+- `TreeView.tsx`:
+  - the scroll targets `[data-fui-tree-item-value=<node id>]` inside the tree container, with `block: "nearest"`, and its timer is cleared on the next selection;
+  - the Add menus' `MenuPopover`s stop click propagation, because React events bubble through portals to the row's `onClick`.
+
 ## [1.4.1] - 2026-10-17
 
 The v1.4.1 milestone: correctness against Dataverse, a complete properties panel, and the open bugs. It was iterated through `1.4.1-beta.1` to `1.4.1-beta.20` (detailed below). Every behaviour was checked against Microsoft Learn and a live Dataverse environment: valid FetchXML is never refused, only queries Dataverse rejects are blocked, and warnings are reserved for what can't be determined.
