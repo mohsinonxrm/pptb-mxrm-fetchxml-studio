@@ -32,7 +32,7 @@ import { returnFetchXmlToInvokingTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
-import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
+import { ResultsGrid, type QueryResult, type ResultsGridHandle, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { RelatedEntityColumn } from "./AddColumnsPanel";
 import type { PagingNotice } from "../../api/paging";
@@ -374,6 +374,8 @@ export function PreviewTabs({
 	// isEditorModeActive in state controls the disabled prop + renders; the ref holds the latest XML.
 	const [isEditorModeActive, setIsEditorModeActive] = useState(false);
 	const editorXmlRef = useRef<string>("");
+	// The command bar's Copy menu copies through the grid (#50)
+	const resultsGridRef = useRef<ResultsGridHandle>(null);
 	const [editorValidationError, setEditorValidationError] = useState<ParseIssueItem[] | null>(
 		null,
 	);
@@ -775,6 +777,8 @@ export function PreviewTabs({
 									onFetchWorkflows={onFetchWorkflows}
 									onExport={onExport}
 									onExportLocal={onExportLocal}
+									loadedCount={result?.rows.length ?? 0}
+									onCopyRows={(scope, mode) => resultsGridRef.current?.copyRows(scope, mode)}
 									canExport={canExport}
 									isExporting={isExporting}
 									exportDisabledReason={exportDisabledReason}
@@ -843,6 +847,7 @@ export function PreviewTabs({
 							)}
 							<div className={styles.gridCard}>
 								<ResultsGrid
+									ref={resultsGridRef}
 									result={result}
 									isLoading={isExecuting}
 									isLoadingMore={isLoadingMore}

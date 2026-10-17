@@ -6,7 +6,7 @@
  * Sort state is derived from FetchXML orders - clicking headers triggers onSortChange callback
  */
 
-import { useMemo, useCallback, useEffect, useState, useRef } from "react";
+import { useMemo, useCallback, useEffect, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import {
 	createTableColumn,
 	makeStyles,
@@ -14,6 +14,17 @@ import {
 	TableCellLayout,
 	Skeleton,
 	SkeletonItem,
+	Menu,
+	MenuPopover,
+	MenuList,
+	MenuItem,
+	MenuDivider,
+	Toaster,
+	Toast,
+	ToastTitle,
+	useToastController,
+	useId,
+	type PositioningVirtualElement,
 } from "@fluentui/react-components";
 import {
 	DataGrid,
@@ -26,7 +37,7 @@ import {
 import type { RowRenderer } from "@fluentui-contrib/react-data-grid-react-window";
 import { useScrollbarWidth, useFluent } from "@fluentui/react-components";
 import type { SortDirection } from "@fluentui/react-components";
-import { ArrowSortUp16Regular, ArrowSortDown16Regular } from "@fluentui/react-icons";
+import { ArrowSortUp16Regular, ArrowSortDown16Regular, Copy20Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import { getCellRenderer } from "./getCellRenderer";
 import { buildRowIdentity } from "./rowIdentity";
@@ -36,6 +47,16 @@ import type { LayoutXmlConfig } from "../../model/layoutxml";
 import type { DisplaySettings } from "../../model/displaySettings";
 import { metadataCache } from "../../state/cache";
 import { collectQueryColumns, joinedLinkAliases, resolveColumn, sortedColumns } from "../../model/queryColumns";
+import {
+	cellText,
+	columnToText,
+	rawText,
+	rowCountLabel,
+	rowsToTsv,
+	writeClipboard,
+	type CopyColumn,
+	type CopyValueMode,
+} from "./copyResults";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -45,6 +66,47 @@ export interface SortChangeData {
 	direction: SortDirection;
 	/** Whether Shift key was held (multi-column sort) */
 	isMultiSort: boolean;
+}
+
+/** Lets the results command bar copy rows (#50) */
+export interface ResultsGridHandle {
+	copyRows: (scope: "selected" | "all", mode: CopyValueMode) => void;
+}
+
+/** What a raw value is, for the cell menu's "Copy raw value" */
+function rawValueKind(attributeType: string | undefined): string | undefined {
+	switch (attributeType) {
+		case "Lookup":
+		case "Customer":
+		case "Owner":
+		case "Uniqueidentifier":
+			return "GUID";
+		case "DateTime":
+			return "ISO date";
+		case "Picklist":
+		case "State":
+		case "Status":
+			return "option value";
+		case "Boolean":
+			return "true/false";
+		case "Integer":
+		case "BigInt":
+		case "Decimal":
+		case "Double":
+		case "Money":
+			return "number";
+		default:
+			return undefined;
+	}
+}
+
+/** A right-clicked cell */
+interface CellMenuState {
+	open: boolean;
+	/** The mouse position (or the cell, for the keyboard's context menu key) */
+	target?: PositioningVirtualElement | HTMLElement;
+	item?: Record<string, unknown>;
+	columnId?: string;
 }
 
 const ROW_HEIGHT = 42;
@@ -162,7 +224,7 @@ interface ResultsGridProps {
 	displaySettings?: DisplaySettings;
 }
 
-export function ResultsGrid({
+export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(function ResultsGrid({
 	result,
 	isLoading,
 	isLoadingMore,
@@ -176,7 +238,7 @@ export function ResultsGrid({
 	onSortChange,
 	onLoadMore,
 	displaySettings,
-}: ResultsGridProps) {
+}: ResultsGridProps, ref) {
 	const styles = useStyles();
 	const { targetDocument } = useFluent();
 	const scrollbarWidth = useScrollbarWidth({ targetDocument });
@@ -343,12 +405,13 @@ export function ResultsGrid({
 
 	// Memoize column definitions with display names and formatted values
 	// Uses columnConfig for ordering and widths when available
-	const { columns, columnDisplayNames, columnAttributeTypes } = useMemo(() => {
+	const { columns, columnDisplayNames, columnAttributeTypes, copyColumns } = useMemo(() => {
 		if (!result || result.columns.length === 0)
 			return {
 				columns: [],
 				columnDisplayNames: new Map<string, string>(),
 				columnAttributeTypes: new Map<string, string | undefined>(),
+				copyColumns: [] as CopyColumn[],
 			};
 
 		// Filter out OData and CRM annotation columns
@@ -401,6 +464,8 @@ export function ResultsGrid({
 
 		const displayNames = new Map<string, string>();
 		const attrTypes = new Map<string, string | undefined>();
+		// The grid's columns as copied, in grid order (#50)
+		const copyCols: CopyColumn[] = [];
 		const columnDefs = displayableColumns.flatMap((col) => {
 			// Get column display info from our comprehensive map
 			const displayInfo = columnDisplayMap.get(col);
@@ -525,6 +590,10 @@ export function ResultsGrid({
 
 			// For "both" mode with formatted values, create two columns
 			if (valueMode === "both" && hasFormattedValues) {
+				copyCols.push(
+					{ id: col, header: displayName, sourceCol: col, showsRaw: false },
+					{ id: `${col}__raw`, header: `${displayName} (Raw)`, sourceCol: col, showsRaw: true },
+				);
 				displayNames.set(`${col}__raw`, `${displayName} (Raw)`);
 				attrTypes.set(`${col}__raw`, attribute?.AttributeType);
 				// Create formatted value column
@@ -592,6 +661,7 @@ export function ResultsGrid({
 			}
 
 			// Standard single column (formatted or raw mode)
+			copyCols.push({ id: col, header: displayName, sourceCol: col, showsRaw: valueMode === "raw" });
 			return createTableColumn<Record<string, unknown>>({
 				columnId: col,
 				compare: (a, b) => {
@@ -645,6 +715,7 @@ export function ResultsGrid({
 			columns: columnDefs,
 			columnDisplayNames: displayNames,
 			columnAttributeTypes: attrTypes,
+			copyColumns: copyCols,
 		};
 	}, [
 		result,
@@ -701,12 +772,113 @@ export function ResultsGrid({
 		[onSortChange, sortStateMap],
 	);
 
+	// ---- Copy (#50) ----
+	const toasterId = useId("results-toaster");
+	const { dispatchToast } = useToastController(toasterId);
+	const [cellMenu, setCellMenu] = useState<CellMenuState>({ open: false });
+	/** The cell with keyboard focus, for Ctrl+C */
+	const focusedCellRef = useRef<{ item: Record<string, unknown>; columnId: string } | null>(null);
+
+	const copyColumnById = useCallback(
+		(columnId: string) => copyColumns.find((c) => c.id === columnId),
+		[copyColumns],
+	);
+
+	const selectedRecords = useCallback(
+		() => (result?.rows ?? []).filter((r) => selectedItems.has(getRowId(r))),
+		[result, selectedItems, getRowId],
+	);
+
+	const copy = useCallback(
+		async (text: string, what: string) => {
+			const ok = await writeClipboard(text);
+			dispatchToast(
+				<Toast>
+					<ToastTitle>{ok ? `${what} copied` : "Couldn't copy to the clipboard"}</ToastTitle>
+				</Toast>,
+				{ intent: ok ? "success" : "error", timeout: ok ? 2000 : 4000 },
+			);
+		},
+		[dispatchToast],
+	);
+
+	const copyRecords = useCallback(
+		(records: Record<string, unknown>[], mode: CopyValueMode) => {
+			if (records.length === 0) return;
+			void copy(rowsToTsv(records, copyColumns, mode), rowCountLabel(records.length));
+		},
+		[copy, copyColumns],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			copyRows: (scope, mode) => copyRecords(scope === "all" ? (result?.rows ?? []) : selectedRecords(), mode),
+		}),
+		[copyRecords, result, selectedRecords],
+	);
+
+	const openCellMenu = useCallback((e: React.MouseEvent<HTMLElement>, item: Record<string, unknown>, columnId: string) => {
+		e.preventDefault();
+		// Open at the mouse; the context menu key reports (0, 0), so open at the cell instead
+		const { clientX: x, clientY: y } = e;
+		const target: PositioningVirtualElement | HTMLElement =
+			x === 0 && y === 0
+				? e.currentTarget
+				: { getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0 }) };
+		setCellMenu({ open: true, target, item, columnId });
+	}, []);
+
+	// Ctrl+C copies the selected rows, or else the focused cell, as shown. Text the user has
+	// highlighted copies as usual.
+	const handleGridKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c" || e.altKey || e.shiftKey) return;
+			if (window.getSelection()?.toString()) return;
+			if (selectedItems.size > 0) {
+				e.preventDefault();
+				copyRecords(selectedRecords(), "shown");
+				return;
+			}
+			const focused = focusedCellRef.current;
+			const column = focused && copyColumnById(focused.columnId);
+			if (focused && column) {
+				e.preventDefault();
+				void copy(cellText(focused.item, column), column.header);
+			}
+		},
+		[selectedItems, copyRecords, selectedRecords, copyColumnById, copy],
+	);
+
+	// The right-clicked cell's values, for the cell menu
+	const cellMenuContent = useMemo(() => {
+		const { item, columnId } = cellMenu;
+		const column = columnId ? copyColumnById(columnId) : undefined;
+		if (!item || !column) return undefined;
+		return {
+			item,
+			column,
+			shown: cellText(item, column),
+			raw: rawText(item, column.sourceCol),
+			rawKind: rawValueKind(columnAttributeTypes.get(column.id)),
+		};
+	}, [cellMenu, copyColumnById, columnAttributeTypes]);
+
 	// Row renderer function for virtualization with scrolling indicator support
 	const renderRow: RowRenderer<Record<string, unknown>> = useCallback(
 		({ item, rowId }, style, _index, isScrolling) => (
 			<DataGridRow<Record<string, unknown>> key={rowId} style={style} className={styles.row}>
-				{({ renderCell }) => (
-					<DataGridCell focusMode="group">
+				{({ renderCell, columnId }) => (
+					<DataGridCell
+						focusMode="group"
+						onContextMenu={(e: React.MouseEvent<HTMLElement>) => openCellMenu(e, item, String(columnId))}
+						onFocus={() => {
+							focusedCellRef.current = { item, columnId: String(columnId) };
+						}}
+						onBlur={() => {
+							focusedCellRef.current = null;
+						}}
+					>
 						{isScrolling ? (
 							<Skeleton style={{ width: "100%" }}>
 								<SkeletonItem shape="rectangle" animation="pulse" appearance="translucent" />
@@ -718,7 +890,7 @@ export function ResultsGrid({
 				)}
 			</DataGridRow>
 		),
-		[styles.row],
+		[styles.row, openCellMenu],
 	);
 
 	// Build column sizing options from columnConfig or defaults
@@ -857,7 +1029,7 @@ export function ResultsGrid({
 
 	return (
 		<div className={styles.container}>
-			<div className={styles.gridWrapper}>
+			<div className={styles.gridWrapper} onKeyDown={handleGridKeyDown}>
 				<div ref={containerRef} className={styles.gridContent}>
 					<DataGrid
 						aria-label={result?.entityLogicalName ?? "Results"}
@@ -919,6 +1091,42 @@ export function ResultsGrid({
 					</span>
 				</div>
 			</div>
+			{cellMenuContent && (
+				<Menu
+					open={cellMenu.open}
+					onOpenChange={(_, data) => setCellMenu((m) => ({ ...m, open: data.open }))}
+					positioning={{ target: cellMenu.target, position: "below", align: "start" }}
+				>
+					<MenuPopover>
+						<MenuList>
+							<MenuItem
+								icon={<Copy20Regular />}
+								onClick={() => void copy(cellMenuContent.shown, cellMenuContent.column.header)}
+							>
+								Copy value
+							</MenuItem>
+							{cellMenuContent.raw !== "" && cellMenuContent.raw !== cellMenuContent.shown && (
+								<MenuItem onClick={() => void copy(cellMenuContent.raw, `${cellMenuContent.column.header} (raw)`)}>
+									Copy raw value{cellMenuContent.rawKind ? ` (${cellMenuContent.rawKind})` : ""}
+								</MenuItem>
+							)}
+							<MenuDivider />
+							<MenuItem onClick={() => copyRecords([cellMenuContent.item], "shown")}>Copy row</MenuItem>
+							<MenuItem disabled={selectedItems.size === 0} onClick={() => copyRecords(selectedRecords(), "shown")}>
+								Copy selected rows ({selectedItems.size})
+							</MenuItem>
+							<MenuItem
+								onClick={() =>
+									void copy(columnToText(result.rows, cellMenuContent.column), `${cellMenuContent.column.header} column`)
+								}
+							>
+								Copy column
+							</MenuItem>
+						</MenuList>
+					</MenuPopover>
+				</Menu>
+			)}
+			<Toaster toasterId={toasterId} position="bottom-end" />
 		</div>
 	);
-}
+});

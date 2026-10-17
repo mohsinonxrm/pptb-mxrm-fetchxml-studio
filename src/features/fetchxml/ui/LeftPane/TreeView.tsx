@@ -3,7 +3,7 @@
  * Displays hierarchical structure: Entity -> Attributes, Orders, Filters, Link-Entities
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
 	Badge,
 	Tree,
@@ -183,9 +183,15 @@ export function TreeView({
 	const [selectAttrsCurrentNames, setSelectAttrsCurrentNames] = useState<string[]>([]);
 
 	// Manage which tree items are open/expanded
+	const treeRef = useRef<HTMLDivElement>(null);
 	const [openItems, setOpenItems] = useState<Set<NodeId>>(
 		new Set([fetchQuery.id, fetchQuery.entity.id])
 	);
+
+	// The Add menus render in a portal inside the row, and React events bubble through portals: a
+	// menu click reached the row's onClick and re-selected the row, so the node the menu had just
+	// added (and selected) lost the selection (#24, #25)
+	const stopRowSelect = (e: React.MouseEvent) => e.stopPropagation();
 
 	// Helper to find path from root to a node (all ancestor IDs)
 	const findPathToNode = (targetId: NodeId): NodeId[] => {
@@ -265,23 +271,16 @@ export function TreeView({
 				return newSet;
 			});
 
-			// Scroll the selected node into view after a short delay to allow DOM updates
-			// Note: Fluent UI Tree doesn't set aria-selected="true" reliably, so we use
-			// the last tree item as the target (newly added nodes appear at the end)
-			setTimeout(() => {
-				const allTreeItems = document.querySelectorAll('[role="treeitem"]');
-
-				if (allTreeItems.length > 0) {
-					const targetElement = allTreeItems[allTreeItems.length - 1];
-					targetElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
-					debugLog(
-						"treeExpansion",
-						`Scrolled to item ${allTreeItems.length} of ${allTreeItems.length}`
-					);
-				} else {
-					debugWarn("treeExpansion", "No tree items found in DOM for scrolling");
-				}
+			// Bring the selected node into view once its ancestors have expanded (#25). Only this tree,
+			// and only when the node is off-screen ("nearest"): selecting a visible node doesn't scroll.
+			// (Before, it always scrolled to the last tree item, so selecting any node jumped to the bottom.)
+			const timer = setTimeout(() => {
+				const item = treeRef.current?.querySelector<HTMLElement>(
+					`[data-fui-tree-item-value="${CSS.escape(selectedNodeId)}"]`,
+				);
+				item?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 			}, 250);
+			return () => clearTimeout(timer);
 		}
 		// Only a new selection expands and scrolls: findPathToNode reads the current tree, and re-running
 		// on every tree edit would keep re-expanding and scrolling while the user works (#65)
@@ -385,7 +384,7 @@ export function TreeView({
 								<MenuTrigger disableButtonEnhancement>
 									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
 								</MenuTrigger>
-								<MenuPopover>
+								<MenuPopover onClick={stopRowSelect}>
 									<MenuList>
 										<MenuItem onClick={() => onAddAllAttributes(entity.id)}>
 											All Attributes
@@ -561,7 +560,7 @@ export function TreeView({
 								<MenuTrigger disableButtonEnhancement>
 									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
 								</MenuTrigger>
-								<MenuPopover>
+								<MenuPopover onClick={stopRowSelect}>
 									<MenuList>
 										<MenuItem onClick={() => onAddCondition(filter.id)}>Condition</MenuItem>
 										<MenuItem onClick={() => onAddSubfilter(filter.id)}>Sub-Filter</MenuItem>
@@ -673,7 +672,7 @@ export function TreeView({
 								<MenuTrigger disableButtonEnhancement>
 									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
 								</MenuTrigger>
-								<MenuPopover>
+								<MenuPopover onClick={stopRowSelect}>
 									<MenuList>
 										<MenuItem
 											onClick={() => onAddAllAttributes(link.id)}
@@ -730,7 +729,7 @@ export function TreeView({
 	};
 
 	return (
-		<div className={styles.container}>
+		<div ref={treeRef} className={styles.container}>
 			<Tree
 				aria-label="FetchXML Query Structure"
 				openItems={openItems}
