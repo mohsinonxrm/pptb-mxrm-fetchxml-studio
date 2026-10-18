@@ -21,6 +21,7 @@ import {
 	type LoadedViewInfo,
 } from "../../api/pptbClient";
 import { debugLog } from "../../../../shared/utils/debug";
+import { getQueryTypeLabel } from "../../model/savedViews";
 
 const useStyles = makeStyles({
 	container: {
@@ -65,6 +66,12 @@ const useStyles = makeStyles({
 		marginLeft: "6px",
 	},
 });
+
+/** Labels a view that isn't a public view (Quick find, Lookup...), so all of them can be listed (#93) */
+function QueryTypeBadge({ view, className }: { view: SavedView; className: string }) {
+	const label = getQueryTypeLabel(view.queryType);
+	return label ? <span className={className}>{label}</span> : null;
+}
 
 interface LoadViewPickerProps {
 	/** Currently selected entity metadata (with ObjectTypeCode) */
@@ -182,6 +189,8 @@ export function LoadViewPicker({
 					entitySetName: selectedEntityMetadata.EntitySetName,
 					name: view.name,
 					layoutxml: view.layoutxml, // Include layoutxml for column configuration
+					queryType: view.queryType,
+					isCustomizable: view.isCustomizable,
 				};
 				onViewSelect(viewInfo);
 				debugLog("viewAPI", `Selected view: ${view.name} (${view.type}) - ID: ${view.id}`);
@@ -261,6 +270,7 @@ export function LoadViewPicker({
 								<span>
 									{view.name}
 									{view.isDefault && <span className={styles.defaultBadge}>Default</span>}
+									<QueryTypeBadge view={view} className={styles.defaultBadge} />
 								</span>
 							</Option>
 						))}
@@ -271,7 +281,10 @@ export function LoadViewPicker({
 					<OptionGroup label="Personal Views">
 						{filteredPersonalViews.map((view) => (
 							<Option key={view.id} value={view.id} text={view.name}>
-								{view.name}
+								<span>
+									{view.name}
+									<QueryTypeBadge view={view} className={styles.defaultBadge} />
+								</span>
 							</Option>
 						))}
 					</OptionGroup>

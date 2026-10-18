@@ -32,14 +32,15 @@ import { returnFetchXmlToInvokingTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
-import { ResultsGrid, type QueryResult, type SortChangeData } from "./ResultsGrid";
+import { ResultsGrid, type QueryResult, type ResultsGridHandle, type SortChangeData } from "./ResultsGrid";
 import { ResultsCommandBar } from "./ResultsCommandBar";
 import type { RelatedEntityColumn } from "./AddColumnsPanel";
 import type { PagingNotice } from "../../api/paging";
 import { isAttributeInScope, useAdvancedFindOnly } from "../../state/metadataScope";
 import { NON_RETURNING_LINK_TYPES } from "../../model/fetchxmlRules";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
-import type { FetchNode } from "../../model/nodes";
+import type { ConditionNode, FetchNode } from "../../model/nodes";
+import type { NewCondition } from "../../model/columnFilters";
 import type { ParseResult, ParseWarning } from "../../model/fetchxmlParser";
 import {
 	validateFetchXmlSyntax,
@@ -226,6 +227,10 @@ interface PreviewTabsProps {
 	onRemoveColumns?: (columnKeys: string[]) => void;
 	/** Callback when user changes sort on a column */
 	onSortChange?: (data: SortChangeData) => void;
+	/** The results grid's column filters (#23) */
+	columnFilters?: ConditionNode[];
+	onAddColumnFilter?: (condition: NewCondition) => void;
+	onRemoveColumnFilters?: (conditionIds: string[]) => void;
 	/** Optional SaveViewButton to render in the toolbar */
 	saveViewButton?: ReactNode;
 	/** Optional SendToToolButton to render in the toolbar */
@@ -322,6 +327,9 @@ export function PreviewTabs({
 	onAddRelatedColumns,
 	onRemoveColumns,
 	onSortChange,
+	columnFilters,
+	onAddColumnFilter,
+	onRemoveColumnFilters,
 	saveViewButton,
 	sendToToolButton,
 	isCallee,
@@ -374,6 +382,11 @@ export function PreviewTabs({
 	// isEditorModeActive in state controls the disabled prop + renders; the ref holds the latest XML.
 	const [isEditorModeActive, setIsEditorModeActive] = useState(false);
 	const editorXmlRef = useRef<string>("");
+	// The command bar's Copy menu copies through the grid (#50)
+	const resultsGridRef = useRef<ResultsGridHandle>(null);
+	// Quick search over the loaded rows (#23), and how many rows it shows
+	const [searchText, setSearchText] = useState("");
+	const [visibleRowCount, setVisibleRowCount] = useState(0);
 	const [editorValidationError, setEditorValidationError] = useState<ParseIssueItem[] | null>(
 		null,
 	);
@@ -775,6 +788,9 @@ export function PreviewTabs({
 									onFetchWorkflows={onFetchWorkflows}
 									onExport={onExport}
 									onExportLocal={onExportLocal}
+									loadedCount={searchText.trim() ? visibleRowCount : (result?.rows.length ?? 0)}
+									searchText={searchText}
+									onCopyRows={(scope, mode) => resultsGridRef.current?.copyRows(scope, mode)}
 									canExport={canExport}
 									isExporting={isExporting}
 									exportDisabledReason={exportDisabledReason}
@@ -843,6 +859,7 @@ export function PreviewTabs({
 							)}
 							<div className={styles.gridCard}>
 								<ResultsGrid
+									ref={resultsGridRef}
 									result={result}
 									isLoading={isExecuting}
 									isLoadingMore={isLoadingMore}
@@ -856,6 +873,12 @@ export function PreviewTabs({
 									onSortChange={onSortChange}
 									onLoadMore={onLoadMore}
 									displaySettings={displaySettings}
+									searchText={searchText}
+									onSearchTextChange={setSearchText}
+									columnFilters={columnFilters}
+									onAddColumnFilter={onAddColumnFilter}
+									onRemoveColumnFilters={onRemoveColumnFilters}
+									onVisibleCountChange={setVisibleRowCount}
 								/>
 							</div>
 						</div>

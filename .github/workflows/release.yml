@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a vX.Y.Z (or vX.Y.Z-beta.N) tag publishes the package to npm through
+# trusted publishing (no npm token) and creates the GitHub Release. See RELEASING.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm trusted publishing + provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest # trusted publishing requires a GitHub-hosted runner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Use the latest npm (trusted publishing needs npm >= 11.5.1)
+        run: npm install -g npm@latest
+      - name: Check the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm test
+      - run: npm run validate
+      - run: npm run build
+      - name: Publish to npm
+        run: |
+          dist_tag=latest
+          case "$GITHUB_REF_NAME" in *-*) dist_tag=beta ;; esac
+          npm publish --provenance --access public --tag "$dist_tag"
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes $prerelease

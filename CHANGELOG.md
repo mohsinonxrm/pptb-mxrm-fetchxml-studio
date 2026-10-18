@@ -7,6 +7,207 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-17
+
+The v1.4.2 milestone: the features other users asked for, a results grid that works from the query, saved views that behave as documented, operators that follow the docs, and the CI/CD and release setup shared with Command Bar Studio and Dataverse Request Studio. It was iterated through `1.4.2-beta.1` to `1.4.2-beta.7` (detailed below). Behaviour follows Microsoft Learn and the live operator matrix. Valid FetchXML is never refused, and a Dataverse error is shown as it is.
+
+### ✨ Added
+
+- **Copy results to the clipboard (#50).**
+  - Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column.
+  - **Ctrl+C** copies the selected rows, or the focused cell.
+  - The command bar's **Copy** menu copies the selected or all loaded rows, as shown or raw.
+  - Rows copy as tab-separated values with headers, so they paste into Excel as cells.
+- **Column filters that write FetchXML (#23).**
+  - Clicking a column header opens a menu: **Sort**, **Filter by…** and **Clear filter**. Shift+click still adds the column to a multi-column sort.
+  - **Filter by…** uses the condition editor's operators and value pickers, adds a `<condition>` and runs the query again, so the filter covers every record.
+  - Active filters show as removable tags above the grid.
+  - Column filters are kept in their own `<filter type="and">`, apart from the conditions you built. Link-entity columns use `entityname`.
+- **Quick search over the loaded rows (#23).** It filters the loaded rows as you type, in any column, using the values as shown, and highlights matches.
+- **Operator help (#95).** The Operator info popover explains the selected operator and links to its doc page: the hierarchy operators, the hierarchy security operators, Contains Values and Equals User Language.
+
+### 🔧 Fixed
+
+- **Results grid columns come from the query (#91).** They used to come from the first row, which Dataverse returns without its null values.
+  - Lookups that are empty in row 1 now show their values.
+  - `<all-attributes />` columns from every loaded page are shown.
+  - `matchfirstrowusingcrossapply` columns appear and can be sorted and filtered.
+  - The local Excel export has exactly the grid's columns.
+- **Saved views (#93).**
+  - An unmodified loaded view runs by its view ID, so Retrieve All pages through it.
+  - Personal views shared with you appear in Load View.
+  - Every type of view is listed, each labelled.
+  - Saved layoutxml uses the documented `jump`, `object` and row `id`.
+  - System views are checked with `ValidateSavedQuery`, and views that aren't customizable can't be overwritten.
+  - **Save and Publish** publishes the view's entity, the documented `PublishXml` form. The `<savedqueries>` node it used to send isn't in the publish request schema. This also publishes any other pending customizations of that entity (#93 h).
+  - Load View reports views it can't load or had to change.
+- **Operators per attribute type (#95).** Memo attributes gain Equals, Not Equals, In and Not In, as do choices (multi-select), which use the option picker. All are documented, verified live, or both. No operator was removed.
+- **Tree (#24, #25).**
+  - Selecting a node no longer scrolls the tree to the bottom.
+  - A node added from an Add menu is selected and scrolled into view.
+- **Header sort for aggregate and aliased link-entity columns (#92)** was confirmed fixed by #114, and is now covered by tests.
+
+### 🏗️ Technical
+
+- **CI/CD and releases (#130).**
+  - CI runs typecheck, lint, tests, `pptb-validate`, the build and a package-contents check on every PR and on pushes to `dev`/`main`.
+  - Releases come from `v*` tags: npm trusted publishing with provenance, and GitHub Releases with generated notes (see `RELEASING.md`).
+  - Prettier config, `.gitattributes` (LF), `engines.node >=22`.
+- **Security (#77).** `tmp` was updated to 0.2.7, which clears the high-severity runtime `npm audit` finding.
+- **Tests.** 637 tests, up from 507. New suites:
+  - copy (`copyResults`);
+  - column filters (`columnFilters`);
+  - search highlighting;
+  - the operator matrix;
+  - grid columns (`resultColumns`);
+  - saved views (`savedViews`) and layoutxml.
+
+## [1.4.2-beta.7] - 2026-10-17
+
+### 🏗️ Technical
+
+- **The shared CI/CD and release standard, same as Command Bar Studio and Dataverse Request Studio (#130).**
+  - **CI** (`ci.yml`) runs on every PR and on pushes to `dev`/`main`: typecheck, lint, tests, `pptb-validate`, the build, then `check-pack.mjs`. That last step checks the package contains the required files (including `pptb.config.json` and `dist/icons/icon.svg`), contains no `src/`, `.map` or `.github/` files, and stays within a size budget of 3 MB packed / 10 MB unpacked.
+  - **Releases** (`release.yml`) come from `v*` tags:
+    - the tag must match `package.json`;
+    - npm publishing uses trusted publishing with provenance, and `-beta.N` versions go to the `beta` dist-tag;
+    - the GitHub Release has generated notes, and betas are marked as pre-releases.
+    - See `RELEASING.md`.
+  - **Repository tooling:**
+    - Added Prettier (`.prettierrc`, `format`/`format:check`), `.gitattributes` (LF), a `typecheck` script (`tsc -b`) and `engines.node >=22`.
+    - Removed the `coverage` and `finalize-package` scripts and `@vitest/coverage-v8`.
+    - Shorter PR template; the issue forms are trimmed to Bug and Feature.
+- **`tmp` updated to 0.2.7 in the lockfile, which clears the high-severity runtime `npm audit` finding (#77).** It wasn't exploitable in the tool: exceljs's browser build doesn't include tmp. The minimatch and brace-expansion findings were already fixed.
+
+## [1.4.2-beta.6] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Saved views (#93).**
+  - **An unmodified loaded view runs by its view ID again**, so Retrieve All pages through it with `@odata.nextLink`. The stored FetchXML is now compared in the tree's generated form, so default attributes such as `descending="false"` no longer cause a mismatch. The comparison is exact; it used to strip whitespace, which hid edits inside attribute values.
+  - **Personal views shared with you appear in Load View.** Before, only views owned by you or your teams were listed. Dataverse applies access rights when reading `userquery`, per Saved queries on Microsoft Learn.
+  - **Load View lists every type of view**, each labelled. Public views come first (default on top), then Advanced find, Associated, Quick find, Lookup and the others. Overwriting keeps the view's query type; Save As creates a public view.
+  - **Saved layoutxml now follows the documented form.**
+    - `object` (the entity type code) and the row `id` (the primary key) come from metadata.
+    - `jump` is the primary name attribute; it used to be the first column, which could be a lookup.
+    - A loaded view keeps its own `jump` and `imageproviderfunctionname`.
+    - A query without a column layout gets one generated, instead of an empty layoutxml.
+    - Attribute values are escaped.
+  - **Save View dialog:**
+    - High and critical performance messages show as errors (saving still isn't blocked).
+    - A validation call that fails now says so, instead of showing "0 validation messages".
+    - "FetchXML is valid" now reads "No performance issues found".
+  - **System views that aren't customizable** (`iscustomizable` false) can't be overwritten: the dialog explains this and points to Save As.
+  - **Load View reports problems:** an error when a view's FetchXML can't be loaded (it used to fail silently), and a warning listing what the tree had to change.
+
+### 🏗️ Technical
+
+- System views are checked with `ValidateSavedQuery` before they're saved. It's bound to the `savedqueries` collection (`savedqueries/Microsoft.Dynamics.CRM.ValidateSavedQuery`, per the Web API reference); it used to be called unbound, and in fact was never called. A rejection shows in the existing Save failed bar. There's no `userquery` binding, so personal views aren't validated this way.
+- New `model/savedViews.ts` (`isUnmodifiedView`, query type labels and order, managed property reading, Load View notices) and `buildViewLayoutXml` in `layoutxml.ts`, with tests.
+
+## [1.4.2-beta.5] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Grid columns come from the query, not from the first row (#91).** Dataverse leaves null values out of each row, so columns used to depend on which values row 1 happened to have.
+  - **Lookups:** a lookup that's empty in the first row no longer shows "—" in every row. Raw mode, "both" mode and Copy raw value work too, because the column is keyed `_name_value` from metadata.
+  - **Empty attributes:** every attribute in the query is a column, even when no loaded row has a value.
+  - **All attributes:** `<all-attributes />`, and a root entity without attribute elements, show every attribute that has a value in any loaded row, including link-entity all-attributes. Later pages add new columns at the end, and existing columns never move.
+  - **Cross-apply:** `matchfirstrowusingcrossapply` columns, which Dataverse returns by schema name, now appear, and can be sorted, filtered and removed.
+  - **Exists and in:** attributes inside `exists`/`in` link-entities are never grid columns. Those link types return no columns.
+  - **Excel export:** local Excel export has exactly the grid's columns, in the grid's order. It no longer adds the primary key on its own.
+
+### 🏗️ Technical
+
+- New `model/resultColumns.ts` (`resultColumns`, `orderByLayout`), with tests. The grid and the local Excel export both use it.
+  - `QueryResult` carries the query that ran instead of a precomputed `columns` list.
+  - `resolveColumn` maps cross-apply schema-name keys back to their attribute.
+- #92 (header sort writing invalid orders) was already fixed by #114. New tests cover aggregate link-entity columns, an aggregate attribute without an alias, and sorting a root lookup from its `_name_value` column.
+
+## [1.4.2-beta.4] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Operators now follow the docs for every attribute type (#95).**
+  - Multi-line text (Memo) attributes offer Equals, Not Equals, In and Not In. The operators reference covers them under "String", and they passed the live operator matrix.
+  - Choices (multi-select) attributes offer Equals, Not Equals, In and Not In, as listed in the choices doc, alongside Contains Values / Does Not Contain Values. Equals and Not Equals use the option picker.
+  - The Operator info popover explains the operator you picked, with a link to its page:
+    - the hierarchy operators: primary key of a hierarchical entity only, up to 100 levels;
+    - the hierarchy security operators: Hierarchy Depth;
+    - Contains Values: full-text indexing, so new records can take a few seconds to match;
+    - Equals User Language.
+
+### 🏗️ Technical
+
+- `operators.matrix.test.ts` asserts the operator list for 28 attribute cases. Each row cites the operators reference, the choices doc or the hierarchy doc, or the #87 live matrix.
+  - Operators are only ever added on that evidence, never removed.
+  - Kept on purpose: user and team operators on user lookups and Uniqueidentifier, because they're verified live.
+  - Not offered: Equals Business on Owner (accepted, but it can never match).
+
+## [1.4.2-beta.3] - 2026-10-17
+
+### ✨ Added
+
+- **Column filters that write FetchXML (#23).**
+  - Clicking a column header opens a menu: Sort (A to Z / Z to A; smallest to largest for numbers; oldest to newest for dates), **Filter by…**, and **Clear filter** when the column is filtered. Shift+click still adds the column to a multi-column sort.
+  - **Filter by…** opens the property panel's condition editor for that column: operators and values from the attribute's metadata.
+  - **Apply** adds a `<condition>` to the query and runs it again, so the filter covers every record.
+  - Filtered columns show a filter icon. Active filters show as tags above the grid ("Annual Revenue greater than 200000"; choice values by label). Dismiss a tag, or use **Clear all**, to remove filters and run the query again.
+- **Quick search over the loaded rows (#23).**
+  - The search box above the grid filters the loaded rows as you type, matching any column's value as shown, with matches highlighted.
+  - The info bar shows how many loaded rows match.
+  - The Copy menu's "All loaded rows" becomes "All matching rows".
+  - Rows the search hides are deselected, and scrolling doesn't load more pages while searching.
+
+### 🔧 Changed
+
+- **Clicking a column header opens the header menu instead of sorting straight away.** Sort is the menu's first item. Shift+click still sorts directly.
+
+### 🏗️ Technical
+
+- New `model/columnFilters.ts`, with tests. Column filters live in their own `<filter type="and">`:
+  - FetchXML allows one `<filter>` per entity, so the group nests inside the root filter. With no root filter, the group becomes the root filter.
+  - An `or` root filter is wrapped in an `and` filter, and unwrapped again when the last column filter is removed. The store keeps the wrapper's ID (`columnFilterWrapperId`), so an `and` filter the user wrote is never unwrapped.
+  - Link-entity columns use `entityname` (the alias, or the link-entity's name), per "Filters on link-entity" on Microsoft Learn.
+- The builder store tracks the group in `columnFilterId`, with actions `ADD_COLUMN_FILTER`, `REMOVE_COLUMN_FILTER` and `CLEAR_COLUMN_FILTERS`.
+  - A FetchXML load (editor sync) relocates the group by position when its conditions match.
+  - Loading a view, changing the entity or starting a new query drops the group.
+- AppShell runs the query once the filter change has committed.
+- `ConditionEditor` takes a `columnFilter` option: the column fixes the attribute, so the Entity, Attribute and Compare-to fields are hidden.
+- Search highlighting reads the search text from a context (`SearchHighlightContext`), so typing doesn't rebuild the grid's columns. The text cell renderers wrap their text in `HighlightText`.
+
+## [1.4.2-beta.2] - 2026-10-17
+
+### ✨ Added
+
+- **Copy results to the clipboard (#50).**
+  - **Right-click a cell** for: Copy value; Copy raw value (GUID, number, ISO date, option value or true/false, when it differs from what's shown); Copy row; Copy selected rows; Copy column. Copy column gives one value per line, e.g. to paste into an `in` condition.
+  - **Ctrl+C** copies the selected rows, or the focused cell when no rows are selected. Text you've highlighted copies as usual.
+  - The command bar's new **Copy** menu copies the selected rows or all loaded rows, with values **as shown** or **raw** (GUIDs, numbers, ISO dates).
+  - Rows copy as tab-separated values with the grid's headers, in the grid's column order, so they paste into Excel as cells. Values with tabs, line breaks or quotes are quoted the way Excel writes them.
+  - A toast confirms what was copied, or says the clipboard couldn't be written.
+
+### 🏗️ Technical
+
+- New `copyResults.ts` (TSV building, value text, clipboard write with a fallback to `toolboxAPI.utils.copyToClipboard`), with tests.
+- `ResultsGrid` is now a `forwardRef` exposing `copyRows(scope, mode)`; `PreviewTabs` connects it to the command bar's Copy menu.
+- The cell menu is a single controlled Fluent `Menu`, positioned at the mouse. When opened with the keyboard's context menu key, it's positioned at the cell.
+
+## [1.4.2-beta.1] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Selecting a node in the tree jumped to the bottom (#25).** After every selection, the tree scrolled to its *last* item, assuming the selected node was always the newest one. It now scrolls to the selected node, only within the tree, and only when the node is off-screen. Selecting a visible node no longer moves the tree.
+- **A node added from the Add menu wasn't selected (#24).**
+  - The builder selected the new attribute, order, filter or link-entity, but the menu click also reached the tree row behind it, which selected the row again.
+  - The new node is now selected, its properties open, and the tree scrolls to it.
+
+### 🏗️ Technical
+
+- `TreeView.tsx`:
+  - the scroll targets `[data-fui-tree-item-value=<node id>]` inside the tree container, with `block: "nearest"`, and its timer is cleared on the next selection;
+  - the Add menus' `MenuPopover`s stop click propagation, because React events bubble through portals to the row's `onClick`.
+
 ## [1.4.1] - 2026-10-17
 
 The v1.4.1 milestone: correctness against Dataverse, a complete properties panel, and the open bugs. It was iterated through `1.4.1-beta.1` to `1.4.1-beta.20` (detailed below). Every behaviour was checked against Microsoft Learn and a live Dataverse environment: valid FetchXML is never refused, only queries Dataverse rejects are blocked, and warnings are reserved for what can't be determined.

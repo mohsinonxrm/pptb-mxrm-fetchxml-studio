@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.4.1-blue)
+![Version](https://img.shields.io/badge/version-1.4.2-blue)
 [![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
@@ -24,9 +24,13 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 📊 Results Grid
 - **Virtualized DataGrid** — Handle large result sets with smooth scrolling (powered by react-window)
+- **Copy results** — Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column. **Ctrl+C** copies the selected rows, or the focused cell. The command bar's **Copy** menu copies the selected or all loaded rows, as shown or as raw values. Rows copy as tab-separated values with a header row, so they paste into Excel as cells
 - **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, with **Stop** to keep what's loaded so far. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. A failed page shows how many rows loaded, with **Retry**
 - **Rich cell rendering** — Power Apps-style display for lookups, option sets, dates, currency, and more
-- **Multi-column sorting** — Click headers to sort; Shift+click for multi-column sort. Each click writes a valid `<order>`: by alias in aggregate queries, with `entityname` for link-entity columns, and not at all for attribute types Dataverse can't sort (multi-select option sets)
+- **Column header menu** — Click a header for **Sort** (A to Z, smallest to largest or oldest to newest, by type), **Filter by…** and **Clear filter**. Shift+click a header still adds it to a multi-column sort.
+- **Column filters** — **Filter by…** adds a `<condition>` to the query and runs it again, so the filter covers every record, not just the loaded ones. Operators and value pickers follow the attribute's metadata, as in the property panel. Column filters are kept in their own `<filter type="and">` inside the root filter, apart from the conditions you built. An `or` root filter is wrapped so the column filters narrow the results; it's unwrapped again when the last column filter goes. Link-entity columns use `entityname`, which filters after the join. Active filters show as removable tags above the grid, and filtered columns show a filter icon
+- **Quick search** — The search box above the grid filters the loaded rows as you type: any column, values as shown, with matches highlighted. The info bar shows how many loaded rows match. Rows it hides are deselected, and scrolling doesn't load more pages while searching
+- **Multi-column sorting** — Shift+click headers for multi-column sort. Each click writes a valid `<order>`: by alias in aggregate queries, with `entityname` for link-entity columns, and not at all for attribute types Dataverse can't sort (multi-select option sets)
 - **Edit / Add columns** — Remove, reorder and add columns from the root entity or related entities (N:1 and 1:N); the tree and FetchXML change to match. Removing a column removes its attribute (aliased or not, root or link-entity), any sort on its alias, and an outer link-entity left empty. At least one column must remain (a query without attributes returns every attribute). Add columns isn't available in aggregate queries
 - **Link-entities without an alias** — Their columns show in the grid: Dataverse names them `{name}{N}.attribute`, and the grid uses the same names
 - **Row selection** — Select single or multiple records for bulk operations. Record actions use the table's primary key, which Dataverse returns automatically for regular queries; for aggregate and distinct queries (which return no record IDs) record actions are disabled with an explanation
@@ -181,12 +185,11 @@ npm run preview
 
 # Validate package manifest against PPTB registry rules
 npm run validate
-
-# Finalize for publishing (validate + build)
-npm run finalize-package
 ```
 
-**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (gold stamp) for prerelease versions such as `1.4.1-beta.8`, and `icons/icon.svg` for releases.
+**Releases.** CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests, PPTB validation, the build and a package-contents check on every pull request. Pushing a `vX.Y.Z` tag on `main` publishes to npm with provenance and creates the GitHub Release; see [RELEASING.md](RELEASING.md).
+
+**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (gold stamp) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
 
 **Dependencies.** `package-lock.json` is committed and pins every dependency with an integrity hash. Use `npm ci` for a clean install. After changing dependencies, run `npm install` and commit the updated lockfile.
 
@@ -196,12 +199,15 @@ npm run finalize-package
 # Unit tests (Vitest + jsdom): parser, serializer, rules, round-trip over the Microsoft Learn examples
 npm test
 
-# Watch mode / coverage
+# Watch mode
 npm run test:watch
-npm run coverage
 
-# Lint
+# Type check and lint
+npm run typecheck
 npm run lint
+
+# Formatting (Prettier)
+npm run format:check
 ```
 
 ### Debug Logging

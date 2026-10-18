@@ -1,26 +1,10 @@
 ## Summary
 
-What does this PR change and why?
+What changes and why. Link the issue (e.g. `Closes #123`).
 
-## Type of change
+## How it was tested
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Build/CI
+Commands run, and any live-org / PPTB verification.
 
-## How to test
-
-Steps to validate the change.
-
-## Screenshots (if UI)
-
-Before/After images or recordings.
-
-## Checklist
-
-- [ ] Added/updated tests (if applicable)
-- [ ] Updated docs (if applicable)
-- [ ] No secrets included (tokens/keys)
-- [ ] Accessibility considered (keyboard/nav/contrast)
+- [ ] `npm run typecheck`, `npm run lint` and `npm test` pass
+- [ ] `CHANGELOG.md` `Unreleased` updated (if user-facing)

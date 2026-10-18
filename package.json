@@ -1,6 +1,6 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
@@ -54,16 +54,20 @@
 		"SECURITY.md",
 		"pptb.config.json"
 	],
+	"engines": {
+		"node": ">=22"
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
-		"validate": "pptb-validate",
+		"preview": "vite preview",
+		"typecheck": "tsc -b",
 		"lint": "eslint . --max-warnings=0",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"coverage": "vitest run --coverage",
-		"preview": "vite preview",
-		"finalize-package": "npm run validate && npm run build"
+		"validate": "pptb-validate",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
 	},
 	"dependencies": {
 		"@fluentui-contrib/react-data-grid-react-window": "^1.4.2",
@@ -86,13 +90,13 @@
 		"@types/react-dom": "^18.3.7",
 		"@types/react-window": "^1.8.8",
 		"@vitejs/plugin-react": "^5.1.0",
-		"@vitest/coverage-v8": "^5.0.4",
 		"eslint": "^9.36.0",
 		"eslint-plugin-react-hooks": "^5.2.0",
 		"eslint-plugin-react-refresh": "^0.4.22",
 		"globals": "^16.4.0",
 		"jsdom": "^30.1.2",
 		"monaco-editor": "^0.54.0",
+		"prettier": "^3.9.10",
 		"scheduler": "^0.27.0",
 		"typescript": "~5.9.3",
 		"typescript-eslint": "^8.45.0",

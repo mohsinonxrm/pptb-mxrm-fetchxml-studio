@@ -6,9 +6,22 @@
  * live matrix of every operator × every Advanced Find attribute type (2026-10-15, #87). Combinations
  * Dataverse rejects aren't offered (e.g. contain-values on single-choice columns, user / team operators
  * on Customer lookups, hierarchy operators on anything but the primary key).
+ *
+ * #95: the reference's "String" type covers multi-line text (Memo) too, and the choices (multi-select)
+ * doc lists eq, ne, in and not-in besides contain-values / not-contain-values; all of them pass in the
+ * #87 matrix (Memo: address1_composite; multi-select: appaction.clienttype), so Memo and multi-select
+ * choices now offer them. Operator × type matrix test:
+ * operators.matrix.test.ts.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/multi-select-picklist#query-data-from-choices
  */
 
 import type { ConditionNode, OperatorType } from "./nodes";
+
+const HIERARCHY_DOCS = "https://learn.microsoft.com/power-apps/developer/data-platform/query-hierarchical-data";
+const CHOICES_DOCS = "https://learn.microsoft.com/power-apps/developer/data-platform/multi-select-picklist#query-data-from-choices";
+/** query-hierarchical-data: "a default limit of 100 recursions" for above / under and their variants */
+const HIERARCHY_NOTE =
+	"Only for the primary key of an entity with a hierarchical relationship. Dataverse follows up to 100 levels.";
 
 export interface OperatorDefinition {
 	value: OperatorType;
@@ -29,19 +42,26 @@ export interface OperatorDefinition {
 	hierarchyPrimaryKeyOnly?: boolean;
 	/** Needs hours or minutes: not for date-only behaviour (verified: 0x80048415) */
 	needsTime?: boolean;
+	/** Short help shown with the operator in the condition editor (#95), from the linked docs */
+	description?: string;
+	/** The Learn page behind description (the operators reference otherwise) */
+	docsUrl?: string;
 }
 
 /**
  * All available FetchXML operators with their metadata
  */
 export const ALL_OPERATORS: OperatorDefinition[] = [
-	// Comparison operators (most types)
+	// Comparison operators (most types). eq / ne / in / not-in on Memo: "String" in the reference, verified
+	// on address1_composite (#87 matrix); on multi-select choices: listed in the choices doc, verified (#87 matrix, #95)
 	{
 		value: "eq",
 		label: "Equals",
 		requiresValue: true,
 		applicableTypes: [
 			"String",
+			"Memo",
+			"MultiSelectPicklist",
 			"Integer",
 			"BigInt",
 			"Decimal",
@@ -65,6 +85,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresValue: true,
 		applicableTypes: [
 			"String",
+			"Memo",
+			"MultiSelectPicklist",
 			"Integer",
 			"BigInt",
 			"Decimal",
@@ -153,6 +175,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "string",
 		applicableTypes: [
 			"String",
+			"Memo",
+			"MultiSelectPicklist",
 			"Integer",
 			"BigInt",
 			"Decimal",
@@ -173,8 +197,11 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresValue: true,
 		requiresMultipleValues: true,
 		valueType: "string",
+		// The reference lists Number only; String, choices (choices doc) and the others are verified (#87)
 		applicableTypes: [
 			"String",
+			"Memo",
+			"MultiSelectPicklist",
 			"Integer",
 			"BigInt",
 			"Decimal",
@@ -268,7 +295,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		],
 	},
 
-	// Choice (multi-select picklist) operators
+	// Choice (multi-select picklist) operators. The choices doc: they rely on full-text indexing, so new
+	// records can take a few seconds to match.
 	{
 		value: "contain-values",
 		label: "Contains Values",
@@ -276,6 +304,9 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresMultipleValues: true,
 		valueType: "number",
 		applicableTypes: ["MultiSelectPicklist"],
+		description:
+			"Matches records where any of these options is selected. Uses full-text indexing, so new records can take a few seconds to match.",
+		docsUrl: CHOICES_DOCS,
 	},
 	{
 		value: "not-contain-values",
@@ -284,6 +315,9 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresMultipleValues: true,
 		valueType: "number",
 		applicableTypes: ["MultiSelectPicklist"],
+		description:
+			"Matches records where none of these options is selected. Uses full-text indexing, so new records can take a few seconds to match.",
+		docsUrl: CHOICES_DOCS,
 	},
 
 	// Date/Time operators (relative dates)
@@ -545,7 +579,10 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		applicableTypes: ["DateTime"],
 	},
 
-	// User/Team context operators (Lookup, Owner types)
+	// User/Team context operators (Lookup, Owner types). The reference types eq-userteams /
+	// eq-useroruserteams as Owner, but they're verified on user lookups (createdby) and Uniqueidentifier
+	// too, so those stay (#95: not narrowed). eq-businessid / ne-businessid on Owner are accepted but
+	// can't match (an owner is a user or team, never a business unit), so they aren't offered there.
 	{
 		value: "eq-userid",
 		label: "Equals Current User",
@@ -586,22 +623,34 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "eq-useroruserhierarchy",
 		label: "Equals User or User Hierarchy",
 		requiresValue: false,
+		// Customer: verified (#87 matrix), unlike the other user operators (0x8004034b)
 		applicableTypes: ["Lookup", "Owner", "Customer", "Uniqueidentifier"],
+		// query-hierarchical-data: hierarchy security operators, depth from the Hierarchy Depth setting
+		description:
+			"When hierarchy security is used: the current user or their reporting hierarchy, up to the Hierarchy Depth setting.",
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "eq-useroruserhierarchyandteams",
 		label: "Equals User or User Hierarchy and Teams",
 		requiresValue: false,
 		applicableTypes: ["Lookup", "Owner", "Uniqueidentifier"],
+		description:
+			"When hierarchy security is used: the current user and their teams, or their reporting hierarchy and its teams, up to the Hierarchy Depth setting.",
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "eq-userlanguage",
 		label: "Equals User Language",
 		requiresValue: false,
+		// The reference: for Language attributes (Integer with the Language format)
 		applicableTypes: ["Integer"],
+		description: "For a language attribute: matches the current user's UI language.",
+		docsUrl: "https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators#eq-userlanguage",
 	},
 
-	// Special operators
+	// Hierarchy operators: query-hierarchical-data ("only apply for the table relationship specifically
+	// defined as a hierarchical relationship"); the primary key only (verified, #87)
 	{
 		value: "under",
 		label: "Under (hierarchy)",
@@ -609,6 +658,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "guid",
 		applicableTypes: ["Uniqueidentifier"],
 		hierarchyPrimaryKeyOnly: true,
+		description: HIERARCHY_NOTE,
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "not-under",
@@ -617,6 +668,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "guid",
 		applicableTypes: ["Uniqueidentifier"],
 		hierarchyPrimaryKeyOnly: true,
+		description: HIERARCHY_NOTE,
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "above",
@@ -625,6 +678,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "guid",
 		applicableTypes: ["Uniqueidentifier"],
 		hierarchyPrimaryKeyOnly: true,
+		description: HIERARCHY_NOTE,
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "eq-or-under",
@@ -633,6 +688,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "guid",
 		applicableTypes: ["Uniqueidentifier"],
 		hierarchyPrimaryKeyOnly: true,
+		description: HIERARCHY_NOTE,
+		docsUrl: HIERARCHY_DOCS,
 	},
 	{
 		value: "eq-or-above",
@@ -641,6 +698,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "guid",
 		applicableTypes: ["Uniqueidentifier"],
 		hierarchyPrimaryKeyOnly: true,
+		description: HIERARCHY_NOTE,
+		docsUrl: HIERARCHY_DOCS,
 	},
 ];
 

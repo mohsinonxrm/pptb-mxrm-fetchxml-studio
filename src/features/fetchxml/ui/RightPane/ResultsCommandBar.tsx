@@ -15,6 +15,10 @@ import {
 	MenuPopover,
 	MenuList,
 	MenuItem,
+	MenuItemRadio,
+	MenuDivider,
+	MenuGroup,
+	MenuGroupHeader,
 	SplitButton,
 	MenuButton,
 	type MenuButtonProps,
@@ -30,6 +34,7 @@ import {
 	DocumentBulletList20Regular,
 	Info20Regular,
 	Stop20Regular,
+	Copy20Regular,
 } from "@fluentui/react-icons";
 import { ExcelIcon } from "../../../../shared/components/ExcelIcon";
 import { EditColumnsPanel } from "./EditColumnsPanel";
@@ -40,11 +45,13 @@ import {
 } from "./AddColumnsPanel";
 import type { LayoutColumn } from "../../model/layoutxml";
 import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
+import type { CopyValueMode } from "./copyResults";
 
 const useStyles = makeStyles({
 	toolbar: {
 		padding: "0",
 	},
+
 	splitButtonAppearance: {
 		// Use subtle appearance for split buttons to match toolbar
 	},
@@ -125,6 +132,12 @@ export interface CommandBarProps {
 	isRetrieveAllInProgress?: boolean;
 	/** Stop Retrieve All; the loaded rows stay (#60) */
 	onStopRetrieveAll?: () => void;
+	/** Rows loaded in the grid (the Copy menu's "All loaded rows") */
+	loadedCount?: number;
+	/** Copy the selected or all loaded rows to the clipboard (#50) */
+	onCopyRows?: (scope: "selected" | "all", mode: CopyValueMode) => void;
+	/** Quick search text (#23): the Copy menu then copies the matching rows */
+	searchText?: string;
 }
 
 export function ResultsCommandBar({
@@ -145,6 +158,9 @@ export function ResultsCommandBar({
 	onFetchWorkflows,
 	onExport,
 	onExportLocal,
+	loadedCount = 0,
+	onCopyRows,
+	searchText = "",
 	canExport = false,
 	isExporting = false,
 	exportDisabledReason,
@@ -175,6 +191,8 @@ export function ResultsCommandBar({
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
+	// Copy menu: values as shown in the grid, or raw (#50)
+	const [copyMode, setCopyMode] = useState<CopyValueMode>("shown");
 
 	// Workflow menu state
 	const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
@@ -387,6 +405,38 @@ export function ResultsCommandBar({
 				)}
 
 				<ToolbarDivider />
+
+				{/* Copy rows as tab-separated values with headers; pastes into Excel (#50) */}
+				<Menu
+					checkedValues={{ copyValues: [copyMode] }}
+					onCheckedValueChange={(_, data) => setCopyMode(data.checkedItems[0] as CopyValueMode)}
+				>
+					<MenuTrigger disableButtonEnhancement>
+						<MenuButton appearance="subtle" icon={<Copy20Regular />} disabled={loadedCount === 0}>
+							Copy
+						</MenuButton>
+					</MenuTrigger>
+					<MenuPopover>
+						<MenuList>
+							<MenuItem disabled={selectedCount === 0} onClick={() => onCopyRows?.("selected", copyMode)}>
+								Selected rows ({selectedCount})
+							</MenuItem>
+							<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
+								{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount})
+							</MenuItem>
+							<MenuDivider />
+							<MenuGroup>
+								<MenuGroupHeader>Values</MenuGroupHeader>
+								<MenuItemRadio name="copyValues" value="shown" persistOnClick>
+									As shown
+								</MenuItemRadio>
+								<MenuItemRadio name="copyValues" value="raw" persistOnClick>
+									Raw (GUIDs, numbers, ISO dates)
+								</MenuItemRadio>
+							</MenuGroup>
+						</MenuList>
+					</MenuPopover>
+				</Menu>
 
 				{/* Export Menu Button */}
 				<Menu>

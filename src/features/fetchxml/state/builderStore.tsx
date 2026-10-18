@@ -25,8 +25,17 @@ import {
 	parseLayoutXml,
 } from "../model/layoutxml";
 import { parseFetchXml, type ParseResult } from "../model/fetchxmlParser";
+import { generateFetchXml } from "../model/fetchxml";
 import type { SortPlan } from "../model/queryColumns";
 import { collectLinkEntityAliases, generateUniqueAlias } from "../model/aliasUtils";
+import {
+	addColumnFilter,
+	clearColumnFilters,
+	relocateColumnFilterGroup,
+	relocateColumnFilterWrapper,
+	removeColumnFilter,
+	type NewCondition,
+} from "../model/columnFilters";
 
 // Temporary ID generator
 let idCounter = 0;
@@ -47,17 +56,24 @@ type SelectedNode =
  * Information about a loaded view for execution optimization
  * Used to determine if the view can be executed via savedQuery/userQuery
  */
-interface LoadedViewState {
+export interface LoadedViewState {
 	/** View ID (savedqueryid or userqueryid) */
 	id: string;
 	/** View type for determining execution method */
 	type: "system" | "personal";
-	/** Original FetchXML from the view - used for comparison */
+	/**
+	 * The view's FetchXML as generated from the tree (generateFetchXml), compared with the query
+	 * about to run to decide whether the view runs by its ID (savedViews.ts isUnmodifiedView, #93)
+	 */
 	originalFetchXml: string;
 	/** Entity set name for the execution URL */
 	entitySetName: string;
 	/** View name for display purposes */
 	name: string;
+	/** The view's querytype (0 = public view); overwriting a view keeps it (#93) */
+	queryType?: number;
+	/** System views: false when the iscustomizable managed property doesn't allow updates (#93) */
+	isCustomizable?: boolean;
 }
 
 export interface BuilderState {
@@ -72,6 +88,10 @@ export interface BuilderState {
 	layoutNeedsSync: boolean;
 	/** When enabled, execution fetches all pages of results progressively */
 	retrieveAllRecords: boolean;
+	/** The <filter> holding the results grid's column filters, if any (#23, columnFilters.ts) */
+	columnFilterId: NodeId | null;
+	/** The "and" filter the column filters wrapped around an "or" root filter, to unwrap it later */
+	columnFilterWrapperId: NodeId | null;
 }
 
 type BuilderAction =
@@ -125,7 +145,10 @@ type BuilderAction =
 			descending: boolean;
 			isMultiSort: boolean;
 	  }
-	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean };
+	| { type: "SET_RETRIEVE_ALL_RECORDS"; enabled: boolean }
+	| { type: "ADD_COLUMN_FILTER"; condition: NewCondition }
+	| { type: "REMOVE_COLUMN_FILTER"; conditionId: NodeId }
+	| { type: "CLEAR_COLUMN_FILTERS" };
 
 const initialState: BuilderState = {
 	fetchQuery: null,
@@ -135,7 +158,28 @@ const initialState: BuilderState = {
 	columnConfig: null,
 	layoutNeedsSync: false,
 	retrieveAllRecords: false,
+	columnFilterId: null,
+	columnFilterWrapperId: null,
 };
+
+/** State with a changed query from the results grid's column filters: selection kept if still there */
+function withColumnFilterQuery(
+	state: BuilderState,
+	fetchQuery: FetchNode,
+	columnFilterId: NodeId | null,
+	columnFilterWrapperId: NodeId | null,
+): BuilderState {
+	const selectedNode = state.selectedNodeId ? findNodeById(fetchQuery, state.selectedNodeId) : null;
+	return {
+		...state,
+		fetchQuery,
+		columnFilterId,
+		columnFilterWrapperId: columnFilterId ? columnFilterWrapperId : null,
+		selectedNodeId: selectedNode ? state.selectedNodeId : fetchQuery.entity.id,
+		selectedNode: selectedNode ?? fetchQuery.entity,
+		loadedView: null, // Query modified
+	};
+}
 
 // Helper to find node by ID in the tree
 function findNodeById(node: unknown, targetId: NodeId): SelectedNode {
@@ -290,6 +334,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// new attributes afterwards. Otherwise generate the initial layout from the FetchXML.
 			const keepLayout = action.preserveLayout === true && state.columnConfig !== null;
 			const newConfig = keepLayout ? state.columnConfig : generateLayoutFromFetchXml(fetchNode);
+			// Every node has a new ID: keep the column filters if they're still there (#23)
+			const columnFilterId = relocateColumnFilterGroup(state.fetchQuery, fetchNode, state.columnFilterId);
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
@@ -298,6 +344,13 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId,
+				columnFilterWrapperId: relocateColumnFilterWrapper(
+					state.fetchQuery,
+					fetchNode,
+					state.columnFilterWrapperId,
+					columnFilterId,
+				),
 			};
 		}
 
@@ -327,6 +380,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId: null,
+				columnFilterWrapperId: null,
 			};
 		}
 
@@ -376,6 +431,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
+				columnFilterId: null,
+				columnFilterWrapperId: null,
 			};
 		}
 
@@ -808,6 +865,29 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 		}
 
+		case "ADD_COLUMN_FILTER": {
+			if (!state.fetchQuery) return state;
+			const result = addColumnFilter(state.fetchQuery, state.columnFilterId, action.condition, generateId);
+			return withColumnFilterQuery(state, result.fetch, result.groupId, result.wrapperId ?? state.columnFilterWrapperId);
+		}
+
+		case "REMOVE_COLUMN_FILTER": {
+			if (!state.fetchQuery) return state;
+			const result = removeColumnFilter(
+				state.fetchQuery,
+				state.columnFilterId,
+				action.conditionId,
+				state.columnFilterWrapperId,
+			);
+			return withColumnFilterQuery(state, result.fetch, result.groupId, state.columnFilterWrapperId);
+		}
+
+		case "CLEAR_COLUMN_FILTERS": {
+			if (!state.fetchQuery) return state;
+			const fetch = clearColumnFilters(state.fetchQuery, state.columnFilterId, state.columnFilterWrapperId);
+			return withColumnFilterQuery(state, fetch, null, null);
+		}
+
 		case "REMOVE_NODE": {
 			if (!state.fetchQuery) return state;
 
@@ -980,15 +1060,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 	}
 }
 
-/** View info for load operations */
-export interface ViewLoadInfo {
-	id: string;
-	type: "system" | "personal";
-	entitySetName: string;
-	name: string;
-	/** The FetchXML string at the point of save/load — generated by the caller using real entity metadata */
-	originalFetchXml: string;
-}
+/** View info after a save; originalFetchXml is generated from the tree (generateFetchXml) */
+export type ViewLoadInfo = LoadedViewState;
+
+/** A view being loaded: its FetchXML for comparison is generated from the parsed tree (#93) */
+export type ViewSourceInfo = Omit<ViewLoadInfo, "originalFetchXml">;
 
 export function BuilderProvider({ children }: { children: ReactNode }) {
 	const [state, dispatch] = useReducer(builderReducer, initialState);
@@ -1046,18 +1122,17 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 				}
 				return result;
 			},
-			loadView: (xmlString: string, viewInfo: ViewLoadInfo, layoutXml?: string): ParseResult => {
+			loadView: (xmlString: string, viewInfo: ViewSourceInfo, layoutXml?: string): ParseResult => {
 				const result = parseFetchXml(xmlString);
 				if (result.success && result.fetchNode) {
 					dispatch({
 						type: "LOAD_VIEW",
 						fetchNode: result.fetchNode,
 						viewInfo: {
-							id: viewInfo.id,
-							type: viewInfo.type,
-							originalFetchXml: xmlString,
-							entitySetName: viewInfo.entitySetName,
-							name: viewInfo.name,
+							...viewInfo,
+							// The stored FetchXML has defaults the generator leaves out (version, mapping,
+							// descending="false"...): compare in generated form, or the view never runs by ID (#93)
+							originalFetchXml: generateFetchXml(result.fetchNode),
 						},
 						layoutXml,
 					});
@@ -1068,15 +1143,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			setLoadedView: (viewInfo: ViewLoadInfo) =>
 				dispatch({
 					type: "SET_LOADED_VIEW",
-					viewInfo: {
-						id: viewInfo.id,
-						type: viewInfo.type,
-						// originalFetchXml is supplied by the caller, which has entity metadata available.
-						// The store never derives/guesses the primary key itself.
-						originalFetchXml: viewInfo.originalFetchXml,
-						entitySetName: viewInfo.entitySetName,
-						name: viewInfo.name,
-					},
+					// originalFetchXml is supplied by the caller, generated from the tree that was saved
+					viewInfo: { ...viewInfo },
 				}),
 			setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
 			updateColumnWidth: (columnName: string, width: number) =>
@@ -1089,6 +1157,9 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 				dispatch({ type: "SET_SORT", plan, descending, isMultiSort }),
 			setRetrieveAllRecords: (enabled: boolean) =>
 				dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
+			addColumnFilter: (condition: NewCondition) => dispatch({ type: "ADD_COLUMN_FILTER", condition }),
+			removeColumnFilter: (conditionId: NodeId) => dispatch({ type: "REMOVE_COLUMN_FILTER", conditionId }),
+			clearColumnFilters: () => dispatch({ type: "CLEAR_COLUMN_FILTERS" }),
 		}),
 		[],
 	);

@@ -19,7 +19,7 @@ body:
     attributes:
       label: Problem statement
       description: What problem are you trying to solve?
-      placeholder: "As a user, I want to..."
+      placeholder: "As a maker, I want to..."
     validations:
       required: true
 
@@ -42,15 +42,15 @@ body:
     attributes:
       label: UX / UI notes (Fluent UI v9)
       description: Any UI expectations, accessibility concerns, keyboard shortcuts, etc.
-      placeholder: "e.g., CommandBar action, panel layout, copy-to-clipboard behavior..."
+      placeholder: "e.g., toolbar action, properties panel layout, results grid behavior..."
     validations:
       required: false
 
   - type: textarea
     attributes:
-      label: Dataverse considerations (if relevant)
-      description: Tables, metadata, paging, throttling, batch, permissions, etc.
-      placeholder: "e.g., requires $expand, needs paging via @odata.nextLink..."
+      label: FetchXML / Dataverse considerations (if relevant)
+      description: FetchXML elements and attributes, metadata, paging, aggregates, permissions, etc.
+      placeholder: "e.g., needs link-entity type 'exists', affects paging cookies, requires view metadata..."
     validations:
       required: false
 
@@ -69,3 +69,4 @@ body:
       label: Additional context
       description: Screenshots, examples, references to FetchXML Builder behavior, etc.
     validations:
+      required: false

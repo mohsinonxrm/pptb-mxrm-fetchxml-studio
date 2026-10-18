@@ -35,13 +35,14 @@ import {
 } from "@fluentui/react-icons";
 import {
 	validateFetchXmlExpression,
+	validateSavedQuery,
 	checkSavedQueryPrivileges,
 	checkUserQueryPrivileges,
 	createSavedQuery,
 	updateSavedQuery,
 	createUserQuery,
 	updateUserQuery,
-	publishSavedQuery,
+	publishEntityViews,
 	addSolutionComponent,
 	getUnmanagedSolutions,
 	COMPONENT_TYPE_SAVEDQUERY,
@@ -49,6 +50,7 @@ import {
 	type Solution,
 } from "../../api/pptbClient";
 import { SolutionPicker } from "./SolutionPicker";
+import { canOverwriteView, getValidationStatus } from "../../model/savedViews";
 
 const useStyles = makeStyles({
 	surface: {
@@ -140,6 +142,17 @@ const useStyles = makeStyles({
 
 export type SaveViewDialogMode = "save" | "saveAs";
 
+/** The loaded view a Save overwrites */
+export interface SaveViewDialogLoadedView {
+	id: string;
+	type: "system" | "personal";
+	name: string;
+	/** querytype of the view (0 = public view); ValidateSavedQuery checks the query for it (#93) */
+	queryType?: number;
+	/** System views: false when the view isn't customizable, so it can't be overwritten (#93) */
+	isCustomizable?: boolean;
+}
+
 interface SaveViewDialogProps {
 	/** Whether the dialog is open */
 	open: boolean;
@@ -162,15 +175,12 @@ interface SaveViewDialogProps {
 	/** Primary ID attribute */
 	primaryIdAttribute: string;
 	/** Currently loaded view (for Save mode) */
-	loadedView: {
-		id: string;
-		type: "system" | "personal";
-		name: string;
-	} | null;
+	loadedView: SaveViewDialogLoadedView | null;
 }
 
 interface ValidationState {
-	status: "idle" | "validating" | "valid" | "warning" | "error";
+	/** "unavailable": the ValidateFetchXmlExpression call itself failed (errorMessage says so) */
+	status: "idle" | "validating" | "valid" | "warning" | "error" | "unavailable";
 	messages: ValidatorIssue[];
 	errorMessage?: string;
 }
@@ -222,6 +232,8 @@ export function SaveViewDialog({
 
 	// Check if this is a "Save" to existing view
 	const isOverwriteMode = mode === "save" && loadedView !== null;
+	// A system view whose iscustomizable managed property is false can't be updated (#93)
+	const isOverwriteBlocked = isOverwriteMode && loadedView !== null && !canOverwriteView(loadedView);
 
 	// Initialize form when dialog opens
 	useEffect(() => {
@@ -283,23 +295,14 @@ export function SaveViewDialog({
 			try {
 				const result = await validateFetchXmlExpression(fetchXml);
 				const messages = result.ValidationResults?.Messages || [];
-
-				if (messages.length === 0) {
-					setValidation({ status: "valid", messages: [] });
-				} else {
-					// Check for critical/high severity
-					const hasCritical = messages.some((m) => m.Severity >= 2);
-					setValidation({
-						status: hasCritical ? "warning" : "warning",
-						messages,
-					});
-				}
+				// Performance advice: high / critical show as errors but never block saving (#93)
+				setValidation({ status: getValidationStatus(messages), messages });
 			} catch (error) {
 				// Validation API call failed - this doesn't mean the FetchXML is invalid
 				// Just skip validation and allow the user to proceed
 				console.warn("FetchXML validation unavailable:", error);
 				setValidation({
-					status: "warning",
+					status: "unavailable",
 					messages: [],
 					errorMessage: "Validation unavailable - FetchXML will be validated when saved",
 				});
@@ -331,6 +334,7 @@ export function SaveViewDialog({
 	const canSave = useMemo(() => {
 		if (!name.trim()) return false;
 		if (isSaving) return false;
+		if (isOverwriteBlocked) return false;
 		if (viewType === "system") {
 			// System views require canWrite privilege (covers both create and update)
 			if (!systemPrivileges?.canWrite) return false;
@@ -339,7 +343,7 @@ export function SaveViewDialog({
 			if (!personalPrivileges?.canWrite) return false;
 		}
 		return true;
-	}, [name, isSaving, viewType, systemPrivileges, personalPrivileges]);
+	}, [name, isSaving, isOverwriteBlocked, viewType, systemPrivileges, personalPrivileges]);
 
 	// Handle save
 	const handleSave = useCallback(async () => {
@@ -372,7 +376,12 @@ export function SaveViewDialog({
 					});
 				}
 			} else {
-				// System view
+				// System view: Dataverse validates the query for the view's query type first, and its
+				// error is shown as the save error (#93). Overwrites keep the view's querytype.
+				// https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/validatesavedquery
+				const queryType = isOverwriteMode && loadedView ? (loadedView.queryType ?? 0) : 0;
+				await validateSavedQuery(fetchXml, queryType);
+
 				if (isOverwriteMode && loadedView) {
 					await updateSavedQuery(loadedView.id, {
 						name: name.trim(),
@@ -404,7 +413,8 @@ export function SaveViewDialog({
 
 				// Publish if requested
 				if (shouldPublish) {
-					await publishSavedQuery(viewId);
+					// Publishes the view's entity: the documented PublishXml form (#93 h)
+					await publishEntityViews(entityLogicalName);
 				}
 			}
 
@@ -469,21 +479,26 @@ export function SaveViewDialog({
 										<CheckmarkCircleRegular
 											style={{ color: tokens.colorPaletteGreenForeground1 }}
 										/>
-										<Text>FetchXML is valid</Text>
+										{/* ValidateFetchXmlExpression only checks performance (#93) */}
+										<Text>No performance issues found</Text>
 									</>
 								)}
-								{validation.status === "warning" && (
+								{(validation.status === "warning" || validation.status === "error") && (
 									<>
-										<WarningRegular style={{ color: tokens.colorPaletteYellowForeground1 }} />
+										{validation.status === "error" ? (
+											<ErrorCircleRegular style={{ color: tokens.colorPaletteRedForeground1 }} />
+										) : (
+											<WarningRegular style={{ color: tokens.colorPaletteYellowForeground1 }} />
+										)}
 										<Text>
 											{validation.messages.length} validation{" "}
 											{validation.messages.length === 1 ? "message" : "messages"}
 										</Text>
 									</>
 								)}
-								{validation.status === "error" && (
+								{validation.status === "unavailable" && (
 									<>
-										<ErrorCircleRegular style={{ color: tokens.colorPaletteRedForeground1 }} />
+										<InfoRegular style={{ color: tokens.colorNeutralForeground3 }} />
 										<Text>{validation.errorMessage}</Text>
 									</>
 								)}
@@ -570,8 +585,17 @@ export function SaveViewDialog({
 									)}
 								</>
 							)}{" "}
+							{/* Not customizable: the view can only be saved as a copy (#93) */}
+							{isOverwriteBlocked && loadedView && (
+								<MessageBar intent="error" className={styles.overwriteWarning}>
+									<MessageBarBody>
+										<MessageBarTitle>Can't overwrite this view</MessageBarTitle>
+										"{loadedView.name}" isn't customizable. Use Save As to save a copy.
+									</MessageBarBody>
+								</MessageBar>
+							)}
 							{/* Overwrite Warning */}
-							{isOverwriteMode && loadedView && (
+							{isOverwriteMode && !isOverwriteBlocked && loadedView && (
 								<MessageBar intent="warning" className={styles.overwriteWarning}>
 									<MessageBarBody>
 										<MessageBarTitle>Overwrite Warning</MessageBarTitle>

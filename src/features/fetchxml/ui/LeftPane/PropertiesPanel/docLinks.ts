@@ -39,6 +39,7 @@ export const DOCS = {
 	quickFind: `${DATA_PLATFORM}/quick-find?tabs=fetchxml`,
 	quickFindLimits: `${DATA_PLATFORM}/quick-find?tabs=fetchxml#quick-find-record-limits`,
 	hierarchy: `${DATA_PLATFORM}/query-hierarchical-data`,
+	choices: `${DATA_PLATFORM}/multi-select-picklist#query-data-from-choices`,
 	dataRetention: "https://learn.microsoft.com/power-apps/maker/data-platform/data-retention-overview",
 	reportPrefiltering:
 		"https://learn.microsoft.com/dynamics365/customerengagement/on-premises/analytics/improve-report-performance-by-using-filters?view=op-9-1",

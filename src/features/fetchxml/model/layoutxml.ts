@@ -29,6 +29,8 @@ export interface LayoutColumn {
 	disableSorting?: boolean;
 	/** Image provider for icon columns */
 	imageProviderName?: string;
+	/** JavaScript function of the image provider web resource (imageproviderfunctionname) */
+	imageProviderFunctionName?: string;
 	/** Original display name from metadata (for UI) */
 	displayName?: string;
 }
@@ -135,6 +137,7 @@ export function parseLayoutXml(xml: string): LayoutXmlConfig {
 		const width = cell.getAttribute("width");
 		const disableSorting = cell.getAttribute("disableSorting");
 		const imageProviderName = cell.getAttribute("imageproviderwebresource");
+		const imageProviderFunctionName = cell.getAttribute("imageproviderfunctionname");
 
 		if (name) {
 			columns.push({
@@ -142,6 +145,7 @@ export function parseLayoutXml(xml: string): LayoutXmlConfig {
 				width: width ? parseInt(width, 10) : DEFAULT_WIDTHS.default,
 				disableSorting: disableSorting === "1",
 				imageProviderName: imageProviderName || undefined,
+				imageProviderFunctionName: imageProviderFunctionName || undefined,
 			});
 		}
 	});
@@ -160,41 +164,88 @@ export function parseLayoutXml(xml: string): LayoutXmlConfig {
 	};
 }
 
+function escapeXmlAttribute(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/"/g, "&quot;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
 /**
  * Generate LayoutXML string from a LayoutXmlConfig
  */
 export function generateLayoutXml(config: LayoutXmlConfig): string {
+	const attr = (name: string, value: string | number) => `${name}="${escapeXmlAttribute(String(value))}"`;
 	const cells = config.columns
 		.map((col) => {
-			const attrs: string[] = [`name="${col.name}"`, `width="${col.width}"`];
+			const attrs: string[] = [attr("name", col.name), attr("width", col.width)];
 			if (col.disableSorting) {
 				attrs.push('disableSorting="1"');
 			}
 			if (col.imageProviderName) {
-				attrs.push(`imageproviderwebresource="${col.imageProviderName}"`);
+				attrs.push(attr("imageproviderwebresource", col.imageProviderName));
+			}
+			if (col.imageProviderFunctionName) {
+				attrs.push(attr("imageproviderfunctionname", col.imageProviderFunctionName));
 			}
 			return `    <cell ${attrs.join(" ")} />`;
 		})
 		.join("\n");
 
-	const gridAttrs: string[] = [`name="${config.gridName}"`];
+	const gridAttrs: string[] = [attr("name", config.gridName)];
 	if (config.objectTypeCode !== undefined) {
-		gridAttrs.push(`object="${config.objectTypeCode}"`);
+		gridAttrs.push(attr("object", config.objectTypeCode));
 	}
 	if (config.jumpAttribute) {
-		gridAttrs.push(`jump="${config.jumpAttribute}"`);
+		gridAttrs.push(attr("jump", config.jumpAttribute));
 	}
 	gridAttrs.push(`select="${config.enableSelection ? "1" : "0"}"`);
 	gridAttrs.push(`icon="${config.showIcon ? "1" : "0"}"`);
 	gridAttrs.push(`preview="${config.enablePreview ? "1" : "0"}"`);
 
-	const rowId = config.primaryIdAttribute || "id";
+	// The row id is the Entity's primary key attribute; an unknown key is left out rather than
+	// written as a made-up "id" attribute (#93). buildViewLayoutXml always supplies it.
+	const rowAttrs = [`name="result"`];
+	if (config.primaryIdAttribute) rowAttrs.push(attr("id", config.primaryIdAttribute));
 
 	return `<grid ${gridAttrs.join(" ")}>
-  <row name="result" id="${rowId}">
+  <row ${rowAttrs.join(" ")}>
 ${cells}
   </row>
 </grid>`;
+}
+
+/** The root Entity's metadata a saved view's layoutxml needs */
+export interface ViewLayoutEntity {
+	objectTypeCode: number;
+	primaryIdAttribute: string;
+	primaryNameAttribute?: string;
+}
+
+/**
+ * LayoutXML to save with a view (#93). Follows the documented layout:
+ * <grid name="resultset" object="{ObjectTypeCode}" jump="{PrimaryNameAttribute}" select="1"
+ * icon="1" preview="1"><row name="result" id="{PrimaryIdAttribute}"><cell .../></row></grid>
+ * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#create-views
+ *  - object and the row id always come from the root Entity's metadata.
+ *  - jump keeps a loaded view's own value; otherwise it is the primary name attribute (it was the
+ *    first column, which can be a lookup or a link-entity column).
+ *  - Without a column layout yet (e.g. only link-entity attributes), one is generated from the
+ *    query instead of saving an empty layoutxml.
+ */
+export function buildViewLayoutXml(
+	config: LayoutXmlConfig | null,
+	fetchQuery: FetchNode,
+	entity: ViewLayoutEntity,
+): string {
+	const layout = config ?? generateLayoutFromFetchXml(fetchQuery, entity.primaryIdAttribute);
+	return generateLayoutXml({
+		...layout,
+		objectTypeCode: entity.objectTypeCode,
+		primaryIdAttribute: entity.primaryIdAttribute,
+		jumpAttribute: layout.jumpAttribute || entity.primaryNameAttribute || undefined,
+	});
 }
 
 /**
@@ -232,7 +283,8 @@ export function generateLayoutFromFetchXml(
 
 	return {
 		gridName: "resultset",
-		jumpAttribute: columns.length > 0 ? columns[0].name : undefined,
+		// jump is the primary name attribute, from metadata when the view is saved (buildViewLayoutXml)
+		jumpAttribute: undefined,
 		enableSelection: true,
 		showIcon: true,
 		enablePreview: true,

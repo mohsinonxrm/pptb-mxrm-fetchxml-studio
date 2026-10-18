@@ -6,6 +6,7 @@
 
 import { Switch, Badge, Label, SkeletonItem, makeStyles, tokens } from "@fluentui/react-components";
 import type { AttributeMetadata } from "../../api/pptbClient";
+import { HighlightText } from "./HighlightText";
 
 const useStyles = makeStyles({
 	booleanCell: {
@@ -160,7 +161,7 @@ export function LookupCellRenderer({
 
 	// Prefer formatted value (just the name string)
 	if (formattedValue) {
-		return <span className={styles.lookupName}>{String(formattedValue)}</span>;
+		return <span className={styles.lookupName}><HighlightText text={String(formattedValue)} /></span>;
 	}
 
 	// Fallback to raw value (structured object)
@@ -172,7 +173,7 @@ export function LookupCellRenderer({
 
 	return (
 		<div className={styles.lookupCell}>
-			<span className={styles.lookupName}>{lookupValue.Name || "—"}</span>
+			<span className={styles.lookupName}><HighlightText text={lookupValue.Name || "—"} /></span>
 			{lookupValue.LogicalName && (
 				<span className={styles.lookupType}>{lookupValue.LogicalName}</span>
 			)}
@@ -197,7 +198,7 @@ export function NumberCellRenderer({
 
 	// Prefer formatted value (already includes currency symbol, etc.)
 	if (formattedValue) {
-		return <span className={styles.numberCell}>{String(formattedValue)}</span>;
+		return <span className={styles.numberCell}><HighlightText text={String(formattedValue)} /></span>;
 	}
 
 	// Fallback to manual formatting
@@ -255,7 +256,7 @@ export function DateTimeCellRenderer({
 
 	// Prefer formatted value
 	if (formattedValue) {
-		return <span className={styles.dateCell}>{String(formattedValue)}</span>;
+		return <span className={styles.dateCell}><HighlightText text={String(formattedValue)} /></span>;
 	}
 
 	// Fallback to manual formatting
@@ -318,7 +319,7 @@ export function TextCellRenderer({
 		return <span>—</span>;
 	}
 
-	return <span className={styles.truncateText}>{String(displayValue)}</span>;
+	return <span className={styles.truncateText}><HighlightText text={String(displayValue)} /></span>;
 }
 
 /**

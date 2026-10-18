@@ -1,5 +1,5 @@
 name: 🐛 Bug report
-description: Something isn't working as expected.
+description: Something in FetchXML Studio isn't working as expected.
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 assignees: []
@@ -8,13 +8,13 @@ body:
     attributes:
       value: |
         Thanks for reporting! Please provide enough detail so we can reproduce the issue.
-        **Do not include secrets** (tokens, client secrets, Authorization headers).
+        **Do not include secrets** (tokens, client secrets, Authorization headers) or customer data.
 
   - type: checkboxes
     attributes:
       label: Pre-flight checks
       options:
-        - label: I searched existing issues and discussions and didn’t find a duplicate.
+        - label: I searched existing issues and discussions and didn't find a duplicate.
           required: true
         - label: I'm using the latest released version (or I've confirmed the issue exists on main).
           required: true
@@ -23,26 +23,16 @@ body:
 
   - type: input
     attributes:
-      label: App/Extension version
+      label: FetchXML Studio version
       description: Version number or commit SHA.
-      placeholder: "e.g., v0.6.1 or 1a2b3c4"
-    validations:
-      required: true
-
-  - type: dropdown
-    attributes:
-      label: Host environment
-      options:
-        - Power Platform ToolBox (PPTB)
-        - Standalone (web)
-        - Other (please specify below)
+      placeholder: "e.g., 1.4.1 or 1a2b3c4"
     validations:
       required: true
 
   - type: input
     attributes:
-      label: Browser (if applicable)
-      placeholder: "e.g., Edge 121 / Chrome 120"
+      label: PPTB version
+      placeholder: "e.g., 1.2.7"
     validations:
       required: false
 
@@ -52,6 +42,23 @@ body:
       placeholder: "e.g., Windows 11 / macOS 14"
     validations:
       required: false
+
+  - type: dropdown
+    attributes:
+      label: Area
+      options:
+        - Query builder (tree / properties panel)
+        - FetchXML editor / Parse to Tree
+        - Validation
+        - Query execution / paging
+        - Results grid
+        - Export (Excel / CSV / clipboard)
+        - Views (load / save)
+        - Metadata loading (tables / columns / relationships)
+        - Performance
+        - Other (please specify below)
+    validations:
+      required: true
 
   - type: textarea
     attributes:
@@ -66,9 +73,9 @@ body:
       label: Steps to reproduce
       description: Provide minimal steps to reproduce the issue.
       placeholder: |
-        1. Open...
-        2. Click...
-        3. Run query...
+        1. Open FetchXML Studio in PPTB
+        2. Select table / paste FetchXML...
+        3. Execute...
         4. Observe...
     validations:
       required: true
@@ -89,6 +96,27 @@ body:
 
   - type: textarea
     attributes:
+      label: FetchXML (optional)
+      description: The smallest query that reproduces the issue (redact names if needed).
+      render: xml
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Dataverse error / paging details (optional)
+      description: HTTP status, error code and message shown in the UI, request/correlation ID, and whether you hit row limits or paging (sanitize).
+      placeholder: |
+        Status: 400
+        Error code: 0x...
+        Message: ...
+        Returns exactly 5000 rows / more records link present
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
       label: Screenshots or recordings (optional)
       description: Drag and drop images/video here.
     validations:
@@ -97,7 +125,7 @@ body:
   - type: textarea
     attributes:
       label: Console logs (optional)
-      description: Paste relevant browser/devtools logs (sanitize sensitive info).
+      description: Paste relevant devtools logs (sanitize sensitive info).
       render: shell
     validations:
       required: false
@@ -107,3 +135,4 @@ body:
       label: Additional context
       description: Anything else that might help.
     validations:
+      required: false

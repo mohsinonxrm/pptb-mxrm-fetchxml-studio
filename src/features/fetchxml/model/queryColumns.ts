@@ -60,13 +60,27 @@ export function collectQueryColumns(fetch: FetchNode): QueryColumn[] {
 	return columns;
 }
 
-/** The query column behind a result/layout column key (also accepts the _name_value lookup form). */
+/**
+ * The query column behind a result/layout column key. Also accepts the _name_value lookup form, and the
+ * schema name a matchfirstrowusingcrossapply link-entity returns its attributes by (#91): the logical
+ * name is the schema name in lowercase.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/join-tables#related-table-property-and-attribute-names-are-inconsistent
+ */
 export function resolveColumn(fetch: FetchNode, key: string): QueryColumn | undefined {
 	const columns = collectQueryColumns(fetch);
 	const direct = columns.find((c) => c.key === key);
 	if (direct) return direct;
 	const lookup = /^_(.+)_value$/.exec(key)?.[1];
-	return lookup ? columns.find((c) => c.isRoot && !c.attribute.alias && c.attribute.name === lookup) : undefined;
+	const root = lookup ? columns.find((c) => c.isRoot && !c.attribute.alias && c.attribute.name === lookup) : undefined;
+	if (root || key.includes(".")) return root;
+	const name = key.toLowerCase();
+	return columns.find(
+		(c) =>
+			!c.isRoot &&
+			!c.attribute.alias &&
+			(c.container as LinkEntityNode).linkType === "matchfirstrowusingcrossapply" &&
+			c.attribute.name === name,
+	);
 }
 
 export interface RemoveColumnsPlan {

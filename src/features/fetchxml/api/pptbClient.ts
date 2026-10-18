@@ -24,6 +24,7 @@ import { debugLog } from "../../../shared/utils/debug";
 import { responseHasFormattedValues } from "./formattedValues";
 import { metadataCache } from "../state/cache";
 import { nextLinkToQueryPath, parseFetchXmlPagingCookie } from "./paging";
+import { readManagedPropertyValue, sortViewsByQueryType } from "../model/savedViews";
 
 export interface EntityMetadata {
 	LogicalName: string;
@@ -682,7 +683,7 @@ export async function executeNextLink(nextLink: string): Promise<FetchXmlResult>
 /**
  * Execute a System View (savedquery) by its ID
  * Uses the optimized ?savedQuery={id} parameter instead of fetching and executing fetchXml
- * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/saved-queries#use-a-saved-query-in-fetchxml
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/retrieve-and-execute-predefined-queries#predefined-queries
  */
 export async function executeSystemView(
 	entitySetName: string,
@@ -712,7 +713,7 @@ export async function executeSystemView(
 /**
  * Execute a Personal View (userquery) by its ID
  * Uses the optimized ?userQuery={id} parameter instead of fetching and executing fetchXml
- * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/saved-queries#use-a-saved-query-in-fetchxml
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/retrieve-and-execute-predefined-queries#predefined-queries
  */
 export async function executePersonalView(
 	entitySetName: string,
@@ -1176,6 +1177,10 @@ export interface SavedView {
 	type: "system" | "personal";
 	description?: string;
 	isDefault?: boolean;
+	/** The querytype column: 0 for public views (savedViews.ts getQueryTypeLabel, #93) */
+	queryType?: number;
+	/** System views: the iscustomizable managed property; false means it can't be overwritten (#93) */
+	isCustomizable?: boolean;
 }
 
 /**
@@ -1188,7 +1193,7 @@ export interface LoadedViewInfo {
 	id: string;
 	/** View type for determining execution method */
 	type: "system" | "personal";
-	/** Original FetchXML from the view - used for comparison */
+	/** The view's FetchXML as stored in Dataverse; it is compared in generated form once parsed (#93) */
 	originalFetchXml: string;
 	/** Entity set name for the execution URL */
 	entitySetName: string;
@@ -1196,6 +1201,10 @@ export interface LoadedViewInfo {
 	name: string;
 	/** Optional LayoutXML for column configuration */
 	layoutxml?: string;
+	/** The view's querytype, kept when it is overwritten (#93) */
+	queryType?: number;
+	/** System views: false when the view isn't customizable, so it can't be overwritten (#93) */
+	isCustomizable?: boolean;
 }
 
 /**
@@ -1312,9 +1321,17 @@ export function generateLayoutXml(
 	);
 }
 
+/** Views with FetchXML to load; a record without any can't be loaded into the tree. */
+function hasFetchXml(record: Record<string, unknown>): boolean {
+	return typeof record.fetchxml === "string" && record.fetchxml.trim() !== "";
+}
+
 /**
- * Get System Views (savedquery) for an entity
- * Only returns public views (querytype = 0) that are active and not hidden
+ * Get System Views (savedquery) for an entity: every active, published view of every query type.
+ * Public views (querytype 0) come first; the others (Advanced Find, Associated, Quick Find,
+ * Lookup, Outlook / offline filters and templates...) are listed with a type label rather than
+ * hidden (#93, savedViews.ts). The querytype column stores all of them:
+ * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#types-of-views
  * @param entityLogicalName The logical name of the entity (e.g., "account")
  */
 export async function getSystemViews(entityLogicalName: string): Promise<SavedView[]> {
@@ -1327,26 +1344,29 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 	try {
 		// Query savedquery entity using queryData for full OData support
 		// returnedtypecode: Entity logical name as string
-		// querytype = 0: Public views (not lookup views, quickfind, etc.)
 		// componentstate = 0: Published (not unpublished/deleted)
 		// statecode = 0: Active views only
 		const query =
-			`savedqueries?$select=savedqueryid,name,fetchxml,layoutxml,isdefault` +
-			`&$filter=(returnedtypecode eq '${entityLogicalName}' and querytype eq 0 and componentstate eq 0 and statecode eq 0)` +
-			`&$orderby=isdefault desc,name asc`;
+			`savedqueries?$select=savedqueryid,name,fetchxml,layoutxml,isdefault,querytype,iscustomizable` +
+			`&$filter=(returnedtypecode eq '${entityLogicalName}' and componentstate eq 0 and statecode eq 0)` +
+			`&$orderby=name asc`;
 
 		debugLog("viewAPI", `Query: ${query}`);
 
 		const result = await window.dataverseAPI!.queryData(query);
 
-		const views: SavedView[] = (result.value || []).map((record) => ({
-			id: record.savedqueryid as string,
-			name: record.name as string,
-			fetchxml: record.fetchxml as string,
-			layoutxml: record.layoutxml as string | undefined,
-			type: "system" as const,
-			isDefault: record.isdefault as boolean | undefined,
-		}));
+		const views: SavedView[] = sortViewsByQueryType(
+			(result.value || []).filter(hasFetchXml).map((record) => ({
+				id: record.savedqueryid as string,
+				name: record.name as string,
+				fetchxml: record.fetchxml as string,
+				layoutxml: record.layoutxml as string | undefined,
+				type: "system" as const,
+				isDefault: record.isdefault as boolean | undefined,
+				queryType: record.querytype as number | undefined,
+				isCustomizable: readManagedPropertyValue(record.iscustomizable),
+			})),
+		);
 
 		debugLog(
 			"viewAPI",
@@ -1361,8 +1381,12 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 }
 
 /**
- * Get Personal Views (userquery) for an entity
- * Returns views owned by the current user or their teams
+ * Get Personal Views (userquery) for an entity: every active one the user can read. That includes
+ * views shared with the user or their teams, not only the ones they own: a user query "can be
+ * assigned and shared with other users, and can be viewed by other users depending on the query's
+ * access privileges" (#93). Retrieving records already applies those access rights.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/saved-queries
+ * Like system views, every query type is listed, public views first (savedViews.ts).
  * @param entityLogicalName The logical name of the entity (e.g., "account")
  */
 export async function getPersonalViews(entityLogicalName: string): Promise<SavedView[]> {
@@ -1376,24 +1400,25 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 		// Query userquery entity using queryData for full OData support
 		// returnedtypecode: Entity logical name as string
 		// statecode = 0: Active views only
-		// querytype = 0: Saved views (not quick find)
-		// EqualUserOrUserTeams: Views owned by current user or their teams
 		const query =
-			`userqueries?$select=userqueryid,name,fetchxml,layoutxml` +
-			`&$filter=(statecode eq 0 and querytype eq 0 and returnedtypecode eq '${entityLogicalName}' and Microsoft.Dynamics.CRM.EqualUserOrUserTeams(PropertyName='ownerid'))` +
+			`userqueries?$select=userqueryid,name,fetchxml,layoutxml,querytype` +
+			`&$filter=(statecode eq 0 and returnedtypecode eq '${entityLogicalName}')` +
 			`&$orderby=name asc`;
 
 		debugLog("viewAPI", `Query: ${query}`);
 
 		const result = await window.dataverseAPI!.queryData(query);
 
-		const views: SavedView[] = (result.value || []).map((record) => ({
-			id: record.userqueryid as string,
-			name: record.name as string,
-			fetchxml: record.fetchxml as string,
-			layoutxml: record.layoutxml as string | undefined,
-			type: "personal" as const,
-		}));
+		const views: SavedView[] = sortViewsByQueryType(
+			(result.value || []).filter(hasFetchXml).map((record) => ({
+				id: record.userqueryid as string,
+				name: record.name as string,
+				fetchxml: record.fetchxml as string,
+				layoutxml: record.layoutxml as string | undefined,
+				type: "personal" as const,
+				queryType: record.querytype as number | undefined,
+			})),
+		);
 
 		debugLog(
 			"viewAPI",
@@ -1494,8 +1519,11 @@ export async function validateFetchXmlExpression(
 }
 
 /**
- * Validate SavedQuery before creation/update
- * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/validatesavedquery
+ * Validate a system view's FetchXML before it is created or updated (#93). Throws Dataverse's error
+ * when the query isn't valid for the query type. The action is bound to the savedquery collection
+ * (POST savedqueries/Microsoft.Dynamics.CRM.ValidateSavedQuery) and has no userquery binding, so
+ * it is used for system views only.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/validatesavedquery
  */
 export async function validateSavedQuery(fetchXml: string, queryType: number = 0): Promise<void> {
 	if (!isDataverseAvailable()) {
@@ -1506,6 +1534,7 @@ export async function validateSavedQuery(fetchXml: string, queryType: number = 0
 
 	try {
 		await window.dataverseAPI!.execute({
+			entityName: "savedquery",
 			operationName: "ValidateSavedQuery",
 			operationType: "action",
 			parameters: {
@@ -1825,19 +1854,22 @@ export async function addSolutionComponent(
 export const COMPONENT_TYPE_SAVEDQUERY = 26;
 
 /**
- * Publish a specific savedquery
- * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/publishxml
+ * Publish a system view by publishing its entity (#93 h). PublishXml publishes entities, ribbons,
+ * dashboards, option sets, the site map and web resources; a savedquery node isn't documented, and
+ * publishing the entity includes its views (and any other pending customizations of that entity).
+ * @see https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.publishxmlrequest.parameterxml
+ * @see https://learn.microsoft.com/power-apps/developer/model-driven-apps/publish-request-schema
  */
-export async function publishSavedQuery(savedQueryId: string): Promise<void> {
+export async function publishEntityViews(entityLogicalName: string): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
 
-	debugLog("viewAPI", `📡 PublishXml for SavedQuery: ${savedQueryId}`);
+	debugLog("viewAPI", `📡 PublishXml for entity: ${entityLogicalName}`);
 
 	try {
-		// Build ParameterXml to publish a specific savedquery
-		const parameterXml = `<importexportxml><savedqueries><savedquery>{${savedQueryId}}</savedquery></savedqueries></importexportxml>`;
+		const name = entityLogicalName.replace(/[^a-z0-9_]/gi, "");
+		const parameterXml = `<importexportxml><entities><entity>${name}</entity></entities></importexportxml>`;
 
 		await window.dataverseAPI!.execute({
 			operationName: "PublishXml",
@@ -1847,9 +1879,9 @@ export async function publishSavedQuery(savedQueryId: string): Promise<void> {
 			},
 		});
 
-		debugLog("viewAPI", `✅ SavedQuery published: ${savedQueryId}`);
+		debugLog("viewAPI", `✅ Entity published: ${name}`);
 	} catch (error) {
-		console.error("publishSavedQuery: Failed:", error);
+		console.error("publishEntityViews: Failed:", error);
 		throw error;
 	}
 }

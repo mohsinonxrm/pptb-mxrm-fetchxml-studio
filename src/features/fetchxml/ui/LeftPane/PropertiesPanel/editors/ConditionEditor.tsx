@@ -50,9 +50,14 @@ interface ConditionEditorProps {
 	/** Query-rule findings for this node (fetchxmlRules.ts) */
 	findings: readonly RuleFinding[];
 	onUpdate: (updates: Record<string, unknown>) => void;
+	/**
+	 * A results-grid column filter (#23): the column fixes the attribute, so only the operator and
+	 * value(s) are shown. The condition isn't in the tree yet; entityName is the column's entity.
+	 */
+	columnFilter?: boolean;
 }
 
-export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpdate }: ConditionEditorProps) {
+export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpdate, columnFilter = false }: ConditionEditorProps) {
 	const styles = useEditorStyles();
 	const [selectedAttribute, setSelectedAttribute] = useState<AttributeMetadata | null>(null);
 
@@ -125,14 +130,17 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	const canCompareToAttribute = operatorComparesAttributes && compatibleTypes.length > 0;
 	const valueofFinding = findingFor(findings, "valueof");
 	const attributeType = selectedAttribute?.AttributeType;
+	// Multi-select choices are AttributeType Virtual; the type name tells them apart (#87)
+	const isMultiSelect = selectedAttribute?.AttributeTypeName?.Value === "MultiSelectPicklistType";
 
-	const showEntity = (isInRootFilter && linkEntityReferences.length > 0) || !!node.entityname;
+	const showEntity = !columnFilter && ((isInRootFilter && linkEntityReferences.length > 0) || !!node.entityname);
 	const entityLabel = node.entityname
 		? (entityTarget?.displayLabel ?? node.entityname)
 		: `This entity (${entityName})`;
 
 	const renderLiteralValue = () => {
-		if (attributeType && OPTION_SET_TYPES.has(attributeType)) {
+		// eq / ne on a multi-select choice: one option value, the form verified live (#95)
+		if ((attributeType && OPTION_SET_TYPES.has(attributeType)) || isMultiSelect) {
 			return (
 				<OptionSetValuePicker
 					entityLogicalName={effectiveEntityName}
@@ -192,7 +200,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				<SectionHeading>Condition</SectionHeading>
+				{!columnFilter && <SectionHeading>Condition</SectionHeading>}
 
 				{showEntity && (
 					<InfoField
@@ -238,32 +246,47 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 					</InfoField>
 				)}
 
-				<InfoField
-					label="Attribute"
-					required
-					validation={!node.attribute ? { state: "error", message: "Choose an attribute to filter on." } : undefined}
-					info={<Info text={`The logical name of the ${effectiveEntityName} attribute to filter on.`} href={DOCS.condition} />}
-				>
-					<AttributePicker
-						entityLogicalName={effectiveEntityName}
-						value={node.attribute}
-						onChange={(logicalName) =>
-							// A different attribute can have a different type: reset operator and value, keep the mode
-							onUpdate({
-								attribute: logicalName || undefined,
-								operator: undefined,
-								value: undefined,
-								valueof: comparesToAttribute ? "" : undefined,
-							})
-						}
-						placeholder="Select an attribute"
-					/>
-				</InfoField>
+				{!columnFilter && (
+					<InfoField
+						label="Attribute"
+						required
+						validation={!node.attribute ? { state: "error", message: "Choose an attribute to filter on." } : undefined}
+						info={<Info text={`The logical name of the ${effectiveEntityName} attribute to filter on.`} href={DOCS.condition} />}
+					>
+						<AttributePicker
+							entityLogicalName={effectiveEntityName}
+							value={node.attribute}
+							onChange={(logicalName) =>
+								// A different attribute can have a different type: reset operator and value, keep the mode
+								onUpdate({
+									attribute: logicalName || undefined,
+									operator: undefined,
+									value: undefined,
+									valueof: comparesToAttribute ? "" : undefined,
+								})
+							}
+							placeholder="Select an attribute"
+						/>
+					</InfoField>
+				)}
 
 				<InfoField
 					label="Operator"
 					required
-					info={<Info text="The operators listed depend on the attribute's type." href={DOCS.operators} />}
+					info={
+						<Info
+							text={[
+								operatorDef?.description,
+								isMultiSelect && !operatorDef?.description
+									? "For a choices attribute, contain-values matches records where any of the given options is selected."
+									: undefined,
+								"The operators listed depend on the attribute's type.",
+							]
+								.filter(Boolean)
+								.join(" ")}
+							href={operatorDef?.docsUrl ?? (isMultiSelect ? DOCS.choices : DOCS.operators)}
+						/>
+					}
 				>
 					<Dropdown
 						value={operatorDef?.label ?? node.operator ?? ""}
@@ -383,7 +406,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 					</InfoField>
 				)}
 
-				{isSingleValue && (operatorComparesAttributes || comparesToAttribute) && (
+				{isSingleValue && !columnFilter && (operatorComparesAttributes || comparesToAttribute) && (
 					<InfoField
 						label="Compare to"
 						validation={valueofFinding?.state === "error" ? valueofFinding : undefined}

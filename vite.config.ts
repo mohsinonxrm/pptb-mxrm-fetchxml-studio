@@ -47,10 +47,5 @@ export default defineConfig({
 		// jsdom provides DOMParser, which the FetchXML parser relies on.
 		environment: "jsdom",
 		include: ["src/**/*.test.ts"],
-		coverage: {
-			provider: "v8",
-			include: ["src/features/fetchxml/model/**", "src/features/fetchxml/engine/**"],
-			reporter: ["text-summary", "html"],
-		},
 	},
 });

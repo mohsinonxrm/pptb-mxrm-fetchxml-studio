@@ -84,6 +84,29 @@ describe("planSortByColumn", () => {
 		const agg = parse(`<fetch aggregate="true"><entity name="account"><attribute name="industrycode" alias="ind" groupby="true" /><attribute name="accountid" alias="n" aggregate="count" /></entity></fetch>`);
 		expect(planSortByColumn(agg, "n")).toEqual({ spec: { alias: "n" } });
 	});
+	// #92: aggregate queries sort by alias, also for link-entity columns. An aggregate order alias is
+	// resolved in the order's own scope, or in the entityname link-entity (verified, fetchxmlRules.ts).
+	describe("aggregate link-entity columns (#92)", () => {
+		const agg = parse(`<fetch aggregate="true"><entity name="opportunity"><attribute name="opportunityid" alias="n" aggregate="count" /><link-entity name="account" from="accountid" to="parentaccountid" alias="a"><attribute name="name" alias="acct" groupby="true" /></link-entity><link-entity name="systemuser" from="systemuserid" to="owninguser"><attribute name="fullname" alias="owner" groupby="true" /></link-entity></entity></fetch>`);
+		it("aliased link-entity: alias with entityname, never attribute", () => {
+			expect(planSortByColumn(agg, "acct")).toEqual({ spec: { alias: "acct", entityname: "a" } });
+		});
+		it("unaliased link-entity with a unique name: alias with its name", () => {
+			expect(planSortByColumn(agg, "owner")).toEqual({ spec: { alias: "owner", entityname: "systemuser" } });
+		});
+		it("unaliased link-entity with a repeated name: alias inside the link-entity", () => {
+			const twice = parse(`<fetch aggregate="true"><entity name="account"><attribute name="accountid" alias="n" aggregate="count" /><link-entity name="systemuser" from="systemuserid" to="owninguser"><attribute name="fullname" alias="o" groupby="true" /></link-entity><link-entity name="systemuser" from="systemuserid" to="createdby"><attribute name="fullname" alias="c" groupby="true" /></link-entity></entity></fetch>`);
+			expect(planSortByColumn(twice, "c")).toMatchObject({ spec: { alias: "c" }, insideLink: { id: twice.entity.links[1].id } });
+		});
+		it("an attribute without an alias isn't sortable in an aggregate query", () => {
+			const noAlias = parse(`<fetch aggregate="true"><entity name="account"><attribute name="industrycode" groupby="true" /><attribute name="accountid" alias="n" aggregate="count" /></entity></fetch>`);
+			expect(planSortByColumn(noAlias, "industrycode")).toHaveProperty("reason");
+		});
+	});
+	it("root lookups sort by attribute name from their _name_value column (#91)", () => {
+		const lookup = parse(`<fetch><entity name="account"><attribute name="primarycontactid" /></entity></fetch>`);
+		expect(planSortByColumn(lookup, "_primarycontactid_value")).toEqual({ spec: { attribute: "primarycontactid" } });
+	});
 	it("multi-select option sets aren't sortable (0x80050224)", () => {
 		const ms = parse(`<fetch><entity name="appaction"><attribute name="clienttype" /></entity></fetch>`);
 		expect(planSortByColumn(ms, "clienttype", { typeName: "MultiSelectPicklistType" })).toHaveProperty("reason");

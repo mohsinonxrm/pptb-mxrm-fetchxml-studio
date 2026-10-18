@@ -18,7 +18,11 @@ import {
 	type MenuButtonProps,
 } from "@fluentui/react-components";
 import { SaveRegular, SaveArrowRightRegular, SendRegular } from "@fluentui/react-icons";
-import { SaveViewDialog, type SaveViewDialogMode } from "../Dialogs/SaveViewDialog";
+import {
+	SaveViewDialog,
+	type SaveViewDialogLoadedView,
+	type SaveViewDialogMode,
+} from "../Dialogs/SaveViewDialog";
 import { useEditorSync } from "../RightPane/editorSync";
 
 const useStyles = makeStyles({
@@ -48,11 +52,7 @@ interface SaveViewButtonProps {
 	/** Primary ID attribute for LayoutXML */
 	primaryIdAttribute: string;
 	/** Loaded view info (for Save/overwrite) */
-	loadedView: {
-		id: string;
-		type: "system" | "personal";
-		name: string;
-	} | null;
+	loadedView: SaveViewDialogLoadedView | null;
 	/** Callback after successful save */
 	onSaveComplete?: (viewId: string, viewType: "system" | "personal", viewName: string) => void;
 	/** Disabled state */

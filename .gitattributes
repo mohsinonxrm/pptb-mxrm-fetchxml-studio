@@ -1,0 +1,14 @@
+# Normalize line endings to LF in the repository (Windows-safe)
+* text=auto eol=lf
+
+# Explicitly handle binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text eol=lf
+*.ico binary
+
+# Explicitly keep Windows-specific scripts with CRLF if needed
+*.bat text eol=crlf
+*.cmd text eol=crlf
