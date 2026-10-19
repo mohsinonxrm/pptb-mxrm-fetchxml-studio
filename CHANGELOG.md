@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-19
+
+Hotfix for 1.4.1 and 1.4.2.
+
+### 🔧 Fixed
+
+- **Picking a condition's attribute no longer crashes the tool.** In 1.4.1 and 1.4.2, choosing an attribute for a condition blanked the whole tool with "Cannot read properties of undefined (reading 'replace')". Changing a condition's entity or clearing its attribute did the same.
+  - **Cause:** picking an attribute rightly clears the operator, because the new attribute's type may not support it, and changing the entity clears the attribute. The FetchXML serializer, which runs on every change for the preview, escaped those cleared values without checking for them.
+  - **Fix:** a missing value is now written as empty (`operator=""`), so the preview shows the condition as unfinished, and its editor still asks for the attribute and operator.
+  - Reproduced and verified in Power Platform ToolBox Desktop against a live environment.
+- **An unfinished condition says what's missing.** It reads "Choose an attribute" or "Choose an operator", where it used to say "The 'undefined' operator needs a value". The tree shows it as "name (no operator)" instead of "name undefined".
+- **Results grid:** the column filter chips no longer throw when a filter condition's operator has been cleared in Properties.
+
+### 🏗️ Technical
+
+- **New test:** every string field of every node in a rich query is blanked (undefined and empty), one at a time. Each variant then goes through the serializer, the query rules, the column and filter helpers, a re-parse and every code generator: 91 cases.
+
 ## [1.4.2] - 2026-10-17
 
 The v1.4.2 milestone: the features other users asked for, a results grid that works from the query, saved views that behave as documented, operators that follow the docs, and the CI/CD and release setup shared with Command Bar Studio and Dataverse Request Studio. It was iterated through `1.4.2-beta.1` to `1.4.2-beta.7` (detailed below). Behaviour follows Microsoft Learn and the live operator matrix. Valid FetchXML is never refused, and a Dataverse error is shown as it is.

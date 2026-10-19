@@ -606,7 +606,9 @@ export function TreeView({
 	const renderConditionNode = (condition: ConditionNode) => {
 		// Format the display text based on operator and value
 		const requiresValue = operatorRequiresValue(condition.operator);
-		let displayText = `${condition.attribute} ${condition.operator}`;
+		// Mid-edit a condition can have no attribute or operator yet (picking an attribute clears the
+		// operator): say so instead of printing "undefined" (1.4.3)
+		let displayText = `${condition.attribute || "(no attribute)"} ${condition.operator || "(no operator)"}`;
 
 		if (requiresValue && condition.valueof) {
 			// Compared to another attribute
