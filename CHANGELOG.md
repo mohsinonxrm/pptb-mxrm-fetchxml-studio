@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.14] - 2026-10-19
+
+### 🔧 Fixed
+
+- **Picking a condition's attribute no longer crashes the tool (#217, the 1.4.3 hotfix).** The 1.5 betas had the same bug as 1.4.1 and 1.4.2: choosing a condition's attribute, changing its entity or clearing its attribute blanked the tool with "Cannot read properties of undefined (reading 'replace')".
+  - A missing value is now written as empty (`operator=""`). An unfinished condition says "Choose an attribute" / "Choose an operator", and the tree shows "name (no operator)".
+  - The results grid's column filter chips no longer throw when a condition's operator is cleared.
+  - A new test blanks every string field of every node and runs every pure consumer (91 cases).
+  - Verified in Power Platform ToolBox Desktop. Merged forward from `main` (1.4.3).
+
 ## [1.5.0-beta.13] - 2026-10-18
 
 ### 🔧 Fixed
