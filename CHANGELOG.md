@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.14] - 2026-10-19
+
+### 🔧 Fixed
+
+- **Picking a condition's attribute no longer crashes the tool (#217, the 1.4.3 hotfix).** The 1.5 betas had the same bug as 1.4.1 and 1.4.2: choosing a condition's attribute, changing its entity or clearing its attribute blanked the tool with "Cannot read properties of undefined (reading 'replace')".
+  - A missing value is now written as empty (`operator=""`). An unfinished condition says "Choose an attribute" / "Choose an operator", and the tree shows "name (no operator)".
+  - The results grid's column filter chips no longer throw when a condition's operator is cleared.
+  - A new test blanks every string field of every node and runs every pure consumer (91 cases).
+  - Verified in Power Platform ToolBox Desktop. Merged forward from `main` (1.4.3).
+
 ## [1.5.0-beta.13] - 2026-10-18
 
 ### 🔧 Fixed
@@ -264,6 +274,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two cross-apply queries Dataverse rejects are now flagged before they run (verified live 2026-10-17).**
   - An order inside a `matchfirstrowusingcrossapply` link-entity (0x80041121). Order from the entity with `entityname` instead; that works.
   - An aliased attribute in one, which fails with a generic SQL error (0x80044150) unless a condition with `entityname` targets the link-entity. With such a condition the alias works, so that case isn't flagged.
+
+## [1.4.3] - 2026-10-19
+
+Hotfix for 1.4.1 and 1.4.2.
+
+### 🔧 Fixed
+
+- **Picking a condition's attribute no longer crashes the tool.** In 1.4.1 and 1.4.2, choosing an attribute for a condition blanked the whole tool with "Cannot read properties of undefined (reading 'replace')". Changing a condition's entity or clearing its attribute did the same.
+  - **Cause:** picking an attribute rightly clears the operator, because the new attribute's type may not support it, and changing the entity clears the attribute. The FetchXML serializer, which runs on every change for the preview, escaped those cleared values without checking for them.
+  - **Fix:** a missing value is now written as empty (`operator=""`), so the preview shows the condition as unfinished, and its editor still asks for the attribute and operator.
+  - Reproduced and verified in Power Platform ToolBox Desktop against a live environment.
+- **An unfinished condition says what's missing.** It reads "Choose an attribute" or "Choose an operator", where it used to say "The 'undefined' operator needs a value". The tree shows it as "name (no operator)" instead of "name undefined".
+- **Results grid:** the column filter chips no longer throw when a filter condition's operator has been cleared in Properties.
+
+### 🏗️ Technical
+
+- **New test:** every string field of every node in a rich query is blanked (undefined and empty), one at a time. Each variant then goes through the serializer, the query rules, the column and filter helpers, a re-parse and every code generator: 91 cases.
 
 ## [1.4.2] - 2026-10-17
 
