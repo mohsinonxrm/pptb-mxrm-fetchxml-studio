@@ -462,7 +462,11 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 						text={`Compare to: ${node.valueof || "(empty)"}`}
 						validation={{
 							state: "warning",
-							message: valueofFinding?.message ?? `The '${node.operator}' operator doesn't compare to a value.`,
+							message:
+								valueofFinding?.message ??
+								(node.operator
+									? `The '${node.operator}' operator doesn't compare to a value.`
+									: "Choose an operator first: eq, ne, gt, ge, lt or le compare to another attribute."),
 						}}
 						onRemove={() => onUpdate({ valueof: undefined })}
 					/>

@@ -381,8 +381,19 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 							: `'${qualifier}' isn't the alias of a joined link-entity. To compare to another entity's attribute, give its link-entity an alias and use alias.attribute (Dataverse rejects it: 0x80040216).` });
 				}
 			}
-			// Value shape per operator (verified live 2026-10-15, #87)
+			// Value shape per operator (verified live 2026-10-15, #87). A condition the user is still
+			// editing can have no attribute or operator yet (picking an attribute clears the operator):
+			// say what's missing, as the parser does, instead of judging the value of an unknown operator.
 			for (const condition of filter.conditions) {
+				if (!condition.attribute) {
+					push({ element: "condition", attribute: "attribute", nodeId: condition.id, severity: "error", kind: "invalid",
+						message: "Choose an attribute: a condition needs one (Dataverse rejects it without one)." });
+				}
+				if (!condition.operator) {
+					push({ element: "condition", attribute: "operator", nodeId: condition.id, severity: "error", kind: "invalid",
+						message: "Choose an operator: a condition needs one (Dataverse rejects it without one)." });
+					continue;
+				}
 				const issue = conditionValueIssue(condition);
 				if (issue) {
 					push({ element: "condition", attribute: "value", nodeId: condition.id, severity: issue.severity, kind: issue.severity === "error" ? "invalid" : "ignored",

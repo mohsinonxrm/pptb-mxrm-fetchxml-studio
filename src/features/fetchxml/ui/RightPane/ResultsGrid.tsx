@@ -1038,7 +1038,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			const name = displaySettings?.useLogicalNames
 				? `${c.entityname ? `${c.entityname}.` : ""}${c.attribute}`
 				: `${attribute?.DisplayName?.UserLocalizedLabel?.Label ?? c.attribute}${c.entityname ? ` (${c.entityname})` : ""}`;
-			const operator = (ALL_OPERATORS.find((o) => o.value === c.operator)?.label ?? c.operator).toLowerCase();
+			// A column filter edited in Properties can have its operator cleared (1.4.3: never throw here)
+			const operator = (ALL_OPERATORS.find((o) => o.value === c.operator)?.label ?? c.operator ?? "").toLowerCase();
 			const values = c.value === undefined || c.value === null ? [] : Array.isArray(c.value) ? c.value : [c.value];
 			// Choice values show as their labels, taken from a loaded row with the same value
 			const column = copyColumns.find((col) => {
