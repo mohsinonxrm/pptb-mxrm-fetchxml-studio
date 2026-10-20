@@ -29,6 +29,37 @@ import {
 } from "./treeUtils";
 import { generateFxsSyncCode, type FxsSyncFormat } from "../engine/fetchxmlCodeGenerators";
 import type { FetchNode } from "./nodes";
+import {
+	advisorEntityNames,
+	collectAdvisories,
+	mergeDataverseCheck,
+	nodeEntities,
+	nodeLocations,
+} from "./advisories";
+import { adviseQueryMetadata, type AdvisorMetadata } from "./queryAdvisor";
+
+/** Metadata for the Advisories metadata rules (1.6, #97): choice, Memo, calculated and the primary key */
+const ADVISOR_METADATA: AdvisorMetadata = new Map([
+	[
+		"account",
+		{
+			primaryIdAttribute: "accountid",
+			attributes: new Map([
+				["name", { typeName: "StringType", maxLength: 160 }],
+				["statecode", { typeName: "StateType" }],
+				["revenue", { typeName: "MoneyType", sourceType: 1 }],
+				["description", { typeName: "MemoType" }],
+			]),
+		},
+	],
+	[
+		"contact",
+		{
+			primaryIdAttribute: "contactid",
+			attributes: new Map([["fullname", { typeName: "StringType", maxLength: 160 }]]),
+		},
+	],
+]);
 
 const RICH = `<fetch top="50" distinct="true" no-lock="true" options="OptimizeForUnknown">
   <entity name="account">
@@ -101,6 +132,29 @@ function consumeAll(fetch: FetchNode) {
 	collectAllFilters(fetch).forEach((f) => {
 		findColumnFilterGroup(fetch, f.id);
 		columnFilterConditions(fetch, f.id);
+	});
+	// The Advisories tab (1.6, #97): its list, metadata rules and the Dataverse merge
+	nodeLocations(fetch);
+	nodeEntities(fetch);
+	advisorEntityNames(fetch);
+	adviseQueryMetadata(fetch, ADVISOR_METADATA);
+	const advisories = collectAdvisories(fetch, ADVISOR_METADATA);
+	mergeDataverseCheck(fetch, advisories, {
+		issues: [
+			{
+				TypeCode: 2,
+				Severity: 1,
+				LocalizedMessageText:
+					"Leading wild card on like/notlike conditions can lead to slow performance. Attribute name",
+			},
+			{
+				TypeCode: 4,
+				Severity: 1,
+				LocalizedMessageText:
+					"Ordering on Enum variables can lead to slow performance. Attribute statecode",
+			},
+			{ TypeCode: 99, Severity: 1, LocalizedMessageText: "Something new" },
+		],
 	});
 	// The editor round trip: what the preview shows must parse again
 	parseFetchXml(xml);

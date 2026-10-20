@@ -296,7 +296,7 @@ function findAgreeing(list: Advisory[], rules: readonly AdvisorRuleId[], attribu
 	if (queryLevel) return candidates[0];
 	if (entity) {
 		const key = entity.toLowerCase();
-		return candidates.find((a) => a.entity?.alias?.toLowerCase() === key || a.entity?.name.toLowerCase() === key);
+		return candidates.find((a) => a.entity?.alias?.toLowerCase() === key || a.entity?.name?.toLowerCase() === key);
 	}
 	return candidates.find((a) => a.entity?.isRoot) ?? candidates[0];
 }
@@ -322,7 +322,8 @@ function locateIssue(fetch: FetchNode, rule: AdvisorRuleId | undefined, attribut
 		const order = containers.flatMap((c) => c.orders).find((o) => o.attribute?.toLowerCase() === want);
 		return order?.id ?? fetch.entity.id;
 	}
-	return conditions.find((c) => c.attribute.toLowerCase() === want)?.id ?? fetch.entity.id;
+	// A condition the user is still editing can have no attribute yet (#217): never throw here
+	return conditions.find((c) => c.attribute?.toLowerCase() === want)?.id ?? fetch.entity.id;
 }
 
 export interface DataverseCheck {
