@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.4.3-blue)
+![Version](https://img.shields.io/badge/version-1.4.4-blue)
 [![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
@@ -82,6 +82,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
 - **Record deletion** — Delete selected records with confirmation dialog
 - **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL
+- **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen; after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
 - **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
 - **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking
 
@@ -95,7 +96,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`
 - **C# FetchExpression** — Simple `new FetchExpression(@"...")` wrapper using a verbatim string literal
 - **JavaScript** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
-- **pac CLI** — `pac org fetch --xml "..."` command for the Power Platform CLI
+- **pac CLI** — `pac env fetch --xml '...'` for the Power Platform CLI, as a bash / zsh line and a PowerShell line. The XML is single-quoted, so the shell never expands values such as `$100` or `$(...)`
 - **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI; table name resolved from `EntityDefinitions` metadata (not a heuristic), each field individually copyable; Top Count is taken only from `top` (`count` is a page size)
 - **Web API** — Full OData URL with request headers (including `Prefer: odata.include-annotations="*"` for formatted values and paging cookies), the documented paging-cookie steps, a cURL snippet and a PowerShell `Invoke-RestMethod` example; entity set name resolved from metadata
 - **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview)
