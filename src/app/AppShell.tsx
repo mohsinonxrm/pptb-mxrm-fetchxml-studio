@@ -95,7 +95,8 @@ import {
 } from "../features/fetchxml/api/paging";
 import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
 import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
-import { fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
+import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
+import { withThrottleRetry } from "../features/fetchxml/api/throttleRetry";
 import { debugLog } from "../shared/utils/debug";
 import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
@@ -116,10 +117,11 @@ import {
 import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
 import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
+import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
-import { copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
+import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
@@ -919,6 +921,14 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		return "These results don't include the table's primary key, so record actions aren't available.";
 	}, [queryResult, primaryIdAttribute, isAggregateQuery, isDistinctQuery]);
 
+	// "Delete all" (no selection) deletes what the query on screen matches (#174): the results must
+	// come from a successful run of a query that matches the same records as the tree. Editing a
+	// filter in the left pane doesn't re-run the query, so the old rows would still be on screen.
+	const deleteAllDisabledReason = useMemo(
+		() => deleteAllUnavailableReason(executeError ? null : queryResult?.query, builder.fetchQuery),
+		[executeError, queryResult?.query, builder.fetchQuery],
+	);
+
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
 		if (!builder.fetchQuery || !entityMetadata) {
@@ -1006,6 +1016,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			// Determine execution method based on loaded view state. A synced editor query
 			// replaced the tree (and cleared the loaded view), so it always runs as FetchXML.
 			let result: FetchXmlResult | undefined;
+			// Set when the first page needed a smaller count (#183); later pages keep it
+			let firstPageShrunkTo: PagingState | undefined;
 			const loadedView = synced ? null : builder.loadedView;
 			let useViewExecution = false;
 
@@ -1021,10 +1033,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						}=${loadedView.id}`,
 					);
 
+					// Retried after service protection errors like every page (#183, #96); a view's page
+					// size is Dataverse's, so it can't be made smaller
 					if (loadedView.type === "system") {
-						result = await executeSystemView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executeSystemView(loadedView.entitySetName, loadedView.id));
 					} else {
-						result = await executePersonalView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executePersonalView(loadedView.entitySetName, loadedView.id));
 					}
 				}
 			}
@@ -1041,7 +1055,30 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 								? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
 								: "📡 Executing FetchXML query",
 				);
-				result = await executeFetchXml(xmlToExecute);
+				// The first page gets the same recovery as later pages (#183): retried after service
+				// protection errors (#96), and requested again with half the count when it's over the
+				// PPTB host's 16 MB response limit (#68). That is the common case: a 5,000-row first page
+				// of a wide Entity. Without a count, Dataverse's default page size (5,000) is the starting
+				// point; queries with top or aggregate can't take a count, so they only get the retry.
+				const canShrink = !hasTopLimit && query?.options?.aggregate !== true;
+				const firstPageState: PagingState = {
+					mode: "fetchxml",
+					xml: xmlToExecute,
+					pageSize: canShrink ? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE) : undefined,
+					currentPage: (options.page ?? 1) - 1,
+					nextPage: options.page ?? 1,
+					moreRecords: true,
+					isRetrieveAllInProgress: false,
+					retrieveAll: false,
+				};
+				const { result: firstPageResult, state: fetchedFirst } = await fetchPageWithRecovery(
+					firstPageState,
+					// Unchanged, the query runs as written; after a halving, with the smaller count
+					(s) => (s.pageSize === firstPageState.pageSize ? executeFetchXml(xmlToExecute) : executeFetchXml(addPagingToFetchXml(xmlToExecute, s.nextPage, undefined, s.pageSize))),
+					{ onShrink: (s) => debugLog("app", `First page too large: retrying with count ${s.pageSize}`) },
+				);
+				result = firstPageResult;
+				if (fetchedFirst.pageSize !== firstPageState.pageSize) firstPageShrunkTo = fetchedFirst;
 			}
 			if (run !== resultRunRef.current) return; // superseded while the first page was loading
 
@@ -1062,11 +1099,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			setPaging({
 				mode: useViewExecution ? "view" : "fetchxml",
 				xml: xmlToExecute,
-				pageSize: options.count,
+				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
 				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
 				fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
-				currentPage: firstPage,
-				nextPage: firstPage + 1,
+				// After a smaller first page (#183), paging continues from the page it was fetched as
+				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
+				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
 				pagingCookie: result.pagingCookie,
 				nextLink: result.nextLink,
 				moreRecords,
@@ -1505,6 +1543,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 			// Scenario 1: No selection - delete ALL records from view
 			if (recordIds.length === 0) {
+				if (deleteAllDisabledReason) return; // the button explains why (#174)
 				if (!recordActionPrivileges.canBulkDelete) {
 					debugLog("app", "Bulk delete privilege required to delete all records from view");
 					return;
@@ -1541,7 +1580,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const isBatchDelete = recordIds.length >= 4;
 			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata],
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata, deleteAllDisabledReason],
 	);
 
 	/**
@@ -1553,6 +1592,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			if (!entityLogicalName || !recordActionPrivileges.canBulkDelete) return;
 
 			const isAllRecords = recordIds.length === 0;
+			if (isAllRecords && deleteAllDisabledReason) return; // the button explains why (#174)
 			const totalRecords = queryResult?.rows.length || 0;
 
 			setBulkDeleteDialogState({
@@ -1562,7 +1602,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				totalViewRecords: isAllRecords ? totalRecords : undefined,
 			});
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult],
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, deleteAllDisabledReason],
 	);
 
 	/**
@@ -1599,9 +1639,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			let successCount = 0;
 			const errors: string[] = [];
 
+			// Stop if the tool's connection changes in place (#175, #66): the next delete would run in
+			// the new environment, where the same record IDs can exist
+			const stillOnConnection = await connectionGuard();
 			for (const recordId of recordIds) {
 				try {
-					await deleteRecord(entityLogicalName, recordId);
+					await deleteRecord(entityLogicalName, recordId, stillOnConnection);
 					successCount++;
 				} catch (error) {
 					errors.push(
@@ -1641,11 +1684,14 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 			// If deleting ALL records from view (no selection)
 			if (bulkDeleteDialogState.isAllRecords) {
-				// Use the current FetchXML directly from builder state
-				if (!builder.fetchQuery) {
-					throw new Error("No FetchXML query available");
+				// The query that produced the results on screen, never the tree after later edits (#174)
+				const executed = queryResult?.query;
+				if (!executed || deleteAllDisabledReason) {
+					throw new Error(deleteAllDisabledReason ?? "Run the query first: Delete all deletes the records the query on screen matches.");
 				}
-				const currentFetchXml = generateFetchXml(builder.fetchQuery);
+				// The FetchXML that ran: a quick find view's test value replaced {0} only there (#142), so
+				// the tree's XML would still say {0}
+				const currentFetchXml = pagingRef.current?.xml ?? generateFetchXml(executed);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
 				debugLog("app", `📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
 				return result;
@@ -1674,7 +1720,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			entityMetadata,
 			bulkDeleteDialogState.recordIds,
 			bulkDeleteDialogState.isAllRecords,
-			builder.fetchQuery,
+			queryResult?.query,
+			deleteAllDisabledReason,
 		],
 	);
 
@@ -2129,6 +2176,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					isAggregateQuery={isAggregateQuery}
 					hasOneToManyRelationship={hasOneToManyRelationship}
 					recordActionsDisabledReason={recordActionsDisabledReason}
+					deleteAllDisabledReason={deleteAllDisabledReason}
 					onSelectionChange={handleSelectionChange}
 					getSelectedRecordIds={getSelectedRecordIds}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
