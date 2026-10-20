@@ -19,10 +19,12 @@ import {
 	useId,
 	tokens,
 	Tooltip,
+	InfoLabel,
 	useComboboxFilter,
 	type ComboboxProps,
 } from "@fluentui/react-components";
 import { Add20Regular, ChevronDown20Regular, ChevronUp20Regular, LockClosed20Regular } from "@fluentui/react-icons";
+import { Info } from "../LeftPane/PropertiesPanel/fields";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import type { EntityScopeMode } from "../../model/displaySettings";
 import { isEntityInScope } from "../../state/metadataScope";
@@ -35,6 +37,8 @@ import { scopeSummaryParts, scopeSummaryText, type RememberedScope } from "../..
 import { LoadViewPicker } from "./LoadViewPicker";
 import type { EntityMetadata, LoadedViewInfo, Publisher, Solution } from "../../api/pptbClient";
 import { debugLog } from "../../../../shared/utils/debug";
+
+const REMEMBERED_SCOPE_INFO = "Your publisher and solution selection is remembered for this environment.";
 
 const useStyles = makeStyles({
 	container: {
@@ -51,6 +55,30 @@ const useStyles = makeStyles({
 		alignItems: "center",
 		gap: "6px",
 		minWidth: 0,
+	},
+	// The whole area left of "New" toggles the section (not just the small chevron button)
+	toggle: {
+		display: "flex",
+		alignItems: "center",
+		gap: "6px",
+		flex: 1,
+		minWidth: 0,
+		minHeight: "24px",
+		cursor: "pointer",
+		userSelect: "none",
+		borderRadius: tokens.borderRadiusMedium,
+		":hover": {
+			backgroundColor: tokens.colorSubtleBackgroundHover,
+		},
+		":focus-visible": {
+			outline: `2px solid ${tokens.colorStrokeFocus2}`,
+			outlineOffset: "1px",
+		},
+	},
+	chevron: {
+		flexShrink: 0,
+		color: tokens.colorNeutralForeground2,
+		display: "inline-flex",
 	},
 	summary: {
 		flex: 1,
@@ -101,8 +129,14 @@ const useStyles = makeStyles({
 		"@container (max-width: 299px)": {
 			minWidth: "28px",
 			maxWidth: "28px",
-			paddingLeft: "3px",
-			paddingRight: "3px",
+			paddingLeft: "0",
+			paddingRight: "0",
+			justifyContent: "center",
+			columnGap: "0",
+			"& .fui-Button__icon": {
+				marginLeft: "0",
+				marginRight: "0",
+			},
 		},
 	},
 	newButtonLabel: {
@@ -423,7 +457,7 @@ export function EntitySelector({
 		},
 		[effectiveScopeMode, updateSelectedPublishers, updatePublisherSolutions, updateOnlySolutions],
 	);
-	const remembersSelection = useRememberedScope({
+	useRememberedScope({
 		mode: accessLoading ? null : effectiveScopeMode,
 		ready: effectiveScopeMode === "publisher-solution" ? publisherFilter.publishersLoaded : solutionFilter.solutionsLoaded,
 		availablePublisherIds,
@@ -478,6 +512,11 @@ export function EntitySelector({
 		} else {
 			setEntityQuery("");
 		}
+	};
+
+	const handleNewQuery = () => {
+		if (collapsed) onCollapsedChange(false);
+		onNewQuery();
 	};
 
 	// The collapsed one-line summary (#25)
@@ -583,16 +622,24 @@ export function EntitySelector({
 		<div className={styles.container}>
 			{/* Header: collapse, title or the one-line summary, New (#25) */}
 			<div className={styles.header}>
-				<Tooltip content={collapsed ? "Expand" : "Collapse"} relationship="label">
-					<Button
-						appearance="subtle"
-						size="small"
-						icon={collapsed ? <ChevronDown20Regular /> : <ChevronUp20Regular />}
-						onClick={() => onCollapsedChange(!collapsed)}
-						aria-expanded={!collapsed}
-						aria-controls={bodyId}
-					/>
-				</Tooltip>
+				<div
+					className={styles.toggle}
+					role="button"
+					tabIndex={0}
+					title={collapsed ? "Expand query scope" : "Collapse query scope"}
+					onClick={() => onCollapsedChange(!collapsed)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							onCollapsedChange(!collapsed);
+						}
+					}}
+					aria-expanded={!collapsed}
+					aria-controls={bodyId}
+				>
+					<span className={styles.chevron}>
+						{collapsed ? <ChevronDown20Regular /> : <ChevronUp20Regular />}
+					</span>
 				{collapsed && summaryParts.length > 0 ? (
 					<Text className={styles.summary} title={scopeSummaryText(summaryParts)}>
 						{entityDisplayName ? (
@@ -609,8 +656,9 @@ export function EntitySelector({
 						Query scope
 					</Text>
 				)}
+				</div>
 				<Tooltip content="New query" relationship="label">
-					<Button className={styles.newButton} appearance="primary" size="small" icon={<Add20Regular />} onClick={onNewQuery}>
+					<Button className={styles.newButton} appearance="primary" size="small" icon={<Add20Regular />} onClick={handleNewQuery}>
 						<span className={styles.newButtonLabel}>New</span>
 					</Button>
 				</Tooltip>
@@ -622,9 +670,9 @@ export function EntitySelector({
 					<div className={styles.filtersRow}>
 						{/* Publishers */}
 						<div className={styles.field}>
-							<label id={publisherComboId} className={styles.label}>
-								Publishers
-							</label>
+							<div className={styles.label}>
+								<InfoLabel id={publisherComboId} info={<Info text={REMEMBERED_SCOPE_INFO} />}>Publishers</InfoLabel>
+							</div>
 							<Combobox
 								className={styles.combobox}
 								input={{ className: styles.comboboxInput }}
@@ -664,9 +712,9 @@ export function EntitySelector({
 
 						{/* Solutions */}
 						<div className={styles.field}>
-							<label id={solutionComboId} className={styles.label}>
-								Solutions
-							</label>
+							<div className={styles.label}>
+								<InfoLabel id={solutionComboId} info={<Info text={REMEMBERED_SCOPE_INFO} />}>Solutions</InfoLabel>
+							</div>
 							{solutionsCombobox(
 								publisherFilter.selectedPublisherIds.length === 0,
 								publisherFilter.selectedPublisherIds.length === 0 ? "Select a publisher first" : undefined,
@@ -680,14 +728,12 @@ export function EntitySelector({
 					<div className={styles.filtersRow}>
 						{/* Publisher - disabled with tooltip */}
 						<div className={styles.field}>
-							<Tooltip
-								content="Publisher filtering requires prvReadPublisher privilege"
-								relationship="description"
-							>
-								<label id={publisherComboId} className={`${styles.label} ${styles.disabledLabel}`}>
-									Publishers <LockClosed20Regular fontSize={14} />
-								</label>
-							</Tooltip>
+							<div className={`${styles.label} ${styles.disabledLabel}`}>
+								<InfoLabel id={publisherComboId} info={<Info text={REMEMBERED_SCOPE_INFO} />}>Publishers</InfoLabel>
+								<Tooltip content="Publisher filtering requires prvReadPublisher privilege" relationship="description">
+									<LockClosed20Regular fontSize={14} />
+								</Tooltip>
+							</div>
 							<Combobox
 								className={styles.combobox}
 								input={{ className: styles.comboboxInput }}
@@ -701,9 +747,9 @@ export function EntitySelector({
 
 						{/* Solutions */}
 						<div className={styles.field}>
-							<label id={solutionComboId} className={styles.label}>
-								Solutions
-							</label>
+							<div className={styles.label}>
+								<InfoLabel id={solutionComboId} info={<Info text={REMEMBERED_SCOPE_INFO} />}>Solutions</InfoLabel>
+							</div>
 							{solutionsCombobox(solutionFilter.solutionsLoading, solutionFilter.solutionsLoading ? "Loading…" : undefined)}
 							{solutionFilter.solutionsError && (
 								<div className={styles.errorText}>{solutionFilter.solutionsError}</div>
@@ -755,13 +801,6 @@ export function EntitySelector({
 					</div>
 				)}
 
-				{remembersSelection && effectiveScopeMode !== "all" && (
-					<Text className={styles.note}>
-						{effectiveScopeMode === "publisher-solution"
-							? "Your publisher and solution selection is remembered for this environment."
-							: "Your solution selection is remembered for this environment."}
-					</Text>
-				)}
 			</div>
 		</div>
 	);

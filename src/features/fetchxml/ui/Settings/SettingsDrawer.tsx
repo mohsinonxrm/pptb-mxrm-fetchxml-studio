@@ -20,8 +20,10 @@ import {
 	Radio,
 	RadioGroup,
 	Tooltip,
+	InfoLabel,
 } from "@fluentui/react-components";
-import { Dismiss24Regular, Settings20Regular, Info16Regular } from "@fluentui/react-icons";
+import { Dismiss24Regular, Settings20Regular } from "@fluentui/react-icons";
+import { Info } from "../LeftPane/PropertiesPanel/fields";
 import type {
 	DisplaySettings,
 	ValueDisplayMode,
@@ -170,15 +172,12 @@ export function SettingsDrawer({
 
 					{/* Entity Scope Mode */}
 					<div className={styles.settingItem}>
-						<Text className={styles.settingLabel}>
-							Entity source
-							<Tooltip
-								content="Controls how the entity list is populated in the toolbar. Scoped modes are faster; 'All entities' loads every entity in the environment."
-								relationship="description"
-							>
-								<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
-							</Tooltip>
-						</Text>
+						<InfoLabel
+						className={styles.settingLabel}
+						info={<Info text="Controls how the entity list is populated in the toolbar. Scoped modes are faster; 'All entities' loads every entity in the environment." />}
+					>
+						Entity source
+					</InfoLabel>
 						<Text className={styles.settingDescription} block>
 							How to scope the entity picker
 						</Text>
@@ -217,15 +216,12 @@ export function SettingsDrawer({
 					<div className={styles.settingItem}>
 						<div className={styles.settingRow}>
 							<div>
-								<Text className={styles.settingLabel}>
+								<InfoLabel
+									className={styles.settingLabel}
+									info={<Info text="When on, entities, attributes and relationships are limited to the ones Advanced Find shows (IsValidForAdvancedFind). Turn off to build queries Advanced Find can't: system and customization entities, intersect entities, and hidden attributes and relationships. Attributes that can't be read (IsValidForRead = false) are never listed." />}
+								>
 									Advanced Find only
-									<Tooltip
-										content="When on, entities, attributes and relationships are limited to the ones Advanced Find shows (IsValidForAdvancedFind). Turn off to build queries Advanced Find can't: system and customization entities, intersect entities, and hidden attributes and relationships. Attributes that can't be read (IsValidForRead = false) are never listed."
-										relationship="description"
-									>
-										<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
-									</Tooltip>
-								</Text>
+								</InfoLabel>
 								<Text className={styles.settingDescription} block>
 									Limit entities, attributes &amp; relationships to the ones Advanced Find shows
 								</Text>

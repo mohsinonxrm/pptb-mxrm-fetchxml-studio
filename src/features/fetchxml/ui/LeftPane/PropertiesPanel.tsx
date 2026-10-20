@@ -5,7 +5,9 @@
  */
 
 import { useMemo } from "react";
-import { makeStyles, tokens } from "@fluentui/react-components";
+import { InfoLabel, makeStyles, tokens } from "@fluentui/react-components";
+import { DOCS } from "./PropertiesPanel/docLinks";
+import { Info } from "./PropertiesPanel/fields";
 import type {
 	FetchNode,
 	EntityNode,
@@ -63,6 +65,59 @@ interface PropertiesPanelProps {
 	selectedNode: SelectedNode;
 	fetchQuery: FetchNode | null;
 	onNodeUpdate: (nodeId: NodeId, updates: Record<string, unknown>) => void;
+}
+
+/**
+ * Header of the Properties bar: "Properties - <section>". The section name (and the entity/attribute
+ * info button) used to sit in the editors; it is shown here now.
+ */
+export function PropertiesHeader({ selectedNode }: { selectedNode: SelectedNode }) {
+	const title = (() => {
+		switch (selectedNode?.type) {
+			case "fetch":
+				return { label: "Execution" };
+			case "entity":
+				return {
+					label: "Entity",
+					info: "The logical name of the entity the query is based on.",
+					href: DOCS.entity,
+				};
+			case "attribute":
+				return {
+					label: "Attribute",
+					info: "The logical name of the attribute to return.",
+					href: DOCS.attribute,
+				};
+			case "filter":
+				return { label: "Filter" };
+			case "order":
+				return { label: "Sort" };
+			case "link-entity":
+				return { label: "Link-entity" };
+			case "condition":
+				return { label: "Condition" };
+			case "all-attributes":
+				return { label: "All attributes" };
+			default:
+				return null;
+		}
+	})();
+
+	return (
+		<span style={{ fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+			Properties
+			{title && (
+				<>
+					<span>-</span>
+					{title.info ? (
+						<InfoLabel info={<Info text={title.info} href={title.href} />}>{title.label}</InfoLabel>
+					) : (
+						<span>{title.label}</span>
+					)}
+				</>
+			)}
+		</span>
+	);
 }
 
 export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: PropertiesPanelProps) {

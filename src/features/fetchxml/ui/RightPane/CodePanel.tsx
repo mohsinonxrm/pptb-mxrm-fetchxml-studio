@@ -53,8 +53,9 @@ const useStyles = makeStyles({
 	},
 	header: {
 		display: "flex",
-		alignItems: "center",
-		justifyContent: "space-between",
+		alignItems: "flex-start",
+		gap: "8px",
+		minWidth: 0,
 		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
 		paddingLeft: "8px",
 		paddingRight: "8px",
@@ -64,10 +65,18 @@ const useStyles = makeStyles({
 		backgroundColor: tokens.colorNeutralBackground2,
 	},
 	tabListWrap: {
+		flex: 1,
+		minWidth: 0,
+	},
+	tabList: {
 		display: "flex",
-		alignItems: "center",
-		gap: "4px",
 		flexWrap: "wrap",
+		minWidth: 0,
+		rowGap: "4px",
+		"& .fui-Tab": {
+			flexShrink: 0,
+			whiteSpace: "nowrap",
+		},
 	},
 	tabLabel: {
 		display: "flex",
@@ -76,6 +85,7 @@ const useStyles = makeStyles({
 	},
 	copyButton: {
 		flexShrink: 0,
+		marginLeft: "auto",
 	},
 	body: {
 		flex: 1,
@@ -286,6 +296,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 			<div className={styles.header}>
 				<div className={styles.tabListWrap}>
 					<TabList
+						className={styles.tabList}
 						size="small"
 						appearance="subtle"
 						selectedValue={selectedFormat}

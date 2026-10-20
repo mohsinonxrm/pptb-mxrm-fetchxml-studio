@@ -4,7 +4,7 @@
  * Handles both System Views (savedquery) and Personal Views (userquery)
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { forwardRef, useState, useCallback, useEffect, useImperativeHandle } from "react";
 import {
 	Menu,
 	MenuTrigger,
@@ -67,7 +67,14 @@ interface SaveViewButtonProps {
 	disabled?: boolean;
 }
 
-export function SaveViewButton({
+/** Save actions for the toolbar's overflow menu (when the Save button doesn't fit) */
+export interface SaveViewButtonHandle {
+	save: () => void;
+	saveAs: () => void;
+	saveAndPublish: () => void;
+}
+
+export const SaveViewButton = forwardRef<SaveViewButtonHandle, SaveViewButtonProps>(function SaveViewButton({
 	fetchXml,
 	layoutXml,
 	entityLogicalName,
@@ -77,7 +84,7 @@ export function SaveViewButton({
 	loadedView,
 	onSaveComplete,
 	disabled = false,
-}: SaveViewButtonProps) {
+}, ref) {
 	const styles = useStyles();
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<SaveViewDialogMode>("save");
@@ -123,6 +130,12 @@ export function SaveViewButton({
 	const handleSave = useCallback(() => void requestOpen("save", false), [requestOpen]);
 	const handleSaveAs = useCallback(() => void requestOpen("saveAs", false), [requestOpen]);
 	const handleSaveAndPublish = useCallback(() => void requestOpen("save", true), [requestOpen]);
+
+	useImperativeHandle(
+		ref,
+		() => ({ save: handleSave, saveAs: handleSaveAs, saveAndPublish: handleSaveAndPublish }),
+		[handleSave, handleSaveAs, handleSaveAndPublish],
+	);
 
 	const handleDialogClose = useCallback(() => {
 		setDialogOpen(false);
@@ -205,4 +218,4 @@ export function SaveViewButton({
 			/>
 		</>
 	);
-}
+});

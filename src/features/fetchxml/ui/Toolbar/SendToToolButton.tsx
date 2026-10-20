@@ -11,7 +11,7 @@
  * the whole session). We pass noReturn and never consume a result.
  */
 
-import { useCallback } from "react";
+import { forwardRef, useCallback, useImperativeHandle } from "react";
 import {
 	Button,
 	Menu,
@@ -54,12 +54,17 @@ export interface SendToToolButtonProps {
 	disabled?: boolean;
 }
 
-export function SendToToolButton({
+/** Send actions for the toolbar's overflow menu (when the button doesn't fit) */
+export interface SendToToolButtonHandle {
+	send: (targetToolId: string) => void;
+}
+
+export const SendToToolButton = forwardRef<SendToToolButtonHandle, SendToToolButtonProps>(function SendToToolButton({
 	fetchXml,
 	entityLogicalName,
 	tools,
 	disabled,
-}: SendToToolButtonProps) {
+}, ref) {
 	const styles = useStyles();
 	const { sync, editorHasContent } = useEditorSync();
 
@@ -87,6 +92,8 @@ export function SendToToolButton({
 		},
 		[fetchXml, entityLogicalName, sync],
 	);
+
+	useImperativeHandle(ref, () => ({ send: (id: string) => void handleSend(id) }), [handleSend]);
 
 	// With content in the editor, sending is available even before the tree has a query
 	const isDisabled = !editorHasContent && (disabled || !fetchXml || !entityLogicalName);
@@ -122,4 +129,4 @@ export function SendToToolButton({
 			</MenuPopover>
 		</Menu>
 	);
-}
+});

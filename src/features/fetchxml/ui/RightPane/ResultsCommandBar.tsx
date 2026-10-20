@@ -3,9 +3,12 @@
  * Similar to Power Apps Model Driven Apps view command bar
  */
 
-import { Fragment, useState, useCallback, type ReactElement } from "react";
+import { Fragment, useState, useCallback, type ReactElement, type ReactNode } from "react";
 import {
-	Toolbar,
+	Button,
+	Overflow,
+	OverflowItem as FluentOverflowItem,
+	OverflowDivider,
 	ToolbarButton,
 	ToolbarDivider,
 	makeStyles,
@@ -22,6 +25,8 @@ import {
 	SplitButton,
 	MenuButton,
 	type MenuButtonProps,
+	useIsOverflowItemVisible,
+	useOverflowMenu,
 } from "@fluentui/react-components";
 import {
 	Open20Regular,
@@ -36,6 +41,7 @@ import {
 	Info20Regular,
 	Stop20Regular,
 	Copy20Regular,
+	MoreHorizontal20Regular,
 } from "@fluentui/react-icons";
 import { ExcelIcon } from "../../../../shared/components/ExcelIcon";
 import { EditColumnsPanel } from "./EditColumnsPanel";
@@ -49,8 +55,26 @@ import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../.
 import type { CopyValueMode } from "./copyResults";
 
 const useStyles = makeStyles({
-	toolbar: {
-		padding: "0",
+	// Wrapper: takes the card's free width and may shrink (as the FetchXML action bar's container does)
+	bar: {
+		flex: 1,
+		minWidth: 0,
+		display: "flex",
+	},
+	// The measured row: flat, shrinkable, clipped. Items that don't fit move into "More actions"
+	primary: {
+		display: "flex",
+		alignItems: "center",
+		gap: "2px",
+		flex: 1,
+		minWidth: 0,
+		overflow: "hidden",
+	},
+	measuredItem: {
+		display: "inline-flex",
+		alignItems: "center",
+		flexShrink: 0,
+		whiteSpace: "nowrap",
 	},
 
 	splitButtonAppearance: {
@@ -164,6 +188,52 @@ export interface CloseMenuItem {
 	disabledReason?: string;
 }
 
+/** Overflow must measure a real DOM element, even when an action is a Menu or a custom component. */
+function OverflowItem({
+	id,
+	groupId,
+	children,
+}: {
+	id: string;
+	groupId: string;
+	children: ReactNode;
+}) {
+	const styles = useStyles();
+	return (
+		<FluentOverflowItem id={id} groupId={groupId}>
+			<span className={styles.measuredItem}>{children}</span>
+		</FluentOverflowItem>
+	);
+}
+
+/** A "More actions" entry; it is only listed while its toolbar item doesn't fit in the row */
+function OverflowMenuEntry({ id, children }: { id: string; children: ReactNode }) {
+	const visible = useIsOverflowItemVisible(id);
+	return visible ? null : <>{children}</>;
+}
+
+/** The "More actions" button and menu; it appears only when some items are hidden in the row */
+function OverflowMoreMenu({ children }: { children: ReactNode }) {
+	const { ref, isOverflowing } = useOverflowMenu<HTMLButtonElement>();
+	if (!isOverflowing) return null;
+	return (
+		<Menu positioning="below-end">
+			<MenuTrigger disableButtonEnhancement>
+				<Button
+					ref={ref}
+					appearance="subtle"
+					size="small"
+					icon={<MoreHorizontal20Regular />}
+					aria-label="More actions"
+				/>
+			</MenuTrigger>
+			<MenuPopover>
+				<MenuList>{children}</MenuList>
+			</MenuPopover>
+		</Menu>
+	);
+}
+
 /** A toolbar button with a tooltip giving the reason it's off, when there is one */
 function StateButton({
 	label,
@@ -181,7 +251,14 @@ function StateButton({
 	reason?: string;
 }) {
 	const button = (
-		<ToolbarButton appearance="subtle" icon={icon} disabled={disabled} disabledFocusable={!!reason} onClick={onClick} aria-label={ariaLabel}>
+		<ToolbarButton
+			appearance="subtle"
+			icon={icon}
+			disabled={disabled}
+			disabledFocusable={!!reason}
+			onClick={onClick}
+			aria-label={ariaLabel}
+		>
 			{label}
 		</ToolbarButton>
 	);
@@ -293,14 +370,16 @@ export function ResultsCommandBar({
 			// Remove the attributes behind removed columns, all at once
 			if (columns && onRemoveColumns) {
 				const updatedNames = new Set(updatedColumns.map((c) => c.name));
-				const removed = columns.filter((col) => !updatedNames.has(col.name)).map((col) => col.name);
+				const removed = columns
+					.filter((col) => !updatedNames.has(col.name))
+					.map((col) => col.name);
 				if (removed.length > 0) onRemoveColumns(removed);
 			}
 			// Apply reordering
 			onReorderColumns?.(updatedColumns);
 			setEditPanelOpen(false);
 		},
-		[columns, onReorderColumns, onRemoveColumns]
+		[columns, onReorderColumns, onRemoveColumns],
 	);
 
 	const handleAddApply = useCallback(
@@ -315,286 +394,536 @@ export function ResultsCommandBar({
 			}
 			setAddPanelOpen(false);
 		},
-		[onAddColumn, onAddRelatedColumns]
+		[onAddColumn, onAddRelatedColumns],
 	);
 
 	const handleOpenAddFromEdit = useCallback(() => {
 		setAddPanelOpen(true);
 	}, []);
 
+	// Menu contents, shared by the inline toolbar menus and their "More actions" submenus
+	const closeMenuItems = () =>
+		closeActions?.map((item, i) => {
+			const menuItem = (
+				<MenuItem
+					disabled={!!item.disabledReason}
+					disabledFocusable={!!item.disabledReason}
+					onClick={() => onCloseAction?.(item.key)}
+				>
+					{item.label}...
+				</MenuItem>
+			);
+			return (
+				<Fragment key={item.key}>
+					{i > 0 && item.destructive && !closeActions[i - 1].destructive && (
+						<MenuDivider />
+					)}
+					{item.disabledReason ? (
+						<Tooltip
+							content={item.disabledReason}
+							relationship="description"
+							positioning="after"
+							withArrow
+						>
+							{menuItem}
+						</Tooltip>
+					) : (
+						menuItem
+					)}
+				</Fragment>
+			);
+		});
+
+	const deleteMenuItems = () => (
+		<>
+			<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={isDeleteDisabled}>
+				Delete{hasSelection ? ` (${selectedCount})` : " All"}
+			</MenuItem>
+			{canBulkDelete && (
+				<MenuItem
+					icon={<DocumentBulletList20Regular />}
+					onClick={onBulkDelete}
+					disabled={isDeleteDisabled}
+				>
+					Bulk delete (job)
+				</MenuItem>
+			)}
+		</>
+	);
+
+	const workflowMenuItems = () => (
+		<>
+			{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
+			{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
+				<MenuItem disabled>No workflows available</MenuItem>
+			)}
+			{!isLoadingWorkflows &&
+				workflows.map((wf) => (
+					<MenuItem
+						key={wf.workflowid}
+						icon={<Play20Regular />}
+						onClick={() => onRunSpecificWorkflow?.(wf)}
+					>
+						{wf.name}
+					</MenuItem>
+				))}
+		</>
+	);
+
+	const copyMenuItems = () => (
+		<>
+			<MenuItem
+				disabled={selectedCount === 0}
+				onClick={() => onCopyRows?.("selected", copyMode)}
+			>
+				Selected rows ({selectedCount})
+			</MenuItem>
+			<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
+				{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount})
+			</MenuItem>
+			<MenuDivider />
+			<MenuGroup>
+				<MenuGroupHeader>Values</MenuGroupHeader>
+				<MenuItemRadio name="copyValues" value="shown" persistOnClick>
+					As shown
+				</MenuItemRadio>
+				<MenuItemRadio name="copyValues" value="raw" persistOnClick>
+					Raw (GUIDs, numbers, ISO dates)
+				</MenuItemRadio>
+			</MenuGroup>
+		</>
+	);
+
+	const exportMenuItems = () => (
+		<>
+			<Tooltip
+				content={
+					canExport
+						? "Export using Dataverse API (all records)"
+						: exportDisabledReason || "Save as a view first to enable server export"
+				}
+				relationship="description"
+				positioning="before"
+			>
+				<MenuItem onClick={onExport} disabled={!canExport || isExporting}>
+					Export (Server)
+				</MenuItem>
+			</Tooltip>
+			<MenuItem onClick={onExportLocal} disabled={isExporting}>
+				Export (Local)
+			</MenuItem>
+		</>
+	);
+
+	/** A "More actions" entry that opens a submenu with the same content as the inline menu */
+	const submenuEntry = (
+		label: string,
+		icon: ReactElement,
+		disabled: boolean,
+		content: () => ReactNode,
+		onOpen?: () => void,
+	) => (
+		<Menu positioning="after-top" onOpenChange={(_, data) => data.open && onOpen?.()}>
+			<MenuTrigger disableButtonEnhancement>
+				<MenuItem hasSubmenu icon={icon} disabled={disabled}>
+					{label}
+				</MenuItem>
+			</MenuTrigger>
+			<MenuPopover>
+				<MenuList>{content()}</MenuList>
+			</MenuPopover>
+		</Menu>
+	);
+
 	return (
 		<>
-			<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
-				{isRetrieveAllInProgress && onStopRetrieveAll && (
-					<>
-						<ToolbarButton appearance="subtle" icon={<Stop20Regular />} onClick={onStopRetrieveAll}>
-							Stop
-						</ToolbarButton>
-						<ToolbarDivider />
-					</>
-				)}
-				<ToolbarButton
-					appearance="subtle"
-					icon={<Open20Regular />}
-					disabled={!singleSelection || recordActionsUnavailable}
-					onClick={onOpen}
-					aria-label="Open record"
-				>
-					Open
-				</ToolbarButton>
-
-				<ToolbarButton
-					appearance="subtle"
-					icon={<Link20Regular />}
-					disabled={!singleSelection || recordActionsUnavailable}
-					onClick={onCopyUrl}
-					aria-label="Copy record URL"
-				>
-					Copy URL
-				</ToolbarButton>
-
-				{recordActionsDisabledReason && (
-					<Tooltip content={recordActionsDisabledReason} relationship="description" withArrow>
-						<ToolbarButton
-							appearance="transparent"
-							icon={<Info20Regular />}
-						>
-							Record actions unavailable
-						</ToolbarButton>
-					</Tooltip>
-				)}
-
-				<ToolbarDivider />
-
-				{/* Activate / Deactivate (#143); the tooltip says why one is off for this entity */}
-				<StateButton
-					label="Activate"
-					ariaLabel="Activate selected records"
-					icon={<CheckmarkCircle20Regular />}
-					onClick={onActivate}
-					disabled={stateButtonsDisabled || !onActivate || !!activateDisabledReason}
-					reason={activateDisabledReason}
-				/>
-
-				{closeActions && closeActions.length > 0 && closeDisabledReason ? (
-					<StateButton label="Close" ariaLabel="Close selected records" icon={<CircleOff20Regular />} disabled reason={closeDisabledReason} />
-				) : closeActions && closeActions.length > 0 ? (
-					// Close (#149): the entity's close messages, in place of Deactivate
-					<Menu positioning="below-start">
-						<MenuTrigger disableButtonEnhancement>
-							<MenuButton
+			{/* Same structure as the FetchXML action bar (OverflowActionBar): the flat row is the measured element */}
+			<div className={styles.bar}>
+				<Overflow>
+					<div className={styles.primary} role="toolbar" aria-label="Record actions">
+						{isRetrieveAllInProgress && onStopRetrieveAll && (
+							<>
+								<OverflowItem id="stop" groupId="record">
+									<ToolbarButton
+										appearance="subtle"
+										icon={<Stop20Regular />}
+										onClick={onStopRetrieveAll}
+									>
+										Stop
+									</ToolbarButton>
+								</OverflowItem>
+								<OverflowDivider groupId="record">
+									<ToolbarDivider />
+								</OverflowDivider>
+							</>
+						)}
+						<OverflowItem id="open" groupId="record">
+							<ToolbarButton
 								appearance="subtle"
-								icon={<CircleOff20Regular />}
-								disabled={stateButtonsDisabled || !onCloseAction}
-								aria-label="Close selected records"
+								icon={<Open20Regular />}
+								disabled={!singleSelection || recordActionsUnavailable}
+								onClick={onOpen}
+								aria-label="Open record"
 							>
-								Close
-							</MenuButton>
-						</MenuTrigger>
-						<MenuPopover>
-							<MenuList>
-								<MenuGroup>
-									{entityDisplayName && <MenuGroupHeader>{entityDisplayName}</MenuGroupHeader>}
-									{closeActions.map((item, i) => {
-										const menuItem = (
-											<MenuItem
-												disabled={!!item.disabledReason}
-												disabledFocusable={!!item.disabledReason}
-												onClick={() => onCloseAction?.(item.key)}
-											>
-												{item.label}...
-											</MenuItem>
-										);
-										return (
-											<Fragment key={item.key}>
-												{i > 0 && item.destructive && !closeActions[i - 1].destructive && <MenuDivider />}
-												{item.disabledReason ? (
-													<Tooltip content={item.disabledReason} relationship="description" positioning="after" withArrow>
-														{menuItem}
-													</Tooltip>
-												) : (
-													menuItem
+								Open
+							</ToolbarButton>
+						</OverflowItem>
+
+						<OverflowItem id="copyUrl" groupId="record">
+							<ToolbarButton
+								appearance="subtle"
+								icon={<Link20Regular />}
+								disabled={!singleSelection || recordActionsUnavailable}
+								onClick={onCopyUrl}
+								aria-label="Copy record URL"
+							>
+								Copy URL
+							</ToolbarButton>
+						</OverflowItem>
+
+						{recordActionsDisabledReason && (
+							<OverflowItem id="recordInfo" groupId="record">
+								<Tooltip
+									content={recordActionsDisabledReason}
+									relationship="description"
+									withArrow
+								>
+									<ToolbarButton
+										appearance="transparent"
+										icon={<Info20Regular />}
+									>
+										Record actions unavailable
+									</ToolbarButton>
+								</Tooltip>
+							</OverflowItem>
+						)}
+
+						<OverflowDivider groupId="state">
+							<ToolbarDivider />
+						</OverflowDivider>
+
+						{/* Activate / Deactivate (#143); the tooltip says why one is off for this entity */}
+						<OverflowItem id="activate" groupId="state">
+							<StateButton
+								label="Activate"
+								ariaLabel="Activate selected records"
+								icon={<CheckmarkCircle20Regular />}
+								onClick={onActivate}
+								disabled={
+									stateButtonsDisabled || !onActivate || !!activateDisabledReason
+								}
+								reason={activateDisabledReason}
+							/>
+						</OverflowItem>
+
+						{closeActions && closeActions.length > 0 && closeDisabledReason ? (
+							<OverflowItem id="close" groupId="state">
+								<StateButton
+									label="Close"
+									ariaLabel="Close selected records"
+									icon={<CircleOff20Regular />}
+									disabled
+									reason={closeDisabledReason}
+								/>
+							</OverflowItem>
+						) : closeActions && closeActions.length > 0 ? (
+							// Close (#149): the entity's close messages, in place of Deactivate
+							<OverflowItem id="close" groupId="state">
+								<Menu positioning="below-start">
+									<MenuTrigger disableButtonEnhancement>
+										<MenuButton
+											appearance="subtle"
+											icon={<CircleOff20Regular />}
+											disabled={stateButtonsDisabled || !onCloseAction}
+											aria-label="Close selected records"
+										>
+											Close
+										</MenuButton>
+									</MenuTrigger>
+									<MenuPopover>
+										<MenuList>
+											<MenuGroup>
+												{entityDisplayName && (
+													<MenuGroupHeader>
+														{entityDisplayName}
+													</MenuGroupHeader>
 												)}
-											</Fragment>
-										);
-									})}
-								</MenuGroup>
-							</MenuList>
-						</MenuPopover>
-					</Menu>
-				) : (
-					<StateButton
-						label="Deactivate"
-						ariaLabel="Deactivate selected records"
-						icon={<DismissCircle20Regular />}
-						onClick={onDeactivate}
-						disabled={stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason}
-						reason={deactivateDisabledReason}
-					/>
-				)}
+												{closeMenuItems()}
+											</MenuGroup>
+										</MenuList>
+									</MenuPopover>
+								</Menu>
+							</OverflowItem>
+						) : (
+							<OverflowItem id="deactivate" groupId="state">
+								<StateButton
+									label="Deactivate"
+									ariaLabel="Deactivate selected records"
+									icon={<DismissCircle20Regular />}
+									onClick={onDeactivate}
+									disabled={
+										stateButtonsDisabled ||
+										!onDeactivate ||
+										!!deactivateDisabledReason
+									}
+									reason={deactivateDisabledReason}
+								/>
+							</OverflowItem>
+						)}
 
-				<ToolbarDivider />
+						<OverflowDivider groupId="delete">
+							<ToolbarDivider />
+						</OverflowDivider>
 
-				{canDelete && (
-					<Menu positioning="below-end">
-						<MenuTrigger disableButtonEnhancement>
-							{(triggerProps: MenuButtonProps) => (
-								<SplitButton
-									appearance="subtle"
-									menuButton={triggerProps}
-									primaryActionButton={{
-										onClick: onDelete,
-										disabled: isDeleteDisabled,
-									}}
-									disabled={isDeleteDisabled}
-									icon={<Delete20Regular />}
-									aria-label={
-										hasSelection ? "Delete selected records" : "Delete all records from view"
+						{canDelete && (
+							<OverflowItem id="delete" groupId="delete">
+								<Menu positioning="below-end">
+									<MenuTrigger disableButtonEnhancement>
+										{(triggerProps: MenuButtonProps) => (
+											<SplitButton
+												appearance="subtle"
+												menuButton={triggerProps}
+												primaryActionButton={{
+													onClick: onDelete,
+													disabled: isDeleteDisabled,
+												}}
+												disabled={isDeleteDisabled}
+												icon={<Delete20Regular />}
+												aria-label={
+													hasSelection
+														? "Delete selected records"
+														: "Delete all records from view"
+												}
+											>
+												{hasSelection ? "Delete" : "Delete all"}
+											</SplitButton>
+										)}
+									</MenuTrigger>
+									<MenuPopover>
+										<MenuList>{deleteMenuItems()}</MenuList>
+									</MenuPopover>
+								</Menu>
+							</OverflowItem>
+						)}
+
+						{canRunWorkflow && (
+							<OverflowItem id="workflow" groupId="workflow">
+								<Menu
+									positioning="below-end"
+									onOpenChange={(_, data) =>
+										data.open && handleWorkflowMenuOpen()
 									}
 								>
-									{hasSelection ? "Delete" : "Delete all"}
-								</SplitButton>
-							)}
-						</MenuTrigger>
-						<MenuPopover>
-							<MenuList>
-								<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={isDeleteDisabled}>
-									Delete{hasSelection ? ` (${selectedCount})` : " All"}
-								</MenuItem>
-								{canBulkDelete && (
-									<MenuItem
-										icon={<DocumentBulletList20Regular />}
-										onClick={onBulkDelete}
-										disabled={isDeleteDisabled}
+									<MenuTrigger disableButtonEnhancement>
+										<MenuButton
+											appearance="subtle"
+											icon={<Play20Regular />}
+											disabled={!hasSelection || isWorkflowDisabled}
+											aria-label="Run workflow on selected records"
+										>
+											Run workflow
+										</MenuButton>
+									</MenuTrigger>
+									<MenuPopover>
+										<MenuList>{workflowMenuItems()}</MenuList>
+									</MenuPopover>
+								</Menu>
+							</OverflowItem>
+						)}
+
+						<OverflowDivider groupId="copy">
+							<ToolbarDivider />
+						</OverflowDivider>
+
+						{/* Copy rows as tab-separated values with headers; pastes into Excel (#50) */}
+						<OverflowItem id="copy" groupId="copy">
+							<Menu
+								checkedValues={{ copyValues: [copyMode] }}
+								onCheckedValueChange={(_, data) =>
+									setCopyMode(data.checkedItems[0] as CopyValueMode)
+								}
+							>
+								<MenuTrigger disableButtonEnhancement>
+									<MenuButton
+										appearance="subtle"
+										icon={<Copy20Regular />}
+										disabled={loadedCount === 0}
 									>
-										Bulk delete (job)
+										Copy
+									</MenuButton>
+								</MenuTrigger>
+								<MenuPopover>
+									<MenuList>{copyMenuItems()}</MenuList>
+								</MenuPopover>
+							</Menu>
+						</OverflowItem>
+
+						{/* Export Menu Button */}
+						<OverflowItem id="export" groupId="copy">
+							<Menu>
+								<MenuTrigger disableButtonEnhancement>
+									<Tooltip
+										content={
+											isExporting
+												? "Export in progress..."
+												: "Export to Excel"
+										}
+										relationship="description"
+									>
+										<MenuButton
+											appearance="subtle"
+											icon={<ExcelIcon />}
+											disabled={isExporting}
+											aria-label="Export to Excel"
+										>
+											{isExporting ? "Exporting..." : "Export to Excel"}
+										</MenuButton>
+									</Tooltip>
+								</MenuTrigger>
+								<MenuPopover>
+									<MenuList>{exportMenuItems()}</MenuList>
+								</MenuPopover>
+							</Menu>
+						</OverflowItem>
+
+						<OverflowDivider groupId="editColumns">
+							<ToolbarDivider />
+						</OverflowDivider>
+
+						<OverflowItem id="editColumns" groupId="editColumns">
+							<ToolbarButton
+								appearance="subtle"
+								icon={<ColumnTriple20Regular />}
+								onClick={handleEditColumnsClick}
+								aria-label="Edit columns"
+							>
+								Edit columns
+							</ToolbarButton>
+						</OverflowItem>
+						<OverflowMoreMenu>
+							<OverflowMenuEntry id="stop">
+								{isRetrieveAllInProgress && onStopRetrieveAll && (
+									<MenuItem icon={<Stop20Regular />} onClick={onStopRetrieveAll}>
+										Stop
 									</MenuItem>
 								)}
-							</MenuList>
-						</MenuPopover>
-					</Menu>
-				)}
-
-				{canRunWorkflow && (
-					<Menu
-						positioning="below-end"
-						onOpenChange={(_, data) => data.open && handleWorkflowMenuOpen()}
-					>
-						<MenuTrigger disableButtonEnhancement>
-							<MenuButton
-								appearance="subtle"
-								icon={<Play20Regular />}
-								disabled={!hasSelection || isWorkflowDisabled}
-								aria-label="Run workflow on selected records"
-							>
-								Run workflow
-							</MenuButton>
-						</MenuTrigger>
-						<MenuPopover>
-							<MenuList>
-								{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
-								{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
-									<MenuItem disabled>No workflows available</MenuItem>
-								)}
-								{!isLoadingWorkflows &&
-									workflows.map((wf) => (
-										<MenuItem
-											key={wf.workflowid}
-											icon={<Play20Regular />}
-											onClick={() => onRunSpecificWorkflow?.(wf)}
-										>
-											{wf.name}
-										</MenuItem>
-									))}
-							</MenuList>
-						</MenuPopover>
-					</Menu>
-				)}
-
-				<ToolbarDivider />
-
-				{/* Copy rows as tab-separated values with headers; pastes into Excel (#50) */}
-				<Menu
-					checkedValues={{ copyValues: [copyMode] }}
-					onCheckedValueChange={(_, data) => setCopyMode(data.checkedItems[0] as CopyValueMode)}
-				>
-					<MenuTrigger disableButtonEnhancement>
-						<MenuButton appearance="subtle" icon={<Copy20Regular />} disabled={loadedCount === 0}>
-							Copy
-						</MenuButton>
-					</MenuTrigger>
-					<MenuPopover>
-						<MenuList>
-							<MenuItem disabled={selectedCount === 0} onClick={() => onCopyRows?.("selected", copyMode)}>
-								Selected rows ({selectedCount})
-							</MenuItem>
-							<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
-								{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount})
-							</MenuItem>
-							<MenuDivider />
-							<MenuGroup>
-								<MenuGroupHeader>Values</MenuGroupHeader>
-								<MenuItemRadio name="copyValues" value="shown" persistOnClick>
-									As shown
-								</MenuItemRadio>
-								<MenuItemRadio name="copyValues" value="raw" persistOnClick>
-									Raw (GUIDs, numbers, ISO dates)
-								</MenuItemRadio>
-							</MenuGroup>
-						</MenuList>
-					</MenuPopover>
-				</Menu>
-
-				{/* Export Menu Button */}
-				<Menu>
-					<MenuTrigger disableButtonEnhancement>
-						<Tooltip
-							content={isExporting ? "Export in progress..." : "Export to Excel"}
-							relationship="description"
-						>
-							<MenuButton
-								appearance="subtle"
-								icon={<ExcelIcon />}
-								disabled={isExporting}
-								aria-label="Export to Excel"
-							>
-								{isExporting ? "Exporting..." : "Export to Excel"}
-							</MenuButton>
-						</Tooltip>
-					</MenuTrigger>
-					<MenuPopover>
-						<MenuList>
-							<Tooltip
-								content={
-									canExport
-										? "Export using Dataverse API (all records)"
-										: exportDisabledReason || "Save as a view first to enable server export"
-								}
-								relationship="description"
-								positioning="before"
-							>
-								<MenuItem onClick={onExport} disabled={!canExport || isExporting}>
-									Export (Server)
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="open">
+								<MenuItem
+									icon={<Open20Regular />}
+									disabled={!singleSelection || recordActionsUnavailable}
+									onClick={onOpen}
+								>
+									Open
 								</MenuItem>
-							</Tooltip>
-							<MenuItem onClick={onExportLocal} disabled={isExporting}>
-								Export (Local)
-							</MenuItem>
-						</MenuList>
-					</MenuPopover>
-				</Menu>
-
-				<ToolbarDivider />
-
-				<ToolbarButton
-					appearance="subtle"
-					icon={<ColumnTriple20Regular />}
-					onClick={handleEditColumnsClick}
-					aria-label="Edit columns"
-				>
-					Edit columns
-				</ToolbarButton>
-			</Toolbar>
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="copyUrl">
+								<MenuItem
+									icon={<Link20Regular />}
+									disabled={!singleSelection || recordActionsUnavailable}
+									onClick={onCopyUrl}
+								>
+									Copy URL
+								</MenuItem>
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="recordInfo">
+								{recordActionsDisabledReason && (
+									<MenuItem icon={<Info20Regular />} disabled>
+										Record actions unavailable
+									</MenuItem>
+								)}
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="activate">
+								<MenuItem
+									icon={<CheckmarkCircle20Regular />}
+									disabled={
+										stateButtonsDisabled ||
+										!onActivate ||
+										!!activateDisabledReason
+									}
+									onClick={onActivate}
+								>
+									Activate
+								</MenuItem>
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="close">
+								{closeActions && closeActions.length > 0 && closeDisabledReason && (
+									<MenuItem icon={<CircleOff20Regular />} disabled>
+										Close
+									</MenuItem>
+								)}
+								{closeActions &&
+									closeActions.length > 0 &&
+									!closeDisabledReason &&
+									submenuEntry(
+										"Close",
+										<CircleOff20Regular />,
+										stateButtonsDisabled || !onCloseAction,
+										closeMenuItems,
+									)}
+							</OverflowMenuEntry>
+							{!closeActions?.length && (
+								<OverflowMenuEntry id="deactivate">
+									<MenuItem
+										icon={<DismissCircle20Regular />}
+										disabled={
+											stateButtonsDisabled ||
+											!onDeactivate ||
+											!!deactivateDisabledReason
+										}
+										onClick={onDeactivate}
+									>
+										Deactivate
+									</MenuItem>
+								</OverflowMenuEntry>
+							)}
+							<OverflowMenuEntry id="delete">
+								{canDelete &&
+									submenuEntry(
+										"Delete",
+										<Delete20Regular />,
+										isDeleteDisabled,
+										deleteMenuItems,
+									)}
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="workflow">
+								{canRunWorkflow &&
+									submenuEntry(
+										"Run workflow",
+										<Play20Regular />,
+										!hasSelection || isWorkflowDisabled,
+										workflowMenuItems,
+										handleWorkflowMenuOpen,
+									)}
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="copy">
+								{submenuEntry(
+									"Copy",
+									<Copy20Regular />,
+									loadedCount === 0,
+									copyMenuItems,
+								)}
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="export">
+								{submenuEntry(
+									"Export to Excel",
+									<ExcelIcon />,
+									isExporting,
+									exportMenuItems,
+								)}
+							</OverflowMenuEntry>
+							<OverflowMenuEntry id="editColumns">
+								<MenuItem
+									icon={<ColumnTriple20Regular />}
+									onClick={handleEditColumnsClick}
+								>
+									Edit columns
+								</MenuItem>
+							</OverflowMenuEntry>
+						</OverflowMoreMenu>
+					</div>
+				</Overflow>
+			</div>
 
 			{/* Edit Columns Panel */}
 			<EditColumnsPanel

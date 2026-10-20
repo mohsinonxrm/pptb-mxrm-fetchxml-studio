@@ -238,7 +238,6 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 			)}
 
 			<div className={styles.section}>
-				<SectionHeading>Link-entity</SectionHeading>
 
 				<InfoField
 					label="Entity"

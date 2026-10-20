@@ -227,10 +227,11 @@ function generateCondition(condition: ConditionNode, indent: number): string[] {
 	const lines: string[] = [];
 	const spaces = "  ".repeat(indent);
 
-	const attrs: string[] = [
-		`attribute="${escapeXmlAttr(condition.attribute)}"`,
-		`operator="${escapeXmlAttr(condition.operator)}"`,
-	];
+	// An edited or imported condition can temporarily lack a required field. Preserve that
+	// incomplete state in the XML without crashing the entire builder.
+	const attrs: string[] = [];
+	if (condition.attribute != null) attrs.push(`attribute="${escapeXmlAttr(condition.attribute)}"`);
+	if (condition.operator != null) attrs.push(`operator="${escapeXmlAttr(condition.operator)}"`);
 
 	if (condition.entityname) attrs.push(`entityname="${escapeXmlAttr(condition.entityname)}"`);
 	if (condition.aggregate && AGGREGATES.has(condition.aggregate))

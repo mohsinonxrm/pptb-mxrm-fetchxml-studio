@@ -34,17 +34,15 @@ export function EntityEditor({ node, onUpdate }: EntityEditorProps) {
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				<InfoField
-					label="Entity"
-					hint="Change it with the Entity picker above the tree."
-					info={<Info text="The logical name of the entity the query is based on." href={DOCS.entity} />}
-				>
-					<Text className={styles.readOnly}>
-						{node.name}
-						{displayName && <span className={styles.secondary}> ({displayName})</span>}
-					</Text>
-				</InfoField>
+				<Text className={styles.readOnly}>
+					{node.name}
+					{displayName && <span className={styles.secondary}> ({displayName})</span>}
+				</Text>
+				<Text className={styles.secondary} block>
+					Change it with the Entity picker above the tree.
+				</Text>
 			</div>
+
 
 			<Accordion collapsible defaultOpenItems={prefilteringSet ? ["prefilter"] : []}>
 				<AccordionItem value="prefilter">

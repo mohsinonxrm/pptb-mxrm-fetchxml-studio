@@ -11,8 +11,15 @@ import {
 	type SelectTabEvent,
 	Button,
 	makeStyles,
-	Toolbar,
-	ToolbarDivider,
+	Menu,
+	MenuItem,
+	MenuList,
+	MenuPopover,
+	MenuTrigger,
+	Overflow,
+	OverflowItem,
+	useIsOverflowItemVisible,
+	useOverflowMenu,
 	ProgressBar,
 	Spinner,
 	Tooltip,
@@ -27,13 +34,24 @@ import {
 	Dismiss16Regular,
 	Settings20Regular,
 	ArrowReply24Regular,
+	ArrowReply20Regular,
 	Code20Regular,
+	MoreHorizontal20Regular,
+	PlugConnected20Regular,
+	SaveRegular,
+	SaveArrowRightRegular,
+	SendRegular,
 } from "@fluentui/react-icons";
-import { returnFetchXmlToInvokingTool } from "../../api/invocation";
+import { returnFetchXmlToInvokingTool, type DiscoveredTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
-import { ResultsGrid, type QueryResult, type ResultsGridHandle, type SortChangeData } from "./ResultsGrid";
+import {
+	ResultsGrid,
+	type QueryResult,
+	type ResultsGridHandle,
+	type SortChangeData,
+} from "./ResultsGrid";
 import { ResultsCommandBar, type CloseMenuItem } from "./ResultsCommandBar";
 import type { RelatedEntityColumn } from "./AddColumnsPanel";
 import type { PagingNotice } from "../../api/paging";
@@ -53,11 +71,7 @@ import {
 import { generateFetchXml } from "../../model/fetchxml";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
-import {
-	EditorSyncContext,
-	type EditorSyncAction,
-	type EditorSyncResult,
-} from "./editorSync";
+import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
@@ -72,7 +86,9 @@ type PreviewTab = "xml" | "layout" | "results" | "advisories" | "code";
 /** FetchXML as the tree writes it, to compare meaning rather than formatting; null if it doesn't parse */
 function parseForAdvisories(xmlText: string): { fetchNode: FetchNode; canonical: string } | null {
 	const result = parseFetchXml(xmlText);
-	return result.success && result.fetchNode ? { fetchNode: result.fetchNode, canonical: generateFetchXml(result.fetchNode) } : null;
+	return result.success && result.fetchNode
+		? { fetchNode: result.fetchNode, canonical: generateFetchXml(result.fetchNode) }
+		: null;
 }
 
 const useStyles = makeStyles({
@@ -88,6 +104,29 @@ const useStyles = makeStyles({
 		justifyContent: "space-between",
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 		paddingRight: "16px",
+		minWidth: 0,
+	},
+	// Execute, the overflow row and Settings: the row takes the free width and moves what doesn't fit
+	// into the "More actions" menu; Execute and Settings never shrink or move
+	headerActions: {
+		display: "flex",
+		alignItems: "center",
+		gap: "8px",
+		flex: 1,
+		minWidth: 0,
+		justifyContent: "flex-end",
+	},
+	fixed: {
+		flexShrink: 0,
+	},
+	overflowRow: {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "flex-start",
+		gap: "8px",
+		flex: 1,
+		minWidth: 0,
+		overflow: "hidden",
 	},
 	progressContainer: {
 		paddingLeft: "16px",
@@ -111,12 +150,19 @@ const useStyles = makeStyles({
 	},
 	// Toolbar card styling
 	toolbarCard: {
+		// Size is independent of the content: the Results grid below may grow, the toolbar may not
+		contain: "inline-size",
 		borderRadius: tokens.borderRadiusMedium,
 		boxShadow: tokens.shadow16,
 		backgroundColor: tokens.colorNeutralBackground1,
 		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		padding: "4px 8px",
 		flexShrink: 0,
+		width: "100%",
+		minWidth: 0,
+		maxWidth: "100%",
+		boxSizing: "border-box",
+		overflow: "hidden",
 	},
 	// Grid card styling
 	gridCard: {
@@ -144,9 +190,14 @@ const useStyles = makeStyles({
 	},
 	// Results tab layout grid
 	resultsLayout: {
+		// The column is fixed to the pane; only the grid card inside may be wider (and scrolls)
+		contain: "inline-size",
 		display: "flex",
 		flexDirection: "column",
 		height: "100%",
+		width: "100%",
+		minWidth: 0,
+		maxWidth: "100%",
 		overflow: "hidden",
 	},
 	messageBarContainer: {
@@ -157,6 +208,144 @@ const useStyles = makeStyles({
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 	},
 });
+
+/** Returns the query to the invoking tool; a failure is shown as a notification */
+async function returnCurrentFetchXml(fetchXml: string): Promise<void> {
+	try {
+		await returnFetchXmlToInvokingTool(fetchXml);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await window.toolboxAPI?.utils?.showNotification?.({
+			title: "Cannot return FetchXML",
+			body: message,
+			type: "error",
+		});
+	}
+}
+
+/** Save actions for the "More actions" menu, run through the SaveViewButton */
+export interface SaveViewActions {
+	hasLoadedView: boolean;
+	isSystemView: boolean;
+	disabled: boolean;
+	run: (action: "save" | "saveAs" | "saveAndPublish") => void;
+}
+
+/** Send-to-tool actions for the "More actions" menu, run through the SendToToolButton */
+export interface SendToActions {
+	tools: DiscoveredTool[];
+	disabled: boolean;
+	send: (toolId: string) => void;
+}
+
+/** A menu entry that is only listed while its toolbar item doesn't fit */
+function OverflowMenuEntry({ id, children }: { id: string; children: ReactNode }) {
+	const visible = useIsOverflowItemVisible(id);
+	return visible ? null : <>{children}</>;
+}
+
+function OverflowActionsMenu({
+	showReturn,
+	showSave,
+	showSendTo,
+	getCurrentXml,
+	saveActions,
+	sendActions,
+}: {
+	showReturn: boolean;
+	showSave: boolean;
+	showSendTo: boolean;
+	getCurrentXml: () => string;
+	saveActions?: SaveViewActions;
+	sendActions?: SendToActions;
+}) {
+	const { ref, isOverflowing } = useOverflowMenu<HTMLButtonElement>();
+	if (!isOverflowing) return null;
+
+	return (
+		<Menu positioning="below-end">
+			<MenuTrigger disableButtonEnhancement>
+				<Button
+					ref={ref}
+					appearance="subtle"
+					size="small"
+					icon={<MoreHorizontal20Regular />}
+					aria-label="More actions"
+				/>
+			</MenuTrigger>
+			<MenuPopover>
+				<MenuList>
+					{showReturn && (
+						<OverflowMenuEntry id="return">
+							<MenuItem
+								icon={<ArrowReply20Regular />}
+								onClick={() => void returnCurrentFetchXml(getCurrentXml())}
+							>
+								Return FetchXML
+							</MenuItem>
+						</OverflowMenuEntry>
+					)}
+					{showSave && saveActions && (
+						<OverflowMenuEntry id="save">
+							{saveActions.hasLoadedView && (
+								<MenuItem
+									icon={<SaveRegular />}
+									disabled={saveActions.disabled}
+									onClick={() => saveActions.run("save")}
+								>
+									Save
+								</MenuItem>
+							)}
+							<MenuItem
+								icon={<SaveArrowRightRegular />}
+								disabled={saveActions.disabled}
+								onClick={() => saveActions.run("saveAs")}
+							>
+								Save as…
+							</MenuItem>
+							{saveActions.isSystemView && (
+								<MenuItem
+									icon={<SendRegular />}
+									disabled={saveActions.disabled}
+									onClick={() => saveActions.run("saveAndPublish")}
+								>
+									Save and publish
+								</MenuItem>
+							)}
+						</OverflowMenuEntry>
+					)}
+					{showSendTo && sendActions && (
+						<OverflowMenuEntry id="sendTo">
+							<Menu>
+								<MenuTrigger disableButtonEnhancement>
+									<MenuItem
+										hasSubmenu
+										icon={<PlugConnected20Regular />}
+										disabled={sendActions.disabled}
+									>
+										Send to tool
+									</MenuItem>
+								</MenuTrigger>
+								<MenuPopover>
+									<MenuList>
+										{sendActions.tools.map((tool) => (
+											<MenuItem
+												key={tool.id}
+												onClick={() => sendActions.send(tool.id)}
+											>
+												{tool.name}
+											</MenuItem>
+										))}
+									</MenuList>
+								</MenuPopover>
+							</Menu>
+						</OverflowMenuEntry>
+					)}
+				</MenuList>
+			</MenuPopover>
+		</Menu>
+	);
+}
 
 /**
  * Returns the current FetchXML to the tool that launched this window (T2T callee).
@@ -171,14 +360,7 @@ function ReturnFetchXmlButton({ getCurrentXml }: { getCurrentXml: () => string }
 	const handleReturn = useCallback(async () => {
 		setIsReturning(true);
 		try {
-			await returnFetchXmlToInvokingTool(getCurrentXml());
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			await window.toolboxAPI?.utils?.showNotification?.({
-				title: "Cannot return FetchXML",
-				body: message,
-				type: "error",
-			});
+			await returnCurrentFetchXml(getCurrentXml());
 		} finally {
 			setIsReturning(false);
 		}
@@ -252,6 +434,10 @@ interface PreviewTabsProps {
 	executeDisabledReason?: string;
 	/** Optional SendToToolButton to render in the toolbar */
 	sendToToolButton?: ReactNode;
+	/** Save actions for the "More actions" menu (with saveViewButton) */
+	saveViewActions?: SaveViewActions;
+	/** Send-to-tool actions for the "More actions" menu (with sendToToolButton) */
+	sendToActions?: SendToActions;
 	/** True when this tool was launched by another tool via T2T — shows the Return button */
 	isCallee?: boolean;
 	/** Callback when user scrolls near bottom (infinite scroll) */
@@ -369,6 +555,8 @@ export function PreviewTabs({
 	quickFindTestValue,
 	executeDisabledReason,
 	sendToToolButton,
+	saveViewActions,
+	sendToActions,
 	isCallee,
 	onLoadMore,
 	pagingNotice,
@@ -421,6 +609,7 @@ export function PreviewTabs({
 	const styles = useStyles();
 	const advancedFindOnly = useAdvancedFindOnly();
 	const [selectedTab, setSelectedTab] = useState<PreviewTab>("xml");
+	const showSaveViewButton = selectedTab === "xml" && !!saveViewButton;
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
@@ -447,7 +636,11 @@ export function PreviewTabs({
 			new Set(
 				(fetchQuery?.entity.links ?? [])
 					.filter((link) => !NON_RETURNING_LINK_TYPES.has(link.linkType))
-					.flatMap((link) => link.attributes.map((a) => `${link.name}|${link.from}|${link.to}|${a.name}`)),
+					.flatMap((link) =>
+						link.attributes.map(
+							(a) => `${link.name}|${link.from}|${link.to}|${a.name}`,
+						),
+					),
 			),
 		[fetchQuery],
 	);
@@ -489,12 +682,25 @@ export function PreviewTabs({
 
 	// ---- Advisories (#97): what the user is looking at, the editor's FetchXML in editor mode
 	const advisorySubject = useMemo(() => {
-		if (!isEditorModeActive) return { fetch: fetchQuery ?? null, key: xml, inTree: true, editorInvalid: false };
+		if (!isEditorModeActive)
+			return { fetch: fetchQuery ?? null, key: xml, inTree: true, editorInvalid: false };
 		const parsed = parseForAdvisories(editorText);
-		if (!parsed) return { fetch: null, key: editorText, inTree: false, editorInvalid: editorText.trim() !== "" };
+		if (!parsed)
+			return {
+				fetch: null,
+				key: editorText,
+				inTree: false,
+				editorInvalid: editorText.trim() !== "",
+			};
 		// The editor means the same as the tree: use the tree's nodes, so locations and fixes work
-		if (fetchQuery && parsed.canonical === xml) return { fetch: fetchQuery, key: xml, inTree: true, editorInvalid: false };
-		return { fetch: parsed.fetchNode, key: parsed.canonical, inTree: false, editorInvalid: false };
+		if (fetchQuery && parsed.canonical === xml)
+			return { fetch: fetchQuery, key: xml, inTree: true, editorInvalid: false };
+		return {
+			fetch: parsed.fetchNode,
+			key: parsed.canonical,
+			inTree: false,
+			editorInvalid: false,
+		};
 	}, [isEditorModeActive, editorText, fetchQuery, xml]);
 	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch);
 	const dataverseCheck = useDataverseCheck();
@@ -503,7 +709,9 @@ export function PreviewTabs({
 		const subject = advisorySubject.fetch;
 		if (!subject) return { advisories: [], added: 0 };
 		const own = collectAdvisories(subject, advisorMetadata);
-		return checkResult ? mergeDataverseCheck(subject, own, checkResult.check) : { advisories: own, added: 0 };
+		return checkResult
+			? mergeDataverseCheck(subject, own, checkResult.check)
+			: { advisories: own, added: 0 };
 	}, [advisorySubject.fetch, advisorMetadata, checkResult]);
 	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
 	const checkDisabledReason = !isDataverseAvailable()
@@ -577,7 +785,11 @@ export function PreviewTabs({
 
 			const result = onParseToTree?.(editorXml, { preserveLayout: true });
 			if (!result?.success || !result.fetchNode) {
-				setEditorValidationError(result?.errors ?? [{ message: "The FetchXML couldn't be loaded into the tree." }]);
+				setEditorValidationError(
+					result?.errors ?? [
+						{ message: "The FetchXML couldn't be loaded into the tree." },
+					],
+				);
 				return { status: "cancelled" };
 			}
 			const syncedXml = generateFetchXml(result.fetchNode);
@@ -592,7 +804,10 @@ export function PreviewTabs({
 	);
 
 	const editorSyncValue = useMemo(
-		() => ({ sync: syncEditorToTree, editorHasContent: isEditorModeActive && editorHasContent }),
+		() => ({
+			sync: syncEditorToTree,
+			editorHasContent: isEditorModeActive && editorHasContent,
+		}),
 		[syncEditorToTree, isEditorModeActive, editorHasContent],
 	);
 
@@ -606,7 +821,11 @@ export function PreviewTabs({
 		const synced = await syncEditorToTree("execute");
 		if (synced.status === "cancelled") return;
 		setSelectedTab("results");
-		onExecute?.(synced.status === "synced" ? { xml: synced.fetchXml, fetchQuery: synced.fetchQuery } : undefined);
+		onExecute?.(
+			synced.status === "synced"
+				? { xml: synced.fetchXml, fetchQuery: synced.fetchQuery }
+				: undefined,
+		);
 	};
 
 	/** Run the editor XML despite warnings; Dataverse's own error is shown if it fails. */
@@ -664,67 +883,98 @@ export function PreviewTabs({
 						<Tab value="layout">LayoutXML</Tab>
 						<Tab value="results">Results</Tab>
 						<Tab value="advisories" aria-label={`Advisories (${advisories.length})`}>
-							Advisories <CounterBadge count={advisories.length} size="small" appearance="ghost" color="brand" />
+							Advisories{" "}
+							<CounterBadge
+								count={advisories.length}
+								size="small"
+								appearance="ghost"
+								color="brand"
+							/>
 						</Tab>
 						<Tab value="code" icon={<Code20Regular />}>
 							Code
 						</Tab>
 					</TabList>
-					<Toolbar size="small">
-						{/* The reason follows the tree's query; in editor mode the editor's query runs after
-						    syncing, and Execute stops there if it still needs a test value (#142) */}
-						{executeDisabledReason && !isEditorModeActive ? (
-							// Disabled buttons don't get pointer events: the tooltip goes on a wrapper (#142)
-							<Tooltip content={executeDisabledReason} relationship="description">
-								<span>
-									<Button appearance="primary" icon={<Play24Regular />} disabled>
-										Execute
-									</Button>
-								</span>
-							</Tooltip>
-						) : (
-							<Button
-								appearance="primary"
-								icon={<Play24Regular />}
-								onClick={handleExecute}
-								disabled={isExecuting || isLoadingMore || (isEditorModeActive ? !editorHasContent : !xml)}
+					<div className={styles.headerActions}>
+						<div className={styles.fixed}>
+							{/* The reason follows the tree's query; in editor mode the editor's query runs after
+							    syncing, and Execute stops there if it still needs a test value (#142) */}
+							{executeDisabledReason && !isEditorModeActive ? (
+								// Disabled buttons don't get pointer events: the tooltip goes on a wrapper (#142)
+								<Tooltip content={executeDisabledReason} relationship="description">
+									<span>
+										<Button
+											appearance="primary"
+											icon={<Play24Regular />}
+											disabled
+										>
+											Execute
+										</Button>
+									</span>
+								</Tooltip>
+							) : (
+								<Button
+									appearance="primary"
+									icon={<Play24Regular />}
+									onClick={handleExecute}
+									disabled={
+										isExecuting ||
+										isLoadingMore ||
+										(isEditorModeActive ? !editorHasContent : !xml)
+									}
+								>
+									{isExecuting ? "Executing…" : "Execute"}
+								</Button>
+							)}
+						</div>
+						<Overflow>
+							<div
+								className={styles.overflowRow}
+								role="toolbar"
+								aria-label="Query actions"
 							>
-								{isExecuting ? "Executing…" : "Execute"}
-							</Button>
-						)}
-						{isCallee && (
-							<>
-								<ToolbarDivider />
-								<ReturnFetchXmlButton getCurrentXml={getCurrentXml} />
-							</>
-						)}
-						{selectedTab === "xml" && saveViewButton && (
-							<>
-								<ToolbarDivider />
-								{saveViewButton}
-							</>
-						)}
-						{sendToToolButton && (
-							<>
-								<ToolbarDivider />
-								{sendToToolButton}
-							</>
-						)}
-						<ToolbarDivider />
+								{isCallee && (
+									<OverflowItem id="return">
+										<ReturnFetchXmlButton getCurrentXml={getCurrentXml} />
+									</OverflowItem>
+								)}
+								{showSaveViewButton && (
+									<OverflowItem id="save">
+										<span className={styles.fixed}>{saveViewButton}</span>
+									</OverflowItem>
+								)}
+								{sendToToolButton && (
+									<OverflowItem id="sendTo">
+										<span className={styles.fixed}>{sendToToolButton}</span>
+									</OverflowItem>
+								)}
+								<OverflowActionsMenu
+									showReturn={!!isCallee}
+									showSave={showSaveViewButton}
+									showSendTo={!!sendToToolButton}
+									getCurrentXml={getCurrentXml}
+									saveActions={saveViewActions}
+									sendActions={sendToActions}
+								/>
+							</div>
+						</Overflow>
 						<Button
+							className={styles.fixed}
 							appearance="subtle"
 							icon={<Settings20Regular />}
 							onClick={onOpenSettings}
 							aria-label="Settings"
 						/>
-					</Toolbar>
+					</div>
 				</div>
 				{(isExecuting || isLoadingMore) && (
 					<div className={styles.progressContainer}>
 						<ProgressBar />
 					</div>
 				)}
-				{quickFindTestValue && <div className={styles.messageBarContainer}>{quickFindTestValue}</div>}
+				{quickFindTestValue && (
+					<div className={styles.messageBarContainer}>{quickFindTestValue}</div>
+				)}
 				{/* Export status MessageBar */}
 				{isExporting && (
 					<div className={styles.messageBarContainer}>
@@ -880,26 +1130,35 @@ export function PreviewTabs({
 											onCopyRecordUrl(ids);
 										}
 									}}
-									onActivate={onActivateRecords && (() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onActivateRecords) {
-											onActivateRecords(ids);
-										}
-									})}
-									onDeactivate={onDeactivateRecords && (() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onDeactivateRecords) {
-											onDeactivateRecords(ids);
-										}
-									})}
+									onActivate={
+										onActivateRecords &&
+										(() => {
+											const ids = getSelectedIds();
+											if (ids?.length && onActivateRecords) {
+												onActivateRecords(ids);
+											}
+										})
+									}
+									onDeactivate={
+										onDeactivateRecords &&
+										(() => {
+											const ids = getSelectedIds();
+											if (ids?.length && onDeactivateRecords) {
+												onDeactivateRecords(ids);
+											}
+										})
+									}
 									activateDisabledReason={activateDisabledReason}
 									deactivateDisabledReason={deactivateDisabledReason}
 									closeActions={closeActions}
 									closeDisabledReason={closeDisabledReason}
-									onCloseAction={onCloseRecords && ((key) => {
-										const ids = getSelectedIds();
-										if (ids?.length) onCloseRecords(key, ids);
-									})}
+									onCloseAction={
+										onCloseRecords &&
+										((key) => {
+											const ids = getSelectedIds();
+											if (ids?.length) onCloseRecords(key, ids);
+										})
+									}
 									onDelete={() => {
 										const ids = getSelectedIds();
 										// For delete, we allow empty selection to trigger "delete all" dialog
@@ -928,9 +1187,15 @@ export function PreviewTabs({
 									onFetchWorkflows={onFetchWorkflows}
 									onExport={onExport}
 									onExportLocal={onExportLocal}
-									loadedCount={searchText.trim() ? visibleRowCount : (result?.rows.length ?? 0)}
+									loadedCount={
+										searchText.trim()
+											? visibleRowCount
+											: (result?.rows.length ?? 0)
+									}
 									searchText={searchText}
-									onCopyRows={(scope, mode) => resultsGridRef.current?.copyRows(scope, mode)}
+									onCopyRows={(scope, mode) =>
+										resultsGridRef.current?.copyRows(scope, mode)
+									}
 									canExport={canExport}
 									isExporting={isExporting}
 									exportDisabledReason={exportDisabledReason}
@@ -942,12 +1207,18 @@ export function PreviewTabs({
 									availableAttributes={
 										// Root entity attributes to offer, per "Advanced Find only" (#57)
 										attributeMetadata && fetchQuery?.entity?.name
-											? Array.from(attributeMetadata.get(fetchQuery.entity.name)?.values() || []).filter((a) =>
+											? Array.from(
+													attributeMetadata
+														.get(fetchQuery.entity.name)
+														?.values() || [],
+												).filter((a) =>
 													isAttributeInScope(a, advancedFindOnly),
 												)
 											: undefined
 									}
-									selectedAttributes={fetchQuery?.entity.attributes.map((a) => a.name)}
+									selectedAttributes={fetchQuery?.entity.attributes.map(
+										(a) => a.name,
+									)}
 									onAddColumn={onAddColumn}
 									onAddRelatedColumns={onAddRelatedColumns}
 									lookupRelationships={lookupRelationships}
@@ -967,7 +1238,16 @@ export function PreviewTabs({
 							</div>
 							{pagingNotice && (
 								<div className={styles.messageBarContainer}>
-									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" ? "warning" : "info"} layout="multiline">
+									<MessageBar
+										intent={
+											pagingNotice.kind === "error"
+												? "error"
+												: pagingNotice.kind === "stopped"
+													? "warning"
+													: "info"
+										}
+										layout="multiline"
+									>
 										<MessageBarBody>
 											<MessageBarTitle>
 												{pagingNotice.kind === "error"
@@ -992,7 +1272,9 @@ export function PreviewTabs({
 												/>
 											}
 										>
-											{pagingNotice.kind === "error" && onRetryPaging && <Button onClick={onRetryPaging}>Retry</Button>}
+											{pagingNotice.kind === "error" && onRetryPaging && (
+												<Button onClick={onRetryPaging}>Retry</Button>
+											)}
 										</MessageBarActions>
 									</MessageBar>
 								</div>

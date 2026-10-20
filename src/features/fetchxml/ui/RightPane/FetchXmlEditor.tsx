@@ -10,13 +10,10 @@ import type * as MonacoEditor from "monaco-editor/editor";
 import {
 	Button,
 	makeStyles,
-	Tooltip,
 	Spinner,
+	Tooltip,
 	tokens,
 	Switch,
-	Toolbar,
-	ToolbarButton,
-	ToolbarDivider,
 	MessageBar,
 	MessageBarBody,
 	MessageBarTitle,
@@ -33,6 +30,7 @@ import {
 	Dismiss24Regular,
 } from "@fluentui/react-icons";
 import { useTheme } from "../../../../shared/contexts/useTheme";
+import { OverflowActionBar } from "../../../../shared/components/OverflowActionBar";
 import {
 	parseFetchXml,
 	validateFetchXmlSyntax,
@@ -62,7 +60,8 @@ const TREE_CHANGED_TITLE = "The tree changed while you were editing";
  * Whether the Advisories tab lists this finding (advisories.ts collectAdvisories): a query-rule
  * finding (they carry a nodeId) that's an error, a warning or advice, not a setting Dataverse ignores.
  */
-const listedInAdvisories = (w: ParseWarning) => w.nodeId !== undefined && (w.severity !== "info" || w.kind === "advice");
+const listedInAdvisories = (w: ParseWarning) =>
+	w.nodeId !== undefined && (w.severity !== "info" || w.kind === "advice");
 
 const useStyles = makeStyles({
 	container: {
@@ -84,11 +83,20 @@ const useStyles = makeStyles({
 		display: "flex",
 		alignItems: "center",
 		gap: tokens.spacingHorizontalS,
+		flex: 1,
+		minWidth: 0,
+		// Compact buttons: less horizontal padding than Fluent's default, so more fit in the row
+		"& .fui-ToolbarButton, & .fui-Button": {
+			paddingLeft: tokens.spacingHorizontalXS,
+			paddingRight: tokens.spacingHorizontalXS,
+		},
 	},
 	toolbarRight: {
 		display: "flex",
 		alignItems: "center",
 		gap: tokens.spacingHorizontalS,
+		flexShrink: 0,
+		marginLeft: tokens.spacingHorizontalS,
 	},
 	editorWrapper: {
 		flex: 1,
@@ -175,13 +183,13 @@ export function FetchXmlEditor({
 	// Add a message
 	const addMessage = useCallback(
 		(intent: Message["intent"], title: string, body: Message["body"], advisories?: boolean) => {
-		const newMessage: Message = {
-			id: messageIdRef.current++,
-			intent,
-			title,
-			body,
-			advisories,
-		};
+			const newMessage: Message = {
+				id: messageIdRef.current++,
+				intent,
+				title,
+				body,
+				advisories,
+			};
 			setMessages((prev) => [newMessage, ...prev].slice(0, 5)); // Keep max 5 messages
 		},
 		[],
@@ -351,8 +359,15 @@ export function FetchXmlEditor({
 		const executionErrors = getExecutionErrors(parseResult);
 		// A bar offers "View all in Advisories" when the tab lists one of its findings (#97)
 		if (notes.length > 0) addMessage("info", "Notes", notes, notes.some(listedInAdvisories));
-		if (blocking.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, blocking, blocking.some(listedInAdvisories));
-		if (executionErrors.length > 0) addMessage("error", INVALID_TITLE, executionErrors, executionErrors.some(listedInAdvisories));
+		if (blocking.length > 0)
+			addMessage("warning", MIGHT_REJECT_TITLE, blocking, blocking.some(listedInAdvisories));
+		if (executionErrors.length > 0)
+			addMessage(
+				"error",
+				INVALID_TITLE,
+				executionErrors,
+				executionErrors.some(listedInAdvisories),
+			);
 		if (blocking.length === 0 && executionErrors.length === 0) {
 			addMessage("success", "Valid", "Dataverse should accept this FetchXML.");
 		}
@@ -383,7 +398,11 @@ export function FetchXmlEditor({
 			if (notes.length > 0) addMessage("info", "Notes", notes);
 			if (stillWarnings.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, stillWarnings);
 			if (stillErrors.length > 0) addMessage("error", INVALID_TITLE, stillErrors);
-			addMessage("success", "Parsed into the tree", "The FetchXML was loaded into the tree builder.");
+			addMessage(
+				"success",
+				"Parsed into the tree",
+				"The FetchXML was loaded into the tree builder.",
+			);
 
 			// Exit editor mode after successful parse
 			onEditorStateChange?.(false, "");
@@ -436,46 +455,61 @@ export function FetchXmlEditor({
 			<div className={styles.toolbar}>
 				<div className={styles.toolbarLeft}>
 					{isEditorMode ? (
-						<Toolbar size="small">
-							<Tooltip content="Copy FetchXML to clipboard" relationship="label">
-								<ToolbarButton icon={<Copy24Regular />} onClick={handleCopy}>
-									Copy
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Paste from clipboard" relationship="label">
-								<ToolbarButton icon={<ClipboardPaste24Regular />} onClick={handlePaste}>
-									Paste
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Load from file" relationship="label">
-								<ToolbarButton icon={<FolderOpen24Regular />} onClick={handleLoadFile}>
-									Load
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Reset to tree-generated XML" relationship="label">
-								<ToolbarButton icon={<ArrowReset24Regular />} onClick={handleReset}>
-									Reset
-								</ToolbarButton>
-							</Tooltip>
-							<ToolbarDivider />
-							<Tooltip content="Validate FetchXML syntax" relationship="label">
-								<ToolbarButton icon={<Checkmark24Regular />} onClick={handleValidate}>
-									Validate
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Parse FetchXML into tree builder" relationship="label">
-								<ToolbarButton
-									icon={<TreeDeciduous24Regular />}
-									onClick={handleParseToTree}
-									disabled={!onParseToTree}
-								>
-									Parse to tree
-								</ToolbarButton>
-							</Tooltip>
-						</Toolbar>
+						<OverflowActionBar
+							label="FetchXML actions"
+							actions={[
+								{
+									id: "copy",
+									label: "Copy",
+									icon: <Copy24Regular />,
+									onClick: handleCopy,
+									tooltip: "Copy FetchXML to clipboard",
+								},
+								{
+									id: "paste",
+									label: "Paste",
+									icon: <ClipboardPaste24Regular />,
+									onClick: handlePaste,
+									tooltip: "Paste from clipboard",
+								},
+								{
+									id: "load",
+									label: "Load",
+									icon: <FolderOpen24Regular />,
+									onClick: handleLoadFile,
+									tooltip: "Load from file",
+								},
+								{
+									id: "reset",
+									label: "Reset",
+									icon: <ArrowReset24Regular />,
+									onClick: handleReset,
+									tooltip: "Reset to tree-generated XML",
+								},
+								{
+									id: "validate",
+									label: "Validate",
+									icon: <Checkmark24Regular />,
+									onClick: handleValidate,
+									tooltip: "Validate FetchXML syntax",
+								},
+								{
+									id: "parse",
+									label: "Parse to tree",
+									icon: <TreeDeciduous24Regular />,
+									onClick: handleParseToTree,
+									disabled: !onParseToTree,
+									tooltip: "Parse FetchXML into tree builder",
+								},
+							]}
+						/>
 					) : (
 						<Tooltip content="Copy FetchXML to clipboard" relationship="label">
-							<Button appearance="subtle" icon={<Copy24Regular />} onClick={handleCopy}>
+							<Button
+								appearance="subtle"
+								icon={<Copy24Regular />}
+								onClick={handleCopy}
+							>
 								Copy
 							</Button>
 						</Tooltip>
@@ -548,7 +582,11 @@ export function FetchXmlEditor({
 							>
 								<MessageBarBody>
 									<MessageBarTitle>{msg.title}</MessageBarTitle>
-									{typeof msg.body === "string" ? msg.body : <ParseIssueList items={msg.body} />}
+									{typeof msg.body === "string" ? (
+										msg.body
+									) : (
+										<ParseIssueList items={msg.body} />
+									)}
 								</MessageBarBody>
 								<MessageBarActions
 									containerAction={

@@ -102,6 +102,31 @@ describe("generateFetchXml", () => {
 		);
 	});
 
+	it("does not crash when a condition is temporarily missing its attribute or operator", () => {
+		const xml = generateFetchXml(
+			fetch(
+				entity("account", {
+					filters: [
+						{
+							id: nid(),
+							type: "filter",
+							conjunction: "and",
+							subfilters: [],
+							links: [],
+							conditions: [
+								{ id: nid(), type: "condition", attribute: "name", operator: undefined! },
+								{ id: nid(), type: "condition", attribute: undefined!, operator: "eq" },
+							],
+						},
+					],
+				}),
+			),
+		);
+		expect(xml).toContain('<condition attribute="name" />');
+		expect(xml).toContain('<condition operator="eq" />');
+		expect(xml).not.toContain('operator="undefined"');
+	});
+
 	it("serializes multi-value conditions as <value> children", () => {
 		const xml = generateFetchXml(
 			fetch(

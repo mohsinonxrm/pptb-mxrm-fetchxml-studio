@@ -23,6 +23,8 @@ import {
 	MenuPopover,
 	MenuList,
 	MenuItem,
+	mergeClasses,
+	Tooltip,
 	tokens,
 	type PositioningVirtualElement,
 	type TreeOpenChangeData,
@@ -85,29 +87,73 @@ function formatDisplayValue(val: unknown): string {
 const useStyles = makeStyles({
 	container: {
 		flex: 1,
-		overflow: "auto",
+		overflowX: "hidden",
+		overflowY: "auto",
 		padding: "8px",
 		minHeight: 0, // Important for flex child with overflow
+		minWidth: 0,
 		// Ensure scrollbars are always visible when content overflows
 		scrollbarGutter: "stable",
 	},
-	treeItem: {
+	tree: {
+		width: "100%",
+		maxWidth: "100%",
+		minWidth: 0,
+		overflowX: "hidden",
 		"&:hover": {
-			backgroundColor: tokens.colorNeutralBackground1Hover,
+			backgroundColor: tokens.colorTransparentBackground,
+		},
+	},
+	treeItemLayout: {
+		width: "100%",
+		maxWidth: "100%",
+		minWidth: 0,
+		boxSizing: "border-box",
+		whiteSpace: "nowrap",
+		"& .fui-TreeItemLayout__main": {
+			display: "block",
+			flex: "1 1 0%",
+			minWidth: 0,
+			maxWidth: "100%",
+			overflow: "hidden",
+			textOverflow: "ellipsis",
+			whiteSpace: "nowrap",
+		},
+		"& .fui-TreeItemLayout__aside": {
+			flexShrink: 0,
+		},
+		"& .fui-TreeItemLayout__actions": {
+			flexShrink: 0,
+			marginInlineStart: "auto",
+		},
+	},
+	label: {
+		display: "block",
+		flex: "1 1 0%",
+		minWidth: 0,
+		overflow: "hidden",
+		textOverflow: "ellipsis",
+		whiteSpace: "nowrap",
+	},
+	selectedTreeItem: {
+		backgroundColor: tokens.colorNeutralBackground1Selected,
+		color: tokens.colorNeutralForeground1Selected,
+		"&:hover": {
+			backgroundColor: tokens.colorNeutralBackground1Selected,
 		},
 	},
 	actions: {
 		display: "flex",
+		flexShrink: 0,
 		gap: "4px",
-		opacity: 0,
-		transition: "opacity 0.2s",
-		"&:focus-within": {
-			opacity: 1,
-		},
+		opacity: 1,
 	},
 	treeItemWithActions: {
-		"&:hover .actions": {
-			opacity: 1,
+		width: "100%",
+		maxWidth: "100%",
+		minWidth: 0,
+		"&:hover": {
+			backgroundColor: tokens.colorTransparentBackground,
 		},
 	},
 	badges: {
@@ -174,6 +220,13 @@ interface ContextMenuState {
 	deleteTarget?: DeleteTarget;
 }
 
+interface NodeTooltipState {
+	nodeId: NodeId;
+	text: string;
+	x: number;
+	y: number;
+}
+
 /** The primary key of an entity, from the cached metadata */
 const primaryIdOf = (logicalName: string): string | undefined =>
 	metadataCache.getEntityMetadata(logicalName)?.PrimaryIdAttribute ??
@@ -218,6 +271,18 @@ export function TreeView({
 	onUpdateAttributes,
 }: TreeViewProps) {
 	const styles = useStyles();
+	const handleNodeSelect = (nodeId: NodeId) => (event: React.MouseEvent) => {
+		// The expand chevron toggles a branch; it should not change the active properties node.
+		if (
+			event.target instanceof Element &&
+			event.target.closest(".fui-TreeItemLayout__expandIcon")
+		) {
+			return;
+		}
+
+		event.preventDefault();
+		onNodeSelect(nodeId);
+	};
 
 	// Query-rule errors per node, the same ones the properties panel and Validate show (#90b)
 	const errorsByNode = useMemo(() => {
@@ -265,6 +330,7 @@ export function TreeView({
 	// Right-click / Shift+F10 menu (#24): one menu for the tree, opened at the row
 	const [contextMenu, setContextMenu] = useState<ContextMenuState>({ open: false });
 	const contextReturnFocus = useRef<HTMLElement | null>(null);
+	const [nodeTooltip, setNodeTooltip] = useState<NodeTooltipState | null>(null);
 	// A node with items inside waits for the confirmation (#24)
 	const [pendingDelete, setPendingDelete] = useState<DeleteTarget | null>(null);
 
@@ -476,6 +542,7 @@ export function TreeView({
 		const children = row.children?.filter(Boolean) ?? [];
 		const hasChildren = children.length > 0;
 		const hasContextMenu = !!row.addItems?.length || !!row.deleteTarget;
+		const fullLabel = typeof row.label === "string" ? [row.label, row.hint].filter(Boolean).join(" ") : undefined;
 		return (
 			<TreeItem
 				key={row.id}
@@ -494,6 +561,10 @@ export function TreeView({
 				}}
 			>
 				<TreeItemLayout
+					className={mergeClasses(
+						styles.treeItemLayout,
+						selectedNodeId === row.id && styles.selectedTreeItem,
+					)}
 					iconBefore={row.icon}
 					actions={
 						row.addItems || row.deleteTarget ? (
@@ -525,7 +596,7 @@ export function TreeView({
 						) : undefined
 					}
 					aside={renderBadges(row.id, row.badges)}
-					onClick={() => onNodeSelect(row.id)}
+					onClick={handleNodeSelect(row.id)}
 					onContextMenu={
 						hasContextMenu
 							? (e: React.MouseEvent<HTMLDivElement>) => {
@@ -536,11 +607,33 @@ export function TreeView({
 							: undefined
 					}
 				>
-					{row.label}
-					{row.hint && <span className={styles.hint}>{row.hint}</span>}
+					<span
+						className={styles.label}
+						onPointerEnter={(event) => {
+							const label = event.currentTarget;
+							if (!fullLabel || label.scrollWidth <= label.clientWidth) return;
+							setNodeTooltip({
+								nodeId: row.id,
+								text: fullLabel,
+								x: event.clientX,
+								y: event.clientY,
+							});
+						}}
+						onPointerMove={(event) => {
+							setNodeTooltip((current) =>
+								current?.nodeId === row.id
+									? { ...current, x: event.clientX, y: event.clientY }
+									: current,
+							);
+						}}
+						onPointerLeave={() => setNodeTooltip((current) => current?.nodeId === row.id ? null : current)}
+					>
+						{row.label}
+						{row.hint && <span className={styles.hint}>{row.hint}</span>}
+					</span>
 				</TreeItemLayout>
 
-				{hasChildren && <Tree>{children}</Tree>}
+				{hasChildren && <Tree className={styles.tree}>{children}</Tree>}
 			</TreeItem>
 		);
 	};
@@ -667,12 +760,32 @@ export function TreeView({
 	return (
 		<div ref={treeRef} className={styles.container}>
 			<Tree
+				className={styles.tree}
 				aria-label="FetchXML Query Structure"
 				openItems={openItems}
 				onOpenChange={handleOpenChange}
 			>
 				{renderFetchNode(fetchQuery)}
 			</Tree>
+
+			<Tooltip
+				content={nodeTooltip?.text ?? ""}
+				relationship="inaccessible"
+				visible={nodeTooltip !== null}
+				positioning={{
+					target: nodeTooltip
+						? {
+								getBoundingClientRect: () => {
+									const { x, y } = nodeTooltip;
+									return { x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0, toJSON: () => ({}) } as DOMRect;
+								},
+							}
+						: undefined,
+					position: "below",
+					align: "start",
+					offset: 8,
+				}}
+			/>
 
 			{/* Context menu: the row's Add items, then Delete (#24) */}
 			<Menu

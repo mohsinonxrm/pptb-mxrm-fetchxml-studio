@@ -17,13 +17,13 @@ import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/m
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
-import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
-import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
+import { SaveViewButton, type SaveViewButtonHandle } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
+import { SendToToolButton, type SendToToolButtonHandle } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
 import { isT2TSupported, resolveLaunchPrefill } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
-import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
+import { PropertiesHeader, PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
@@ -229,7 +229,7 @@ const useStyles = makeStyles({
 		display: "flex",
 		flexDirection: "column",
 		overflow: "hidden",
-		minWidth: 0,
+		minWidth: "660px",
 	},
 	toolbar: {
 		padding: "12px 16px",
@@ -505,6 +505,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
+	// Save and Send-to-tool actions for the toolbar's "More actions" menu (#overflow)
+	const saveViewRef = useRef<SaveViewButtonHandle>(null);
+	const sendToolRef = useRef<SendToToolButtonHandle>(null);
 	const [displaySettings, setDisplaySettings] = usePersistedSettings();
 	// The pickers follow "Advanced Find only" (#57). A layout effect, so the scope is set before the
 	// children's effects load metadata.
@@ -1864,7 +1867,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				{/* Bottom: Properties Panel */}
 				<div className={styles.leftPaneBottom} style={{ height: `${100 - topHeight}%` }}>
 					<div className={styles.toolbar}>
-						<span style={{ fontWeight: 600 }}>Properties</span>
+						<PropertiesHeader selectedNode={builder.selectedNode} />
 					</div>
 					<div className={styles.propertiesContent}>
 						<PropertiesPanel
@@ -1952,8 +1955,20 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 							? "Enter a quick find value to execute this query."
 							: undefined
 					}
+					saveViewActions={{
+						hasLoadedView: !!builder.loadedView,
+						isSystemView: builder.loadedView?.type === "system",
+						disabled: !fetchXml || !entityMetadata,
+						run: (action) => saveViewRef.current?.[action](),
+					}}
+					sendToActions={{
+						tools: sendToTools,
+						disabled: !fetchXml || !builder.fetchQuery?.entity?.name,
+						send: (toolId) => sendToolRef.current?.send(toolId),
+					}}
 					saveViewButton={
 						<SaveViewButton
+							ref={saveViewRef}
 							fetchXml={fetchXml}
 							layoutXml={layoutXml}
 							entityLogicalName={builder.fetchQuery?.entity?.name || ""}
@@ -1968,6 +1983,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					sendToToolButton={
 						isT2TSupported() && sendToTools.length > 0 ? (
 							<SendToToolButton
+								ref={sendToolRef}
 								fetchXml={fetchXml}
 								entityLogicalName={builder.fetchQuery?.entity?.name || ""}
 								tools={sendToTools}

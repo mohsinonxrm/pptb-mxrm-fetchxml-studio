@@ -13,7 +13,7 @@ import { getOrderMetadataIssue } from "../../../../model/attributeCapabilities";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoField, LeftoverSetting, SectionHeading } from "../fields";
+import { Info, InfoField, LeftoverSetting } from "../fields";
 import { findingFor, worst } from "../ruleFindings";
 import { useAttributeTypeInfo } from "../useEditorMetadata";
 
@@ -78,7 +78,6 @@ export function OrderEditor({ node, container, isRootEntity, fetchQuery, finding
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				<SectionHeading>Sort</SectionHeading>
 
 				{isRootEntity && targets.length > 0 && (
 					<InfoField

@@ -134,7 +134,6 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				<SectionHeading>Execution</SectionHeading>
 				<TeachingPopover open={showTeachingPopover} onOpenChange={(_, data) => setShowTeachingPopover(data.open)}>
 					<TeachingPopoverTrigger>
 						<Switch

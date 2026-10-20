@@ -27,4 +27,4 @@ dist-ssr
 .claude/
 
 # Instructions for GitHub Copilot
-
+.playwright-mcp

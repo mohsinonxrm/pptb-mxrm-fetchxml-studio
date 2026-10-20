@@ -38,7 +38,6 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				<SectionHeading>Filter</SectionHeading>
 				<InfoField
 					label="Match"
 					info={<Info text="Whether all conditions (and) or any condition (or) must be true." href={DOCS.filter} />}

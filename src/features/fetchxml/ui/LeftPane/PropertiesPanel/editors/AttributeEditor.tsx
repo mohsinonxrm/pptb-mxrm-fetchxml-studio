@@ -88,18 +88,12 @@ export function AttributeEditor({
 
 	const aliasRequired = isAggregateQuery || node.rowAggregate !== undefined;
 	const attributeField = (
-		<InfoField
-			label="Attribute"
-			required
-			info={<Info text="The logical name of the attribute to return." href={DOCS.attribute} />}
-		>
-			<AttributePicker
-				entityLogicalName={entityName}
-				value={node.name}
-				onChange={(name) => onUpdate({ name })}
-				placeholder="Select an attribute"
-			/>
-		</InfoField>
+		<AttributePicker
+			entityLogicalName={entityName}
+			value={node.name}
+			onChange={(name) => onUpdate({ name })}
+			placeholder="Select an attribute"
+		/>
 	);
 	const aliasField = (
 		<InfoField

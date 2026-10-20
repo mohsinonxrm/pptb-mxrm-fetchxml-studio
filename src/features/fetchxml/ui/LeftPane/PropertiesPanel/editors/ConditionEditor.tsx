@@ -28,7 +28,7 @@ import type { AttributeMetadata } from "../../../../api/pptbClient";
 import { collectLinkEntityReferences, isConditionInRootEntityFilter } from "../../../../model/treeUtils";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoField, LeftoverSetting, NumberField, SectionHeading, type Validation } from "../fields";
+import { Info, InfoField, LeftoverSetting, NumberField, type Validation } from "../fields";
 import { useEntityInfo } from "../useEditorMetadata";
 import { findingFor, worst } from "../ruleFindings";
 import { convertWildcardValue, isWildcardOperator } from "../../../../model/wildcards";
@@ -225,7 +225,6 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	return (
 		<div className={styles.container}>
 			<div className={styles.section}>
-				{!columnFilter && <SectionHeading>Condition</SectionHeading>}
 
 				{showEntity && (
 					<InfoField
@@ -246,7 +245,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 								onUpdate({
 									entityname: data.optionValue === THIS_ENTITY ? undefined : data.optionValue,
 									attribute: undefined,
-									operator: undefined,
+									operator: "eq",
 									value: undefined,
 									valueof: undefined,
 								})
@@ -282,10 +281,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							entityLogicalName={effectiveEntityName}
 							value={node.attribute}
 							onChange={(logicalName) =>
-								// A different attribute can have a different type: reset operator and value, keep the mode
+								// A different attribute can have a different type: reset to the default operator and clear the value
 								onUpdate({
 									attribute: logicalName || undefined,
-									operator: undefined,
+									operator: "eq",
 									value: undefined,
 									valueof: comparesToAttribute ? "" : undefined,
 								})
