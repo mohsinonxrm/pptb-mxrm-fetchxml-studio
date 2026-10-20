@@ -35,6 +35,7 @@ import { canExecuteBatch, connectionGuard, getPrimaryConnection } from "./host";
 import {
 	deleteRecordsInBatches,
 	updateRecordStatesInBatches,
+	CONNECTION_CHANGED_MESSAGE,
 	STATE_CONNECTION_CHANGED_MESSAGE,
 	type ExecuteBatch,
 } from "./batchDelete";
@@ -2206,7 +2207,12 @@ const hostExecuteBatch: ExecuteBatch = (requests) => window.dataverseAPI!.execut
  * @param recordId GUID of the record to delete
  * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/update-delete-entities-using-web-api#basic-delete
  */
-export async function deleteRecord(entityLogicalName: string, recordId: string): Promise<void> {
+export async function deleteRecord(
+	entityLogicalName: string,
+	recordId: string,
+	/** Asked before each attempt and retry (#175): false stops, e.g. after a connection change */
+	shouldContinue?: () => boolean | Promise<boolean>,
+): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
@@ -2217,11 +2223,12 @@ export async function deleteRecord(entityLogicalName: string, recordId: string):
 		const entitySetName = await deleteEntitySet(entityLogicalName);
 		if (entitySetName) {
 			// The batch path retries service protection errors itself (batchDelete.ts)
-			const result = await deleteRecordsInBatches(entitySetName, [recordId], { executeBatch: hostExecuteBatch });
+			const result = await deleteRecordsInBatches(entitySetName, [recordId], { executeBatch: hostExecuteBatch, shouldContinue });
 			if (result.failed > 0) throw new Error(result.errors[0]?.replace(`${recordId}: `, "") || "Delete failed");
 		} else {
 			// Retried after service protection errors (#96): Dataverse rejected the request unprocessed
-			await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId));
+			if (shouldContinue && !(await shouldContinue())) throw new Error(CONNECTION_CHANGED_MESSAGE);
+			await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), { shouldContinue });
 		}
 		debugLog("recordAPI", `✅ Record deleted: ${entityLogicalName}(${recordId})`);
 	} catch (error) {
@@ -2477,6 +2484,8 @@ export async function executeWorkflow(
 	workflowId: string,
 	recordId: string,
 	entityLogicalName: string,
+	/** Asked after each throttling wait (#175): false stops instead of retrying */
+	shouldContinue?: () => boolean | Promise<boolean>,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2499,6 +2508,7 @@ export async function executeWorkflow(
 					EntityId: recordId,
 				},
 			}),
+			{ shouldContinue }, // not retried after a connection change (#175)
 		);
 
 		debugLog("workflowAPI", `✅ Workflow executed successfully`);
@@ -2580,7 +2590,7 @@ export async function executeWorkflowBatch(
 		// Execute workflows in parallel within the batch
 		const workflowPromises = batchRecordIds.map(async (recordId) => {
 			try {
-				await executeWorkflow(workflowId, recordId, entityLogicalName);
+				await executeWorkflow(workflowId, recordId, entityLogicalName, stillOnConnection);
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -2719,17 +2729,27 @@ export async function deleteRecordsBatch(
 	const batchTimes: number[] = [];
 	let completed = 0;
 	let batchesCompleted = 0;
+	// Older hosts without executeBatch: the same connection guard as the $batch path (#175, #66)
+	const stillOnConnection = await connectionGuard();
 
 	// Process batches sequentially (each batch processes in parallel)
 	for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
 		const batchRecordIds = batches[batchIndex];
 		const batchStartTime = Date.now();
 
+		if (!(await stillOnConnection())) {
+			const remaining = batches.slice(batchIndex).flat();
+			result.failed += remaining.length;
+			result.errors.push(...remaining.map((id) => `${id}: ${CONNECTION_CHANGED_MESSAGE}`));
+			break;
+		}
+
 		// Execute deletes in parallel within the batch
 		const deletePromises = batchRecordIds.map(async (recordId) => {
 			try {
-				// Retried after service protection errors (#96), like deleteRecord's fallback
-				await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId));
+				// Retried after service protection errors (#96), like deleteRecord's fallback; not after
+				// a connection change (#175)
+				await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), { shouldContinue: stillOnConnection });
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -3000,8 +3020,9 @@ export async function setRecordsState(
 			break;
 		}
 		try {
-			await withThrottleRetry(() =>
-				window.dataverseAPI!.update(entityLogicalName, recordId, statePatchBody(target)),
+			await withThrottleRetry(
+				() => window.dataverseAPI!.update(entityLogicalName, recordId, statePatchBody(target)),
+				{ shouldContinue }, // not retried after a connection change (#175)
 			);
 			result.succeeded++;
 		} catch (error) {

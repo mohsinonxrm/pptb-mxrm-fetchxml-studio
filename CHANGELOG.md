@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔧 Fixed
+
+- **The first page gets the same recovery as later pages (#183).**
+  - The first page of results was requested once, with no retry after service protection errors (#96) and no smaller page after the ToolBox's 16 MB response limit (#68). That was the common case #68 was meant for: a 5,000-row first page of a wide Entity, which failed.
+  - Now a too-large first page is requested again with half the count (from Dataverse's default 5,000 when the query sets none), and later pages keep that size.
+  - Saved views are retried after throttling. Their page size is Dataverse's, so it can't be made smaller.
+  - Queries with `top` or `aggregate` are retried but not shrunk.
+- **No write resumes after the tool's connection changed (#175).** The connection guard (#66) was checked before each batch, but not in three places:
+  - the 1–3 record delete loop;
+  - the waits before a throttled `$batch` or request is retried (5–30 s);
+  - the older-host delete path.
+  
+  A retry after an in-place connection change would have run in the new environment, where the same record IDs can exist. Those records now report "Not deleted: the tool's connection changed…" (or "Not changed…" for Activate/Deactivate) instead. Workflow retries stop the same way.
+
 ## [1.5.0-beta.14] - 2026-10-19
 
 ### 🔧 Fixed

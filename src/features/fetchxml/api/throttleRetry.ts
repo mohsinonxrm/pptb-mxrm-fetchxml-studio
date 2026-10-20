@@ -26,6 +26,20 @@ export interface ThrottleRetryOptions {
 	sleep?: (ms: number) => Promise<void>;
 	/** Called before each wait (debug logging, progress text) */
 	onRetry?: (info: { attempt: number; delayMs: number; error: unknown }) => void;
+	/**
+	 * Checked after each wait, before the retry (#175): false stops with RetryStoppedError, e.g. when
+	 * the tool's connection changed in place while waiting (connectionGuard, #66). A write retried
+	 * after that would run in the new environment, where the same record IDs can exist.
+	 */
+	shouldContinue?: () => boolean | Promise<boolean>;
+}
+
+/** A retry wasn't sent because shouldContinue said stop (#175) */
+export class RetryStoppedError extends Error {
+	constructor(message = "Not sent: the tool's connection changed while waiting to retry") {
+		super(message);
+		this.name = "RetryStoppedError";
+	}
 }
 
 export const DEFAULT_MAX_RETRIES = 3;
@@ -67,6 +81,7 @@ export async function withThrottleRetry<T>(
 		shouldRetry = isServiceProtectionError,
 		sleep = defaultSleep,
 		onRetry,
+		shouldContinue,
 	} = options;
 	for (let attempt = 1; ; attempt++) {
 		try {
@@ -77,6 +92,7 @@ export async function withThrottleRetry<T>(
 			if (delayMs === undefined) throw error;
 			onRetry?.({ attempt, delayMs, error });
 			await sleep(delayMs);
+			if (shouldContinue && !(await shouldContinue())) throw new RetryStoppedError();
 		}
 	}
 }
