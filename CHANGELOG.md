@@ -23,7 +23,7 @@ Hotfix for 1.4.3: record actions act only on what you see, and the pac CLI snipp
   - It used to wrap the XML in double quotes, so bash and zsh expanded `$100`, `$(…)` or backticks, and PowerShell rejected `\"`.
   - It now single-quotes the XML, on a **bash / zsh** line and a **PowerShell 7.3+** line.
   - PowerShell's curly single quotes (`‘’‚‛`) are doubled too, so a value like `O’Neil` can't end the string.
-  - It uses `pac env fetch`, the name `pac org` was given in pac 1.32. It points to `--xmlFile` for Windows PowerShell 5.1.
+  - It uses `pac env fetch`: pac 1.32 renamed `pac org` to `pac env`, and `pac org` still works. It points to `--xmlFile` for Windows PowerShell 5.1.
 
 ### 🏗️ Technical
 
