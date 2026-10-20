@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.15] - 2026-10-20
+
 ### 🔧 Fixed
 
+- **"Delete all" deletes what the query on screen matches (#174, from 1.4.4).** With nothing selected, Delete all and Bulk delete (job) submit the FetchXML that produced the visible results. A quick find view's test value is included. They're unavailable ("Delete all unavailable", with the reason in its tooltip) before a run, after a failed run, or when the tree has changed in a way that matches different records, until you run the query again. Adding, removing or sorting columns in the grid doesn't block it.
+- **pac CLI snippet: PowerShell's curly single quotes are doubled too (#196, from 1.4.4),** so a value like `O’Neil` can't end the string.
 - **The first page gets the same recovery as later pages (#183).**
   - The first page of results was requested once, with no retry after service protection errors (#96) and no smaller page after the ToolBox's 16 MB response limit (#68). That was the common case #68 was meant for: a 5,000-row first page of a wide Entity, which failed.
   - Now a too-large first page is requested again with half the count (from Dataverse's default 5,000 when the query sets none), and later pages keep that size.

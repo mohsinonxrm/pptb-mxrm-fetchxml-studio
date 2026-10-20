@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta.14-blue)
+![Version](https://img.shields.io/badge/version-1.5.0--beta.15-blue)
 [![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
@@ -91,6 +91,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
 - **Record deletion** — Delete selected records with confirmation dialog
 - **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL
+- **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen (a quick find view's test value included); after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
 - **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
 - **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking
 
@@ -139,7 +140,7 @@ FetchXML Studio only reads from Dataverse until you start one of the operations 
 | Operation | When | What it does in Dataverse |
 |---|---|---|
 | **Delete records** | Results → **Delete** with 1–100 rows selected | Deletes the selected records. 1–3 records are deleted one request each; 4–100 are deleted in a batch, with progress. Needs the entity's Delete privilege. |
-| **Bulk Delete** | Results → **Delete** with more than 100 rows selected, or with **no rows selected**, or **Bulk Delete** | Submits an asynchronous Bulk Delete job (`BulkDelete`). It runs on the server, and you can track it under Settings → Data Management → Bulk Record Deletion. With no rows selected, the job deletes **every record the query matches**, not just the rows loaded in the grid. Needs the Bulk Delete privilege (`prvBulkDelete`). |
+| **Bulk Delete** | Results → **Delete** with more than 100 rows selected, or with **no rows selected**, or **Bulk Delete** | Submits an asynchronous Bulk Delete job (`BulkDelete`). It runs on the server, and you can track it under Settings → Data Management → Bulk Record Deletion. With no rows selected, the job deletes **every record the query on screen matches**, not just the rows loaded in the grid; it's unavailable until the query has run, and again after you edit the query in the left pane until you run it again. Needs the Bulk Delete privilege (`prvBulkDelete`). |
 | **Activate / Deactivate** | Results → **Activate** or **Deactivate** with rows selected | Sets each selected record's Status and Status Reason with an update (`PATCH {EntitySetName}(id)` with `statecode` and `statuscode`), in batches with progress. The options come from the entity's metadata: entities with two states and one status reason each (such as account and contact) go to the state's default status reason; others let you pick the status reason, grouped by state, limited to the allowed transitions when the entity enforces status reason transitions. Off for entities whose states change through their own actions (opportunity, case, quote, order, invoice, contract) and for entities with no Status column. Needs the entity's Write privilege. |
 | **Run workflow** | Results → **Run Workflow** on selected rows | Starts the chosen on-demand workflow (`ExecuteWorkflow`) once per selected record. What the workflow does is up to the workflow. |
 | **Save view (personal)** | **Save As** / **Save**, Personal view | Creates or updates a `userquery` record (your personal view). |
