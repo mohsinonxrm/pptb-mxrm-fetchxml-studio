@@ -83,7 +83,8 @@ import {
 } from "../features/fetchxml/api/paging";
 import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
 import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
-import { fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
+import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
+import { withThrottleRetry } from "../features/fetchxml/api/throttleRetry";
 import { debugLog } from "../shared/utils/debug";
 import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
@@ -107,7 +108,7 @@ import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid"
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
-import { copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
+import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
@@ -965,6 +966,8 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			// Determine execution method based on loaded view state. A synced editor query
 			// replaced the tree (and cleared the loaded view), so it always runs as FetchXML.
 			let result: FetchXmlResult | undefined;
+			// Set when the first page needed a smaller count (#183); later pages keep it
+			let firstPageShrunkTo: PagingState | undefined;
 			const loadedView = synced ? null : builder.loadedView;
 			let useViewExecution = false;
 
@@ -980,10 +983,12 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 						}=${loadedView.id}`,
 					);
 
+					// Retried after service protection errors like every page (#183, #96); a view's page
+					// size is Dataverse's, so it can't be made smaller
 					if (loadedView.type === "system") {
-						result = await executeSystemView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executeSystemView(loadedView.entitySetName, loadedView.id));
 					} else {
-						result = await executePersonalView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executePersonalView(loadedView.entitySetName, loadedView.id));
 					}
 				}
 			}
@@ -1000,7 +1005,30 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 								? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
 								: "📡 Executing FetchXML query",
 				);
-				result = await executeFetchXml(xmlToExecute);
+				// The first page gets the same recovery as later pages (#183): retried after service
+				// protection errors (#96), and requested again with half the count when it's over the
+				// PPTB host's 16 MB response limit (#68). That is the common case: a 5,000-row first page
+				// of a wide Entity. Without a count, Dataverse's default page size (5,000) is the starting
+				// point; queries with top or aggregate can't take a count, so they only get the retry.
+				const canShrink = !hasTopLimit && query?.options?.aggregate !== true;
+				const firstPageState: PagingState = {
+					mode: "fetchxml",
+					xml: xmlToExecute,
+					pageSize: canShrink ? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE) : undefined,
+					currentPage: (options.page ?? 1) - 1,
+					nextPage: options.page ?? 1,
+					moreRecords: true,
+					isRetrieveAllInProgress: false,
+					retrieveAll: false,
+				};
+				const { result: firstPageResult, state: fetchedFirst } = await fetchPageWithRecovery(
+					firstPageState,
+					// Unchanged, the query runs as written; after a halving, with the smaller count
+					(s) => (s.pageSize === firstPageState.pageSize ? executeFetchXml(xmlToExecute) : executeFetchXml(addPagingToFetchXml(xmlToExecute, s.nextPage, undefined, s.pageSize))),
+					{ onShrink: (s) => debugLog("app", `First page too large: retrying with count ${s.pageSize}`) },
+				);
+				result = firstPageResult;
+				if (fetchedFirst.pageSize !== firstPageState.pageSize) firstPageShrunkTo = fetchedFirst;
 			}
 			if (run !== resultRunRef.current) return; // superseded while the first page was loading
 
@@ -1021,11 +1049,12 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			setPaging({
 				mode: useViewExecution ? "view" : "fetchxml",
 				xml: xmlToExecute,
-				pageSize: options.count,
+				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
 				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
 				fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
-				currentPage: firstPage,
-				nextPage: firstPage + 1,
+				// After a smaller first page (#183), paging continues from the page it was fetched as
+				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
+				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
 				pagingCookie: result.pagingCookie,
 				nextLink: result.nextLink,
 				moreRecords,
@@ -1558,9 +1587,12 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			let successCount = 0;
 			const errors: string[] = [];
 
+			// Stop if the tool's connection changes in place (#175, #66): the next delete would run in
+			// the new environment, where the same record IDs can exist
+			const stillOnConnection = await connectionGuard();
 			for (const recordId of recordIds) {
 				try {
-					await deleteRecord(entityLogicalName, recordId);
+					await deleteRecord(entityLogicalName, recordId, stillOnConnection);
 					successCount++;
 				} catch (error) {
 					errors.push(

@@ -22,6 +22,7 @@
 
 import type { BatchDeleteProgress, BatchDeleteResult } from "./pptbClient";
 import { formatDataverseError } from "./dataverseErrors";
+import { RetryStoppedError } from "./throttleRetry";
 import { statePatchBody, type StateTarget } from "../model/recordState";
 
 type HostExecuteBatch = Window["dataverseAPI"]["executeBatch"];
@@ -101,14 +102,24 @@ interface RecordOperation {
 	formatError?: (result: BatchResult) => string;
 }
 
-/** Sends one batch, retrying while Dataverse throttles it */
-async function sendWithRetry(requests: BatchRequest[], execute: ExecuteBatch, wait: (ms: number) => Promise<void>): Promise<BatchResult[]> {
+/**
+ * Sends one batch, retrying while Dataverse throttles it. After each wait, `shouldContinue` is asked
+ * again (#175): the connection can change in place during a 5–30 s wait, and the resent batch would
+ * then run in the new environment.
+ */
+async function sendWithRetry(
+	requests: BatchRequest[],
+	execute: ExecuteBatch,
+	wait: (ms: number) => Promise<void>,
+	shouldContinue: () => boolean | Promise<boolean>,
+): Promise<BatchResult[]> {
 	for (let attempt = 0; ; attempt++) {
 		try {
 			return await execute(requests);
 		} catch (error) {
 			if (!isThrottled(error) || attempt >= THROTTLE_WAITS_MS.length) throw error;
 			await wait(THROTTLE_WAITS_MS[attempt]);
+			if (!(await shouldContinue())) throw new RetryStoppedError();
 		}
 	}
 }
@@ -190,11 +201,15 @@ async function runRecordBatches(
 			stop(chunk);
 		} else {
 			try {
-				results = await sendWithRetry(requests, executeBatch, wait);
+				results = await sendWithRetry(requests, executeBatch, wait, shouldContinue);
 			} catch (error) {
-				// One record per batch tells which records failed (see the file comment). A lone
-				// record gets the error itself: there's nothing to tell apart.
-				if (chunk.length === 1) {
+				if (error instanceof RetryStoppedError) {
+					// Stopped while waiting to retry (#175): nothing in this chunk was sent
+					stopped = true;
+					stop(chunk);
+				} else if (chunk.length === 1) {
+					// One record per batch tells which records failed (see the file comment). A lone
+					// record gets the error itself: there's nothing to tell apart.
 					record(chunk[0], new Error(errorMessage(error)), false);
 				} else {
 					failedEarly = true;
@@ -213,9 +228,15 @@ async function runRecordBatches(
 					break;
 				}
 				try {
-					const [single] = await sendWithRetry([toRequest(id)], executeBatch, wait);
+					const [single] = await sendWithRetry([toRequest(id)], executeBatch, wait, shouldContinue);
 					record(id, single ?? new Error("No response for this record"), true);
 				} catch (error) {
+					if (error instanceof RetryStoppedError) {
+						// Stopped while waiting to retry this record (#175): it and the rest weren't sent
+						stopped = true;
+						stop(chunk.slice(i));
+						break;
+					}
 					record(id, new Error(errorMessage(error)), true);
 				}
 			}
