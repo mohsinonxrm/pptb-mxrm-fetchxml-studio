@@ -84,6 +84,11 @@ export interface CommandBarProps {
 	 * actions are disabled and this text explains why.
 	 */
 	recordActionsDisabledReason?: string;
+	/**
+	 * Why "Delete all" (no selection) is off: the query changed since these results loaded, or nothing
+	 * ran yet, so it would delete records the grid doesn't show (#174). Selected records still work.
+	 */
+	deleteAllDisabledReason?: string;
 	/** Fetch available workflows for the entity */
 	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
 	/** Export to Excel via Dataverse ExportToExcel API (requires saved view) */
@@ -155,6 +160,7 @@ export function ResultsCommandBar({
 	canRunWorkflow = false,
 	workflowDisabled = false,
 	recordActionsDisabledReason,
+	deleteAllDisabledReason,
 	onFetchWorkflows,
 	onExport,
 	onExportLocal,
@@ -187,7 +193,8 @@ export function ResultsCommandBar({
 	const hasSelection = selectedCount > 0;
 	const singleSelection = selectedCount === 1;
 	const recordActionsUnavailable = !!recordActionsDisabledReason;
-	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable;
+	const deleteAllBlocked = !hasSelection && !!deleteAllDisabledReason;
+	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || deleteAllBlocked;
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
@@ -328,6 +335,14 @@ export function ResultsCommandBar({
 
 				<ToolbarDivider />
 
+				{/* Same pattern as "Record actions unavailable": the reason is in the tooltip (#174) */}
+				{canDelete && deleteAllBlocked && !recordActionsDisabledReason && (
+					<Tooltip content={deleteAllDisabledReason} relationship="description" withArrow>
+						<ToolbarButton appearance="transparent" icon={<Info20Regular />}>
+							Delete all unavailable
+						</ToolbarButton>
+					</Tooltip>
+				)}
 				{canDelete && (
 					<Menu positioning="below-end">
 						<MenuTrigger disableButtonEnhancement>
