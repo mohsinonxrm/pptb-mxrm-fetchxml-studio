@@ -304,6 +304,8 @@ interface PreviewTabsProps {
 	hasOneToManyRelationship?: boolean;
 	/** When set, results have no record IDs and all record actions are disabled with this explanation */
 	recordActionsDisabledReason?: string;
+	/** Why "Delete all" (no selection) is off: the query changed since the results loaded, or nothing ran (#174) */
+	deleteAllDisabledReason?: string;
 	/** Callback when selection changes in ResultsGrid */
 	onSelectionChange?: (recordIds: string[]) => void;
 	/** Callback to get currently selected record IDs */
@@ -378,6 +380,7 @@ export function PreviewTabs({
 	isAggregateQuery,
 	hasOneToManyRelationship,
 	recordActionsDisabledReason,
+	deleteAllDisabledReason,
 	onSelectionChange,
 	getSelectedRecordIds,
 	onOpenSettings,
@@ -813,6 +816,7 @@ export function PreviewTabs({
 									canRunWorkflow={canRunWorkflow}
 									workflowDisabled={isAggregateQuery || hasOneToManyRelationship}
 									recordActionsDisabledReason={recordActionsDisabledReason}
+									deleteAllDisabledReason={deleteAllDisabledReason}
 									onFetchWorkflows={onFetchWorkflows}
 									onExport={onExport}
 									onExportLocal={onExportLocal}

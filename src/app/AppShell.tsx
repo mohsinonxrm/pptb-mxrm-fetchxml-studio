@@ -105,6 +105,7 @@ import {
 import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
 import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
+import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
@@ -879,6 +880,14 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 		return "These results don't include the table's primary key, so record actions aren't available.";
 	}, [queryResult, primaryIdAttribute, isAggregateQuery, isDistinctQuery]);
 
+	// "Delete all" (no selection) deletes what the query on screen matches (#174): the results must
+	// come from a successful run of a query that matches the same records as the tree. Editing a
+	// filter in the left pane doesn't re-run the query, so the old rows would still be on screen.
+	const deleteAllDisabledReason = useMemo(
+		() => deleteAllUnavailableReason(executeError ? null : queryResult?.query, builder.fetchQuery),
+		[executeError, queryResult?.query, builder.fetchQuery],
+	);
+
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
 		if (!builder.fetchQuery || !entityMetadata) {
@@ -1493,6 +1502,7 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 
 			// Scenario 1: No selection - delete ALL records from view
 			if (recordIds.length === 0) {
+				if (deleteAllDisabledReason) return; // the button explains why (#174)
 				if (!recordActionPrivileges.canBulkDelete) {
 					debugLog("app", "Bulk delete privilege required to delete all records from view");
 					return;
@@ -1529,7 +1539,7 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			const isBatchDelete = recordIds.length >= 4;
 			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata],
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata, deleteAllDisabledReason],
 	);
 
 	/**
@@ -1541,6 +1551,7 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			if (!entityLogicalName || !recordActionPrivileges.canBulkDelete) return;
 
 			const isAllRecords = recordIds.length === 0;
+			if (isAllRecords && deleteAllDisabledReason) return; // the button explains why (#174)
 			const totalRecords = queryResult?.rows.length || 0;
 
 			setBulkDeleteDialogState({
@@ -1550,7 +1561,7 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 				totalViewRecords: isAllRecords ? totalRecords : undefined,
 			});
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult],
+		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, deleteAllDisabledReason],
 	);
 
 	/**
@@ -1632,11 +1643,14 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 
 			// If deleting ALL records from view (no selection)
 			if (bulkDeleteDialogState.isAllRecords) {
-				// Use the current FetchXML directly from builder state
-				if (!builder.fetchQuery) {
-					throw new Error("No FetchXML query available");
+				// The query that produced the results on screen, never the tree after later edits (#174)
+				const executed = queryResult?.query;
+				if (!executed || deleteAllDisabledReason) {
+					throw new Error(deleteAllDisabledReason ?? "Run the query first: Delete all deletes the records the query on screen matches.");
 				}
-				const currentFetchXml = generateFetchXml(builder.fetchQuery);
+				// The FetchXML that ran: a quick find view's test value replaced {0} only there (#142), so
+				// the tree's XML would still say {0}
+				const currentFetchXml = pagingRef.current?.xml ?? generateFetchXml(executed);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
 				debugLog("app", `📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
 				return result;
@@ -1665,7 +1679,8 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 			entityMetadata,
 			bulkDeleteDialogState.recordIds,
 			bulkDeleteDialogState.isAllRecords,
-			builder.fetchQuery,
+			queryResult?.query,
+			deleteAllDisabledReason,
 		],
 	);
 
@@ -2076,6 +2091,7 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 					isAggregateQuery={isAggregateQuery}
 					hasOneToManyRelationship={hasOneToManyRelationship}
 					recordActionsDisabledReason={recordActionsDisabledReason}
+					deleteAllDisabledReason={deleteAllDisabledReason}
 					onSelectionChange={handleSelectionChange}
 					getSelectedRecordIds={getSelectedRecordIds}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
