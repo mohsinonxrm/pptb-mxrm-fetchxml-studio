@@ -1021,13 +1021,13 @@ function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 					isRetrieveAllInProgress: false,
 					retrieveAll: false,
 				};
-				const { result: firstPage, state: fetchedFirst } = await fetchPageWithRecovery(
+				const { result: firstPageResult, state: fetchedFirst } = await fetchPageWithRecovery(
 					firstPageState,
 					// Unchanged, the query runs as written; after a halving, with the smaller count
 					(s) => (s.pageSize === firstPageState.pageSize ? executeFetchXml(xmlToExecute) : executeFetchXml(addPagingToFetchXml(xmlToExecute, s.nextPage, undefined, s.pageSize))),
 					{ onShrink: (s) => debugLog("app", `First page too large: retrying with count ${s.pageSize}`) },
 				);
-				result = firstPage;
+				result = firstPageResult;
 				if (fetchedFirst.pageSize !== firstPageState.pageSize) firstPageShrunkTo = fetchedFirst;
 			}
 			if (run !== resultRunRef.current) return; // superseded while the first page was loading
