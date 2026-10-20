@@ -112,6 +112,22 @@ describe("deleteRecordsInBatches", () => {
 		expect(result.succeeded).toBe(2);
 	});
 
+	it("doesn't resend a throttled batch after the connection changed during the wait (#175)", async () => {
+		const wait = vi.fn(noWait);
+		const executeBatch = vi
+			.fn<(requests: BatchRequest[]) => Promise<BatchResult[]>>()
+			.mockRejectedValueOnce(new Error("0x80072322: Number of requests exceeded the limit of 6000 over time window of 300 seconds."))
+			.mockImplementation(async (requests) => requests.map(ok));
+		let checks = 0;
+		// On the connection before the batch, changed by the time the wait is over
+		const result = await deleteRecordsInBatches("accounts", ids(2), { executeBatch, wait, shouldContinue: () => ++checks === 1 });
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(executeBatch).toHaveBeenCalledTimes(1);
+		expect(result.succeeded).toBe(0);
+		expect(result.failed).toBe(2);
+		expect(result.errors.every((e) => e.endsWith(CONNECTION_CHANGED_MESSAGE))).toBe(true);
+	});
+
 	it("reports a lone record's error without retrying it", async () => {
 		const [a] = ids(1);
 		const executeBatch = vi.fn(async () => {

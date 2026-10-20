@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchPageWithRecovery, halvePageSize } from "./pageRecovery";
+import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery, halvePageSize } from "./pageRecovery";
 import type { PagingState } from "./paging";
 
 // #68: a page over the PPTB host's 16 MB limit is fetched again with half the count.
@@ -24,6 +24,12 @@ describe("halvePageSize (#68)", () => {
 		);
 		expect(next?.pageSize).toBe(2500);
 		expect(next?.nextPage).toBe(2);
+	});
+
+	it("halves a first page that set no count from Dataverse's default, keeping page 1 (#183)", () => {
+		const next = halvePageSize(paging({ pageSize: DATAVERSE_DEFAULT_PAGE_SIZE, currentPage: 0, nextPage: 1 }));
+		expect(next?.pageSize).toBe(2500);
+		expect(next?.nextPage).toBe(1);
 	});
 
 	it("renumbers the page for simple paging so it starts at the same row", () => {

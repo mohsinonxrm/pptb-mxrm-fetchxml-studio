@@ -8,7 +8,7 @@ import {
 	quoteForPowerShell,
 } from "./fetchxmlCodeGenerators";
 
-const HOSTILE = `<fetch><entity name="account"><filter><condition attribute="name" operator="like" value="O'Brien $100 $(echo pwned) \`id\` \\ %" /></filter></entity></fetch>`;
+const HOSTILE = `<fetch><entity name="account"><filter><condition attribute="name" operator="like" value="O'Brien O’Neil ‘x’; Remove-Item ‚z‛ $100 $(echo pwned) \`id\` \\ %" /></filter></entity></fetch>`;
 
 /** Whether a POSIX shell is available to run the quoted value through (CI on Linux, Git Bash locally) */
 function posixShell(): string | undefined {
@@ -45,6 +45,9 @@ describe("pac CLI snippet (#166)", () => {
 	it("quotes apostrophes for each shell", () => {
 		expect(quoteForPosixShell("O'Brien")).toBe(`'O'\\''Brien'`);
 		expect(quoteForPowerShell("O'Brien")).toBe(`'O''Brien'`);
+		// PowerShell treats the curly single quotes U+2018–U+201B as single quotes (#196)
+		expect(quoteForPowerShell("O’Neil")).toBe("'O’’Neil'");
+		expect(quoteForPowerShell("‘x’ ‚y‛")).toBe("'‘‘x’’ ‚‚y‛‛'");
 	});
 
 	it.runIf(posixShell())(
@@ -61,7 +64,7 @@ describe("pac CLI snippet (#166)", () => {
 	it.runIf(hasPwsh())("PowerShell receives the XML unchanged, with nothing expanded", () => {
 		const out = execFileSync(
 			"pwsh",
-			["-NoProfile", "-Command", `[Console]::Out.Write(${quoteForPowerShell(HOSTILE)})`],
+			["-NoProfile", "-Command", `[Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::Out.Write(${quoteForPowerShell(HOSTILE)})`],
 			{
 				encoding: "utf8",
 			},

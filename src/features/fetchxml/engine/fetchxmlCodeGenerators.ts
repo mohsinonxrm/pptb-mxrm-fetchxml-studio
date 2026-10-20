@@ -126,9 +126,14 @@ export function quoteForPosixShell(value: string): string {
 	return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-/** PowerShell: single-quoted strings are literal; a ' is written as ''. */
+/**
+ * PowerShell: single-quoted strings are literal; a quote is written twice. PowerShell treats the
+ * curly single quotes U+2018–U+201B as single quotes too, so each is doubled as well; otherwise
+ * O’Brien would end the string early (#196).
+ * https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_quoting_rules
+ */
 export function quoteForPowerShell(value: string): string {
-	return `'${value.replace(/'/g, "''")}'`;
+	return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, (q) => q + q)}'`;
 }
 
 /**

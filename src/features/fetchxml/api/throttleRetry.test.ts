@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { retryDelayMs, withThrottleRetry } from "./throttleRetry";
+import { RetryStoppedError, retryDelayMs, withThrottleRetry } from "./throttleRetry";
 
 // #96: back-off after service protection errors, with fake timers.
 
@@ -64,6 +64,14 @@ describe("withThrottleRetry (#96)", () => {
 		const operation = vi.fn().mockRejectedValue(error);
 		await expect(withThrottleRetry(operation)).rejects.toBe(error);
 		expect(operation).toHaveBeenCalledTimes(1);
+	});
+
+	it("doesn't retry after shouldContinue says stop during the wait (#175)", async () => {
+		const sleep = vi.fn().mockResolvedValue(undefined);
+		const operation = vi.fn().mockRejectedValue(throttled());
+		await expect(withThrottleRetry(operation, { sleep, shouldContinue: () => false })).rejects.toBeInstanceOf(RetryStoppedError);
+		expect(sleep).toHaveBeenCalledTimes(1);
+		expect(operation).toHaveBeenCalledTimes(1); // waited, then not resent
 	});
 
 	it("uses an injected sleep", async () => {

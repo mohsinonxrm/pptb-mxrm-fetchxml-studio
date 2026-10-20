@@ -17,6 +17,13 @@ import { isResponseTooLargeError } from "./dataverseErrors";
 import type { PagingState } from "./paging";
 import { withThrottleRetry, type ThrottleRetryOptions } from "./throttleRetry";
 
+/**
+ * Dataverse's default (and maximum) page size for standard tables, the starting point for halving a
+ * first page that sets no count (#183).
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
+ */
+export const DATAVERSE_DEFAULT_PAGE_SIZE = 5000;
+
 /** No smaller page than this is tried (a page that still doesn't fit fails with the friendly error). */
 export const MIN_ADAPTIVE_PAGE_SIZE = 100;
 /** At most this many halvings for one page (5,000 → 2,500 → 1,250 → 625). */
