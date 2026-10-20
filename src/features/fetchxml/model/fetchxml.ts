@@ -322,19 +322,24 @@ function generateLinkEntity(link: LinkEntityNode, indent: number): string[] {
 }
 
 /**
- * Escape XML special characters
- */
-/**
+ * Escape XML special characters.
+ *
  * Attribute values are always written in double quotes, so `'` stays as is: `&apos;` is valid XML
  * but breaks expressions such as @{body('x')} when the FetchXML is pasted into Power Automate (#63).
+ *
+ * A missing value is written as empty, never thrown on: the property editors clear required fields
+ * while the user is mid-edit (picking a condition's attribute clears its operator, changing its
+ * entity clears its attribute), and the FetchXML preview serializes the tree on every render. In
+ * 1.4.1 and 1.4.2, `undefined.replace` here crashed the whole tool (1.4.3 hotfix). The incomplete
+ * node then shows as attribute="" / operator="" and its editor still asks for the missing value.
  */
-function escapeXmlAttr(str: string): string {
-	return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function escapeXmlAttr(str: string | null | undefined): string {
+	return (str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** Element text (<value>): only &, < and > need escaping. */
-function escapeXmlText(str: string): string {
-	return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/** Element text (<value>): only &, < and > need escaping. A missing value is written as empty. */
+function escapeXmlText(str: string | null | undefined): string {
+	return (str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /**
