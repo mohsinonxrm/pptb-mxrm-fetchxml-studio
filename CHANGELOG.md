@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.15] - 2026-10-20
+
 ### 🔧 Fixed
 
+- **"Delete all" deletes what the query on screen matches (#174, from 1.4.4).** With nothing selected, Delete all and Bulk delete (job) submit the FetchXML that produced the visible results. A quick find view's test value is included. They're unavailable ("Delete all unavailable", with the reason in its tooltip) before a run, after a failed run, or when the tree has changed in a way that matches different records, until you run the query again. Adding, removing or sorting columns in the grid doesn't block it.
+- **pac CLI snippet: PowerShell's curly single quotes are doubled too (#196, from 1.4.4),** so a value like `O’Neil` can't end the string.
 - **The first page gets the same recovery as later pages (#183).**
   - The first page of results was requested once, with no retry after service protection errors (#96) and no smaller page after the ToolBox's 16 MB response limit (#68). That was the common case #68 was meant for: a 5,000-row first page of a wide Entity, which failed.
   - Now a too-large first page is requested again with half the count (from Dataverse's default 5,000 when the query sets none), and later pages keep that size.
@@ -288,6 +292,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two cross-apply queries Dataverse rejects are now flagged before they run (verified live 2026-10-17).**
   - An order inside a `matchfirstrowusingcrossapply` link-entity (0x80041121). Order from the entity with `entityname` instead; that works.
   - An aliased attribute in one, which fails with a generic SQL error (0x80044150) unless a condition with `entityname` targets the link-entity. With such a condition the alias works, so that case isn't flagged.
+
+## [1.4.4] - 2026-10-19
+
+Hotfix for 1.4.3: record actions act only on what you see, and the pac CLI snippet is quoted safely.
+
+### 🔧 Fixed
+
+- **"Delete all" deletes what the query on screen matches (#174).**
+  - With nothing selected, "Delete all" and "Bulk delete (job)" submit a Bulk Delete job for a query. They used the query tree as it was at that moment. If you edited a filter in the left pane after running the query, the grid kept showing the old rows, but the job would delete what the edited query matched. It also worked before anything had run.
+  - Now these actions submit the query that produced the results on screen. They're unavailable, with "Delete all unavailable" explaining why, until you run the query again whenever the tree has changed in a way that matches different records.
+  - Changes you make in the results grid don't block it: adding or removing columns, adding related columns and sorting keep the same records, and column filters re-run the query.
+  - Deleting selected records is unchanged.
+- **Record actions use the current selection after more results load (#158, backported from 1.5).** When the next page loaded (scrolling, or Retrieve All), the grid cleared its selection, but Delete, Activate and Run workflow still had the previous record IDs. They now clear together.
+- **The pac CLI snippet no longer lets the shell expand FetchXML values (#166, #196).**
+  - It used to wrap the XML in double quotes, so bash and zsh expanded `$100`, `$(…)` or backticks, and PowerShell rejected `\"`.
+  - It now single-quotes the XML, on a **bash / zsh** line and a **PowerShell 7.3+** line.
+  - PowerShell's curly single quotes (`‘’‚‛`) are doubled too, so a value like `O’Neil` can't end the string.
+  - It uses `pac env fetch`: pac 1.32 renamed `pac org` to `pac env`, and `pac org` still works. It points to `--xmlFile` for Windows PowerShell 5.1.
+
+### 🏗️ Technical
+
+- **Tests:**
+  - `deleteScope.test.ts`: 16 scenarios of which edits change the records "Delete all" would delete.
+  - `fetchxmlCodeGenerators.test.ts`: the pac snippet, with the quoted XML run through a real POSIX shell and PowerShell when available, including curly-quote injection attempts.
 
 ## [1.4.3] - 2026-10-19
 
