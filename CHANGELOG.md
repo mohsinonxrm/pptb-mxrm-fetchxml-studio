@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- **Density for the results grid and the query tree (#228), as in Dataverse Request Studio.**
+  - **Where:** a **Density** menu in the results command bar: **Medium** (as before), **Small** and **Extra small**. Wide results with many columns fit more on screen.
+  - **How it applies:**
+    - One setting drives both. The grid uses Fluent's `DataGrid size`: rows of 42, 34 and 24 px.
+    - The tree uses Fluent's `Tree size`. Small and Extra small both use the small tree, because Fluent's Tree has no extra-small size.
+    - The Yes/No switch, choice badges and lookup cells shrink to fit the smaller rows.
+  - Saved with the display settings. A saved value from an older version, or an unknown one, falls back to Medium.
+
 - **Close dialogs for opportunity, case, quote, order and invoice (#149, verified live on temporary records):** in the results command bar, **Close** replaces Deactivate for these entities.
   - **Opportunity:** Close as won / Close as lost (`WinOpportunity` / `LoseOpportunity`), with actual revenue (left empty, each opportunity keeps its own), close date, description and, for lost, a competitor that suggests Out-Sold.
   - **Case:** Resolve case (`CloseIncident`), with resolution, resolution type, billable time and remarks. **Cancel case** is a plain state change to Cancelled; Merged isn't offered.

@@ -61,7 +61,7 @@ import {
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
-import type { DisplaySettings } from "../../model/displaySettings";
+import { normalizeGridDensity, type DisplaySettings, type GridDensity } from "../../model/displaySettings";
 import type { NodeId } from "../../model/nodes";
 import { collectAdvisories, mergeDataverseCheck, type Advisory } from "../../model/advisories";
 import { AdvisoriesPanel } from "./AdvisoriesPanel";
@@ -333,6 +333,8 @@ interface PreviewTabsProps {
 	onOpenSettings?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
+	/** Change the grid and tree density (#228) */
+	onGridDensityChange?: (density: GridDensity) => void;
 	/** Primary key attribute from Dataverse entity metadata (e.g. "activityid" for activity entities) */
 	primaryIdAttribute?: string;
 	/** Identity of the tool's connection: "" with none (usePptbContext); Check with Dataverse needs one (#97) */
@@ -415,6 +417,7 @@ export function PreviewTabs({
 	getSelectedRecordIds,
 	onOpenSettings,
 	displaySettings,
+	onGridDensityChange,
 	primaryIdAttribute,
 	connectionKey,
 	selectedNodeId,
@@ -871,6 +874,8 @@ export function PreviewTabs({
 							<div className={styles.toolbarCard}>
 								<ResultsCommandBar
 									selectedCount={toolbarSelectedCount}
+									density={normalizeGridDensity(displaySettings?.gridDensity)}
+									onDensityChange={onGridDensityChange}
 									onOpen={() => {
 										const ids = getSelectedIds();
 										if (ids?.length && onOpenRecord) {

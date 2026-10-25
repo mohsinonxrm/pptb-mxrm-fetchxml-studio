@@ -7,6 +7,7 @@
 import { Switch, Badge, Label, SkeletonItem, makeStyles, tokens } from "@fluentui/react-components";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import { HighlightText } from "./HighlightText";
+import { useGridDensity } from "./gridDensityContext";
 
 const useStyles = makeStyles({
 	booleanCell: {
@@ -77,6 +78,7 @@ export function BooleanCellRenderer({
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
+	const density = useGridDensity();
 	const boolValue = Boolean(value);
 
 	// Prefer formatted value, otherwise use metadata labels
@@ -88,7 +90,8 @@ export function BooleanCellRenderer({
 
 	return (
 		<div className={styles.booleanCell}>
-			<Switch checked={boolValue} disabled />
+			{/* The small switch fits the Small and Extra small rows (#228) */}
+			<Switch checked={boolValue} disabled size={density === "medium" ? "medium" : "small"} />
 			<Label size="small">{String(displayValue)}</Label>
 		</div>
 	);
@@ -108,6 +111,8 @@ export function PicklistCellRenderer({
 	attribute?: AttributeMetadata;
 }) {
 	const styles = useStyles();
+	// The small badge fits the Extra small rows (#228)
+	const badgeSize = useGridDensity() === "extra-small" ? "small" : "medium";
 
 	// Prefer formatted value
 	if (formattedValue) {
@@ -117,7 +122,7 @@ export function PicklistCellRenderer({
 				: "tint";
 		return (
 			<div className={styles.picklistCell}>
-				<Badge appearance={appearance}>{String(formattedValue)}</Badge>
+				<Badge appearance={appearance} size={badgeSize}>{String(formattedValue)}</Badge>
 			</div>
 		);
 	}
@@ -141,7 +146,7 @@ export function PicklistCellRenderer({
 
 	return (
 		<div className={styles.picklistCell}>
-			<Badge appearance={appearance}>{label}</Badge>
+			<Badge appearance={appearance} size={badgeSize}>{label}</Badge>
 		</div>
 	);
 }
@@ -158,6 +163,7 @@ export function LookupCellRenderer({
 	formattedValue?: unknown;
 }) {
 	const styles = useStyles();
+	const density = useGridDensity();
 
 	// Prefer formatted value (just the name string)
 	if (formattedValue) {
@@ -174,7 +180,8 @@ export function LookupCellRenderer({
 	return (
 		<div className={styles.lookupCell}>
 			<span className={styles.lookupName}><HighlightText text={lookupValue.Name || "—"} /></span>
-			{lookupValue.LogicalName && (
+			{/* A second line doesn't fit an Extra small row (#228) */}
+			{lookupValue.LogicalName && density !== "extra-small" && (
 				<span className={styles.lookupType}>{lookupValue.LogicalName}</span>
 			)}
 		</div>
