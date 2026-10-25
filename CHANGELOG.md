@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **The query tree shows which node is selected (#229).**
+  - **Before:** the selected node drove the properties panel, but its row had no highlight once the mouse moved away, and screen readers weren't told it was selected.
+  - **Now:** the selected row has a subtle selected background, semibold text and a brand indicator bar (as in Fluent Nav). It's marked `aria-selected`, and Windows high contrast shows it in the system highlight colours.
+  - **Keyboard:** Enter selects the focused node, like a click.
+
 - **Check with Dataverse no longer throws on an unfinished condition (#97, found by the #217 incomplete-node test).** Matching Dataverse's findings to the query read `condition.attribute.toLowerCase()`, so a condition whose attribute had just been cleared crashed the Advisories tab. A blank link-entity name had the same problem. The incomplete-node test now also runs the Advisories list, the metadata rules and the Dataverse merge.
 
 ### ✨ Added
