@@ -72,6 +72,10 @@ async function devHarness(command: string, mode: string): Promise<Plugin[]> {
 // https://vite.dev/config/
 export default defineConfig(async ({ command, mode }) => ({
 	plugins: [react(), toolIcon(), monacoDompurify(), ...(await devHarness(command, mode))],
+	// The tool's version, for "Copy details" when a panel fails (#185)
+	define: {
+		__FXS_VERSION__: JSON.stringify((JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version),
+	},
 	optimizeDeps: {
 		// Pre-bundle monaco-editor so Vite doesn't try to transform its deep
 		// internal imports at runtime (avoids CJS/ESM interop issues).

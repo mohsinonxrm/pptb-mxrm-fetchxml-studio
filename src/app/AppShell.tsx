@@ -27,6 +27,7 @@ import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPane
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
+import { PaneErrorBoundary, ToolErrorBoundary } from "../shared/components/ErrorBoundary";
 import { DeleteConfirmDialog } from "../features/fetchxml/ui/Dialogs/DeleteConfirmDialog";
 import { BulkDeleteDialog } from "../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
 import { WorkflowPickerDialog } from "../features/fetchxml/ui/Dialogs/WorkflowPickerDialog";
@@ -308,12 +309,22 @@ export function AppShell() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [session]);
 
+	// After a render error, the tool is re-mounted like after a connection change (#185): with the
+	// last good query, or with a new one
+	const [restarts, setRestarts] = useState(0);
+	const restart = (withQuery: boolean) => {
+		carryOver.current.fetchXml = withQuery ? carryOver.current.readFetchXml?.() : undefined;
+		setRestarts((n) => n + 1);
+	};
+
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				<BuilderProvider key={session}>
-					<AppContent carryOver={carryOver.current} connectionKey={connectionKey} />
-				</BuilderProvider>
+				<ToolErrorBoundary readFetchXml={() => carryOver.current.readFetchXml?.()} onRestart={restart}>
+					<BuilderProvider key={`${session}-${restarts}`}>
+						<AppContent carryOver={carryOver.current} connectionKey={connectionKey} />
+					</BuilderProvider>
+				</ToolErrorBoundary>
 			</ThemeProvider>
 		</FluentProvider>
 	);
@@ -1835,6 +1846,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			<div className={styles.leftPane} data-left-pane style={{ width: `${leftPaneWidth}px` }}>
 				{/* Top: Tree View */}
 				<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
+					<PaneErrorBoundary where="Query scope" title="The query scope couldn't be shown" resetKey={connectionKey}>
 					<EntitySelector
 						selectedEntity={builder.fetchQuery?.entity.name || null}
 						onEntityChange={builder.setEntity}
@@ -1874,7 +1886,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 							}
 						}}
 					/>
+					</PaneErrorBoundary>
 					{builder.fetchQuery ? (
+						<PaneErrorBoundary where="Query tree" title="The query tree couldn't be shown" resetKey={builder.fetchQuery}>
 						<TreeView
 							fetchQuery={builder.fetchQuery}
 							size={treeSizeFor(displaySettings.gridDensity)}
@@ -1892,6 +1906,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 							onRemoveNode={builder.removeNode}
 							onUpdateAttributes={builder.updateAttributes}
 						/>
+						</PaneErrorBoundary>
 					) : (
 						<div className={styles.placeholder}>Select an entity to begin</div>
 					)}
@@ -1914,11 +1929,13 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						<span style={{ fontWeight: 600 }}>Properties</span>
 					</div>
 					<div className={styles.propertiesContent}>
+						<PaneErrorBoundary where="Properties panel" title="The properties couldn't be shown" resetKey={builder.selectedNodeId}>
 						<PropertiesPanel
 							selectedNode={builder.selectedNode}
 							fetchQuery={builder.fetchQuery}
 							onNodeUpdate={builder.updateNode}
 						/>
+						</PaneErrorBoundary>
 					</div>
 				</div>
 			</div>
