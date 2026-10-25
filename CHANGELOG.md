@@ -18,6 +18,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- **Query tree icons say what each node is, and are coloured by what it does (#230).**
+  - **Colours,** from Fluent palette tokens that adapt to light, dark and high contrast:
+
+    | Colour | Nodes |
+    |---|---|
+    | Brand | the query |
+    | Blue | tables: entity and link-entities |
+    | Teal | columns: attributes |
+    | Orange | criteria: filters and conditions |
+    | Grape | sort: orders |
+
+  - **Every node type has its own icon.** Fetch and Entity, and Filter and Condition, used to share one.
+    - Fetch `</>`, Entity a table, link-entity a joined table.
+    - Condition an operators icon, order an up or down arrow by direction, All attributes three columns.
+  - **Attributes show their Dataverse column type**, from the `AttributeTypeName` FXS already loads, so there are no new requests. All 24 types on Microsoft Learn are covered, for example:
+    - Text, Multiple lines, Whole number, Decimal, Currency, Yes/No, Date and time;
+    - Choice, Choices, Status, Status reason;
+    - Lookup, Customer, Owner, Image, File;
+    - a key for the primary key.
+
+    While metadata loads, a generic column icon shows. Calculated, rollup, formula and prompt columns get a badge.
+  - **New Settings option, Display › Tree icons:**
+    - **Tinted icons** (default): one colour per icon.
+    - **Color icons:** Fluent's multicolour icons where they exist, filled tinted icons elsewhere. In Windows high contrast they switch to the plain filled icon, as Fluent's icon package advises.
+  - **Add menus:** All attributes, Condition and Link-entity use the matching icons.
+
 - **Density for the results grid and the query tree (#228), as in Dataverse Request Studio.**
   - **Where:** a **Density** menu in the results command bar: **Medium** (as before), **Small** and **Extra small**. Wide results with many columns fit more on screen.
   - **How it applies:**

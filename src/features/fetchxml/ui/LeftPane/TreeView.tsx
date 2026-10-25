@@ -29,14 +29,13 @@ import {
 	type TreeOpenChangeData,
 } from "@fluentui/react-components";
 import {
-	Table20Regular,
-	TableSimple20Regular,
+	ColumnTriple20Regular,
 	CheckboxChecked20Regular,
 	TextAdd20Regular,
-	Column20Regular,
 	Filter20Regular,
 	ArrowSort20Regular,
-	Link20Regular,
+	MathSymbols20Regular,
+	TableLink20Regular,
 	Add20Regular,
 	Delete20Regular,
 } from "@fluentui/react-icons";
@@ -58,6 +57,8 @@ import { debugLog, debugWarn } from "../../../../shared/utils/debug";
 import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
 import { metadataCache } from "../../state/cache";
 import type { AttributeMetadata } from "../../api/pptbClient";
+import { NODE_ICONS, attributeIcon, sourceTypeBadge, type TreeIcon, type TreeIconStyle } from "../../model/treeIcons";
+import { TreeNodeIcon } from "./TreeNodeIcon";
 import { loadEntityAttributes } from "../../api/dataverseMetadata";
 
 /**
@@ -215,6 +216,10 @@ interface TreeViewProps {
 	fetchQuery: FetchNode;
 	/** Fluent Tree size, from the grid and tree density (#228) */
 	size?: "medium" | "small";
+	/** Tinted or Color node icons, from Settings (#230) */
+	iconStyle?: TreeIconStyle;
+	/** Attribute metadata of the query's entities, for the attribute icons (#230) */
+	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	selectedNodeId: NodeId | null;
 	onNodeSelect: (nodeId: NodeId) => void;
 	onAddAttribute: (parentId: NodeId) => void;
@@ -231,6 +236,8 @@ interface TreeViewProps {
 export function TreeView({
 	fetchQuery,
 	size = "medium",
+	iconStyle = "tinted",
+	attributeMetadata,
 	selectedNodeId,
 	onNodeSelect,
 	onAddAttribute,
@@ -452,7 +459,7 @@ export function TreeView({
 		// Only one top-level filter per entity / link-entity
 		const hasFilter = entity.filters.length > 0;
 		return [
-			{ key: "all", label: "All attributes", icon: <TableSimple20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAllAttributes(entity.id) },
+			{ key: "all", label: "All attributes", icon: <ColumnTriple20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAllAttributes(entity.id) },
 			{
 				key: "select",
 				label: "Select attributes…",
@@ -463,14 +470,14 @@ export function TreeView({
 			{ key: "blank", label: "Blank attribute", icon: <TextAdd20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAttribute(entity.id) },
 			{ key: "order", label: "Order by", icon: <ArrowSort20Regular />, disabled: !canHaveAttributes, onClick: () => onAddOrder(entity.id) },
 			{ key: "filter", label: "Filter", icon: <Filter20Regular />, disabled: hasFilter, onClick: () => onAddFilter(entity.id) },
-			{ key: "link", label: "Link-entity", icon: <Link20Regular />, onClick: () => onAddLinkEntity(entity.id) },
+			{ key: "link", label: "Link-entity", icon: <TableLink20Regular />, onClick: () => onAddLinkEntity(entity.id) },
 		];
 	};
 
 	const filterAddItems = (filter: FilterNode): AddItem[] => [
-		{ key: "condition", label: "Condition", icon: <Filter20Regular />, onClick: () => onAddCondition(filter.id) },
+		{ key: "condition", label: "Condition", icon: <MathSymbols20Regular />, onClick: () => onAddCondition(filter.id) },
 		{ key: "subfilter", label: "Sub-filter", icon: <Filter20Regular />, onClick: () => onAddSubfilter(filter.id) },
-		{ key: "link", label: "Link-entity (any/not any/all)", icon: <Link20Regular />, onClick: () => onAddLinkEntity(filter.id) },
+		{ key: "link", label: "Link-entity (any/not any/all)", icon: <TableLink20Regular />, onClick: () => onAddLinkEntity(filter.id) },
 	];
 
 	const renderMenuItems = (items: AddItem[]) =>
@@ -578,10 +585,13 @@ export function TreeView({
 
 	// ============ NODES ============
 
+	/** A node's icon: colour by role, icon by node type (#230) */
+	const nodeIcon = ({ role, icon }: TreeIcon) => <TreeNodeIcon role={role} icon={icon} iconStyle={iconStyle} />;
+
 	const renderFetchNode = (fetch: FetchNode) =>
 		renderRow({
 			id: fetch.id,
-			icon: <Table20Regular />,
+			icon: nodeIcon(NODE_ICONS.fetch),
 			label: "Fetch query",
 			badges: badgeList(
 				fetch.options.aggregate === true && { text: "Aggregate", color: "brand" },
@@ -595,7 +605,7 @@ export function TreeView({
 	/** Children shared by <entity> and <link-entity> */
 	const containerChildren = (container: EntityNode | LinkEntityNode) => [
 		container.allAttributes?.enabled && renderAllAttributesNode(container.allAttributes),
-		...container.attributes.map((attr) => renderAttributeNode(attr)),
+		...container.attributes.map((attr) => renderAttributeNode(attr, container.name)),
 		...container.orders.map((order) => renderOrderNode(order)),
 		...container.filters.map((filter) => renderFilterNode(filter, container.name)),
 		...container.links.map((link) => renderLinkEntityNode(link, container.name)),
@@ -605,7 +615,7 @@ export function TreeView({
 	const renderEntityNode = (entity: EntityNode) =>
 		renderRow({
 			id: entity.id,
-			icon: <Table20Regular />,
+			icon: nodeIcon(NODE_ICONS.entity),
 			label: entity.name,
 			addItems: entityAddItems(entity),
 			children: containerChildren(entity),
@@ -614,20 +624,26 @@ export function TreeView({
 	const renderAllAttributesNode = (node: AllAttributesNode) =>
 		renderRow({
 			id: node.id,
-			icon: <TableSimple20Regular />,
+			icon: nodeIcon(NODE_ICONS.allAttributes),
 			label: "All attributes",
 			deleteTarget: { id: node.id, title: "Delete all attributes?", descendants: 0 },
 		});
 
-	const renderAttributeNode = (attr: AttributeNode) => {
+	/** @param entityName - The entity / link-entity the attribute belongs to */
+	const renderAttributeNode = (attr: AttributeNode, entityName: string) => {
+		const meta = attributeMetadata?.get(entityName)?.get(attr.name);
 		const badges: NodeBadge[] = [];
+		// Calculated, rollup, formula and prompt columns (#230)
+		const computed = sourceTypeBadge(meta);
+		if (computed) badges.push({ text: computed });
 		if (attr.groupby) badges.push({ text: attr.dategrouping ? `Group by · ${attr.dategrouping}` : "Group by", color: "brand" });
 		if (attr.aggregate) badges.push({ text: FUNCTION_TEXT[attr.aggregate] ?? attr.aggregate, color: "brand" });
 		if (attr.aggregate === "countcolumn" && attr.distinct) badges.push({ text: "Unique" });
 		if (attr.rowAggregate) badges.push({ text: "Child count" });
 		return renderRow({
 			id: attr.id,
-			icon: <Column20Regular />,
+			// The column type's icon (#230); the generic one while metadata loads
+			icon: nodeIcon({ role: "column", icon: attributeIcon(meta) }),
 			label: attr.alias ? `${attr.name} (as ${attr.alias})` : attr.name,
 			badges,
 			deleteTarget: { id: attr.id, title: `Delete attribute ${attr.name}?`, descendants: 0 },
@@ -641,7 +657,7 @@ export function TreeView({
 		const displayName = order.entityname ? `${order.entityname}.${target}` : target;
 		return renderRow({
 			id: order.id,
-			icon: <ArrowSort20Regular />,
+			icon: nodeIcon(order.descending ? NODE_ICONS.orderDescending : NODE_ICONS.orderAscending),
 			label: `${displayName} ${direction}`,
 			deleteTarget: { id: order.id, title: `Delete order ${displayName}?`, descendants: 0 },
 		});
@@ -650,7 +666,7 @@ export function TreeView({
 	const renderFilterNode = (filter: FilterNode, containerName: string): ReactElement =>
 		renderRow({
 			id: filter.id,
-			icon: <Filter20Regular />,
+			icon: nodeIcon(NODE_ICONS.filter),
 			label: `Filter (${filter.conjunction})`,
 			badges: badgeList(filter.hint === "union" && { text: "Union" }, filter.isQuickFindFields && { text: "Quick find" }),
 			addItems: filterAddItems(filter),
@@ -678,7 +694,7 @@ export function TreeView({
 
 		return renderRow({
 			id: condition.id,
-			icon: <Filter20Regular />,
+			icon: nodeIcon(NODE_ICONS.condition),
 			label: displayText,
 			deleteTarget: { id: condition.id, title: `Delete condition ${condition.attribute}?`, descendants: 0 },
 		});
@@ -688,7 +704,7 @@ export function TreeView({
 	const renderLinkEntityNode = (link: LinkEntityNode, parentName: string): ReactElement =>
 		renderRow({
 			id: link.id,
-			icon: <Link20Regular />,
+			icon: nodeIcon(NODE_ICONS.linkEntity),
 			// Names the lookup when there's no alias (#25)
 			label: linkEntityLabel(link, primaryIdOf(parentName)),
 			hint: showsNoAttributesHint(link) ? "(no attributes)" : undefined,

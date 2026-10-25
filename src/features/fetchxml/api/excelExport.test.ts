@@ -129,6 +129,7 @@ describe("exportToExcelLocal", () => {
 				advancedFindOnly: true,
 				scopeCollapsed: false,
 				gridDensity: "medium",
+				treeIconStyle: "tinted",
 			},
 		});
 		const sheet = await readBack(buffer);

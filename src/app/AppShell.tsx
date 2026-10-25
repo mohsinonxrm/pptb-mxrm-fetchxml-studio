@@ -1882,6 +1882,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						<TreeView
 							fetchQuery={builder.fetchQuery}
 							size={treeSizeFor(displaySettings.gridDensity)}
+							iconStyle={displaySettings.treeIconStyle}
+							attributeMetadata={attributeMetadata}
 							selectedNodeId={builder.selectedNodeId}
 							onNodeSelect={builder.selectNode}
 							onAddAttribute={builder.addAttribute}
