@@ -56,8 +56,6 @@ export interface DisplaySettings {
 	 * When false, all entities/attributes are shown (power-user / developer mode).
 	 */
 	advancedFindOnly: boolean;
-	/** The query scope section (publishers, solutions, entity, view) is collapsed to one line (#25) */
-	scopeCollapsed: boolean;
 	/** Density of the results grid and the query tree (#228) */
 	gridDensity: GridDensity;
 	/** Query tree icons: one-colour tinted icons, or Fluent's multicolour Color icons (#230) */
@@ -70,7 +68,6 @@ export const defaultDisplaySettings: DisplaySettings = {
 	valueDisplayMode: "formatted",
 	entityScopeMode: "publisher-solution",
 	advancedFindOnly: true,
-	scopeCollapsed: false,
 	gridDensity: "medium",
 	treeIconStyle: "tinted",
 };

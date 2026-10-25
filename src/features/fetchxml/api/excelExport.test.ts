@@ -127,7 +127,6 @@ describe("exportToExcelLocal", () => {
 				valueDisplayMode: "both",
 				entityScopeMode: "all",
 				advancedFindOnly: true,
-				scopeCollapsed: false,
 				gridDensity: "medium",
 				treeIconStyle: "tinted",
 			},

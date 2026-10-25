@@ -18,6 +18,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- **Scope chip: where entities come from, in one button (#227).** It's the design shared with Dataverse Request Studio and Command Bar Studio (variant A).
+  - **The chip** heads the left pane and always shows the current scope:
+    - `Contoso › Sales Core v1.2.0`, with `+N` for more;
+    - `All entities`;
+    - a primary **Choose scope** when nothing is picked yet.
+
+    A solution shows its first three version parts, so a patch differs from its parent. A tooltip shows every publisher and solution when the label is cut off.
+  - **Its popover** holds the scope settings, and changes apply right away:
+    - **Show entities from:** Publisher → solution, Solution only, All entities. Options your privileges don't allow are off.
+    - **Publishers** and **Solutions**, as tag pickers. Solutions show the unique name and version, grouped Unmanaged / Managed, and search matches the name, unique name or version.
+    - **Advanced Find only.**
+    - **Done** returns focus to the chip.
+  - **First run:** a tip points at the chip ("Choose where entities come from"). Its **Choose scope** opens the popover. It's shown once per environment, and only after any remembered scope has been restored.
+  - **Entity picker:** says "Choose a scope to list entities" until there is one, and shows how many entities are in scope.
+  - **Replaced:**
+    - the always-visible Publishers / Solutions comboboxes;
+    - the collapsible Query scope header and its summary (#25);
+    - the "remembered for this environment" note (remembering is now simply how it works);
+    - the Entity source and Advanced Find only settings in the Settings drawer.
+
 - **Query tree icons say what each node is, and are coloured by what it does (#230).**
   - **Colours,** from Fluent palette tokens that adapt to light, dark and high contrast:
 
