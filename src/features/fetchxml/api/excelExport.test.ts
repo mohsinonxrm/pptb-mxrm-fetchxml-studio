@@ -128,6 +128,7 @@ describe("exportToExcelLocal", () => {
 				entityScopeMode: "all",
 				advancedFindOnly: true,
 				scopeCollapsed: false,
+				gridDensity: "medium",
 			},
 		});
 		const sheet = await readBack(buffer);

@@ -213,6 +213,8 @@ const FUNCTION_TEXT: Record<string, string> = {
 
 interface TreeViewProps {
 	fetchQuery: FetchNode;
+	/** Fluent Tree size, from the grid and tree density (#228) */
+	size?: "medium" | "small";
 	selectedNodeId: NodeId | null;
 	onNodeSelect: (nodeId: NodeId) => void;
 	onAddAttribute: (parentId: NodeId) => void;
@@ -228,6 +230,7 @@ interface TreeViewProps {
 
 export function TreeView({
 	fetchQuery,
+	size = "medium",
 	selectedNodeId,
 	onNodeSelect,
 	onAddAttribute,
@@ -698,6 +701,7 @@ export function TreeView({
 		<div ref={treeRef} className={styles.container}>
 			<Tree
 				aria-label="FetchXML Query Structure"
+				size={size}
 				openItems={openItems}
 				onOpenChange={handleOpenChange}
 			>

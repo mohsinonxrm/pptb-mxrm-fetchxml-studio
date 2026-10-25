@@ -36,6 +36,7 @@ import {
 	Info20Regular,
 	Stop20Regular,
 	Copy20Regular,
+	TextDensity20Regular,
 } from "@fluentui/react-icons";
 import { ExcelIcon } from "../../../../shared/components/ExcelIcon";
 import { EditColumnsPanel } from "./EditColumnsPanel";
@@ -47,6 +48,7 @@ import {
 import type { LayoutColumn } from "../../model/layoutxml";
 import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
 import type { CopyValueMode } from "./copyResults";
+import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
 
 const useStyles = makeStyles({
 	toolbar: {
@@ -157,6 +159,10 @@ export interface CommandBarProps {
 	onCopyRows?: (scope: "selected" | "all", mode: CopyValueMode) => void;
 	/** Quick search text (#23): the Copy menu then copies the matching rows */
 	searchText?: string;
+	/** Density of the grid and the query tree (#228) */
+	density?: GridDensity;
+	/** Change the density; the menu is hidden without it */
+	onDensityChange?: (density: GridDensity) => void;
 }
 
 /** One item of the Close menu (#149) */
@@ -226,6 +232,8 @@ export function ResultsCommandBar({
 	loadedCount = 0,
 	onCopyRows,
 	searchText = "",
+	density = "medium",
+	onDensityChange,
 	canExport = false,
 	isExporting = false,
 	exportDisabledReason,
@@ -609,6 +617,31 @@ export function ResultsCommandBar({
 				>
 					Edit columns
 				</ToolbarButton>
+
+				{/* Density of the grid and the query tree, as in Dataverse Request Studio (#228) */}
+				{onDensityChange && (
+					<Menu
+						checkedValues={{ density: [density] }}
+						onCheckedValueChange={(_, data) => onDensityChange(data.checkedItems[0] as GridDensity)}
+					>
+						<MenuTrigger disableButtonEnhancement>
+							<Tooltip content="Density (grid and tree)" relationship="description">
+								<MenuButton appearance="subtle" icon={<TextDensity20Regular />}>
+									{GRID_DENSITY_LABELS[density]}
+								</MenuButton>
+							</Tooltip>
+						</MenuTrigger>
+						<MenuPopover>
+							<MenuList>
+								{(Object.keys(GRID_DENSITY_LABELS) as GridDensity[]).map((d) => (
+									<MenuItemRadio key={d} name="density" value={d}>
+										{GRID_DENSITY_LABELS[d]}
+									</MenuItemRadio>
+								))}
+							</MenuList>
+						</MenuPopover>
+					</Menu>
+				)}
 			</Toolbar>
 
 			{/* Edit Columns Panel */}

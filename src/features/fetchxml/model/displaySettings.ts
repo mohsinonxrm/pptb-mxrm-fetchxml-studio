@@ -15,6 +15,30 @@ export type ValueDisplayMode = "formatted" | "raw" | "both";
  */
 export type EntityScopeMode = "publisher-solution" | "solution-only" | "all";
 
+/**
+ * Density of the results grid and the query tree (#228): Fluent's `DataGrid size` values. One
+ * setting drives both; Fluent's Tree has only medium and small, so Small and Extra small both use
+ * the small tree.
+ */
+export type GridDensity = "medium" | "small" | "extra-small";
+
+/** The densities in menu order, with their labels (the same as Dataverse Request Studio's) */
+export const GRID_DENSITY_LABELS: Record<GridDensity, string> = {
+	medium: "Medium",
+	small: "Small",
+	"extra-small": "Extra small",
+};
+
+/** A saved value that isn't a known density (an older or edited settings object) falls back to medium */
+export function normalizeGridDensity(value: unknown): GridDensity {
+	return value === "small" || value === "extra-small" ? value : "medium";
+}
+
+/** Fluent `Tree size` for a density: the tree has no extra-small size */
+export function treeSizeFor(density: GridDensity): "medium" | "small" {
+	return density === "medium" ? "medium" : "small";
+}
+
 export interface DisplaySettings {
 	/** Show logical names in column headers instead of display names */
 	useLogicalNames: boolean;
@@ -32,6 +56,8 @@ export interface DisplaySettings {
 	advancedFindOnly: boolean;
 	/** The query scope section (publishers, solutions, entity, view) is collapsed to one line (#25) */
 	scopeCollapsed: boolean;
+	/** Density of the results grid and the query tree (#228) */
+	gridDensity: GridDensity;
 }
 
 /** Default display settings */
@@ -41,4 +67,5 @@ export const defaultDisplaySettings: DisplaySettings = {
 	entityScopeMode: "publisher-solution",
 	advancedFindOnly: true,
 	scopeCollapsed: false,
+	gridDensity: "medium",
 };

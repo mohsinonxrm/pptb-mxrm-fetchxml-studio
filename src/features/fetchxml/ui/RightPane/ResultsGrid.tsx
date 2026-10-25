@@ -71,7 +71,8 @@ import { ConditionEditor } from "../LeftPane/PropertiesPanel/editors/ConditionEd
 import { HighlightText } from "./HighlightText";
 import { SearchHighlightContext } from "./searchHighlightContext";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
-import type { DisplaySettings } from "../../model/displaySettings";
+import { normalizeGridDensity, type DisplaySettings, type GridDensity } from "../../model/displaySettings";
+import { GridDensityContext } from "./gridDensityContext";
 import { metadataCache } from "../../state/cache";
 import { joinedLinkAliases, resolveColumn, sortedColumns } from "../../model/queryColumns";
 import { orderByLayout, resultColumns } from "../../model/resultColumns";
@@ -139,7 +140,12 @@ interface CellMenuState {
 	columnId?: string;
 }
 
-const ROW_HEIGHT = 42;
+/**
+ * Row and header heights per density (#228), for the virtualized body. Medium keeps the grid's
+ * existing sizes; Small and Extra small follow Fluent's `DataGrid size` (as Dataverse Request Studio).
+ */
+const ROW_HEIGHT: Record<GridDensity, number> = { medium: 42, small: 34, "extra-small": 24 };
+const HEADER_HEIGHT: Record<GridDensity, number> = { medium: 43, small: 34, "extra-small": 28 };
 
 const useStyles = makeStyles({
 	container: {
@@ -354,6 +360,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	onVisibleCountChange,
 }: ResultsGridProps, ref) {
 	const styles = useStyles();
+	// One density for the grid and the tree (#228)
+	const density = normalizeGridDensity(displaySettings?.gridDensity);
 	const { targetDocument } = useFluent();
 	const scrollbarWidth = useScrollbarWidth({ targetDocument });
 	const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
@@ -1334,9 +1342,11 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			{filterBar}
 			<div className={styles.gridWrapper} onKeyDown={handleGridKeyDown}>
 				<div ref={containerRef} className={styles.gridContent}>
+					<GridDensityContext.Provider value={density}>
 					<SearchHighlightContext.Provider value={search}>
 						<DataGrid
 							aria-label={result?.entityLogicalName ?? "Results"}
+							size={density}
 							items={visibleRows}
 							columns={columns}
 							sortable
@@ -1355,7 +1365,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							getRowId={getRowId}
 						>
 							<DataGridHeader ref={headerRef} style={{ paddingRight: scrollbarWidth }}>
-								<DataGridRow style={{ minHeight: "43px", maxHeight: "43px" }}>
+								<DataGridRow style={{ minHeight: HEADER_HEIGHT[density], maxHeight: HEADER_HEIGHT[density] }}>
 									{({ renderHeaderCell }) => (
 										<DataGridHeaderCell className={styles.headerCell}>
 											{renderHeaderCell()}
@@ -1364,7 +1374,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								</DataGridRow>
 							</DataGridHeader>
 							<DataGridBody<Record<string, unknown>>
-								itemSize={ROW_HEIGHT}
+								itemSize={ROW_HEIGHT[density]}
 								height={Math.max(0, gridDimensions.height - headerHeight)}
 								listProps={{
 									useIsScrolling: true,
@@ -1376,6 +1386,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							</DataGridBody>
 						</DataGrid>
 					</SearchHighlightContext.Provider>
+					</GridDensityContext.Provider>
 				</div>
 				<div className={styles.infoBar}>
 					<span>

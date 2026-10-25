@@ -120,6 +120,7 @@ import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid"
 import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
+import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
 import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
@@ -1880,6 +1881,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					{builder.fetchQuery ? (
 						<TreeView
 							fetchQuery={builder.fetchQuery}
+							size={treeSizeFor(displaySettings.gridDensity)}
 							selectedNodeId={builder.selectedNodeId}
 							onNodeSelect={builder.selectNode}
 							onAddAttribute={builder.addAttribute}
@@ -2181,6 +2183,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					getSelectedRecordIds={getSelectedRecordIds}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
 					displaySettings={displaySettings}
+					onGridDensityChange={(gridDensity) => setDisplaySettings({ ...displaySettings, gridDensity })}
 				/>
 			</div>
 			{/* Delete Confirmation Dialog */}
