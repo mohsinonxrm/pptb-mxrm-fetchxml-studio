@@ -15,6 +15,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 🔧 Visual Query Builder
 - **Tree-based hierarchy** — Build FetchXML queries visually with entities, attributes, filters, orders, and link-entities
+  - **Selected node** — The node shown in the properties panel is highlighted (selected background and indicator bar, `aria-selected`). Click a row or press Enter to select it; arrow keys move between rows and expand or collapse branches
   - **Add menus and right-click** — Each row's + menu offers All attributes, Select attributes…, Blank attribute, Order by, Filter and Link-entity, with the tree's icons. Right-click (or Shift+F10) a row for the same items plus **Delete**. Deleting a node with items inside asks first.
   - **Readable rows** — Rows with nothing inside have no chevron. A link-entity that can return attributes but has none says "(no attributes)". A link-entity without an alias is labelled by its lookup, e.g. "contact via primarycontactid (outer)".
 - **Query scope** — Publishers, Solutions, Entity and Load view sit in a section that collapses to one line (entity · view · solutions), with **New** always visible. Your publisher and solution selection is remembered for each environment. Solutions show their unique name and version, grouped Unmanaged / Managed.

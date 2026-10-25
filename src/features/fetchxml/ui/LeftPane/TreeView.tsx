@@ -17,6 +17,7 @@ import {
 	DialogSurface,
 	DialogTitle,
 	makeStyles,
+	mergeClasses,
 	Menu,
 	MenuDivider,
 	MenuTrigger,
@@ -91,9 +92,31 @@ const useStyles = makeStyles({
 		// Ensure scrollbars are always visible when content overflows
 		scrollbarGutter: "stable",
 	},
-	treeItem: {
-		"&:hover": {
-			backgroundColor: tokens.colorNeutralBackground1Hover,
+	// The selected node (#229): subtle selected background and a brand indicator bar, like Fluent Nav.
+	// Windows high contrast uses the system highlight colours instead.
+	selected: {
+		position: "relative",
+		backgroundColor: tokens.colorSubtleBackgroundSelected,
+		fontWeight: tokens.fontWeightSemibold,
+		"::before": {
+			content: '""',
+			position: "absolute",
+			left: 0,
+			top: "20%",
+			bottom: "20%",
+			width: "3px",
+			borderRadius: tokens.borderRadiusCircular,
+			backgroundColor: tokens.colorCompoundBrandStroke,
+		},
+		":hover": {
+			backgroundColor: tokens.colorSubtleBackgroundHover,
+		},
+		"@media (forced-colors: active)": {
+			backgroundColor: "Highlight",
+			color: "HighlightText",
+			"::before": {
+				backgroundColor: "HighlightText",
+			},
 		},
 	},
 	actions: {
@@ -481,10 +504,14 @@ export function TreeView({
 				key={row.id}
 				itemType={hasChildren ? "branch" : "leaf"}
 				value={row.id}
+				aria-selected={row.id === selectedNodeId}
 				className={styles.treeItemWithActions}
 				onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
 					// Only the focused row, not the rows it contains (keyboard events bubble up the tree)
-					if (!hasContextMenu || e.target !== e.currentTarget) return;
+					if (e.target !== e.currentTarget) return;
+					// Enter selects the focused node, like a click (#229). Fluent still toggles a branch on Enter.
+					if (e.key === "Enter") onNodeSelect(row.id);
+					if (!hasContextMenu) return;
 					if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
 						e.preventDefault();
 						const layout = e.currentTarget.querySelector<HTMLElement>(":scope > .fui-TreeItemLayout") ?? e.currentTarget;
@@ -494,6 +521,7 @@ export function TreeView({
 				}}
 			>
 				<TreeItemLayout
+					className={mergeClasses(row.id === selectedNodeId && styles.selected)}
 					iconBefore={row.icon}
 					actions={
 						row.addItems || row.deleteTarget ? (
