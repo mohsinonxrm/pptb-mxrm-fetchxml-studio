@@ -29,6 +29,8 @@ jobs:
       - run: npm test
       - run: npm run validate
       - run: npm run build
+      - name: Check the bundled DOMPurify (Monaco ships its own; vite.config.ts replaces it)
+        run: node .github/scripts/check-dompurify.mjs
       - name: Check package contents
         run: |
           npm pack --dry-run --json --silent > "$RUNNER_TEMP/pack.json"

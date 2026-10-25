@@ -37,7 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
-- **`dompurify` 3.4.15 → 3.4.16 for monaco-editor, through an npm override.** This clears the two low advisories (GHSA-6688-9rhm-gjv2, GHSA-p98j-92pf-mc4p) and the failing Dependabot security job: monaco-editor 0.57 pins `dompurify` exactly, so Dependabot couldn't update it. Nothing that ships changes: Monaco bundles its own copy of DOMPurify and never imports the npm package, so the built Monaco chunk is byte-identical. `npm audit --omit=dev` now reports 0 findings.
+- **The Monaco editor now ships DOMPurify 3.4.17 (security).**
+  - **Why the override wasn't enough:** Monaco bundles its own copy of DOMPurify, so the npm `overrides` entry never reached the build. 1.4.4 shipped 3.1.7, and 1.5.0-beta.15 shipped 3.4.15.
+  - **The fix:**
+    - A Vite plugin (`monacoDompurify` in `vite.config.ts`) resolves Monaco's DOMPurify import to the npm `dompurify` package.
+    - The override is raised from 3.4.16 to **3.4.17**. 3.4.17 is 13 days old, an owner-approved exception to the 14-day rule.
+  - **Advisories cleared:** GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high) and GHSA-c6gr-qvv4-5v3f (low), all published 2026-10-22. They had failed CI's audit gate. Earlier, two low ones (GHSA-6688-9rhm-gjv2, GHSA-p98j-92pf-mc4p).
+  - **Exposure was limited:** Monaco's sanitizer doesn't use the options these advisories need (`SAFE_FOR_TEMPLATES`, `IN_PLACE`, `PARSER_MEDIA_TYPE`).
+  - **Check:** `.github/scripts/check-dompurify.mjs` runs after the build in CI and in `release.yml` before publishing. It fails if `dist/` contains any DOMPurify other than the installed one. It was verified both ways: without the plugin the bundle has 3.4.15 and the check fails.
+  - Same approach as Command Bar Studio 0.6.2.
+  - `npm audit --omit=dev` reports 0 findings.
 - **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
 - **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
 - **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
