@@ -2,6 +2,8 @@
  * Display settings types and defaults
  */
 
+import type { TreeIconStyle } from "./treeIcons";
+
 export type ValueDisplayMode = "formatted" | "raw" | "both";
 
 /**
@@ -58,6 +60,8 @@ export interface DisplaySettings {
 	scopeCollapsed: boolean;
 	/** Density of the results grid and the query tree (#228) */
 	gridDensity: GridDensity;
+	/** Query tree icons: one-colour tinted icons, or Fluent's multicolour Color icons (#230) */
+	treeIconStyle: TreeIconStyle;
 }
 
 /** Default display settings */
@@ -68,4 +72,5 @@ export const defaultDisplaySettings: DisplaySettings = {
 	advancedFindOnly: true,
 	scopeCollapsed: false,
 	gridDensity: "medium",
+	treeIconStyle: "tinted",
 };

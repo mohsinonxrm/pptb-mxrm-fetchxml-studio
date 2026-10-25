@@ -13,6 +13,7 @@ import {
 	normalizeGridDensity,
 	type DisplaySettings,
 } from "../../features/fetchxml/model/displaySettings";
+import { normalizeTreeIconStyle } from "../../features/fetchxml/model/treeIcons";
 import { debugLog } from "../utils/debug";
 
 /**
@@ -34,7 +35,11 @@ export function mergeWithDefaults(persisted: unknown): DisplaySettings {
 		...(persisted as Partial<DisplaySettings>),
 	};
 	// The grid and tree sizes come from this value: never pass an unknown one to Fluent (#228)
-	return { ...merged, gridDensity: normalizeGridDensity(merged.gridDensity) };
+	return {
+		...merged,
+		gridDensity: normalizeGridDensity(merged.gridDensity),
+		treeIconStyle: normalizeTreeIconStyle(merged.treeIconStyle),
+	};
 }
 
 export function usePersistedSettings(): [DisplaySettings, (settings: DisplaySettings) => void] {
