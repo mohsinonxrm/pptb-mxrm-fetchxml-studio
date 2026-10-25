@@ -40,7 +40,14 @@ const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.l
 
 const settingsApi = () => (typeof window === "undefined" ? undefined : window.toolboxAPI?.settings);
 
-/** @returns Whether the selection is remembered for this environment */
+export interface RememberedScopeState {
+	/** The selection is remembered for this environment */
+	remembers: boolean;
+	/** The mode's remembered selection has been restored (or there was none to restore), so an empty
+	 * selection now really is empty: the scope chip's first-run tip waits for this (#227) */
+	restored: boolean;
+}
+
 export function useRememberedScope({
 	mode,
 	ready,
@@ -49,7 +56,7 @@ export function useRememberedScope({
 	publisherIds,
 	solutionIds,
 	apply,
-}: RememberedScopeOptions): boolean {
+}: RememberedScopeOptions): RememberedScopeState {
 	// The stored map and this environment's key, read once: the selector remounts when the
 	// connection changes (#66)
 	const [loaded, setLoaded] = useState<{ stored: unknown; envKey: string } | null>(null);
@@ -111,5 +118,5 @@ export function useRememberedScope({
 			.catch((err: unknown) => console.warn("Failed to remember the publisher / solution selection:", err));
 	}, [loaded, mode, restoredModes, publisherIds, solutionIds]);
 
-	return !!loaded?.envKey;
+	return { remembers: !!loaded?.envKey, restored: mode === "all" || (!!mode && restoredModes.has(mode)) };
 }

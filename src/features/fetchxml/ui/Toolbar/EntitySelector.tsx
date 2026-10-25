@@ -2,17 +2,15 @@
  * Entity selector with Publisher/Solution filtering support
  * Adapts UI based on user privileges (Full Filter / Solutions-Only / Publishers-Only / Metadata-Only / No Access modes)
  *
- * The query scope section (#25): collapses to one line ("Entity · View: … · solutions") with New
- * always visible, and remembers the publisher / solution selection per environment.
+ * The scope chip (#227) heads it: it shows the publisher / solution scope and opens the pickers, the
+ * entity source and Advanced Find only. The selection is remembered per environment (#25).
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
 	Combobox,
 	Option,
-	OptionGroup,
 	makeStyles,
-	mergeClasses,
 	Button,
 	Spinner,
 	Text,
@@ -22,7 +20,7 @@ import {
 	useComboboxFilter,
 	type ComboboxProps,
 } from "@fluentui/react-components";
-import { Add20Regular, ChevronDown20Regular, ChevronUp20Regular, LockClosed20Regular } from "@fluentui/react-icons";
+import { Add20Regular, LockClosed20Regular } from "@fluentui/react-icons";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import type { EntityScopeMode } from "../../model/displaySettings";
 import { isEntityInScope } from "../../state/metadataScope";
@@ -31,10 +29,11 @@ import { usePublisherFilter } from "../../../../shared/hooks/usePublisherFilter"
 import { useSolutionFilter } from "../../../../shared/hooks/useSolutionFilter";
 import { useLazyMetadata } from "../../../../shared/hooks/useLazyMetadata";
 import { useRememberedScope } from "../../../../shared/hooks/useRememberedScope";
-import { scopeSummaryParts, scopeSummaryText, type RememberedScope } from "../../model/scopeSelection";
+import { useScopeTip } from "../../../../shared/hooks/useScopeTip";
+import type { RememberedScope } from "../../model/scopeSelection";
 import { LoadViewPicker } from "./LoadViewPicker";
-import type { EntityMetadata, LoadedViewInfo, Publisher, Solution } from "../../api/pptbClient";
-import { debugLog } from "../../../../shared/utils/debug";
+import { ScopeChip } from "./ScopeChip";
+import type { EntityMetadata, LoadedViewInfo } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	container: {
@@ -45,44 +44,12 @@ const useStyles = makeStyles({
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 		containerType: "inline-size",
 	},
-	// Chevron, title or summary, New (#25)
+	// The scope chip and New (#227)
 	header: {
 		display: "flex",
 		alignItems: "center",
 		gap: "6px",
 		minWidth: 0,
-	},
-	summary: {
-		flex: 1,
-		minWidth: 0,
-		overflow: "hidden",
-		textOverflow: "ellipsis",
-		whiteSpace: "nowrap",
-	},
-	// Collapsed: hidden, not unmounted, so the pickers keep their state (the loaded view's name)
-	body: {
-		display: "flex",
-		flexDirection: "column",
-		gap: "8px",
-	},
-	bodyCollapsed: {
-		display: "none",
-	},
-	filtersRow: {
-		display: "flex",
-		gap: "12px",
-		alignItems: "flex-end",
-		flexWrap: "wrap",
-		// Stack vertically when container is narrow (< 520px)
-		"@container (max-width: 519px)": {
-			flexDirection: "column",
-			alignItems: "stretch",
-		},
-	},
-	entityRow: {
-		display: "flex",
-		alignItems: "flex-end",
-		gap: "12px",
 	},
 	// Fluent's Combobox has a built-in minimum width (~250px); in a narrow left pane it drew over the
 	// "New" button (#53). The comboboxes shrink with the pane instead.
@@ -125,19 +92,6 @@ const useStyles = makeStyles({
 		alignItems: "center",
 		gap: "6px",
 	},
-	disabledLabel: {
-		color: tokens.colorNeutralForegroundDisabled,
-	},
-	// Two-line options: name, then unique name and version / prefix (#25)
-	option: {
-		display: "flex",
-		flexDirection: "column",
-		minWidth: 0,
-	},
-	optionSecondary: {
-		color: tokens.colorNeutralForeground3,
-		fontSize: tokens.fontSizeBase200,
-	},
 	note: {
 		color: tokens.colorNeutralForeground3,
 		fontSize: tokens.fontSizeBase200,
@@ -167,31 +121,6 @@ const useStyles = makeStyles({
 	},
 });
 
-/** Wider than a narrow field, so most options stay on two lines (#25) */
-const LISTBOX_PROPS = { style: { minWidth: 260 } };
-
-/** "Select solutions…", the one selected name, or "N selected" */
-function multiselectPlaceholder(names: string[], empty: string): string {
-	if (names.length === 0) return empty;
-	if (names.length === 1) return names[0];
-	return `${names.length} selected`;
-}
-
-const solutionMatches = (sol: Solution, query: string) => {
-	const q = query.trim().toLowerCase();
-	return !q || sol.friendlyname.toLowerCase().includes(q) || (sol.uniquename ?? "").toLowerCase().includes(q);
-};
-
-const publisherMatches = (pub: Publisher, query: string) => {
-	const q = query.trim().toLowerCase();
-	return (
-		!q ||
-		pub.friendlyname.toLowerCase().includes(q) ||
-		(pub.uniquename ?? "").toLowerCase().includes(q) ||
-		(pub.customizationprefix ?? "").toLowerCase().includes(q)
-	);
-};
-
 interface EntitySelectorProps {
 	selectedEntity: string | null;
 	onEntityChange: (entityLogicalName: string) => void;
@@ -200,11 +129,11 @@ interface EntitySelectorProps {
 	onViewLoad?: (viewInfo: LoadedViewInfo) => void;
 	/** User-preferred entity scope mode (may be clamped to privilege ceiling) */
 	entityScopeMode: EntityScopeMode;
+	/** Change the entity source (#227: the scope chip's popover) */
+	onEntityScopeModeChange: (mode: EntityScopeMode) => void;
 	/** Limit entities and attributes to Advanced Find–eligible ones */
 	advancedFindOnly: boolean;
-	/** The section is collapsed to one line (#25; a persisted setting) */
-	collapsed: boolean;
-	onCollapsedChange: (collapsed: boolean) => void;
+	onAdvancedFindOnlyChange: (value: boolean) => void;
 }
 
 export function EntitySelector({
@@ -213,15 +142,13 @@ export function EntitySelector({
 	onNewQuery,
 	onViewLoad,
 	entityScopeMode,
+	onEntityScopeModeChange,
 	advancedFindOnly,
-	collapsed,
-	onCollapsedChange,
+	onAdvancedFindOnlyChange,
 }: EntitySelectorProps) {
 	const styles = useStyles();
-	const publisherComboId = useId("publisher-combobox");
-	const solutionComboId = useId("solution-combobox");
 	const entityComboId = useId("entity-combobox");
-	const bodyId = useId("query-scope");
+	const entityHintId = useId("entity-hint");
 
 	// Access mode detection
 	const { accessSummary, loading: accessLoading, noAccessMode } = useAccessMode();
@@ -299,9 +226,6 @@ export function EntitySelector({
 		);
 	}, [selectedEntity, availableEntities, allEntities]);
 
-	// The view the Load view picker shows, for the collapsed summary (#25)
-	const [selectedViewName, setSelectedViewName] = useState<string | null>(null);
-
 	// Handle view selection from LoadViewPicker
 	const handleViewSelect = useCallback(
 		(viewInfo: LoadedViewInfo) => {
@@ -320,50 +244,6 @@ export function EntitySelector({
 		}
 	}, [selectedEntity, onEntityChange]);
 
-	// Publisher multiselect with filtering
-	const [publisherQuery, setPublisherQuery] = useState("");
-
-	const filteredPublishers = useMemo(
-		() => publisherFilter.publishers.filter((pub) => publisherMatches(pub, publisherQuery)),
-		[publisherQuery, publisherFilter.publishers],
-	);
-
-	// Debug logging for publisher filtering
-	useEffect(() => {
-		debugLog("entityFilters", "[EntitySelector] Publisher Filter State:", {
-			publisherQuery,
-			totalPublishers: publisherFilter.publishers.length,
-			filteredPublishers: filteredPublishers.length,
-			selectedPublisherIds: publisherFilter.selectedPublisherIds,
-		});
-	}, [
-		publisherQuery,
-		publisherFilter.publishers,
-		filteredPublishers,
-		publisherFilter.selectedPublisherIds,
-	]);
-
-	// The publisher / solution selection only filters the entity picker: the query is never
-	// cleared, and an entity outside the selection shows by its logical name (#57)
-	const onPublisherSelect: ComboboxProps["onOptionSelect"] = (_e, data) => {
-		publisherFilter.updateSelectedPublishers(data.selectedOptions);
-		setPublisherQuery("");
-	};
-
-	const publisherPlaceholder = useMemo(
-		() =>
-			multiselectPlaceholder(
-				publisherFilter.publishers
-					.filter((pub) => publisherFilter.selectedPublisherIds.includes(pub.publisherid))
-					.map((pub) => pub.friendlyname),
-				"Select publishers…",
-			),
-		[publisherFilter.selectedPublisherIds, publisherFilter.publishers],
-	);
-
-	// Solution multiselect with filtering and grouping
-	const [solutionQuery, setSolutionQuery] = useState("");
-
 	// Get current solutions based on mode
 	const currentSolutions =
 		effectiveScopeMode === "publisher-solution"
@@ -375,28 +255,14 @@ export function EntitySelector({
 			? publisherFilter.selectedSolutionIds
 			: solutionFilter.selectedSolutionIds;
 
-	// Group solutions by managed status
-	const { unmanagedSolutions, managedSolutions } = useMemo(() => {
-		const unmanaged = currentSolutions.filter((sol) => !sol.ismanaged);
-		const managed = currentSolutions.filter((sol) => sol.ismanaged);
-		return { unmanagedSolutions: unmanaged, managedSolutions: managed };
-	}, [currentSolutions]);
-
-	const onSolutionSelect: ComboboxProps["onOptionSelect"] = (_e, data) => {
-		if (effectiveScopeMode === "publisher-solution") {
-			publisherFilter.updateSelectedSolutions(data.selectedOptions);
-		} else if (effectiveScopeMode === "solution-only") {
-			solutionFilter.updateSelectedSolutions(data.selectedOptions);
-		}
-		setSolutionQuery("");
-	};
-
-	const selectedSolutionNames = useMemo(
-		() =>
-			currentSolutions
-				.filter((sol) => currentSelectedSolutionIds.includes(sol.solutionid))
-				.map((sol) => sol.friendlyname),
-		[currentSelectedSolutionIds, currentSolutions],
+	// The publisher / solution selection only filters the entity picker: the query is never
+	// cleared, and an entity outside the selection shows by its logical name (#57)
+	const onSolutionsChange = useCallback(
+		(ids: string[]) => {
+			if (effectiveScopeMode === "publisher-solution") publisherFilter.updateSelectedSolutions(ids);
+			else if (effectiveScopeMode === "solution-only") solutionFilter.updateSelectedSolutions(ids);
+		},
+		[effectiveScopeMode, publisherFilter, solutionFilter],
 	);
 
 	// Remember the publisher / solution selection for this environment (#25)
@@ -423,7 +289,7 @@ export function EntitySelector({
 		},
 		[effectiveScopeMode, updateSelectedPublishers, updatePublisherSolutions, updateOnlySolutions],
 	);
-	const remembersSelection = useRememberedScope({
+	const rememberedScope = useRememberedScope({
 		mode: accessLoading ? null : effectiveScopeMode,
 		ready: effectiveScopeMode === "publisher-solution" ? publisherFilter.publishersLoaded : solutionFilter.solutionsLoaded,
 		availablePublisherIds,
@@ -480,15 +346,20 @@ export function EntitySelector({
 		}
 	};
 
-	// The collapsed one-line summary (#25)
-	const entityDisplayName = selectedEntity
-		? selectedEntityMetadata?.DisplayName?.UserLocalizedLabel?.Label || selectedEntity
-		: null;
-	const summaryParts = scopeSummaryParts({
-		entity: entityDisplayName,
-		view: selectedEntityMetadata && onViewLoad ? selectedViewName : null,
-		solutions: effectiveScopeMode === "all" ? [] : selectedSolutionNames,
-	});
+	// The privilege ceiling for the entity source (#227: chosen in the scope chip, no longer in Settings)
+	const canUsePublisherSolution = !accessSummary || accessSummary.fullFilterMode;
+	const canUseSolutionOnly = !accessSummary || accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode;
+
+	// First-run tip (#227): no scope yet, after any remembered one was restored, once per environment
+	const scopeTip = useScopeTip();
+	const listsReady =
+		effectiveScopeMode === "publisher-solution"
+			? publisherFilter.publishersLoaded
+			: effectiveScopeMode === "solution-only"
+				? solutionFilter.solutionsLoaded
+				: true;
+	const hasScope = effectiveScopeMode === "all" || currentSelectedSolutionIds.length > 0;
+	const showScopeTip = scopeTip.ready && !scopeTip.dismissed && rememberedScope.restored && listsReady && !hasScope;
 
 	// Loading state during initial access check
 	if (accessLoading) {
@@ -531,84 +402,36 @@ export function EntitySelector({
 				? solutionFilter.entitiesError
 				: null;
 
-	const solutionOption = (sol: Solution) => (
-		<Option key={sol.solutionid} value={sol.solutionid} text={sol.friendlyname}>
-			<span className={styles.option}>
-				<span>{sol.friendlyname}</span>
-				<span className={styles.optionSecondary}>
-					{[sol.uniquename, sol.version && `v${sol.version}`].filter(Boolean).join(" · ")}
-				</span>
-			</span>
-		</Option>
-	);
-
-	/** The solution options in Unmanaged / Managed groups, or why there are none */
-	const renderSolutionOptions = (emptyMessage?: string) => {
-		if (emptyMessage) return <Option disabled>{emptyMessage}</Option>;
-		if (unmanagedSolutions.length === 0 && managedSolutions.length === 0) {
-			return <Option disabled>No solutions found</Option>;
-		}
-		const unmanaged = unmanagedSolutions.filter((sol) => solutionMatches(sol, solutionQuery));
-		const managed = managedSolutions.filter((sol) => solutionMatches(sol, solutionQuery));
-		if (unmanaged.length === 0 && managed.length === 0) {
-			return <Option disabled>{`No solutions match "${solutionQuery.trim()}"`}</Option>;
-		}
-		return (
-			<>
-				{unmanaged.length > 0 && <OptionGroup label="Unmanaged">{unmanaged.map(solutionOption)}</OptionGroup>}
-				{managed.length > 0 && <OptionGroup label="Managed">{managed.map(solutionOption)}</OptionGroup>}
-			</>
-		);
-	};
-
-	const solutionsCombobox = (disabled: boolean, emptyMessage?: string) => (
-		<Combobox
-			className={styles.combobox}
-			input={{ className: styles.comboboxInput }}
-			listbox={LISTBOX_PROPS}
-			aria-labelledby={solutionComboId}
-			placeholder={multiselectPlaceholder(selectedSolutionNames, "Select solutions…")}
-			multiselect
-			value={solutionQuery}
-			selectedOptions={currentSelectedSolutionIds}
-			onOptionSelect={onSolutionSelect}
-			onChange={(ev) => setSolutionQuery(ev.target.value)}
-			disabled={disabled}
-		>
-			{renderSolutionOptions(emptyMessage)}
-		</Combobox>
-	);
+	const entityPlaceholder = entityLoading
+		? "Loading entities…"
+		: !hasScope
+			? "Choose a scope to list entities"
+			: "Select an entity…";
 
 	return (
 		<div className={styles.container}>
-			{/* Header: collapse, title or the one-line summary, New (#25) */}
+			{/* The scope chip (#227) and New */}
 			<div className={styles.header}>
-				<Tooltip content={collapsed ? "Expand" : "Collapse"} relationship="label">
-					<Button
-						appearance="subtle"
-						size="small"
-						icon={collapsed ? <ChevronDown20Regular /> : <ChevronUp20Regular />}
-						onClick={() => onCollapsedChange(!collapsed)}
-						aria-expanded={!collapsed}
-						aria-controls={bodyId}
-					/>
-				</Tooltip>
-				{collapsed && summaryParts.length > 0 ? (
-					<Text className={styles.summary} title={scopeSummaryText(summaryParts)}>
-						{entityDisplayName ? (
-							<>
-								<b>{summaryParts[0]}</b>
-								{summaryParts.slice(1).map((part) => ` · ${part}`)}
-							</>
-						) : (
-							scopeSummaryText(summaryParts)
-						)}
-					</Text>
-				) : (
-					<Text weight="semibold" className={styles.summary}>
-						Query scope
-					</Text>
-				)}
+				<ScopeChip
+					mode={effectiveScopeMode}
+					onModeChange={onEntityScopeModeChange}
+					canUsePublisherSolution={canUsePublisherSolution}
+					canUseSolutionOnly={canUseSolutionOnly}
+					publishers={publisherFilter.publishers}
+					selectedPublisherIds={publisherFilter.selectedPublisherIds}
+					publishersLoading={publisherFilter.publishersLoading}
+					publishersError={publisherFilter.publishersError}
+					onPublishersChange={publisherFilter.updateSelectedPublishers}
+					solutions={currentSolutions}
+					selectedSolutionIds={currentSelectedSolutionIds}
+					solutionsLoading={effectiveScopeMode === "solution-only" && solutionFilter.solutionsLoading}
+					solutionsError={effectiveScopeMode === "solution-only" ? solutionFilter.solutionsError : null}
+					onSolutionsChange={onSolutionsChange}
+					advancedFindOnly={advancedFindOnly}
+					onAdvancedFindOnlyChange={onAdvancedFindOnlyChange}
+					showTip={showScopeTip}
+					onTipDismiss={scopeTip.dismiss}
+				/>
 				<Tooltip content="New query" relationship="label">
 					<Button className={styles.newButton} appearance="primary" size="small" icon={<Add20Regular />} onClick={onNewQuery}>
 						<span className={styles.newButtonLabel}>New</span>
@@ -616,153 +439,49 @@ export function EntitySelector({
 				</Tooltip>
 			</div>
 
-			<div id={bodyId} className={mergeClasses(styles.body, collapsed && styles.bodyCollapsed)}>
-				{/* Full Filter Mode: Publisher + Solution filters */}
-				{effectiveScopeMode === "publisher-solution" && (
-					<div className={styles.filtersRow}>
-						{/* Publishers */}
-						<div className={styles.field}>
-							<label id={publisherComboId} className={styles.label}>
-								Publishers
-							</label>
-							<Combobox
-								className={styles.combobox}
-								input={{ className: styles.comboboxInput }}
-								listbox={LISTBOX_PROPS}
-								aria-labelledby={publisherComboId}
-								placeholder={publisherPlaceholder}
-								multiselect
-								value={publisherQuery}
-								selectedOptions={publisherFilter.selectedPublisherIds}
-								onOptionSelect={onPublisherSelect}
-								onChange={(ev) => setPublisherQuery(ev.target.value)}
-								disabled={publisherFilter.publishersLoading}
-							>
-								{filteredPublishers.length === 0 ? (
-									<Option disabled>
-										{publisherQuery.trim() ? `No publishers match "${publisherQuery.trim()}"` : "No publishers found"}
-									</Option>
-								) : (
-									filteredPublishers.map((pub) => (
-										<Option key={pub.publisherid} value={pub.publisherid} text={pub.friendlyname}>
-											<span className={styles.option}>
-												<span>{pub.friendlyname}</span>
-												<span className={styles.optionSecondary}>
-													{[pub.uniquename, pub.customizationprefix && `prefix ${pub.customizationprefix}_`]
-														.filter(Boolean)
-														.join(" · ")}
-												</span>
-											</span>
-										</Option>
-									))
-								)}
-							</Combobox>
-							{publisherFilter.publishersError && (
-								<div className={styles.errorText}>{publisherFilter.publishersError}</div>
-							)}
-						</div>
-
-						{/* Solutions */}
-						<div className={styles.field}>
-							<label id={solutionComboId} className={styles.label}>
-								Solutions
-							</label>
-							{solutionsCombobox(
-								publisherFilter.selectedPublisherIds.length === 0,
-								publisherFilter.selectedPublisherIds.length === 0 ? "Select a publisher first" : undefined,
-							)}
-						</div>
-					</div>
-				)}
-
-				{/* Solution-Only Mode: Solution filter (no publisher picker) */}
-				{effectiveScopeMode === "solution-only" && (
-					<div className={styles.filtersRow}>
-						{/* Publisher - disabled with tooltip */}
-						<div className={styles.field}>
-							<Tooltip
-								content="Publisher filtering requires prvReadPublisher privilege"
-								relationship="description"
-							>
-								<label id={publisherComboId} className={`${styles.label} ${styles.disabledLabel}`}>
-									Publishers <LockClosed20Regular fontSize={14} />
-								</label>
-							</Tooltip>
-							<Combobox
-								className={styles.combobox}
-								input={{ className: styles.comboboxInput }}
-								aria-labelledby={publisherComboId}
-								placeholder="No access to publishers"
-								disabled
-							>
-								<Option>Requires prvReadPublisher privilege</Option>
-							</Combobox>
-						</div>
-
-						{/* Solutions */}
-						<div className={styles.field}>
-							<label id={solutionComboId} className={styles.label}>
-								Solutions
-							</label>
-							{solutionsCombobox(solutionFilter.solutionsLoading, solutionFilter.solutionsLoading ? "Loading…" : undefined)}
-							{solutionFilter.solutionsError && (
-								<div className={styles.errorText}>{solutionFilter.solutionsError}</div>
-							)}
-						</div>
-					</div>
-				)}
-
-				{/* Entity selector (all modes) */}
-				<div className={styles.entityRow}>
-					<div className={styles.field}>
-						<label id={entityComboId} className={styles.label}>
-							Entity
-						</label>
-						<Combobox
-							className={styles.combobox}
-							input={{ className: styles.comboboxInput }}
-							aria-labelledby={entityComboId}
-							placeholder={entityLoading ? "Loading entities…" : "Select an entity…"}
-							value={entityQuery}
-							onOptionSelect={onEntitySelect}
-							onChange={(ev) => setEntityQuery(ev.target.value)}
-							clearable
-							disabled={entityLoading || availableEntities.length === 0}
-						>
-							{entityLoading ? (
-								<Option disabled>Loading…</Option>
-							) : availableEntities.length === 0 ? (
-								<Option disabled>
-									{effectiveScopeMode !== "all" ? "Select a solution first" : "No entities found"}
-								</Option>
-							) : (
-								filteredEntityOptions
-							)}
-						</Combobox>
-						{entityError && <div className={styles.errorText}>{entityError}</div>}
-					</div>
-				</div>
-
-				{/* Load View Picker - only show when entity is selected */}
-				{selectedEntityMetadata && onViewLoad && (
-					<div className={styles.viewPickerRow}>
-						<LoadViewPicker
-							selectedEntityMetadata={selectedEntityMetadata}
-							onViewSelect={handleViewSelect}
-							onViewClear={handleViewClear}
-							onSelectedViewChange={setSelectedViewName}
-						/>
-					</div>
-				)}
-
-				{remembersSelection && effectiveScopeMode !== "all" && (
-					<Text className={styles.note}>
-						{effectiveScopeMode === "publisher-solution"
-							? "Your publisher and solution selection is remembered for this environment."
-							: "Your solution selection is remembered for this environment."}
-					</Text>
-				)}
+			{/* Entity selector (all modes) */}
+			<div className={styles.field}>
+				<label id={entityComboId} className={styles.label}>
+					Entity
+				</label>
+				<Combobox
+					className={styles.combobox}
+					input={{ className: styles.comboboxInput }}
+					aria-labelledby={entityComboId}
+					aria-describedby={entityHintId}
+					placeholder={entityPlaceholder}
+					value={entityQuery}
+					onOptionSelect={onEntitySelect}
+					onChange={(ev) => setEntityQuery(ev.target.value)}
+					clearable
+					disabled={entityLoading || availableEntities.length === 0}
+				>
+					{entityLoading ? (
+						<Option disabled>Loading…</Option>
+					) : availableEntities.length === 0 ? (
+						<Option disabled>{!hasScope ? "Choose a scope to list entities" : "No entities found"}</Option>
+					) : (
+						filteredEntityOptions
+					)}
+				</Combobox>
+				<Text id={entityHintId} className={styles.note}>
+					{!entityLoading && availableEntities.length > 0
+						? `${availableEntities.length.toLocaleString()} ${availableEntities.length === 1 ? "entity" : "entities"} in scope`
+						: ""}
+				</Text>
+				{entityError && <div className={styles.errorText}>{entityError}</div>}
 			</div>
+
+			{/* Load View Picker - only show when entity is selected */}
+			{selectedEntityMetadata && onViewLoad && (
+				<div className={styles.viewPickerRow}>
+					<LoadViewPicker
+						selectedEntityMetadata={selectedEntityMetadata}
+						onViewSelect={handleViewSelect}
+						onViewClear={handleViewClear}
+					/>
+				</div>
+			)}
 		</div>
 	);
 }

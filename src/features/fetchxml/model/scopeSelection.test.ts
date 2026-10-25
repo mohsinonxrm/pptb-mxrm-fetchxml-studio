@@ -4,29 +4,8 @@ import {
 	readRememberedScopes,
 	rememberedScopeFor,
 	restorableIds,
-	scopeSummaryParts,
-	scopeSummaryText,
 	withRememberedScope,
 } from "./scopeSelection";
-
-describe("scopeSummaryParts (#25)", () => {
-	it("joins entity, view and solutions", () => {
-		const parts = scopeSummaryParts({ entity: "Account", view: "Active accounts", solutions: ["Contoso Core"] });
-		expect(parts).toEqual(["Account", "View: Active accounts", "Contoso Core"]);
-		expect(scopeSummaryText(parts)).toBe("Account · View: Active accounts · Contoso Core");
-	});
-
-	it("omits the empty parts", () => {
-		expect(scopeSummaryParts({ entity: "Account" })).toEqual(["Account"]);
-		expect(scopeSummaryParts({ entity: "Account", view: null, solutions: [] })).toEqual(["Account"]);
-		expect(scopeSummaryParts({ view: "Active accounts" })).toEqual(["View: Active accounts"]);
-		expect(scopeSummaryParts({})).toEqual([]);
-	});
-
-	it("lists several solutions", () => {
-		expect(scopeSummaryParts({ entity: "Account", solutions: ["A", "B"] })).toEqual(["Account", "A, B"]);
-	});
-});
 
 describe("remembered publisher / solution selection (#25)", () => {
 	it("keys environments by URL, ignoring case and trailing slashes", () => {

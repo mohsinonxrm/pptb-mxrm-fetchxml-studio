@@ -121,7 +121,6 @@ import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteSco
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
-import { useAccessMode } from "../shared/hooks/useAccessMode";
 import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
@@ -515,9 +514,6 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		metadataScope.setAdvancedFindOnly(displaySettings.advancedFindOnly);
 	}, [displaySettings.advancedFindOnly]);
 	const advancedFindOnly = useAdvancedFindOnly();
-
-	// Access summary for constraining SettingsDrawer scope options
-	const { accessSummary } = useAccessMode();
 
 	// State for resizable split
 	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
@@ -1844,9 +1840,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						onEntityChange={builder.setEntity}
 						onNewQuery={builder.newQuery}
 						entityScopeMode={displaySettings.entityScopeMode}
+						onEntityScopeModeChange={(entityScopeMode) => setDisplaySettings({ ...displaySettings, entityScopeMode })}
 						advancedFindOnly={displaySettings.advancedFindOnly}
-						collapsed={displaySettings.scopeCollapsed}
-						onCollapsedChange={(scopeCollapsed) => setDisplaySettings({ ...displaySettings, scopeCollapsed })}
+						onAdvancedFindOnlyChange={(advancedFindOnly) => setDisplaySettings({ ...displaySettings, advancedFindOnly })}
 						onViewLoad={(viewInfo: LoadedViewInfo) => {
 							// Load the view's FetchXML into the tree while preserving view info
 							// Pass layoutxml for column configuration if available
@@ -2259,7 +2255,6 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			<SettingsDrawer
 				open={settingsDrawerOpen}
 				settings={displaySettings}
-				accessSummary={accessSummary}
 				onClose={() => setSettingsDrawerOpen(false)}
 				onSettingsChange={setDisplaySettings}
 			/>

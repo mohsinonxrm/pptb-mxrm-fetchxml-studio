@@ -19,16 +19,13 @@ import {
 	Divider,
 	Radio,
 	RadioGroup,
-	Tooltip,
 } from "@fluentui/react-components";
-import { Dismiss24Regular, Settings20Regular, Info16Regular } from "@fluentui/react-icons";
+import { Dismiss24Regular, Settings20Regular } from "@fluentui/react-icons";
 import type {
 	DisplaySettings,
 	ValueDisplayMode,
-	EntityScopeMode,
 } from "../../model/displaySettings";
 import type { TreeIconStyle } from "../../model/treeIcons";
-import type { AccessSummary } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -69,17 +66,6 @@ const useStyles = makeStyles({
 	dropdown: {
 		minWidth: "160px",
 	},
-	radioGroup: {
-		display: "flex",
-		flexDirection: "column",
-		gap: tokens.spacingVerticalXS,
-		marginTop: tokens.spacingVerticalXS,
-	},
-	disabledHint: {
-		fontSize: tokens.fontSizeBase100,
-		color: tokens.colorNeutralForegroundDisabled,
-		fontStyle: "italic",
-	},
 });
 
 export interface SettingsDrawerProps {
@@ -91,12 +77,6 @@ export interface SettingsDrawerProps {
 	onClose: () => void;
 	/** Called when settings change */
 	onSettingsChange: (settings: DisplaySettings) => void;
-	/**
-	 * Access summary from useAccessMode — used to constrain which Entity Scope
-	 * options are available based on the user's Dataverse privileges.
-	 * When null (still loading), all options are shown.
-	 */
-	accessSummary?: AccessSummary | null;
 }
 
 export function SettingsDrawer({
@@ -104,7 +84,6 @@ export function SettingsDrawer({
 	settings,
 	onClose,
 	onSettingsChange,
-	accessSummary,
 }: SettingsDrawerProps) {
 	const styles = useStyles();
 
@@ -122,31 +101,12 @@ export function SettingsDrawer({
 		[settings, onSettingsChange],
 	);
 
-	const handleEntityScopeModeChange = useCallback(
-		(mode: EntityScopeMode) => {
-			onSettingsChange({ ...settings, entityScopeMode: mode });
-		},
-		[settings, onSettingsChange],
-	);
-
 	const handleTreeIconStyleChange = useCallback(
 		(treeIconStyle: TreeIconStyle) => {
 			onSettingsChange({ ...settings, treeIconStyle });
 		},
 		[settings, onSettingsChange],
 	);
-
-	const handleAdvancedFindOnlyChange = useCallback(
-		(checked: boolean) => {
-			onSettingsChange({ ...settings, advancedFindOnly: checked });
-		},
-		[settings, onSettingsChange],
-	);
-
-	// Determine which scope options are available given the user's privilege ceiling
-	const canUsePublisherSolution = !accessSummary || accessSummary.fullFilterMode;
-	const canUseSolutionOnly =
-		!accessSummary || accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode;
 
 	return (
 		<OverlayDrawer
@@ -176,79 +136,10 @@ export function SettingsDrawer({
 				<div className={styles.section}>
 					<Text className={styles.sectionTitle}>Query scope</Text>
 
-					{/* Entity Scope Mode */}
-					<div className={styles.settingItem}>
-						<Text className={styles.settingLabel}>
-							Entity source
-							<Tooltip
-								content="Controls how the entity list is populated in the toolbar. Scoped modes are faster; 'All entities' loads every entity in the environment."
-								relationship="description"
-							>
-								<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
-							</Tooltip>
-						</Text>
-						<Text className={styles.settingDescription} block>
-							How to scope the entity picker
-						</Text>
-						<RadioGroup
-							className={styles.radioGroup}
-							value={settings.entityScopeMode}
-							onChange={(_e, data) => handleEntityScopeModeChange(data.value as EntityScopeMode)}
-						>
-							<Tooltip
-								content={
-									!canUsePublisherSolution ? "Requires prvReadPublisher + prvReadSolution" : ""
-								}
-								relationship="description"
-								positioning="before"
-							>
-								<Radio
-									value="publisher-solution"
-									label="Publisher → Solution (default)"
-									disabled={!canUsePublisherSolution}
-								/>
-							</Tooltip>
-							<Tooltip
-								content={!canUseSolutionOnly ? "Requires prvReadSolution" : ""}
-								relationship="description"
-								positioning="before"
-							>
-								<Radio value="solution-only" label="Solution only" disabled={!canUseSolutionOnly} />
-							</Tooltip>
-							<Radio value="all" label="All entities" />
-						</RadioGroup>
-					</div>
-
-					<Divider style={{ marginBottom: tokens.spacingVerticalM }} />
-
-					{/* Advanced Find Only */}
-					<div className={styles.settingItem}>
-						<div className={styles.settingRow}>
-							<div>
-								<Text className={styles.settingLabel}>
-									Advanced Find only
-									<Tooltip
-										content="When on, entities, attributes and relationships are limited to the ones Advanced Find shows (IsValidForAdvancedFind). Turn off to build queries Advanced Find can't: system and customization entities, intersect entities, and hidden attributes and relationships. Attributes that can't be read (IsValidForRead = false) are never listed."
-										relationship="description"
-									>
-										<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
-									</Tooltip>
-								</Text>
-								<Text className={styles.settingDescription} block>
-									Limit entities, attributes &amp; relationships to the ones Advanced Find shows
-								</Text>
-								{!settings.advancedFindOnly && (
-									<Text className={styles.disabledHint} block>
-										All entities, attributes and relationships are shown. A few system entities can&apos;t be queried; Dataverse returns an error for those.
-									</Text>
-								)}
-							</div>
-							<Switch
-								checked={settings.advancedFindOnly}
-								onChange={(_e, data) => handleAdvancedFindOnlyChange(data.checked)}
-							/>
-						</div>
-					</div>
+					<Text className={styles.settingDescription} block>
+						Set where entities come from (publisher, solutions, all entities) and Advanced Find only from the
+						scope button above the entity picker.
+					</Text>
 				</div>
 
 				<Divider />
