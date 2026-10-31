@@ -103,19 +103,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
-- **The Monaco editor now ships DOMPurify 3.4.17 (security).**
-  - **Why the override wasn't enough:** Monaco bundles its own copy of DOMPurify, so the npm `overrides` entry never reached the build. 1.4.4 shipped 3.1.7, and 1.5.0-beta.15 shipped 3.4.15.
-  - **The fix:**
-    - A Vite plugin (`monacoDompurify` in `vite.config.ts`) resolves Monaco's DOMPurify import to the npm `dompurify` package.
-    - The override is raised from 3.4.16 to **3.4.17**. 3.4.17 is 13 days old, an owner-approved exception to the 14-day rule.
-  - **Advisories cleared:** GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high) and GHSA-c6gr-qvv4-5v3f (low), all published 2026-10-22. They had failed CI's audit gate. Earlier, two low ones (GHSA-6688-9rhm-gjv2, GHSA-p98j-92pf-mc4p).
-  - **Exposure was limited:** Monaco's sanitizer doesn't use the options these advisories need (`SAFE_FOR_TEMPLATES`, `IN_PLACE`, `PARSER_MEDIA_TYPE`).
-  - **Check:** `.github/scripts/check-dompurify.mjs` runs after the build in CI and in `release.yml` before publishing. It fails if `dist/` contains any DOMPurify other than the installed one. It was verified both ways: without the plugin the bundle has 3.4.15 and the check fails.
-  - Same approach as Command Bar Studio 0.6.2.
-  - `npm audit --omit=dev` reports 0 findings.
 - **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
 - **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
 - **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
+
+## [1.5.0-beta.16] - 2026-10-30
+
+### 🔧 Fixed
+
+- **Bulk Delete jobs no longer fail with 0x80048d19 "Error identified in Payload provided by the user for Entity :''" (#224, from 1.4.5).** Dataverse rejected "Delete all", "Bulk delete (job)" and deleting more than 100 selected records whenever the query had a condition on a number, Yes/No, choice, status, money or decimal column, such as the "Active …" views. Condition values are now sent as strings, which is what the Web API's [`Object`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object) type defines.
+- **Bulk deleting more than about 530 selected records works (#177 first part, from 1.4.5).** The query for selected records is built in the tool instead of being converted through a GET request with every ID in the URL.
+
+### 🔒 Security
+
+- **The editor ships DOMPurify 3.4.17 (from 1.4.5).** Monaco Editor bundles its own copy, which npm `overrides` can't reach, so 1.5.0-beta.15 shipped DOMPurify 3.4.15. The build now uses the npm `dompurify` package at the version `overrides` sets, and CI and release check the built bundle (`.github/scripts/check-dompurify.mjs`).
 
 ## [1.5.0-beta.15] - 2026-10-20
 
@@ -402,6 +403,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two cross-apply queries Dataverse rejects are now flagged before they run (verified live 2026-10-17).**
   - An order inside a `matchfirstrowusingcrossapply` link-entity (0x80041121). Order from the entity with `entityname` instead; that works.
   - An aliased attribute in one, which fails with a generic SQL error (0x80044150) unless a condition with `entityname` targets the link-entity. With such a condition the alias works, so that case isn't flagged.
+## [1.4.5] - 2026-10-30
+
+Hotfix for 1.4.4: Bulk Delete jobs are accepted again, and the editor ships a current DOMPurify.
+
+### 🔧 Fixed
+
+- **Bulk Delete jobs no longer fail with 0x80048d19 "Error identified in Payload provided by the user for Entity :''" (#224).**
+  - "Delete all", "Bulk delete (job)" and deleting more than 100 selected records submit a `BulkDelete` job. Dataverse rejected the job whenever the query had a condition on a number, Yes/No, choice, status, money or decimal column, such as the common "Active …" views.
+  - The cause: the query sent with the job had those condition values as JSON numbers and booleans. The Web API's [`Object`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object) type, used for condition values, defines `Value` as a string.
+  - Every condition value is now sent as a string, with its type unchanged. Checked live for whole numbers, Yes/No, decimals, `in` lists, dates, lookups and conditions on related tables.
+- **Bulk deleting more than about 530 selected records works (#177, first part).** The job's query was converted from FetchXML by a GET request with every record ID in the URL, which went over the URL length limit. The query for selected records is now built in the tool, so the number of IDs no longer matters. (The second part of #177, about the fallback without the Bulk Delete privilege, is planned for 1.6.)
+
+### 🔒 Security
+
+- **The editor ships DOMPurify 3.4.17.** Monaco Editor bundles its own copy of DOMPurify, which npm `overrides` can't reach, so 1.4.4 shipped DOMPurify 3.1.7. The build now uses the npm `dompurify` package in its place, at the version `overrides` sets (3.4.17: GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr, GHSA-c6gr-qvv4-5v3f). Same approach as Command Bar Studio 0.6.2 and Dataverse Request Studio.
+
+### 🏗️ Technical
+
+- `bulkDeleteQuery.ts`: `withStringConditionValues` (string condition values for converted queries) and `selectedRecordsQuery` (the selected-records query, built locally), with tests.
+- `vite.config.ts`: the `monacoDompurify()` plugin resolves Monaco's DOMPurify import to the npm package.
+- CI and release check the built bundle's DOMPurify version (`.github/scripts/check-dompurify.mjs`) and fail on a mismatch.
 
 ## [1.4.4] - 2026-10-19
 
