@@ -102,5 +102,10 @@
 		"typescript-eslint": "^8.45.0",
 		"vite": "^7.3.0",
 		"vitest": "^5.0.4"
+	},
+	"overrides": {
+		"monaco-editor": {
+			"dompurify": "3.4.17"
+		}
 	}
 }
