@@ -989,8 +989,10 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 	if (valueElements.length > 0) {
 		// Multiple value elements (for in, not-in, between, etc.)
 		const values: (string | number)[] = [];
+		const valueAttributes: Record<string, Record<string, string>> = {};
 		for (const valEl of valueElements) {
-			const valText = valEl.textContent?.trim() || "";
+			// Not trimmed: the value is kept as written, spaces included (#181)
+			const valText = valEl.textContent ?? "";
 			// Try to parse as number if it looks like one
 			const numVal = parseFloat(valText);
 			if (!isNaN(numVal) && valText === numVal.toString()) {
@@ -998,8 +1000,13 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 			} else {
 				values.push(valText);
 			}
+			// uiname / uitype on lookup values in saved views, kept verbatim (#181)
+			if (valEl.attributes.length > 0) {
+				valueAttributes[valText] = Object.fromEntries(Array.from(valEl.attributes, (a) => [a.name, a.value]));
+			}
 		}
 		condition.value = values;
+		if (Object.keys(valueAttributes).length > 0) condition.valueAttributes = valueAttributes;
 	} else if (valueAttr !== null) {
 		// Single value attribute
 		const numVal = parseFloat(valueAttr);
