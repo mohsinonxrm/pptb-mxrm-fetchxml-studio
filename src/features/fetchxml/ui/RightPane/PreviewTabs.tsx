@@ -59,6 +59,7 @@ import {
 	type EditorSyncResult,
 } from "./editorSync";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
+import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
 import { normalizeGridDensity, type DisplaySettings, type GridDensity } from "../../model/displaySettings";
@@ -832,6 +833,7 @@ export function PreviewTabs({
 						className={styles.codeCard}
 						style={selectedTab !== "xml" ? { display: "none" } : undefined}
 					>
+						<PaneErrorBoundary where="FetchXML editor" title="The FetchXML editor couldn't be shown">
 						<FetchXmlEditor
 							xml={xml}
 							onParseToTree={onParseToTree}
@@ -839,8 +841,10 @@ export function PreviewTabs({
 							replaceRequest={editorReplace}
 							onViewAdvisories={() => setSelectedTab("advisories")}
 						/>
+						</PaneErrorBoundary>
 					</div>
 					{selectedTab === "advisories" && (
+						<PaneErrorBoundary where="Advisories panel" title="The advisories couldn't be shown" resetKey={advisorySubject.key}>
 						<AdvisoriesPanel
 							advisories={advisories}
 							noQuery={!fetchQuery}
@@ -858,18 +862,24 @@ export function PreviewTabs({
 							onCheck={handleCheckWithDataverse}
 							checkDisabledReason={checkDisabledReason}
 						/>
+						</PaneErrorBoundary>
 					)}
 					{selectedTab === "layout" && (
 						<div className={styles.codeCard}>
-							<LayoutXmlViewer layoutXml={layoutXml || ""} />
+							<PaneErrorBoundary where="LayoutXML panel" title="The LayoutXML couldn't be shown" resetKey={layoutXml}>
+								<LayoutXmlViewer layoutXml={layoutXml || ""} />
+							</PaneErrorBoundary>
 						</div>
 					)}
 					{selectedTab === "code" && (
 						<div className={styles.codeCard}>
-							<CodePanel fetchXml={xml} />
+							<PaneErrorBoundary where="Code panel" title="The code couldn't be generated" resetKey={xml}>
+								<CodePanel fetchXml={xml} />
+							</PaneErrorBoundary>
 						</div>
 					)}
 					{selectedTab === "results" && (
+						<PaneErrorBoundary where="Results panel" title="The results couldn't be shown" resetKey={result}>
 						<div className={styles.resultsLayout}>
 							<div className={styles.toolbarCard}>
 								<ResultsCommandBar
@@ -1031,6 +1041,7 @@ export function PreviewTabs({
 								/>
 							</div>
 						</div>
+						</PaneErrorBoundary>
 					)}
 				</div>
 			</div>

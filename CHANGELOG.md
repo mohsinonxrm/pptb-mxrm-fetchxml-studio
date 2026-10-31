@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **A render error no longer blanks the whole tool (#185).**
+  - **Before:** an exception while drawing any part of FetchXML Studio unmounted everything. PPTB then showed an empty tab, and the query in progress was lost (as in #217).
+  - **One panel fails:** the scope, query tree, properties, FetchXML editor, results, advisories, LayoutXML and Code panels each have their own error boundary. A failing panel shows an error message bar with **Try again** and **Copy details**, and the rest of the tool keeps working. The panel also tries again by itself when what it shows changes, for example another node, new results or a different query.
+  - **The whole tool fails:** a page shows your query's FetchXML with **Restart with this query**, which re-mounts the tool and reloads the last good query, the same way as after a connection change. It also offers **Start a new query**, **Copy FetchXML** and **Copy details**. Reloading the page doesn't work in PPTB.
+  - **Details:** "Copy details" gives the error, where it happened, the version and the time, never record data. Each error is logged once to the console.
+  - The look was reviewed as a prototype (variant A).
+
 - **The query tree shows which node is selected (#229).**
   - **Before:** the selected node drove the properties panel, but its row had no highlight once the mouse moved away, and screen readers weren't told it was selected.
   - **Now:** the selected row has a subtle selected background, semibold text and a brand indicator bar (as in Fluent Nav). It's marked `aria-selected`, and Windows high contrast shows it in the system highlight colours.
