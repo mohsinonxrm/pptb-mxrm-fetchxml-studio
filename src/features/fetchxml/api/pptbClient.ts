@@ -52,7 +52,7 @@ import {
 	type CloseValues,
 } from "../model/closeActions";
 
-import { odataString } from "./odata";
+import { functionWithString, odataString } from "./odata";
 import { buildRecordNameQuery, buildRecordSearchQuery, type RecordSearchTarget } from "./recordSearch";
 export interface EntityMetadata {
 	LogicalName: string;
@@ -899,11 +899,10 @@ export async function fetchXmlToSQL(fetchXml: string): Promise<string> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
-	const result = (await window.dataverseAPI!.execute({
-		operationName: "FetchXMLToSQL",
-		operationType: "function",
-		parameters: { FetchXml: fetchXml },
-	})) as unknown as Record<string, unknown>;
+	// Escaped and URL-encoded here, not by the host (#176)
+	const result = (await window.dataverseAPI!.queryData(
+		functionWithString("FetchXMLToSQL", "FetchXml", fetchXml),
+	)) as unknown as Record<string, unknown>;
 
 	// The raw result, to debug the undocumented response shape (debug only, #71)
 	debugLog("fetchXmlAPI", "FetchXMLToSQL raw result:", result);
@@ -932,7 +931,7 @@ export async function fetchXmlToSQL(fetchXml: string): Promise<string> {
 
 /** RetrieveUserPrivilegeByPrivilegeName: whether the user has the privilege (throws on failure). */
 async function retrieveUserPrivilege(userId: string, privilegeName: string): Promise<boolean> {
-	const query = `systemusers(${userId})/Microsoft.Dynamics.CRM.RetrieveUserPrivilegeByPrivilegeName(PrivilegeName='${privilegeName}')`;
+	const query = `systemusers(${userId})/Microsoft.Dynamics.CRM.RetrieveUserPrivilegeByPrivilegeName(PrivilegeName='${odataString(privilegeName)}')`;
 	const result = await window.dataverseAPI!.queryData(query);
 	// RetrieveUserPrivilegeByPrivilegeName returns the response directly, not wrapped in .value
 	const response = result as unknown as PrivilegeCheckResponse;
@@ -1522,10 +1521,9 @@ export async function validateFetchXmlExpression(
 	debugLog("viewAPI", `📡 ValidateFetchXmlExpression - Validating FetchXML...`);
 
 	try {
-		// The function requires URL-encoded FetchXML passed as a query parameter
-		// Format: ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='encodedFetchXml'
-		const encodedFetchXml = encodeURIComponent(fetchXml);
-		const query = `ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='${encodedFetchXml}'`;
+		// FetchXML as a parameter alias, quotes doubled and URL-encoded: an apostrophe in a value
+		// (O'Brien) used to end the literal, failing with 0x80060888 (#176)
+		const query = functionWithString("ValidateFetchXmlExpression", "FetchXml", fetchXml);
 
 		const result = (await window.dataverseAPI!.queryData(
 			query,
@@ -2284,8 +2282,9 @@ export async function checkBulkDeletePrivilege(): Promise<boolean> {
 }
 
 /**
- * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function.
- * Uses execute() which properly escapes string parameters (single-quote doubling + URL-encode).
+ * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function. The FetchXML is
+ * escaped and URL-encoded here (functionWithString), not by the host: PPTB Desktop's execute()
+ * escapes it, the VS Code extension doesn't (#176, #173).
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
  */
 export async function fetchXmlToQueryExpression(
@@ -2297,11 +2296,9 @@ export async function fetchXmlToQueryExpression(
 
 	debugLog("recordAPI", `📡 Converting FetchXML to QueryExpression`);
 
-	const result = (await window.dataverseAPI!.execute({
-		operationName: "FetchXmlToQueryExpression",
-		operationType: "function",
-		parameters: { FetchXml: fetchXml },
-	})) as unknown as { Query: Record<string, unknown> };
+	const result = (await window.dataverseAPI!.queryData(
+		functionWithString("FetchXmlToQueryExpression", "FetchXml", fetchXml),
+	)) as unknown as { Query: Record<string, unknown> };
 
 	debugLog("recordAPI", `✅ Converted FetchXML to QueryExpression`, result);
 	return result.Query ?? (result as unknown as Record<string, unknown>);

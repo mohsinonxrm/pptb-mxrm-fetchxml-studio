@@ -10,6 +10,7 @@
  */
 
 import { getPrimaryConnection } from "./host";
+import { isGuid, normalizeGuid } from "./recordSearch";
 
 /** The host invocation API as typed on the global window.toolboxAPI. */
 type ToolboxInvocationAPI = NonNullable<Window["toolboxAPI"]>["invocation"];
@@ -186,6 +187,18 @@ export async function resolveLaunchPrefill(
 }
 
 /**
+ * The query that reads a view's FetchXML by reference (savedquery / userquery), or null when the id
+ * isn't a GUID: it comes from another tool's prefill and goes into $filter unquoted (#176).
+ */
+export function viewRefFetchXmlQuery(viewRef: { id: string; entityLogicalName: "savedquery" | "userquery" }): string | null {
+	if (!isGuid(viewRef.id)) return null;
+	const isPersonal = viewRef.entityLogicalName === "userquery";
+	const setName = isPersonal ? "userqueries" : "savedqueries";
+	const idField = isPersonal ? "userqueryid" : "savedqueryid";
+	return `${setName}?$select=${idField},fetchxml&$filter=${idField} eq ${normalizeGuid(viewRef.id)}`;
+}
+
+/**
  * Retrieve a view's FetchXML by reference. Reuses the same dataverseAPI.queryData
  * route that the entity → view picker uses to read view definitions (savedquery /
  * userquery), filtered to a single record by id.
@@ -197,11 +210,11 @@ async function resolveViewRefFetchXml(viewRef: {
 	const dataverse = window.dataverseAPI;
 	if (!dataverse) return null;
 
-	const isPersonal = viewRef.entityLogicalName === "userquery";
-	const setName = isPersonal ? "userqueries" : "savedqueries";
-	const idField = isPersonal ? "userqueryid" : "savedqueryid";
-
-	const query = `${setName}?$select=${idField},fetchxml&$filter=${idField} eq ${viewRef.id}`;
+	const query = viewRefFetchXmlQuery(viewRef);
+	if (!query) {
+		console.warn("FetchXML Studio: ignoring a view reference whose id isn't a GUID:", viewRef.id);
+		return null;
+	}
 	const result = await dataverse.queryData(query);
 	const record = result.value?.[0];
 	const fetchXml = record?.fetchxml;

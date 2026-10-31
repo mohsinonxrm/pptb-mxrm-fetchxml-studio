@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **An apostrophe in a value no longer breaks Check with Dataverse or Save View validation (#176).**
+  - **Before:** a condition value like `O'Brien` ended the OData string literal the FetchXML was sent in. **Check with Dataverse** failed with 0x80060888 "Syntax error", and Save View's validation quietly said it was unavailable. Verified live.
+  - **Now:** the FetchXML is passed as a parameter alias, with quotes doubled and the value URL-encoded, as [Use Web API functions](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-functions#passing-parameters-to-a-function) recommends.
+  - **The Code tab (SQL, C# QueryExpression) and Bulk Delete's query conversion** now build the same request themselves instead of relying on the host to escape the FetchXML. PPTB Desktop did escape it; the PPTB VS Code extension doesn't (#173), so `'`, `&`, `#`, `%` or `+` in a value could break those requests or change the value there. Verified live on Desktop: the result is identical for a value with all five.
+  - A view ID passed in by another tool must be a GUID before it's used in a query, and the privilege name in the privilege check is quoted like other values.
+
 - **Deleting more than 100 selected records needs the Bulk Delete privilege (#177).**
   - **Before:** more than 100 selected records are deleted by a Bulk Delete job, which needs `prvBulkDelete`. Without it, the tool fell back to deleting every selected record itself, one request per record in batches, while the README said Delete covers 1–100 rows.
   - **Now:** without the privilege, Delete is unavailable for more than 100 selected records. "Delete unavailable" beside it says why and names the privilege, the same way as "Delete all unavailable" (#174). Selecting 100 or fewer works as before, and with the privilege nothing changes.
