@@ -118,7 +118,7 @@ import {
 import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
 import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
-import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteScope";
+import { deleteAllUnavailableReason, deleteSelectionUnavailableReason, MAX_DIRECT_DELETE } from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
@@ -1566,8 +1566,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				return;
 			}
 
-			// Scenario 3: More than 100 records - use bulk delete with IN operator
-			if (recordIds.length > 100 && recordActionPrivileges.canBulkDelete) {
+			// Scenario 3: More than 100 records - use bulk delete with IN operator. Without prvBulkDelete
+			// it's blocked, not deleted record by record (#177); the command bar says why.
+			if (recordIds.length > MAX_DIRECT_DELETE) {
+				if (deleteSelectionUnavailableReason(recordIds.length, recordActionPrivileges.canBulkDelete)) return;
 				setBulkDeleteDialogState({
 					open: true,
 					recordIds,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseFetchXml } from "./fetchxmlParser";
-import { deleteAllUnavailableReason } from "./deleteScope";
+import { deleteAllUnavailableReason, deleteSelectionUnavailableReason, MAX_DIRECT_DELETE } from "./deleteScope";
 import type { FetchNode } from "./nodes";
 
 const q = (xml: string): FetchNode => {
@@ -55,5 +55,22 @@ describe("Delete all uses the query on screen (#174)", () => {
 	it("with top, the sort decides which records are in the first N: a new sort needs a re-run", () => {
 		const topRan = RAN.replace("<fetch>", '<fetch top="10">');
 		expect(allowed(topRan, topRan.replace('<order attribute="name"/>', '<order attribute="createdon"/>'))).toBe(false);
+	});
+});
+
+describe("Delete of more than 100 selected records needs prvBulkDelete (#177)", () => {
+	it("allows up to 100 selected records without the privilege", () => {
+		expect(deleteSelectionUnavailableReason(1, false)).toBeUndefined();
+		expect(deleteSelectionUnavailableReason(MAX_DIRECT_DELETE, false)).toBeUndefined();
+	});
+
+	it("blocks more than 100 without the privilege, and names it", () => {
+		const reason = deleteSelectionUnavailableReason(MAX_DIRECT_DELETE + 1, false);
+		expect(reason).toContain("prvBulkDelete");
+		expect(reason).toContain("100 or fewer");
+	});
+
+	it("allows any number with the privilege (a Bulk Delete job)", () => {
+		expect(deleteSelectionUnavailableReason(5000, true)).toBeUndefined();
 	});
 });

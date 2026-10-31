@@ -60,3 +60,19 @@ export function deleteAllUnavailableReason(executed: FetchNode | null | undefine
 	}
 	return undefined;
 }
+
+/** Selected records up to this many are deleted by the tool itself; more go to a Bulk Delete job. */
+export const MAX_DIRECT_DELETE = 100;
+
+/**
+ * Why "Delete" isn't available for the selected records, or undefined when it is (#177). More than
+ * MAX_DIRECT_DELETE selected records are deleted by a Bulk Delete job, which needs prvBulkDelete.
+ * Without it the tool used to fall back to deleting every one of them itself.
+ */
+export function deleteSelectionUnavailableReason(selectedCount: number, canBulkDelete: boolean): string | undefined {
+	if (selectedCount <= MAX_DIRECT_DELETE || canBulkDelete) return undefined;
+	return (
+		`Deleting more than ${MAX_DIRECT_DELETE} records submits a Bulk Delete job, which needs the Bulk Delete ` +
+		`privilege (prvBulkDelete). Select ${MAX_DIRECT_DELETE} or fewer, or ask your administrator for the privilege.`
+	);
+}
