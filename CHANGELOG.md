@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.17] - 2026-10-31
+
+### 🔧 Fixed
+
+- **Saving a loaded view keeps its lookup display names and exact values (#181, from 1.4.6).** A saved view's `<value uiname="…" uitype="…">` attributes are kept for each value, so model-driven apps still show the names in the view's filter. Long decimals keep every digit, line breaks and tabs in attribute values are written as `&#10;`, `&#13;` and `&#9;`, and spaces in `<value>` text are kept, including in the pac CLI and Web API snippets.
+- **A failed relationship load no longer crashes the tool (from 1.4.6).** When the relationship list for a new link-entity couldn't load, the tool crashed instead of showing "Error loading relationships".
+
 ### 🔧 Changed
 
 - **Insider icon: the gold corner is bigger, deeper gold and flush with the corner.** The old stamp's right point sat inside the hexagon's edge, leaving a thin blue gap, and the light gold faded at small sizes. The stamp now fills the corner, about 1.5 times larger, in two tones of gold (`#CC8A00` and `#F2A100`) split on the same diagonal as the blue. Prerelease builds only; the release icon is unchanged.
