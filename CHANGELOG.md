@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.16] - 2026-10-30
+
+### 🔧 Fixed
+
+- **Bulk Delete jobs no longer fail with 0x80048d19 "Error identified in Payload provided by the user for Entity :''" (#224, from 1.4.5).** Dataverse rejected "Delete all", "Bulk delete (job)" and deleting more than 100 selected records whenever the query had a condition on a number, Yes/No, choice, status, money or decimal column, such as the "Active …" views. Condition values are now sent as strings, which is what the Web API's [`Object`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object) type defines.
+- **Bulk deleting more than about 530 selected records works (#177 first part, from 1.4.5).** The query for selected records is built in the tool instead of being converted through a GET request with every ID in the URL.
+
+### 🔒 Security
+
+- **The editor ships DOMPurify 3.4.17 (from 1.4.5).** Monaco Editor bundles its own copy, which npm `overrides` can't reach, so 1.5.0-beta.15 shipped DOMPurify 3.4.15. The build now uses the npm `dompurify` package at the version `overrides` sets, and CI and release check the built bundle (`.github/scripts/check-dompurify.mjs`).
+
 ## [1.5.0-beta.15] - 2026-10-20
 
 ### 🔧 Fixed
