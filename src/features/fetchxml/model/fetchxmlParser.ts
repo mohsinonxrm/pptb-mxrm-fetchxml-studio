@@ -109,6 +109,15 @@ const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 
 
 /**
+ * A whole number as Dataverse reads top, count, page and utc-offset: optional spaces and sign,
+ * digits only (#181). parseInt accepted "10abc" as 10. Verified live (2026-10-30): top="10abc"
+ * fails ("Input string was not in a correct format"), top=" 10 " and top="+5" run.
+ */
+function parseXmlInt(text: string): number {
+	return /^\s*[+-]?\d+\s*$/.test(text) ? parseInt(text, 10) : NaN;
+}
+
+/**
  * Attributes Dataverse ignores that are ubiquitous in FetchXML exported from Advanced Find and
  * saved views. Reporting them on every paste would be noise, so they are accepted silently.
  */
@@ -524,7 +533,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 	// Numeric options
 	const top = fetchElement.getAttribute("top");
 	if (top !== null) {
-		const topNum = parseInt(top, 10);
+		const topNum = parseXmlInt(top);
 		if (!isNaN(topNum)) {
 			options.top = topNum;
 		} else {
@@ -540,7 +549,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const count = fetchElement.getAttribute("count");
 	if (count !== null) {
-		const countNum = parseInt(count, 10);
+		const countNum = parseXmlInt(count);
 		if (!isNaN(countNum)) {
 			options.count = countNum;
 		} else {
@@ -556,7 +565,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const page = fetchElement.getAttribute("page");
 	if (page !== null) {
-		const pageNum = parseInt(page, 10);
+		const pageNum = parseXmlInt(page);
 		if (!isNaN(pageNum)) {
 			options.page = pageNum;
 		} else {
@@ -572,7 +581,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const utcOffset = fetchElement.getAttribute("utc-offset");
 	if (utcOffset !== null) {
-		const utcNum = parseInt(utcOffset, 10);
+		const utcNum = parseXmlInt(utcOffset);
 		if (!isNaN(utcNum)) {
 			options.utcOffset = utcNum;
 		} else {
@@ -989,8 +998,10 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 	if (valueElements.length > 0) {
 		// Multiple value elements (for in, not-in, between, etc.)
 		const values: (string | number)[] = [];
+		const valueAttributes: Record<string, Record<string, string>> = {};
 		for (const valEl of valueElements) {
-			const valText = valEl.textContent?.trim() || "";
+			// Not trimmed: the value is kept as written, spaces included (#181)
+			const valText = valEl.textContent ?? "";
 			// Try to parse as number if it looks like one
 			const numVal = parseFloat(valText);
 			if (!isNaN(numVal) && valText === numVal.toString()) {
@@ -998,8 +1009,13 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 			} else {
 				values.push(valText);
 			}
+			// uiname / uitype on lookup values in saved views, kept verbatim (#181)
+			if (valEl.attributes.length > 0) {
+				valueAttributes[valText] = Object.fromEntries(Array.from(valEl.attributes, (a) => [a.name, a.value]));
+			}
 		}
 		condition.value = values;
+		if (Object.keys(valueAttributes).length > 0) condition.valueAttributes = valueAttributes;
 	} else if (valueAttr !== null) {
 		// Single value attribute
 		const numVal = parseFloat(valueAttr);
