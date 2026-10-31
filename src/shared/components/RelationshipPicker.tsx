@@ -6,11 +6,9 @@
  * matches any part.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
 	Combobox,
-	Field,
-	Link,
 	Option,
 	OptionGroup,
 	makeStyles,
@@ -56,12 +54,26 @@ const LISTBOX_PROPS = { style: { minWidth: 420 } };
 const label = (item: { DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } } | undefined) =>
 	item?.DisplayName?.UserLocalizedLabel?.Label || undefined;
 
+/**
+ * Metadata the picker couldn't load (#201): the relationships themselves, or only the display names
+ * (the list then shows logical names). The field around the picker says why and offers retry.
+ */
+export interface RelationshipLoadIssue {
+	kind: "relationships" | "names";
+	/** Dataverse's reason (dataverseErrors) */
+	message: string;
+	/** Load again; failed loads aren't cached */
+	retry: () => void;
+}
+
 interface RelationshipPickerProps {
 	entityLogicalName: string;
 	value?: string; // SchemaName of selected relationship
 	onChange: (relationship: RelationshipOption) => void;
 	placeholder?: string;
 	disabled?: boolean;
+	/** Called when a load fails or recovers (undefined), for the surrounding field's message (#201) */
+	onLoadIssue?: (issue: RelationshipLoadIssue | undefined) => void;
 }
 
 export function RelationshipPicker({
@@ -70,6 +82,7 @@ export function RelationshipPicker({
 	onChange,
 	placeholder = "Select a relationship…",
 	disabled = false,
+	onLoadIssue,
 }: RelationshipPickerProps) {
 	const styles = useStyles();
 	const comboId = useId("relationship-combobox");
@@ -80,6 +93,21 @@ export function RelationshipPicker({
 	const [namesError, setNamesError] = useState<string | null>(null);
 	// Retry (#201): bumped to load again; failed loads aren't cached
 	const [attempt, setAttempt] = useState(0);
+	const retry = useCallback(() => setAttempt((n) => n + 1), []);
+	// The latest callback, so a new function from the parent doesn't re-report the same issue
+	const onLoadIssueRef = useRef(onLoadIssue);
+	useEffect(() => {
+		onLoadIssueRef.current = onLoadIssue;
+	});
+	useEffect(() => {
+		onLoadIssueRef.current?.(
+			error
+				? { kind: "relationships", message: error, retry }
+				: namesError
+					? { kind: "names", message: namesError, retry }
+					: undefined,
+		);
+	}, [error, namesError, retry]);
 	const [query, setQuery] = useState<string>("");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Reload when the "Advanced Find only" setting changes (#57)
@@ -191,22 +219,12 @@ export function RelationshipPicker({
 		return <Spinner size="tiny" label="Loading relationships…" />;
 	}
 
-	const retry = (
-		<Link as="button" onClick={() => setAttempt((n) => n + 1)}>
-			Retry
-		</Link>
-	);
-
 	if (error) {
-		// Why, and Retry (#201)
-		return (
-			<Field validationState="error" validationMessage={<>{error} {retry}</>}>
-				<Combobox aria-labelledby={comboId} value="" placeholder="Couldn't load relationships" disabled={true} />
-			</Field>
-		);
+		// The field around the picker shows why, with Retry (onLoadIssue, #201)
+		return <Combobox aria-labelledby={comboId} value="" placeholder="Couldn't load relationships" disabled={true} />;
 	}
 
-	const picker = (
+	return (
 		<Combobox
 			aria-labelledby={comboId}
 			listbox={LISTBOX_PROPS}
@@ -240,20 +258,5 @@ export function RelationshipPicker({
 				})
 			)}
 		</Combobox>
-	);
-
-	// Logical names only: say why, with Retry (#201)
-	return namesError ? (
-		<Field
-			hint={
-				<>
-					Showing logical names: display names couldn't be loaded ({namesError}). {retry}
-				</>
-			}
-		>
-			{picker}
-		</Field>
-	) : (
-		picker
 	);
 }
