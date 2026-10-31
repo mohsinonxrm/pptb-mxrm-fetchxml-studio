@@ -221,7 +221,17 @@ export function RelationshipPicker({
 
 	if (error) {
 		// The field around the picker shows why, with Retry (onLoadIssue, #201)
-		return <Combobox aria-labelledby={comboId} value="" placeholder="Couldn't load relationships" disabled={true} />;
+		// selectedOptions is required here: without it Fluent's Combobox read undefined.length and the
+		// panel crashed instead of showing the error (found testing #201)
+		return (
+			<Combobox
+				aria-labelledby={comboId}
+				value=""
+				selectedOptions={[]}
+				placeholder="Couldn't load relationships"
+				disabled={true}
+			/>
+		);
 	}
 
 	return (
