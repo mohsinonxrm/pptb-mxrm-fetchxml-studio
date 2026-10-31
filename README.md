@@ -90,7 +90,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Native save dialog** — When running inside PPTB, both export paths use `fileSystem.saveFile` for a native OS save-file dialog; falls back to browser blob download in standalone/dev mode
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
 - **Record deletion** — Delete selected records with confirmation dialog
-- **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL
+- **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL; any number of selected records (the query for selected records is built in the tool, with no URL length limit)
 - **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen (a quick find view's test value included); after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
 - **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
 - **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking
