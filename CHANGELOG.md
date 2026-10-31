@@ -307,6 +307,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two cross-apply queries Dataverse rejects are now flagged before they run (verified live 2026-10-17).**
   - An order inside a `matchfirstrowusingcrossapply` link-entity (0x80041121). Order from the entity with `entityname` instead; that works.
   - An aliased attribute in one, which fails with a generic SQL error (0x80044150) unless a condition with `entityname` targets the link-entity. With such a condition the alias works, so that case isn't flagged.
+## [1.4.6] - 2026-10-31
+
+Hotfix for 1.4.5: saved views keep their lookup display names and exact values, and a failed relationship load no longer crashes the tool.
+
+### 🔧 Fixed
+
+- **Saving a loaded view keeps its lookup display names and exact values (#181).**
+  - A saved view's `<value uiname="Contoso" uitype="account">{id}</value>` lost `uiname` and `uitype` when the query went through the tree. Loading a view and saving it again stripped the names model-driven apps show in the view's filter. They're kept now, for each value; changing or removing a value drops only its own.
+  - Long decimals kept only 10 decimal places (`0.12345678901234` became `0.123456789`). Every digit is kept now.
+  - Line breaks and tabs in an attribute value turned into spaces. They're written as `&#10;`, `&#13;` and `&#9;` now.
+  - Spaces in `<value>` text were trimmed, including in the pac CLI and Web API snippets. They're kept now.
+- **A failed relationship load no longer crashes the tool (found testing #201).** When the relationship list for a new link-entity couldn't load (a missing privilege, throttling, the network), the tool crashed instead of showing "Error loading relationships".
+
+### 🏗️ Technical
+
+- `ConditionNode.valueAttributes` keeps each `<value>` element's own attributes; `compactFetchXml()` makes the one-line FetchXML for pac and the Web API without touching `<value>` text.
+- `fetchxmlRoundTrip.test.ts` and `fetchxmlCodeGenerators.test.ts` cover each case.
+
 ## [1.4.5] - 2026-10-30
 
 Hotfix for 1.4.4: Bulk Delete jobs are accepted again, and the editor ships a current DOMPurify.
