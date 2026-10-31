@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Deleting more than 100 selected records needs the Bulk Delete privilege (#177).**
+  - **Before:** more than 100 selected records are deleted by a Bulk Delete job, which needs `prvBulkDelete`. Without it, the tool fell back to deleting every selected record itself, one request per record in batches, while the README said Delete covers 1–100 rows.
+  - **Now:** without the privilege, Delete is unavailable for more than 100 selected records. "Delete unavailable" beside it says why and names the privilege, the same way as "Delete all unavailable" (#174). Selecting 100 or fewer works as before, and with the privilege nothing changes.
+
 - **A render error no longer blanks the whole tool (#185).**
   - **Before:** an exception while drawing any part of FetchXML Studio unmounted everything. PPTB then showed an empty tab, and the query in progress was lost (as in #217).
   - **One panel fails:** the scope, query tree, properties, FetchXML editor, results, advisories, LayoutXML and Code panels each have their own error boundary. A failing panel shows an error message bar with **Try again** and **Copy details**, and the rest of the tool keeps working. The panel also tries again by itself when what it shows changes, for example another node, new results or a different query.

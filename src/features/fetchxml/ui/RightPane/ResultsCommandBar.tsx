@@ -49,6 +49,7 @@ import type { LayoutColumn } from "../../model/layoutxml";
 import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
 import type { CopyValueMode } from "./copyResults";
 import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
+import { deleteSelectionUnavailableReason } from "../../model/deleteScope";
 
 const useStyles = makeStyles({
 	toolbar: {
@@ -261,10 +262,13 @@ export function ResultsCommandBar({
 	const singleSelection = selectedCount === 1;
 	const recordActionsUnavailable = !!recordActionsDisabledReason;
 	const deleteAllBlocked = !hasSelection && !!deleteAllDisabledReason;
-	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || deleteAllBlocked;
+	// More than 100 selected without prvBulkDelete (#177): blocked, with the reason, like Delete all
+	const deleteSelectionReason = hasSelection ? deleteSelectionUnavailableReason(selectedCount, canBulkDelete) : undefined;
+	const deleteBlockedReason = deleteAllBlocked ? deleteAllDisabledReason : deleteSelectionReason;
+	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || !!deleteBlockedReason;
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
 	// Activate / Deactivate (#143): need a selection, record IDs and the record-action rules delete has
-	const stateButtonsDisabled = !hasSelection || isDeleteDisabled;
+	const stateButtonsDisabled = !hasSelection || deleteDisabled || recordActionsUnavailable;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
 	// Copy menu: values as shown in the grid, or raw (#50)
@@ -450,11 +454,11 @@ export function ResultsCommandBar({
 
 				<ToolbarDivider />
 
-				{/* Same pattern as "Record actions unavailable": the reason is in the tooltip (#174) */}
-				{canDelete && deleteAllBlocked && !recordActionsDisabledReason && (
-					<Tooltip content={deleteAllDisabledReason} relationship="description" withArrow>
+				{/* Same pattern as "Record actions unavailable": the reason is in the tooltip (#174, #177) */}
+				{canDelete && deleteBlockedReason && !recordActionsDisabledReason && (
+					<Tooltip content={deleteBlockedReason} relationship="description" withArrow>
 						<ToolbarButton appearance="transparent" icon={<Info20Regular />}>
-							Delete all unavailable
+							{deleteAllBlocked ? "Delete all unavailable" : "Delete unavailable"}
 						</ToolbarButton>
 					</Tooltip>
 				)}
