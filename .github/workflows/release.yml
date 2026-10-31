@@ -68,6 +68,8 @@ jobs:
       - run: npm test
       - run: npm run validate
       - run: npm run build
+      - name: Check the bundled DOMPurify
+        run: node .github/scripts/check-dompurify.mjs
       - name: Publish to npm
         env:
           DIST_TAG: ${{ steps.channel.outputs.dist_tag }}
