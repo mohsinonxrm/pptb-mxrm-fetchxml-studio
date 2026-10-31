@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-10-30
+
+Hotfix for 1.4.4: Bulk Delete jobs are accepted again, and the editor ships a current DOMPurify.
+
+### 🔧 Fixed
+
+- **Bulk Delete jobs no longer fail with 0x80048d19 "Error identified in Payload provided by the user for Entity :''" (#224).**
+  - "Delete all", "Bulk delete (job)" and deleting more than 100 selected records submit a `BulkDelete` job. Dataverse rejected the job whenever the query had a condition on a number, Yes/No, choice, status, money or decimal column, such as the common "Active …" views.
+  - The cause: the query sent with the job had those condition values as JSON numbers and booleans. The Web API's [`Object`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object) type, used for condition values, defines `Value` as a string.
+  - Every condition value is now sent as a string, with its type unchanged. Checked live for whole numbers, Yes/No, decimals, `in` lists, dates, lookups and conditions on related tables.
+- **Bulk deleting more than about 530 selected records works (#177, first part).** The job's query was converted from FetchXML by a GET request with every record ID in the URL, which went over the URL length limit. The query for selected records is now built in the tool, so the number of IDs no longer matters. (The second part of #177, about the fallback without the Bulk Delete privilege, is planned for 1.6.)
+
+### 🔒 Security
+
+- **The editor ships DOMPurify 3.4.17.** Monaco Editor bundles its own copy of DOMPurify, which npm `overrides` can't reach, so 1.4.4 shipped DOMPurify 3.1.7. The build now uses the npm `dompurify` package in its place, at the version `overrides` sets (3.4.17: GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr, GHSA-c6gr-qvv4-5v3f). Same approach as Command Bar Studio 0.6.2 and Dataverse Request Studio.
+
+### 🏗️ Technical
+
+- `bulkDeleteQuery.ts`: `withStringConditionValues` (string condition values for converted queries) and `selectedRecordsQuery` (the selected-records query, built locally), with tests.
+- `vite.config.ts`: the `monacoDompurify()` plugin resolves Monaco's DOMPurify import to the npm package.
+- CI and release check the built bundle's DOMPurify version (`.github/scripts/check-dompurify.mjs`) and fail on a mismatch.
+
 ## [1.4.4] - 2026-10-19
 
 Hotfix for 1.4.3: record actions act only on what you see, and the pac CLI snippet is quoted safely.

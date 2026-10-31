@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.4.4-blue)
+![Version](https://img.shields.io/badge/version-1.4.5-blue)
 [![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
@@ -81,7 +81,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Native save dialog** — When running inside PPTB, both export paths use `fileSystem.saveFile` for a native OS save-file dialog; falls back to browser blob download in standalone/dev mode
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
 - **Record deletion** — Delete selected records with confirmation dialog
-- **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL
+- **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL; any number of selected records (the query for selected records is built in the tool, with no URL length limit)
 - **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen; after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
 - **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
 - **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking

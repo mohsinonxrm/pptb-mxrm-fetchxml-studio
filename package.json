@@ -1,6 +1,6 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.4.4",
+	"version": "1.4.5",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
@@ -102,5 +102,10 @@
 		"typescript-eslint": "^8.45.0",
 		"vite": "^7.3.0",
 		"vitest": "^5.0.4"
+	},
+	"overrides": {
+		"monaco-editor": {
+			"dompurify": "3.4.17"
+		}
 	}
 }

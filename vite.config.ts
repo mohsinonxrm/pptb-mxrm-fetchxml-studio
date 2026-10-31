@@ -22,9 +22,30 @@ function toolIcon(): Plugin {
 	};
 }
 
+/**
+ * Monaco ships its own copy of DOMPurify (monaco-editor/esm/vs/base/browser/dompurify/dompurify.js),
+ * so npm `overrides` alone never reach the bundle: 1.4.4 shipped 3.1.7. This resolves Monaco's
+ * import to the npm `dompurify` package instead (same default export, the DOMPurify instance), so
+ * security fixes come from npm, at the version package.json's override sets.
+ * .github/scripts/check-dompurify.mjs checks the built bundle in CI and before publishing. Same
+ * approach as Command Bar Studio 0.6.2.
+ */
+function monacoDompurify(): Plugin {
+	return {
+		name: "fxs-monaco-dompurify",
+		enforce: "pre",
+		async resolveId(source, importer, options) {
+			if (!importer || !/[\\/]monaco-editor[\\/]esm[\\/]vs[\\/]base[\\/]browser[\\/]/.test(importer)) return null;
+			if (!/(^|[\\/])dompurify[\\/]dompurify\.js$/.test(source)) return null;
+			// Resolved from Monaco's folder: its own (overridden) dompurify dependency
+			return this.resolve("dompurify", importer, { ...options, skipSelf: true });
+		},
+	};
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-	plugins: [react(), toolIcon()],
+	plugins: [react(), toolIcon(), monacoDompurify()],
 	optimizeDeps: {
 		// Pre-bundle monaco-editor so Vite doesn't try to transform its deep
 		// internal imports at runtime (avoids CJS/ESM interop issues).
