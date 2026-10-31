@@ -171,7 +171,7 @@ FetchXML Studio only reads from Dataverse until you start one of the operations 
 | **Mark as paid / Cancel invoice** | Results → **Close** with invoices selected | Sets the invoice to Paid (Complete or Partial) or Canceled with an update (`PATCH` of `statecode` and `statuscode`), like Deactivate. Invoices have no close message, and no activity is created. Needs Write on invoice. |
 | **Run workflow** | Results → **Run Workflow** on selected rows | Starts the chosen on-demand workflow (`ExecuteWorkflow`) once per selected record. What the workflow does is up to the workflow. |
 | **Save view (personal)** | **Save As** / **Save**, Personal view | Creates or updates a `userquery` record (your personal view). |
-| **Save view (system)** | **Save As** / **Save**, System view | Checks the query with `ValidateSavedQuery`, then creates or updates a `savedquery` record and publishes it (`PublishXml`). Optionally adds it to the unmanaged solution you choose (`AddSolutionComponent`). Overwriting a view that isn't customizable is blocked. |
+| **Save view (system)** | **Save As** / **Save**, System view | Checks the query with `ValidateSavedQuery`, then creates or updates a `savedquery` record, adds a new view to the unmanaged solution you choose (`AddSolutionComponent`, optional) and publishes it (`PublishXml`). If adding to the solution or publishing fails, the view is already saved: the dialog says which step failed and retries only that step, so saving again never creates a second view. The dialog can't be closed while it saves. Overwriting a view that isn't customizable is blocked. |
 
 Nothing else writes to Dataverse:
 - **Export (Server)** asks Dataverse to build an Excel file (`ExportToExcel`) and changes no data.

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Save View: no duplicate views after a failed step, and no closing mid-save (#180).**
+  - **Before:** saving a new system view creates it, adds it to the chosen solution, then publishes. If adding to the solution or publishing failed, the dialog said "Save failed" and stayed on "Save as new", so pressing Save again created a second view with the same name. A publish failure after an overwrite also said "Save failed", though the view was saved. And Esc, a click outside or the title-bar X closed the dialog while it was still saving, so the outcome was never shown.
+  - **Now:** a warning says what was saved and which step failed ("Saved, but not added to the solution" or "Saved, but not published"), with Dataverse's message. The form locks, and the main button retries only that step (and publishing after it, if requested). **Close** loads the saved view, so the next Save overwrites it.
+  - While saving, Esc and clicks outside are ignored and the X is disabled, like Cancel. The design was reviewed with the owner.
+
 - **An apostrophe in a value no longer breaks Check with Dataverse or Save View validation (#176).**
   - **Before:** a condition value like `O'Brien` ended the OData string literal the FetchXML was sent in. **Check with Dataverse** failed with 0x80060888 "Syntax error", and Save View's validation quietly said it was unavailable. Verified live.
   - **Now:** the FetchXML is passed as a parameter alias, with quotes doubled and the value URL-encoded, as [Use Web API functions](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-functions#passing-parameters-to-a-function) recommends.

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { runViewSaveSteps, viewSaveSteps, type ViewSaveStep } from "../../model/viewSaveSteps";
 import {
 	Dialog,
 	DialogSurface,
@@ -195,6 +196,9 @@ export interface SavedViewDetails {
 	isDefault?: boolean;
 }
 
+/** A message ending with a full stop, so the next sentence reads on (#180) */
+const asSentence = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
 interface SaveViewDialogProps {
 	/** Whether the dialog is open */
 	open: boolean;
@@ -280,6 +284,19 @@ export function SaveViewDialog({
 	const [isSaving, setIsSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
 
+	// The view was created or updated but a later step failed (#180): the view exists, so the form
+	// locks and the primary button retries only the remaining steps; closing loads the view.
+	const [partialSave, setPartialSave] = useState<{
+		viewId: string;
+		viewType: "system" | "personal";
+		name: string;
+		details: SavedViewDetails;
+		solution: Solution | null;
+		remaining: ViewSaveStep[];
+		error: string;
+	} | null>(null);
+	const formLocked = isSaving || partialSave !== null;
+
 	// "Save a copy…" from a view that can't be overwritten switches to Save as (#142)
 	const [savingCopy, setSavingCopy] = useState(false);
 	// The connected user, to tell a personal view shared with them from their own (#142)
@@ -327,6 +344,7 @@ export function SaveViewDialog({
 			}
 			setSavingCopy(false);
 			setSaveError(null);
+			setPartialSave(null);
 			setValidation({ status: "idle", messages: [] });
 		}
 	}, [open, isOverwriteRequest, loadedView]);
@@ -472,6 +490,52 @@ export function SaveViewDialog({
 		return true;
 	}, [name, isSaving, isOverwriteBlocked, isCheckingAccess, viewType, systemPrivileges, personalPrivileges]);
 
+	// One follow-up step for a saved system view (#180)
+	const runViewSaveStep = useCallback(
+		async (step: ViewSaveStep, viewId: string, solution: Solution | null) => {
+			if (step === "solution") {
+				if (solution) await addSolutionComponent(viewId, COMPONENT_TYPE_SAVEDQUERY, solution.uniquename, false);
+			} else {
+				// Publishes the view's entity: the documented PublishXml form (#93 h)
+				await publishEntityViews(entityLogicalName);
+			}
+		},
+		[entityLogicalName],
+	);
+
+	// Retry only the steps left after a partial save (#180)
+	const handleRetry = useCallback(async () => {
+		if (!partialSave || isSaving) return;
+		setIsSaving(true);
+		const releaseClose = holdClose();
+		try {
+			const failed = await runViewSaveSteps(partialSave.remaining, (step) =>
+				runViewSaveStep(step, partialSave.viewId, partialSave.solution),
+			);
+			if (failed) {
+				setPartialSave({ ...partialSave, remaining: failed.remaining, error: formatDataverseError(failed.error, "The step failed") });
+				return;
+			}
+			setPartialSave(null);
+			onSaveComplete(partialSave.viewId, partialSave.viewType, partialSave.name, partialSave.details);
+		} finally {
+			releaseClose();
+			setIsSaving(false);
+		}
+	}, [partialSave, isSaving, runViewSaveStep, onSaveComplete]);
+
+	// Esc, the X and Cancel / Close: ignored while saving (#180). After a partial save the view
+	// exists, so closing loads it and the next Save overwrites it instead of creating another.
+	const handleClose = useCallback(() => {
+		if (isSaving) return;
+		if (partialSave) {
+			setPartialSave(null);
+			onSaveComplete(partialSave.viewId, partialSave.viewType, partialSave.name, partialSave.details);
+			return;
+		}
+		onClose();
+	}, [isSaving, partialSave, onSaveComplete, onClose]);
+
 	// Handle save
 	const handleSave = useCallback(async () => {
 		if (!canSave) return;
@@ -483,6 +547,8 @@ export function SaveViewDialog({
 
 		try {
 			let viewId: string;
+			// Run after the view exists: add a new system view to the solution, then publish (#180)
+			let steps: ViewSaveStep[] = [];
 			// Overwrite writes the description as shown, so clearing it clears the view's (#142)
 			const savedDescription = description.trim();
 			// Set as default view: sent only to make a view the default; Dataverse keeps one default
@@ -517,6 +583,7 @@ export function SaveViewDialog({
 				const queryType = isOverwriteMode && loadedView ? (loadedView.queryType ?? 0) : 0;
 				await validateSavedQuery(fetchXml, queryType);
 
+				const isNewView = !(isOverwriteMode && loadedView);
 				if (isOverwriteMode && loadedView) {
 					await updateSavedQuery(loadedView.id, {
 						name: name.trim(),
@@ -536,29 +603,28 @@ export function SaveViewDialog({
 						querytype: 0,
 						isdefault: setAsDefault,
 					});
-
-					// Add to solution if selected
-					if (selectedSolution) {
-						await addSolutionComponent(
-							viewId,
-							COMPONENT_TYPE_SAVEDQUERY,
-							selectedSolution.uniquename,
-							false
-						);
-					}
 				}
-
-				// Publish if requested
-				if (shouldPublish) {
-					// Publishes the view's entity: the documented PublishXml form (#93 h)
-					await publishEntityViews(entityLogicalName);
-				}
+				steps = viewSaveSteps({ addToSolution: isNewView && selectedSolution !== null, publish: shouldPublish });
 			}
 
-			onSaveComplete(viewId, viewType, name.trim(), {
+			const details: SavedViewDetails = {
 				description: savedDescription || undefined,
 				isDefault: viewType === "system" ? setAsDefault || isAlreadyDefault : undefined,
-			});
+			};
+			const failed = await runViewSaveSteps(steps, (step) => runViewSaveStep(step, viewId, selectedSolution));
+			if (failed) {
+				setPartialSave({
+					viewId,
+					viewType,
+					name: name.trim(),
+					details,
+					solution: selectedSolution,
+					remaining: failed.remaining,
+					error: formatDataverseError(failed.error, "The step failed"),
+				});
+				return;
+			}
+			onSaveComplete(viewId, viewType, name.trim(), details);
 		} catch (error) {
 			console.error("Failed to save view:", error);
 			setSaveError(formatDataverseError(error, "Failed to save view")); // (#96)
@@ -579,6 +645,7 @@ export function SaveViewDialog({
 		selectedSolution,
 		shouldPublish,
 		onSaveComplete,
+		runViewSaveStep,
 		showDefaultOption,
 		makeDefault,
 		isAlreadyDefault,
@@ -610,7 +677,7 @@ export function SaveViewDialog({
 	}, [isOverwriteMode, loadedView, shouldPublish, viewType]);
 
 	return (
-		<Dialog open={open} onOpenChange={(_, data) => !data.open && onClose()}>
+		<Dialog open={open} onOpenChange={(_, data) => !data.open && handleClose()}>
 			<DialogSurface className={styles.surface}>
 				<DialogBody>
 					<DialogTitle
@@ -619,7 +686,8 @@ export function SaveViewDialog({
 								appearance="subtle"
 								aria-label="Close"
 								icon={<DismissRegular />}
-								onClick={onClose}
+								onClick={handleClose}
+								disabled={isSaving}
 							/>
 						}
 					>
@@ -709,7 +777,7 @@ export function SaveViewDialog({
 									value={name}
 									onChange={(_, data) => setName(data.value)}
 									placeholder="Enter view name"
-									disabled={isSaving || isOverwriteBlocked}
+									disabled={formLocked || isOverwriteBlocked}
 								/>
 							</Field>
 							<Field
@@ -720,7 +788,7 @@ export function SaveViewDialog({
 									value={description}
 									onChange={(_, data) => setDescription(data.value)}
 									placeholder="Optional description"
-									disabled={isSaving || isOverwriteBlocked}
+									disabled={formLocked || isOverwriteBlocked}
 									rows={2}
 								/>
 							</Field>
@@ -730,7 +798,7 @@ export function SaveViewDialog({
 									<RadioGroup
 										value={viewType}
 										onChange={(_, data) => setViewType(data.value as "system" | "personal")}
-										disabled={isSaving}
+										disabled={formLocked}
 									>
 										<Radio
 											value="personal"
@@ -767,7 +835,7 @@ export function SaveViewDialog({
 											solutions={unmanagedSolutions}
 											selectedSolution={selectedSolution}
 											onSolutionChange={setSelectedSolution}
-											disabled={isSaving}
+											disabled={formLocked}
 										/>
 									)}
 								</>
@@ -786,7 +854,7 @@ export function SaveViewDialog({
 									<Checkbox
 										label="Set as default view"
 										checked={makeDefault}
-										disabled={isSaving || isAlreadyDefault}
+										disabled={formLocked || isAlreadyDefault}
 										onChange={(_, data) => setMakeDefault(data.checked === true)}
 									/>
 								</Field>
@@ -860,6 +928,29 @@ export function SaveViewDialog({
 								</MessageBarBody>
 							</MessageBar>
 						)}
+
+						{/* Saved, but a follow-up step failed (#180) */}
+						{partialSave && (
+							<MessageBar intent="warning" layout="multiline">
+								<MessageBarBody>
+									{partialSave.remaining[0] === "solution" ? (
+										<>
+											<MessageBarTitle>Saved, but not added to the solution</MessageBarTitle>
+											{`The view "${partialSave.name}" was created, but adding it to "${
+												partialSave.solution?.friendlyname ?? partialSave.solution?.uniquename ?? ""
+											}" failed: ${asSentence(partialSave.error)} Retry, or close: the view stays, outside the solution.`}
+										</>
+									) : (
+										<>
+											<MessageBarTitle>Saved, but not published</MessageBarTitle>
+											{`The view was saved, but publishing ${entityDisplayName || entityLogicalName} failed: ${asSentence(
+												partialSave.error,
+											)} Users see the change once it's published.`}
+										</>
+									)}
+								</MessageBarBody>
+							</MessageBar>
+						)}
 					</DialogContent>
 					<DialogActions>
 						{/* A view that can't be overwritten can be saved as a copy (#142) */}
@@ -868,12 +959,22 @@ export function SaveViewDialog({
 								Save a copy…
 							</Button>
 						)}
-						<Button appearance="secondary" onClick={onClose} disabled={isSaving}>
-							Cancel
+						<Button appearance="secondary" onClick={handleClose} disabled={isSaving}>
+							{partialSave ? "Close" : "Cancel"}
 						</Button>
-						<Button appearance="primary" onClick={handleSave} disabled={!canSave}>
+						<Button
+							appearance="primary"
+							onClick={partialSave ? handleRetry : handleSave}
+							disabled={partialSave ? isSaving : !canSave}
+						>
 							{isSaving ? (
 								<Spinner size="tiny" />
+							) : partialSave ? (
+								partialSave.remaining[0] === "solution" ? (
+									"Retry adding to solution"
+								) : (
+									"Retry publishing"
+								)
 							) : shouldPublish && viewType === "system" ? (
 								"Save and publish"
 							) : (
