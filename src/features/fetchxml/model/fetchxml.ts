@@ -22,18 +22,10 @@ import { AGGREGATE_FUNCTIONS } from "./attributeCapabilities";
  */
 function formatValueForFetchXml(val: unknown): string {
 	if (typeof val === "number") {
-		// Avoid scientific notation (1e-12) by using toFixed with sufficient precision
-		// Then remove trailing zeros
-		if (Math.abs(val) < 1e-10 && val !== 0) {
-			// Very small numbers - use high precision
-			return val.toFixed(20).replace(/\.?0+$/, "");
-		} else if (Number.isInteger(val)) {
-			// Integer - no decimal point needed
-			return val.toString();
-		} else {
-			// Decimal - preserve precision but remove trailing zeros
-			return val.toFixed(10).replace(/\.?0+$/, "");
-		}
+		// String() is exact and round-trips (0.12345678901234 used to be cut to 10 places, #181);
+		// only scientific notation (1e-12, 1e21) is written out in full
+		const text = String(val);
+		return /e/i.test(text) ? val.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 }) : text;
 	}
 	return String(val);
 }
@@ -253,7 +245,10 @@ function generateCondition(condition: ConditionNode, indent: number): string[] {
 			lines.push(`${spaces}<condition ${attrs.join(" ")}>`);
 			condition.value.forEach((val) => {
 				if (val !== undefined && val !== null) {
-					lines.push(`${spaces}  <value>${escapeXmlText(formatValueForFetchXml(val))}</value>`);
+					const text = formatValueForFetchXml(val);
+					// The value's own attributes (uiname, uitype) as they were parsed (#181)
+					const own = extraAttrs(condition.valueAttributes?.[text]);
+					lines.push(`${spaces}  <value${own.length ? ` ${own.join(" ")}` : ""}>${escapeXmlText(text)}</value>`);
 				}
 			});
 			lines.push(`${spaces}</condition>`);
@@ -334,7 +329,18 @@ function generateLinkEntity(link: LinkEntityNode, indent: number): string[] {
  * node then shows as attribute="" / operator="" and its editor still asks for the missing value.
  */
 function escapeXmlAttr(str: string | null | undefined): string {
-	return (str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	return (
+		(str ?? "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			// XML attribute-value normalisation turns a literal tab, newline or CR into a space, so
+			// they're written as character references to survive (#181)
+			.replace(/\t/g, "&#9;")
+			.replace(/\n/g, "&#10;")
+			.replace(/\r/g, "&#13;")
+	);
 }
 
 /** Element text (<value>): only &, < and > need escaping. A missing value is written as empty. */

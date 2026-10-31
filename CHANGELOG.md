@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Parse to tree and Save View keep values exactly as written (#181).**
+  - **Lookup display names on `<value>`:** a saved view's `<value uiname="Contoso" uitype="account">{id}</value>` lost `uiname` and `uitype` when the query went through the tree, so loading a view and saving it again stripped the names model-driven apps show in the view's filter. They're kept now, for each value. Changing or removing a value drops only its own.
+  - **Long decimals** kept only 10 decimal places (`0.12345678901234` became `0.123456789`). Every digit is kept now; only scientific notation (`1e-12`) is written out in full.
+  - **Line breaks and tabs** in an attribute value turned into spaces. They're written as `&#10;`, `&#13;` and `&#9;` now.
+  - **Spaces in `<value>` text** were trimmed, so `<value> </value>` became empty; the pac CLI and Web API snippets did the same. They're kept now.
+  - **`top`, `count`, `page` and `utc-offset`** accepted partly numeric text: `top="10abc"` became `top="10"` without a word. Such values are now reported like any other invalid value; Dataverse rejects them (verified live: "Input string was not in a correct format"). A sign and surrounding spaces are still accepted, as Dataverse accepts them.
+
 - **Save View: no duplicate views after a failed step, and no closing mid-save (#180).**
   - **Before:** saving a new system view creates it, adds it to the chosen solution, then publishes. If adding to the solution or publishing failed, the dialog said "Save failed" and stayed on "Save as new", so pressing Save again created a second view with the same name. A publish failure after an overwrite also said "Save failed", though the view was saved. And Esc, a click outside or the title-bar X closed the dialog while it was still saving, so the outcome was never shown.
   - **Now:** a warning says what was saved and which step failed ("Saved, but not added to the solution" or "Saved, but not published"), with Dataverse's message. The form locks, and the main button retries only that step (and publishing after it, if requested). **Close** loads the saved view, so the next Save overwrites it.

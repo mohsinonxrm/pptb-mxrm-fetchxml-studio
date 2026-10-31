@@ -193,3 +193,74 @@ describe("Parse to Tree no longer reports documented attributes as changes", () 
 		expect(getParseToTreeChanges(parsed)).toEqual([]);
 	});
 });
+
+describe("values survive the round trip (#181)", () => {
+	const lookupIn = `<fetch><entity name="account"><attribute name="name" /><filter type="and"><condition attribute="primarycontactid" operator="in"><value uiname="Jane Doe" uitype="contact">{00000000-0000-0000-0000-000000000001}</value><value uiname="John Roe" uitype="contact">{00000000-0000-0000-0000-000000000002}</value></condition></filter></entity></fetch>`;
+
+	it("keeps uiname and uitype on <value> elements, as saved views write them", () => {
+		const { regenerated } = expectLosslessRoundTrip(lookupIn);
+		expect(regenerated).toContain(`<value uiname="Jane Doe" uitype="contact">{00000000-0000-0000-0000-000000000001}</value>`);
+	});
+
+	it("drops a value's own attributes when that value is changed, and keeps the others", () => {
+		const fetch = parseFetchXml(lookupIn).fetchNode!;
+		const condition = fetch.entity.filters[0].conditions[0];
+		condition.value = ["{00000000-0000-0000-0000-000000000003}", "{00000000-0000-0000-0000-000000000002}"];
+		const xml = generateFetchXml(fetch);
+		expect(xml).toContain("<value>{00000000-0000-0000-0000-000000000003}</value>");
+		expect(xml).toContain(`<value uiname="John Roe" uitype="contact">{00000000-0000-0000-0000-000000000002}</value>`);
+		expect(xml).not.toContain("Jane Doe");
+	});
+
+	it("keeps every digit of a long decimal", () => {
+		expectLosslessRoundTrip(`<fetch><entity name="product"><attribute name="name" /><filter><condition attribute="price" operator="gt" value="0.12345678901234" /><condition attribute="price" operator="in"><value>1234.56789012345</value><value>2</value></condition></filter></entity></fetch>`);
+	});
+
+	it("writes numbers without scientific notation", () => {
+		const fetch = parseFetchXml(`<fetch><entity name="product"><filter><condition attribute="price" operator="gt" value="1" /></filter></entity></fetch>`).fetchNode!;
+		const condition = fetch.entity.filters[0].conditions[0];
+		condition.value = 1e-12;
+		expect(generateFetchXml(fetch)).toContain(`value="0.000000000001"`);
+		condition.value = 1e21;
+		expect(generateFetchXml(fetch)).toContain(`value="1000000000000000000000"`);
+	});
+
+	it("keeps newlines and tabs in attribute values", () => {
+		const { parsed, regenerated } = expectLosslessRoundTrip(`<fetch><entity name="account"><filter><condition attribute="description" operator="eq" value="line 1&#10;line 2&#9;end" /></filter></entity></fetch>`);
+		expect(parsed.fetchNode!.entity.filters[0].conditions[0].value).toBe("line 1\nline 2\tend");
+		expect(regenerated).toContain(`value="line 1&#10;line 2&#9;end"`);
+	});
+
+	it("keeps spaces in <value> text, including a value that's only a space", () => {
+		const xml = `<fetch><entity name="account"><filter><condition attribute="name" operator="in"><value> </value><value>  Contoso  </value></condition></filter></entity></fetch>`;
+		const parsed = parseFetchXml(xml);
+		expect(parsed.fetchNode!.entity.filters[0].conditions[0].value).toEqual([" ", "  Contoso  "]);
+		const regenerated = generateFetchXml(parsed.fetchNode!);
+		expect(regenerated).toContain("<value> </value>");
+		expect(regenerated).toContain("<value>  Contoso  </value>");
+	});
+});
+
+describe("top, count, page and utc-offset must be whole numbers (#181)", () => {
+	const options = (attrs: string) => parseFetchXml(`<fetch ${attrs}><entity name="account"><attribute name="name" /></entity></fetch>`);
+
+	it("rejects partly numeric values instead of reading the leading digits", () => {
+		const parsed = options(`top="10abc" count="5x" page="2y"`);
+		expect(parsed.fetchNode!.options.top).toBeUndefined();
+		expect(parsed.fetchNode!.options.count).toBeUndefined();
+		expect(parsed.fetchNode!.options.page).toBeUndefined();
+		const flagged = parsed.warnings.filter((w) => w.element === "fetch" && w.severity === "error").map((w) => w.attribute);
+		expect(flagged).toEqual(expect.arrayContaining(["top", "count", "page"]));
+	});
+
+	it("still reports a partly numeric utc-offset as ignored (Dataverse ignores it)", () => {
+		const parsed = options(`utc-offset="2x"`);
+		expect(parsed.fetchNode!.options.utcOffset).toBeUndefined();
+		expect(parsed.warnings.find((w) => w.attribute === "utc-offset")).toMatchObject({ severity: "info", kind: "ignored" });
+	});
+
+	it("accepts a sign and surrounding spaces, as Dataverse does", () => {
+		const parsed = options(`top=" 10 " count="+5" utc-offset="-300"`);
+		expect(parsed.fetchNode!.options).toMatchObject({ top: 10, count: 5, utcOffset: -300 });
+	});
+});
