@@ -30,6 +30,7 @@ import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
 import { Info, InfoField, LeftoverSetting, NumberField, SectionHeading, type Validation } from "../fields";
 import { useEntityInfo } from "../useEditorMetadata";
+import { MetadataLoadWarning } from "../MetadataLoadWarning";
 import { findingFor, worst } from "../ruleFindings";
 import { convertWildcardValue, isWildcardOperator } from "../../../../model/wildcards";
 import { isGuid } from "../../../../api/recordSearch";
@@ -224,6 +225,8 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 
 	return (
 		<div className={styles.container}>
+			{/* Metadata that couldn't load, with Retry (#201) */}
+			<MetadataLoadWarning entityName={effectiveEntityName} />
 			<div className={styles.section}>
 				{!columnFilter && <SectionHeading>Condition</SectionHeading>}
 

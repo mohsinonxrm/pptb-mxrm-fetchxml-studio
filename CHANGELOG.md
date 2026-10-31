@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Metadata that couldn't load is reported, with Retry (#201).**
+  - **Before:** when an entity's columns or details failed to load (a missing privilege, throttling, the network), the property editors silently fell back to free text, the relationship picker showed only "Error loading relationships", and failed display names silently became logical names. "Nothing to show" and "the request failed" looked the same.
+  - **Now:** the property editor shows a warning, "Couldn't load columns for account" (or entity details), with Dataverse's reason and **Retry**; the editor still works with free text. The relationship picker shows the reason under the box with **Retry**, and when only display names failed, the list works with logical names and a hint says why. A failed relationship load also no longer crashes the Properties panel, which is what happened before (the error box's Combobox had no selection list). Retry reloads what failed; what loaded comes from the cache. The design was reviewed with the owner.
+
 - **Parse to tree and Save View keep values exactly as written (#181).**
   - **Lookup display names on `<value>`:** a saved view's `<value uiname="Contoso" uitype="account">{id}</value>` lost `uiname` and `uitype` when the query went through the tree, so loading a view and saving it again stripped the names model-driven apps show in the view's filter. They're kept now, for each value. Changing or removing a value drops only its own.
   - **Long decimals** kept only 10 decimal places (`0.12345678901234` became `0.123456789`). Every digit is kept now; only scientific notation (`1e-12`) is written out in full.

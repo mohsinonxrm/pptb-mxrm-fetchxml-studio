@@ -22,6 +22,7 @@ import { useEditorStyles } from "../editorStyles";
 import { Info, InfoCheckbox, InfoField, LeftoverSetting, SectionHeading, type Validation } from "../fields";
 import { findingFor, worst } from "../ruleFindings";
 import { useAttributeTypeInfo, useEntityInfo } from "../useEditorMetadata";
+import { MetadataLoadWarning } from "../MetadataLoadWarning";
 
 const FUNCTION_LABELS: Record<AggregateFunction, string> = {
 	count: "Count records (count)",
@@ -151,6 +152,8 @@ export function AttributeEditor({
 
 		return (
 			<div className={styles.container}>
+				{/* Metadata that couldn't load, with Retry (#201) */}
+				<MetadataLoadWarning entityName={entityName} />
 				<div className={styles.section}>
 					<SectionHeading>Attribute</SectionHeading>
 					{attributeField}
@@ -229,6 +232,8 @@ export function AttributeEditor({
 
 	return (
 		<div className={styles.container}>
+			{/* Metadata that couldn't load, with Retry (#201) */}
+			<MetadataLoadWarning entityName={entityName} />
 			<div className={styles.section}>
 				<SectionHeading>Attribute</SectionHeading>
 				{attributeField}

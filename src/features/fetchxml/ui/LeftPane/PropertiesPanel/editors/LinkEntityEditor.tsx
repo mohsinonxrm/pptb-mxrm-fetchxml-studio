@@ -19,6 +19,7 @@ import {
 	DialogTitle,
 	Dropdown,
 	Input,
+	Link,
 	Option,
 	OptionGroup,
 } from "@fluentui/react-components";
@@ -28,7 +29,11 @@ import type { RuleFinding } from "../../../../model/fetchxmlRules";
 import { NON_RETURNING_LINK_TYPES } from "../../../../model/fetchxmlRules";
 import { sanitizeAlias } from "../../../../model/aliasUtils";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
-import { RelationshipPicker, type RelationshipOption } from "../../../../../../shared/components/RelationshipPicker";
+import {
+	RelationshipPicker,
+	type RelationshipLoadIssue,
+	type RelationshipOption,
+} from "../../../../../../shared/components/RelationshipPicker";
 import { planManyToManyJoin } from "../../../../model/manyToMany";
 import { loadEntityMetadata } from "../../../../api/dataverseMetadata";
 import { useBuilder } from "../../../../state/builderContext";
@@ -77,6 +82,8 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 	const { addLinkEntityWithConfig, fetchQuery } = useBuilder();
 	const [pendingLinkType, setPendingLinkType] = useState<LinkType | null>(null);
 	const [relationshipError, setRelationshipError] = useState<string | null>(null);
+	// The picker couldn't load relationships or their display names (#201)
+	const [loadIssue, setLoadIssue] = useState<RelationshipLoadIssue | undefined>(undefined);
 
 	// Offer the relationship picker until the link-entity has been set up
 	const shouldShowPicker = node.name === "new_entity" || (!node.name && !node.from && !node.to);
@@ -224,13 +231,41 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 					<SectionHeading>Relationship</SectionHeading>
 					<InfoField
 						label="Relationship"
-						hint="Fills in the entity and the attributes to match. A many-to-many relationship adds its intersect entity with the related entity inside it. Or set them below."
-						validation={relationshipError ? { state: "error", message: relationshipError } : undefined}
+						hint={
+							loadIssue?.kind === "names" ? (
+								<>
+									Showing logical names: display names couldn't be loaded ({loadIssue.message}).{" "}
+									<Link as="button" onClick={loadIssue.retry}>
+										Retry
+									</Link>
+								</>
+							) : (
+								"Fills in the entity and the attributes to match. A many-to-many relationship adds its intersect entity with the related entity inside it. Or set them below."
+							)
+						}
+						validation={
+							relationshipError
+								? { state: "error", message: relationshipError }
+								: loadIssue?.kind === "relationships"
+									? {
+											state: "error",
+											message: (
+												<>
+													{loadIssue.message}{" "}
+													<Link as="button" onClick={loadIssue.retry}>
+														Retry
+													</Link>
+												</>
+											),
+										}
+									: undefined
+						}
 						info={<Info text={`The relationships of ${parentEntityName}.`} href={DOCS.joinTables} />}
 					>
 						<RelationshipPicker
 							entityLogicalName={parentEntityName}
 							onChange={handleRelationshipSelect}
+							onLoadIssue={setLoadIssue}
 							placeholder="Select a relationship…"
 						/>
 					</InfoField>

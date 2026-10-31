@@ -6,7 +6,7 @@
  * matches any part.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
 	Combobox,
 	Option,
@@ -26,6 +26,7 @@ import {
 import { metadataCache } from "../../features/fetchxml/state/cache";
 import { useAdvancedFindOnly } from "../../features/fetchxml/state/metadataScope";
 import type { AttributeMetadata, EntityMetadata } from "../../features/fetchxml/api/pptbClient";
+import { formatDataverseError } from "../../features/fetchxml/api/dataverseErrors";
 import {
 	RELATIONSHIP_CATEGORIES,
 	buildRelationshipOptions,
@@ -53,12 +54,26 @@ const LISTBOX_PROPS = { style: { minWidth: 420 } };
 const label = (item: { DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } } | undefined) =>
 	item?.DisplayName?.UserLocalizedLabel?.Label || undefined;
 
+/**
+ * Metadata the picker couldn't load (#201): the relationships themselves, or only the display names
+ * (the list then shows logical names). The field around the picker says why and offers retry.
+ */
+export interface RelationshipLoadIssue {
+	kind: "relationships" | "names";
+	/** Dataverse's reason (dataverseErrors) */
+	message: string;
+	/** Load again; failed loads aren't cached */
+	retry: () => void;
+}
+
 interface RelationshipPickerProps {
 	entityLogicalName: string;
 	value?: string; // SchemaName of selected relationship
 	onChange: (relationship: RelationshipOption) => void;
 	placeholder?: string;
 	disabled?: boolean;
+	/** Called when a load fails or recovers (undefined), for the surrounding field's message (#201) */
+	onLoadIssue?: (issue: RelationshipLoadIssue | undefined) => void;
 }
 
 export function RelationshipPicker({
@@ -67,12 +82,32 @@ export function RelationshipPicker({
 	onChange,
 	placeholder = "Select a relationship…",
 	disabled = false,
+	onLoadIssue,
 }: RelationshipPickerProps) {
 	const styles = useStyles();
 	const comboId = useId("relationship-combobox");
 	const [relationships, setRelationships] = useState<RelationshipOption[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// Display names that couldn't load: the list still works, with logical names (#201)
+	const [namesError, setNamesError] = useState<string | null>(null);
+	// Retry (#201): bumped to load again; failed loads aren't cached
+	const [attempt, setAttempt] = useState(0);
+	const retry = useCallback(() => setAttempt((n) => n + 1), []);
+	// The latest callback, so a new function from the parent doesn't re-report the same issue
+	const onLoadIssueRef = useRef(onLoadIssue);
+	useEffect(() => {
+		onLoadIssueRef.current = onLoadIssue;
+	});
+	useEffect(() => {
+		onLoadIssueRef.current?.(
+			error
+				? { kind: "relationships", message: error, retry }
+				: namesError
+					? { kind: "names", message: namesError, retry }
+					: undefined,
+		);
+	}, [error, namesError, retry]);
 	const [query, setQuery] = useState<string>("");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Reload when the "Advanced Find only" setting changes (#57)
@@ -90,13 +125,20 @@ export function RelationshipPicker({
 		let current = true;
 		setLoading(true);
 		setError(null);
+		setNamesError(null);
+		let namesFailure: unknown;
+		const names = <T,>(load: Promise<T[]>): Promise<T[]> =>
+			load.catch((failure: unknown): T[] => {
+				namesFailure ??= failure;
+				return [];
+			});
 
 		// Display names: every entity (cached for the entity picker), this entity's attributes (the
 		// many-to-one lookups) and any related entity's attributes already cached (one-to-many lookups)
 		Promise.all([
 			loadEntityRelationships(entityLogicalName, advancedFindOnly),
-			loadAllEntities().catch((): EntityMetadata[] => []),
-			loadAllEntityAttributes(entityLogicalName).catch((): AttributeMetadata[] => []),
+			names<EntityMetadata>(loadAllEntities()),
+			names<AttributeMetadata>(loadAllEntityAttributes(entityLogicalName)),
 		])
 			.then(([data, entities, ownAttributes]) => {
 				if (!current) return;
@@ -116,6 +158,7 @@ export function RelationshipPicker({
 				});
 
 				setRelationships(options);
+				setNamesError(namesFailure === undefined ? null : formatDataverseError(namesFailure, "The request failed."));
 				setLoading(false);
 				debugLog("relationshipPicker", "Relationships loaded successfully:", {
 					entityLogicalName,
@@ -128,13 +171,13 @@ export function RelationshipPicker({
 					entityLogicalName,
 					error: err,
 				});
-				setError("Failed to load relationships");
+				setError(formatDataverseError(err, "The request failed."));
 				setLoading(false);
 			});
 		return () => {
 			current = false;
 		};
-	}, [entityLogicalName, advancedFindOnly]);
+	}, [entityLogicalName, advancedFindOnly, attempt]);
 
 	// Sync query with selected value
 	useEffect(() => {
@@ -177,11 +220,15 @@ export function RelationshipPicker({
 	}
 
 	if (error) {
+		// The field around the picker shows why, with Retry (onLoadIssue, #201)
+		// selectedOptions is required here: without it Fluent's Combobox read undefined.length and the
+		// panel crashed instead of showing the error (found testing #201)
 		return (
 			<Combobox
 				aria-labelledby={comboId}
 				value=""
-				placeholder="Error loading relationships"
+				selectedOptions={[]}
+				placeholder="Couldn't load relationships"
 				disabled={true}
 			/>
 		);

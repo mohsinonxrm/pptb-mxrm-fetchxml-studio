@@ -11,7 +11,7 @@ import { Button, Checkbox, Field, InfoLabel, Label, Link, SpinButton, Text, type
 import { useEditorStyles } from "./editorStyles";
 
 export type Content = string | ReactElement;
-export type Validation = { state: "error" | "warning" | "none"; message: string } | undefined;
+export type Validation = { state: "error" | "warning" | "none"; message: Content } | undefined;
 
 /** InfoLabel popover content: text plus an optional "Learn more" link to Microsoft Learn. */
 export function Info({ text, href }: { text: ReactNode; href?: string }) {
