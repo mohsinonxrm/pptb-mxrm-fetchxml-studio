@@ -140,6 +140,11 @@ export interface ConditionNode {
 	aggregate?: "sum" | "count" | "countcolumn" | "min" | "max" | "avg"; // for aggregate filtering
 	entityname?: string; // for link-entity filters, references the entity/link alias
 	valueof?: string; // for cross-table column comparisons (references another attribute)
+	/**
+	 * Attributes on each `<value>` element (uiname, uitype, … as saved views write them), kept
+	 * verbatim by the value's text (#181). Changing or removing a value drops its own attributes.
+	 */
+	valueAttributes?: Record<string, ExtraAttributes>;
 	extraAttributes?: ExtraAttributes;
 }
 

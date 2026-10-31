@@ -216,10 +216,13 @@ export function RelationshipPicker({
 	}
 
 	if (error) {
+		// selectedOptions is required here: without it Fluent's Combobox read undefined.length and the
+		// tool crashed instead of showing the error (found testing #201)
 		return (
 			<Combobox
 				aria-labelledby={comboId}
 				value=""
+				selectedOptions={[]}
 				placeholder="Error loading relationships"
 				disabled={true}
 			/>
