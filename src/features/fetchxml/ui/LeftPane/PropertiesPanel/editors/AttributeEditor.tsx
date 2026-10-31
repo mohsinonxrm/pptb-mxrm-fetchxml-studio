@@ -152,6 +152,8 @@ export function AttributeEditor({
 
 		return (
 			<div className={styles.container}>
+				{/* Metadata that couldn't load, with Retry (#201) */}
+				<MetadataLoadWarning entityName={entityName} />
 				<div className={styles.section}>
 					<SectionHeading>Attribute</SectionHeading>
 					{attributeField}
