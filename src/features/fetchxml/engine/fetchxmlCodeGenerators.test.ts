@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
+	compactFetchXml,
 	generateFxsSyncCode,
 	quoteForPosixShell,
 	quoteForPowerShell,
@@ -81,3 +82,22 @@ function hasPwsh(): boolean {
 		return false;
 	}
 }
+
+describe("one-line FetchXML for pac and the Web API (#181)", () => {
+	it("removes whitespace between tags but keeps <value> text", () => {
+		const xml = `<fetch>
+  <entity name="account">
+    <filter>
+      <condition attribute="name" operator="in">
+        <value> </value>
+        <value uiname="A / B">  x  </value>
+        <value />
+      </condition>
+    </filter>
+  </entity>
+</fetch>`;
+		expect(compactFetchXml(xml)).toBe(
+			'<fetch><entity name="account"><filter><condition attribute="name" operator="in"><value> </value><value uiname="A / B">  x  </value><value /></condition></filter></entity></fetch>',
+		);
+	});
+});
