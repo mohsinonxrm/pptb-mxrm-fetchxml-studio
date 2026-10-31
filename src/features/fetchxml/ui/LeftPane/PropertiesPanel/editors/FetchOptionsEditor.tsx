@@ -39,6 +39,7 @@ import { useEditorStyles } from "../editorStyles";
 import { Info, InfoCheckbox, InfoField, NumberField, SectionHeading } from "../fields";
 import { findingFor, worst } from "../ruleFindings";
 import { useEntityInfo } from "../useEditorMetadata";
+import { MetadataLoadWarning } from "../MetadataLoadWarning";
 import { AggregateOffDialog } from "./AggregateOffDialog";
 
 // Track if the teaching popover has been shown this session
@@ -133,6 +134,8 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 
 	return (
 		<div className={styles.container}>
+			{/* Metadata that couldn't load, with Retry (#201) */}
+			<MetadataLoadWarning entityName={node.entity.name} />
 			<div className={styles.section}>
 				<SectionHeading>Execution</SectionHeading>
 				<TeachingPopover open={showTeachingPopover} onOpenChange={(_, data) => setShowTeachingPopover(data.open)}>

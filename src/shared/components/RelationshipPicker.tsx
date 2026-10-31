@@ -9,6 +9,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
 	Combobox,
+	Field,
+	Link,
 	Option,
 	OptionGroup,
 	makeStyles,
@@ -26,6 +28,7 @@ import {
 import { metadataCache } from "../../features/fetchxml/state/cache";
 import { useAdvancedFindOnly } from "../../features/fetchxml/state/metadataScope";
 import type { AttributeMetadata, EntityMetadata } from "../../features/fetchxml/api/pptbClient";
+import { formatDataverseError } from "../../features/fetchxml/api/dataverseErrors";
 import {
 	RELATIONSHIP_CATEGORIES,
 	buildRelationshipOptions,
@@ -73,6 +76,10 @@ export function RelationshipPicker({
 	const [relationships, setRelationships] = useState<RelationshipOption[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// Display names that couldn't load: the list still works, with logical names (#201)
+	const [namesError, setNamesError] = useState<string | null>(null);
+	// Retry (#201): bumped to load again; failed loads aren't cached
+	const [attempt, setAttempt] = useState(0);
 	const [query, setQuery] = useState<string>("");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Reload when the "Advanced Find only" setting changes (#57)
@@ -90,13 +97,20 @@ export function RelationshipPicker({
 		let current = true;
 		setLoading(true);
 		setError(null);
+		setNamesError(null);
+		let namesFailure: unknown;
+		const names = <T,>(load: Promise<T[]>): Promise<T[]> =>
+			load.catch((failure: unknown): T[] => {
+				namesFailure ??= failure;
+				return [];
+			});
 
 		// Display names: every entity (cached for the entity picker), this entity's attributes (the
 		// many-to-one lookups) and any related entity's attributes already cached (one-to-many lookups)
 		Promise.all([
 			loadEntityRelationships(entityLogicalName, advancedFindOnly),
-			loadAllEntities().catch((): EntityMetadata[] => []),
-			loadAllEntityAttributes(entityLogicalName).catch((): AttributeMetadata[] => []),
+			names<EntityMetadata>(loadAllEntities()),
+			names<AttributeMetadata>(loadAllEntityAttributes(entityLogicalName)),
 		])
 			.then(([data, entities, ownAttributes]) => {
 				if (!current) return;
@@ -116,6 +130,7 @@ export function RelationshipPicker({
 				});
 
 				setRelationships(options);
+				setNamesError(namesFailure === undefined ? null : formatDataverseError(namesFailure, "The request failed."));
 				setLoading(false);
 				debugLog("relationshipPicker", "Relationships loaded successfully:", {
 					entityLogicalName,
@@ -128,13 +143,13 @@ export function RelationshipPicker({
 					entityLogicalName,
 					error: err,
 				});
-				setError("Failed to load relationships");
+				setError(formatDataverseError(err, "The request failed."));
 				setLoading(false);
 			});
 		return () => {
 			current = false;
 		};
-	}, [entityLogicalName, advancedFindOnly]);
+	}, [entityLogicalName, advancedFindOnly, attempt]);
 
 	// Sync query with selected value
 	useEffect(() => {
@@ -176,18 +191,22 @@ export function RelationshipPicker({
 		return <Spinner size="tiny" label="Loading relationships…" />;
 	}
 
+	const retry = (
+		<Link as="button" onClick={() => setAttempt((n) => n + 1)}>
+			Retry
+		</Link>
+	);
+
 	if (error) {
+		// Why, and Retry (#201)
 		return (
-			<Combobox
-				aria-labelledby={comboId}
-				value=""
-				placeholder="Error loading relationships"
-				disabled={true}
-			/>
+			<Field validationState="error" validationMessage={<>{error} {retry}</>}>
+				<Combobox aria-labelledby={comboId} value="" placeholder="Couldn't load relationships" disabled={true} />
+			</Field>
 		);
 	}
 
-	return (
+	const picker = (
 		<Combobox
 			aria-labelledby={comboId}
 			listbox={LISTBOX_PROPS}
@@ -221,5 +240,20 @@ export function RelationshipPicker({
 				})
 			)}
 		</Combobox>
+	);
+
+	// Logical names only: say why, with Retry (#201)
+	return namesError ? (
+		<Field
+			hint={
+				<>
+					Showing logical names: display names couldn't be loaded ({namesError}). {retry}
+				</>
+			}
+		>
+			{picker}
+		</Field>
+	) : (
+		picker
 	);
 }

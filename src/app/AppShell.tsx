@@ -24,6 +24,7 @@ import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
+import { clearMetadataLoadErrors } from "../features/fetchxml/ui/LeftPane/PropertiesPanel/metadataLoadErrors";
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
@@ -287,6 +288,8 @@ export function AppShell() {
 	if (nextScope.scope !== connectionScope) {
 		if (nextScope.changed) {
 			metadataCache.clear();
+			// Failed metadata loads belonged to the previous connection (#201)
+			clearMetadataLoadErrors();
 			// WhoAmI and privilege answers belong to the previous user and environment (#71)
 			resetDataverseSessionCache();
 			carryOver.current.fetchXml = carryOver.current.readFetchXml?.();

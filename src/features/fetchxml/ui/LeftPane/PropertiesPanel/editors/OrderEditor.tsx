@@ -16,6 +16,7 @@ import { useEditorStyles } from "../editorStyles";
 import { Info, InfoField, LeftoverSetting, SectionHeading } from "../fields";
 import { findingFor, worst } from "../ruleFindings";
 import { useAttributeTypeInfo } from "../useEditorMetadata";
+import { MetadataLoadWarning } from "../MetadataLoadWarning";
 
 /** AttributeType values Dataverse can sort by: multi-select option sets, images and files can't (§9A). */
 const ORDERABLE_TYPES = [
@@ -77,6 +78,8 @@ export function OrderEditor({ node, container, isRootEntity, fetchQuery, finding
 
 	return (
 		<div className={styles.container}>
+			{/* Metadata that couldn't load, with Retry (#201) */}
+			<MetadataLoadWarning entityName={scope.name} />
 			<div className={styles.section}>
 				<SectionHeading>Sort</SectionHeading>
 

@@ -18,6 +18,7 @@ import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
 import { Info, InfoCheckbox, InfoField } from "../fields";
 import { useEntityInfo } from "../useEditorMetadata";
+import { MetadataLoadWarning } from "../MetadataLoadWarning";
 
 interface EntityEditorProps {
 	node: EntityNode;
@@ -33,6 +34,8 @@ export function EntityEditor({ node, onUpdate }: EntityEditorProps) {
 
 	return (
 		<div className={styles.container}>
+			{/* Metadata that couldn't load, with Retry (#201) */}
+			<MetadataLoadWarning entityName={node.name} />
 			<div className={styles.section}>
 				<InfoField
 					label="Entity"
