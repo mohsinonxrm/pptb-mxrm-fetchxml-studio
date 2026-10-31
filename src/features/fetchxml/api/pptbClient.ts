@@ -25,6 +25,7 @@ import { responseHasFormattedValues } from "./formattedValues";
 import { metadataCache } from "../state/cache";
 import { nextLinkToQueryPath, parseFetchXmlPagingCookie } from "./paging";
 import { readManagedPropertyValue, sortViewsByQueryType } from "../model/savedViews";
+import { selectedRecordsQuery, withStringConditionValues } from "./bulkDeleteQuery";
 
 export interface EntityMetadata {
 	LogicalName: string;
@@ -2214,9 +2215,9 @@ async function getBulkDeleteOperationId(asyncOperationId: string): Promise<strin
 }
 
 /**
- * Submit a bulk delete job for selected records
- * Uses FetchXmlToQueryExpression function to convert FetchXML to QueryExpression
- * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
+ * Submit a bulk delete job for selected records. The query is built here (#177: converting an
+ * ID list through FetchXmlToQueryExpression put it all in a GET URL, which failed above ~530 records).
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/delete-data-bulk
  * @param entityLogicalName Logical name of the entity
  * @param primaryIdAttribute Primary ID attribute name (e.g., "accountid")
  * @param recordIds Array of record GUIDs to delete
@@ -2239,24 +2240,10 @@ export async function submitBulkDelete(
 	);
 
 	try {
-		// Build FetchXML to select records by their IDs
-		// Use <value> elements for the "in" operator
-		const valuesXml = recordIds.map((id) => `<value>${id}</value>`).join("");
-		const fetchXml = `<fetch>
-			<entity name="${entityLogicalName}">
-				<attribute name="${primaryIdAttribute}" />
-				<filter>
-					<condition attribute="${primaryIdAttribute}" operator="in">
-						${valuesXml}
-					</condition>
-				</filter>
-			</entity>
-		</fetch>`;
+		// primaryIdAttribute in (the selected IDs), with the IDs as strings (#224, #177)
+		const queryExpression = selectedRecordsQuery(entityLogicalName, primaryIdAttribute, recordIds);
 
-		// Convert FetchXML to QueryExpression using the Dataverse function
-		const queryExpression = await fetchXmlToQueryExpression(fetchXml);
-
-		// Submit BulkDelete with the converted QueryExpression
+		// Submit BulkDelete with the QueryExpression
 		const result = (await window.dataverseAPI!.execute({
 			operationName: "BulkDelete",
 			operationType: "action",
@@ -2681,8 +2668,9 @@ export async function submitBulkDeleteFromFetchXml(
 	debugLog("recordAPI", `📡 Submitting bulk delete job from FetchXML: ${jobName}`);
 
 	try {
-		// Convert FetchXML to QueryExpression using the Dataverse function
-		const queryExpression = await fetchXmlToQueryExpression(fetchXml);
+		// Convert FetchXML to QueryExpression using the Dataverse function. BulkDelete only accepts
+		// condition values as strings; the conversion returns numbers and booleans raw (#224)
+		const queryExpression = withStringConditionValues(await fetchXmlToQueryExpression(fetchXml));
 
 		// Submit BulkDelete with the converted QueryExpression
 		const result = (await window.dataverseAPI!.execute({
