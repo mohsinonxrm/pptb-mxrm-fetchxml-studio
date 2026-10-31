@@ -220,7 +220,7 @@ npm run validate
 
 **Releases.** CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests, PPTB validation, the build and a package-contents check on every pull request. `main` holds the current stable release. A minor release stabilizes on a `release/X.Y` branch, so `dev` is never frozen. A `vX.Y.Z-beta.N` tag there publishes to npm `beta` as a GitHub pre-release, and after a smoke test and a 7-day soak, the `vX.Y.Z` tag on `main` publishes to npm `latest`, both with provenance. Fixes go to the oldest supported branch and merge forward. The previous minor gets critical fixes for 30 days ([SECURITY.md](SECURITY.md)); see [RELEASING.md](RELEASING.md).
 
-**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (gold stamp) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
+**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (a two-tone gold corner) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
 
 **Dependencies.** `package-lock.json` is committed and pins every dependency with an integrity hash. Use `npm ci` for a clean install. After changing dependencies, run `npm install` and commit the updated lockfile.
 

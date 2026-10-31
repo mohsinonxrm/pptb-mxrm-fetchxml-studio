@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔧 Changed
+
+- **Insider icon: the gold corner is bigger, deeper gold and flush with the corner.** The old stamp's right point sat inside the hexagon's edge, leaving a thin blue gap, and the light gold faded at small sizes. The stamp now fills the corner, about 1.5 times larger, in two tones of gold (`#CC8A00` and `#F2A100`) split on the same diagonal as the blue. Prerelease builds only; the release icon is unchanged.
+
 ## [1.5.0-beta.16] - 2026-10-30
 
 ### 🔧 Fixed
