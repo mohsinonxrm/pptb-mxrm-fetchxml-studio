@@ -22,6 +22,10 @@ export interface QeQueryExpression {
 	TopCount?: number | null;
 	Distinct?: boolean;
 	NoLock?: boolean;
+	/** SQL query hints, e.g. from the FetchXML `options` attribute ("" when none) */
+	QueryHints?: string | null;
+	/** "retained" for long-term retained data (FetchXML `datasource`) */
+	DataSource?: string | null;
 }
 
 export interface QeColumnSet {
@@ -46,6 +50,9 @@ export interface QeFilterExpression {
 	Conditions?: QeConditionExpression[];
 	Filters?: QeFilterExpression[];
 	AnyAllFilterLinkEntity?: QeAnyAllFilterLinkEntity | null;
+	/** e.g. "union" */
+	FilterHint?: string | null;
+	IsQuickFindFilter?: boolean;
 }
 
 export interface QeConditionExpression {
@@ -56,6 +63,16 @@ export interface QeConditionExpression {
 	Values?: unknown[];
 	/** When true, Values contains attribute names to compare against (not literal values) */
 	CompareColumns?: boolean;
+}
+
+/**
+ * A condition value as the Web API returns it: the .NET type name and the value, e.g.
+ * { "Type": "System.Int32", "Value": 10 }. Dates come back as System.String (#178, seen live).
+ * https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object
+ */
+export interface QeObject {
+	Type: string;
+	Value: unknown;
 }
 
 export interface QeAnyAllFilterLinkEntity {
@@ -89,7 +106,7 @@ export interface QeLinkEntity {
 export interface QeOrderExpression {
 	AttributeName: string;
 	/** OrderType — numeric or string name (0/"Ascending", 1/"Descending") */
-	OrderType?: number;
+	OrderType?: number | string;
 	Alias?: string | null;
 	EntityName?: string | null;
 }
@@ -154,8 +171,8 @@ export const XRM_DATETIME_GROUPING: Record<number, string> = {
 };
 
 /**
- * ConditionOperator enum values.
- * Reference: https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.query.conditionoperator
+ * ConditionOperator enum values, as the SDK numbers them (the Web API returns the names; #178).
+ * Reference: https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.query.conditionoperator
  */
 export const CONDITION_OPERATOR: Record<number, string> = {
 	0: "Equal",
@@ -197,39 +214,55 @@ export const CONDITION_OPERATOR: Record<number, string> = {
 	36: "NextXWeeks",
 	37: "LastXMonths",
 	38: "NextXMonths",
-	39: "OlderThanXMonths",
-	40: "OlderThanXYears",
-	41: "OlderThanXWeeks",
-	42: "OlderThanXDays",
-	43: "OlderThanXHours",
-	44: "OlderThanXMinutes",
-	45: "LastXYears",
-	46: "NextXYears",
-	47: "EqualUserId",
-	48: "NotEqualUserId",
-	49: "EqualBusinessId",
-	50: "NotEqualBusinessId",
-	51: "ChildOf",
-	52: "Mask",
-	53: "NotMask",
-	54: "MasksSelect",
-	55: "Contains",
-	56: "DoesNotContain",
-	57: "EqualUserLanguage",
-	58: "NotOn",
-	59: "OlderThanXMinutes", // alias — same numeric range as 44 per some API versions
-	60: "Next",
-	61: "EqualUserOrUserTeams",
-	62: "EqualUserTeams",
-	63: "EqualUserOrUserHierarchy",
-	64: "EqualUserOrUserHierarchyAndTeams",
-	65: "Under",
-	66: "NotUnder",
-	67: "UnderOrEqual",
-	68: "Above",
-	69: "AboveOrEqual",
-	70: "Begins",
-	71: "ContainValues",
-	72: "DoesNotContainValues",
-	73: "EqualRoleBusinessId",
+	39: "LastXYears",
+	40: "NextXYears",
+	41: "EqualUserId",
+	42: "NotEqualUserId",
+	43: "EqualBusinessId",
+	44: "NotEqualBusinessId",
+	45: "ChildOf",
+	46: "Mask",
+	47: "NotMask",
+	48: "MasksSelect",
+	49: "Contains",
+	50: "DoesNotContain",
+	51: "EqualUserLanguage",
+	52: "NotOn",
+	53: "OlderThanXMonths",
+	54: "BeginsWith",
+	55: "DoesNotBeginWith",
+	56: "EndsWith",
+	57: "DoesNotEndWith",
+	58: "ThisFiscalYear",
+	59: "ThisFiscalPeriod",
+	60: "NextFiscalYear",
+	61: "NextFiscalPeriod",
+	62: "LastFiscalYear",
+	63: "LastFiscalPeriod",
+	64: "LastXFiscalYears",
+	65: "LastXFiscalPeriods",
+	66: "NextXFiscalYears",
+	67: "NextXFiscalPeriods",
+	68: "InFiscalYear",
+	69: "InFiscalPeriod",
+	70: "InFiscalPeriodAndYear",
+	71: "InOrBeforeFiscalPeriodAndYear",
+	72: "InOrAfterFiscalPeriodAndYear",
+	73: "EqualUserTeams",
+	74: "EqualUserOrUserTeams",
+	75: "Under",
+	76: "NotUnder",
+	77: "UnderOrEqual",
+	78: "Above",
+	79: "AboveOrEqual",
+	80: "EqualUserOrUserHierarchy",
+	81: "EqualUserOrUserHierarchyAndTeams",
+	82: "OlderThanXYears",
+	83: "OlderThanXWeeks",
+	84: "OlderThanXDays",
+	85: "OlderThanXHours",
+	86: "OlderThanXMinutes",
+	87: "ContainValues",
+	88: "DoesNotContainValues",
+	89: "EqualRoleBusinessId",
 };

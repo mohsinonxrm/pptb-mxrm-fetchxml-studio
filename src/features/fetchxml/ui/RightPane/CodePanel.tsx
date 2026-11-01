@@ -39,6 +39,14 @@ import type { QeQueryExpression } from "../../engine/queryExpressionTypes";
 import { fetchXmlToQueryExpression, fetchXmlToSQL } from "../../api/pptbClient";
 import { loadEntityMetadata } from "../../api/dataverseMetadata";
 import { copyText } from "../../api/host";
+import {
+	CONVERSION_DELAY_MS,
+	conversionKey,
+	needsConversion,
+	serverConversionFor,
+	type ConversionResult,
+	type ServerConversion,
+} from "./serverConversions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
@@ -152,86 +160,76 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const [selectedFormat, setSelectedFormat] = useState<CodeFormat>("csharp-fetchexpr");
 	const [copied, setCopied] = useState(false);
 
-	// Async: C# QueryExpression
-	const [qeCode, setQeCode] = useState<string>("");
-	const [qeLoading, setQeLoading] = useState(false);
-	const [qeError, setQeError] = useState<string | null>(null);
-
-	// Async: SQL
-	const [sqlCode, setSqlCode] = useState<string>("");
-	const [sqlLoading, setSqlLoading] = useState(false);
-	const [sqlError, setSqlError] = useState<string | null>(null);
+	// Dataverse conversions (C# QueryExpression, SQL): for the selected format only, after typing
+	// pauses, and once per query and environment (#199)
+	const [conversions, setConversions] = useState<Partial<Record<ServerConversion, ConversionResult>>>({});
+	const lastRequestedRef = useRef<Partial<Record<ServerConversion, string>>>({});
+	const conversionsRef = useRef(conversions);
+	useEffect(() => {
+		conversionsRef.current = conversions;
+	}, [conversions]);
+	const debouncedXml = useDebouncedValue(fetchXml, CONVERSION_DELAY_MS);
 
 	// Power Automate: resolved entity set name from metadata
 	const [paEntitySetName, setPaEntitySetName] = useState<string | undefined>(undefined);
 
-	// Abort / cancel async calls when fetchXml changes
-	const abortRef = useRef<{ cancelled: boolean }>({ cancelled: false });
-
 	useEffect(() => {
-		// Cancel any in-flight previous calls
-		abortRef.current.cancelled = true;
-		const signal = { cancelled: false };
-		abortRef.current = signal;
-
 		if (!fetchXml || !connected) {
-			setQeCode("");
-			setQeError(null);
-			setSqlCode("");
-			setSqlError(null);
 			setPaEntitySetName(undefined);
 			return;
 		}
-
+		let cancelled = false;
 		// Resolve the real OData entity set name for Power Automate
-		const entityNameMatch = fetchXml.match(/entity\s+name=["']([^"']+)["']/i);
+		const entityNameMatch = fetchXml.match(/<entity\b[^>]*?\sname=["']([^"']+)["']/i);
 		if (entityNameMatch) {
 			loadEntityMetadata(entityNameMatch[1])
 				.then((meta) => {
-					if (!signal.cancelled) setPaEntitySetName(meta.EntitySetName);
+					if (!cancelled) setPaEntitySetName(meta.EntitySetName);
 				})
 				.catch(() => {
 					/* silently fall back to heuristic */
 				});
 		}
-
-		// Trigger both async generators in parallel
-		setQeLoading(true);
-		setQeError(null);
-		setSqlLoading(true);
-		setSqlError(null);
-
-		// C# QueryExpression
-		fetchXmlToQueryExpression(fetchXml)
-			.then((qe) => {
-				if (signal.cancelled) return;
-				const code = generateCSharpQueryExpression(qe as unknown as QeQueryExpression);
-				setQeCode(code);
-			})
-			.catch((err: unknown) => {
-				if (signal.cancelled) return;
-				setQeError(err instanceof Error ? err.message : String(err));
-				setQeCode("");
-			})
-			.finally(() => {
-				if (!signal.cancelled) setQeLoading(false);
-			});
-
-		// SQL
-		fetchXmlToSQL(fetchXml)
-			.then((sql) => {
-				if (signal.cancelled) return;
-				setSqlCode(sql);
-			})
-			.catch((err: unknown) => {
-				if (signal.cancelled) return;
-				setSqlError(err instanceof Error ? err.message : String(err));
-				setSqlCode("");
-			})
-			.finally(() => {
-				if (!signal.cancelled) setSqlLoading(false);
-			});
+		return () => {
+			cancelled = true;
+		};
 	}, [fetchXml, connected]);
+
+	useEffect(() => {
+		const kind = serverConversionFor(selectedFormat);
+		// Wait until typing pauses: until then the debounced query is behind the one on screen
+		if (!kind || !debouncedXml || debouncedXml !== fetchXml || !connected) return;
+		const key = conversionKey(debouncedXml, environmentUrl);
+		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind])) return;
+		lastRequestedRef.current[kind] = key;
+		// Retrying a failed conversion: show it loading, not the old error
+		if (conversionsRef.current[kind]?.key === key) {
+			conversionsRef.current = { ...conversionsRef.current, [kind]: undefined };
+			setConversions((prev) => ({ ...prev, [kind]: undefined }));
+		}
+
+		const request =
+			kind === "queryexpression"
+				? fetchXmlToQueryExpression(debouncedXml).then((qe) =>
+						generateCSharpQueryExpression(qe as unknown as QeQueryExpression),
+					)
+				: fetchXmlToSQL(debouncedXml);
+		const settle = (result: ConversionResult) => {
+			// A newer request for this format replaces this one
+			if (lastRequestedRef.current[kind] !== key) return;
+			setConversions((prev) => ({ ...prev, [kind]: result }));
+		};
+		request.then(
+			(code) => settle({ key, code, error: null }),
+			(err: unknown) => settle({ key, code: "", error: err instanceof Error ? err.message : String(err) }),
+		);
+	}, [debouncedXml, fetchXml, selectedFormat, connected, environmentUrl]);
+
+	// The selected format's conversion, if it's for the query on screen; until then it's loading
+	const conversionKind = serverConversionFor(selectedFormat);
+	const currentConversion = conversionKind ? conversions[conversionKind] : undefined;
+	const conversionIsCurrent = currentConversion?.key === conversionKey(fetchXml, environmentUrl);
+	const conversionLoading = !!conversionKind && !!fetchXml && connected && !conversionIsCurrent;
 
 	const handleTabSelect = (_e: SelectTabEvent, data: SelectTabData) => {
 		setSelectedFormat(data.value as CodeFormat);
@@ -241,9 +239,8 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const currentCode = useCallback((): string => {
 		switch (selectedFormat) {
 			case "csharp-queryexpr":
-				return qeCode;
 			case "sql":
-				return sqlCode;
+				return conversionIsCurrent ? (currentConversion?.code ?? "") : "";
 			default:
 				return generateFxsSyncCode(
 					selectedFormat as FxsSyncFormat,
@@ -254,7 +251,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		}
 		// paEntitySetName loads after the query changes: without it the Web API snippet kept the old
 		// (or no) entity set name (#65)
-	}, [selectedFormat, fetchXml, qeCode, sqlCode, environmentUrl, paEntitySetName]);
+	}, [selectedFormat, fetchXml, conversionIsCurrent, currentConversion, environmentUrl, paEntitySetName]);
 
 	const handleCopy = useCallback(() => {
 		const code = currentCode();
@@ -266,12 +263,9 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		});
 	}, [currentCode]);
 
-	const isAsyncLoading =
-		(selectedFormat === "csharp-queryexpr" && qeLoading) ||
-		(selectedFormat === "sql" && sqlLoading);
+	const isAsyncLoading = conversionLoading;
 
-	const asyncError =
-		selectedFormat === "csharp-queryexpr" ? qeError : selectedFormat === "sql" ? sqlError : null;
+	const asyncError = conversionIsCurrent ? (currentConversion?.error ?? null) : null;
 
 	const showOffline =
 		(selectedFormat === "csharp-queryexpr" || selectedFormat === "sql") && !connected;
@@ -406,4 +400,14 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 			</div>
 		</div>
 	);
+}
+
+/** `value`, once it has stopped changing for `delayMs` */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const timer = setTimeout(() => setDebounced(value), delayMs);
+		return () => clearTimeout(timer);
+	}, [value, delayMs]);
+	return debounced;
 }

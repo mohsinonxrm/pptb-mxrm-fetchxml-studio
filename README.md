@@ -32,7 +32,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 📊 Results Grid
 - **Virtualized DataGrid** — Handle large result sets with smooth scrolling (powered by react-window)
-- **Copy results** — Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column. **Ctrl+C** copies the selected rows, or the focused cell. The command bar's **Copy** menu copies the selected or all loaded rows, as shown or as raw values. Rows copy as tab-separated values with a header row, so they paste into Excel as cells
+- **Copy results** — Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column. **Ctrl+C** copies the selected rows, or the focused cell. The command bar's **Copy** menu copies the selected or all loaded rows, as shown or as raw values. Rows copy as tab-separated values with a header row, so they paste into Excel as cells. In copied rows, text that a spreadsheet would run as a formula (starting with `=`, `+`, `-` or `@`) gets a leading apostrophe, so it pastes as text; a single cell or a column is copied exactly
 - **Total record count** — With *Return total record count*, the info bar shows "Rows: 50 of 1,234 total", or "5,000+ total" when Dataverse caps the count. **Count all {entity} records** then gets the entity's unfiltered total (`RetrieveTotalRecordCount`, a snapshot that ignores the query's filters)
 - **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, with **Stop** to keep what's loaded so far. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. Every page, the first included, is retried after Dataverse's service protection limits and requested again with a smaller `count` when it's over the ToolBox's 16 MB response limit. A failed page shows how many rows loaded, with **Retry**
 - **Rich cell rendering** — Power Apps-style display for lookups, option sets, dates, currency, and more
@@ -121,13 +121,13 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 🔀 Code Generation
 - **Code tab** — New tab in the right pane that generates ready-to-use code from the current query in seven formats
-- **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`
+- **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`, any/all filters on related rows, paging, query hints and retained data. Values keep the type Dataverse reports (`"00123"` stays a string, decimals get `m`). Converted only while the tab is selected, after typing pauses
 - **C# FetchExpression** — Simple `new FetchExpression(@"...")` wrapper using a verbatim string literal
 - **JavaScript** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
 - **pac CLI** — `pac env fetch --xml '...'` for the Power Platform CLI, as a bash / zsh line and a PowerShell line. The XML is single-quoted, so the shell never expands values such as `$100` or `$(...)`
 - **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI; table name resolved from `EntityDefinitions` metadata (not a heuristic), each field individually copyable; Top Count is taken only from `top` (`count` is a page size)
 - **Web API** — Full OData URL with request headers (including `Prefer: odata.include-annotations="*"` for formatted values and paging cookies), the documented paging-cookie steps, a cURL snippet and a PowerShell `Invoke-RestMethod` example; entity set name resolved from metadata
-- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview)
+- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview); also converted only while selected
 
 ### 🎨 User Experience
 - **Errors stay contained** — If one panel fails to render, only that panel shows an error, with **Try again** and **Copy details**; the rest of the tool keeps working. If the whole tool fails, **Restart with this query** brings it back with your query, or copy the FetchXML first

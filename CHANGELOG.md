@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **The generated C# QueryExpression compiles and means what the query does (#178).**
+  - **Link-entities:** they were written with `ColumnSet =` and `Criteria =`, which `LinkEntity` doesn't have, so the code didn't compile (CS0117). They use `Columns` and `LinkCriteria` now, as do any/all filters on related rows (`AnyAllFilterLinkEntity`), which leave out the columns Dataverse ignores.
+  - **Orders:** `new OrderExpression(...)` had the alias and entity name swapped. It's (attribute, order, alias, entity name) now, per the [SDK reference](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.query.orderexpression.-ctor).
+  - **Values:** text that looked like a number (`"00123"`, `"12.50"`, a 20-digit code) was written as a number, changing the query or failing to compile. Each value now keeps the .NET type Dataverse reports, checked against live responses: strings stay quoted, decimals and money get `m` (`1000.5m`), whole numbers stay plain, GUIDs become `new Guid(...)`. Line breaks, tabs and other control characters in names and values are escaped.
+  - **Columns:** a query with both plain and aliased columns (`<attribute name="name"/><attribute name="createdon" alias="created"/>`) lost the plain ones. Both are written now: `new ColumnSet("name") { AttributeExpressions = { ... } }`.
+  - **Aggregates:** `hasGroupBy: true` isn't a constructor argument, and a date grouping without an alias picked the wrong constructor. Both are set as properties (`HasGroupBy = true`, `DateTimeGrouping = XrmDateTimeGrouping.Year`).
+  - **Operators:** the numeric operator map didn't match the SDK from 39 on. It does now, and an unknown code is written as a cast that still compiles. (Dataverse returns operator names, so this only mattered for numeric codes.)
+  - **Less noise:** the default `PageInfo` Dataverse always returns is left out unless the query pages. Query hints, `DataSource` (`datasource="retained"`), `FilterHint` and quick find filters are kept.
+  - **Other snippets:** the Web API URL also encodes `! ' ( ) *`, so the cURL line no longer triggers bash history expansion ("event not found"). The JavaScript and Web API snippets find the entity name when `name` isn't the first attribute, and the offline fallback for `transactioncurrency` is `transactioncurrencies`.
+
+- **Copied rows can't paste into a spreadsheet as live formulas (#208).**
+  - **Before:** Copy wrote cell text as it was. A value such as `=HYPERLINK(...)` or `@SUM(...)`, often entered by users or integrations, became a working formula when the rows were pasted into Excel or Google Sheets.
+  - **Now:** in copied rows (Ctrl+C on rows, the Copy menu, the row and selected-rows menu items), text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, as [OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection) recommends, so the spreadsheet shows it as text. A formatted number's sign is left alone (`-5`, `-$5.00`), but a choice label such as `-Other` is protected too. Copying a single cell or a column (for example to paste into an `in` condition) still copies it exactly. The local Excel export wasn't affected: it writes text as text cells.
+
+- **Record actions use the selected entity's privileges, not the previous entity's (#179).**
+  - **Before:** switching entity started a new privilege check without stopping the previous one. If the previous entity's check finished last, Delete and Bulk delete used its result: enabled where you can't delete, or disabled where you can. Dataverse still refused a delete you weren't allowed to make, but the buttons and confirmations were wrong.
+  - **Now:** an outdated check's result is dropped, and the record actions stay unavailable until the selected entity's check finishes. The three checks also run at the same time instead of one after another.
+
+- **The Code tab no longer sends Dataverse requests on every keystroke (#199).**
+  - **Before:** while the Code tab was open, each change to the query sent both `FetchXmlToQueryExpression` (C# QueryExpression) and `FetchXMLToSQL` (SQL), whichever format was selected. Typing a condition value sent a pair per keystroke. That counted against service protection limits, and half-typed queries flashed server errors.
+  - **Now:** a format is converted only while it's selected, half a second after typing stops, and once per query and environment, so switching formats back and forth reuses the result. A failed conversion is tried again when you select its format again.
+
+- **FetchXML editor suggestions and hovers no longer pile up (#194).**
+  - **Before:** the editor registered its FetchXML completion and hover providers each time it mounted and never removed them. It remounts on every connection change, so after a few changes each suggestion and hover appeared several times, and memory grew over the session. The providers also answered in the read-only LayoutXML viewer.
+  - **Now:** they're registered once, apply only to the FetchXML editor, and are removed when it goes.
+
 - **Metadata that couldn't load is reported, with Retry (#201).**
   - **Before:** when an entity's columns or details failed to load (a missing privilege, throttling, the network), the property editors silently fell back to free text, the relationship picker showed only "Error loading relationships", and failed display names silently became logical names. "Nothing to show" and "the request failed" looked the same.
   - **Now:** the property editor shows a warning, "Couldn't load columns for account" (or entity details), with Dataverse's reason and **Retry**; the editor still works with free text. The relationship picker shows the reason under the box with **Retry**, and when only display names failed, the list works with logical names and a hint says why. A failed relationship load also no longer crashes the Properties panel, which is what happened before (the error box's Combobox had no selection list). Retry reloads what failed; what loaded comes from the cache. The design was reviewed with the owner.

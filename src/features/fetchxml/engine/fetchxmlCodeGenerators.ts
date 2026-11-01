@@ -89,7 +89,8 @@ function generateCSharpFetchExpression(fetchXml: string): string {
 
 function generateJavaScript(fetchXml: string): string {
 	// Extract entity name from FetchXML for the JS snippet
-	const entityNameMatch = fetchXml.match(/<fetch[^>]*>[\s\S]*?<entity\s+name=["']([^"']+)["']/i);
+	// name needn't be the first attribute: <entity enableprefiltering="1" name="account"> (#178)
+	const entityNameMatch = fetchXml.match(/<fetch[^>]*>[\s\S]*?<entity\b[^>]*?\sname=["']([^"']+)["']/i);
 	const entityLogicalName = entityNameMatch ? entityNameMatch[1] : "entity_logical_name";
 
 	const encodedXml = encodeForJsTemplate(fetchXml);
@@ -278,7 +279,12 @@ function generateWebApi(fetchXml: string, orgUrl?: string, entitySetName?: strin
 
 	// Compress XML for URL (collapse whitespace)
 	const compressedXml = compactFetchXml(fetchXml);
-	const encodedXml = encodeURIComponent(compressedXml);
+	// encodeURIComponent leaves ! ' ( ) * as they are; inside the cURL line's double quotes, ! starts
+	// bash history expansion ("event not found"), so they're encoded too (#178)
+	const encodedXml = encodeURIComponent(compressedXml).replace(
+		/[!'()*]/g,
+		(c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+	);
 	const fullUrl = `${baseUrl}${apiPath}?fetchXml=${encodedXml}`;
 
 	return [
@@ -333,7 +339,7 @@ function generateWebApi(fetchXml: string, orgUrl?: string, entitySetName?: strin
  * Falls back to `<logicalName>s` if the entity name cannot be determined.
  */
 function deriveEntitySetName(fetchXml: string): string {
-	const match = fetchXml.match(/<entity\s+name=["']([^"']+)["']/i);
+	const match = fetchXml.match(/<entity\b[^>]*?\sname=["']([^"']+)["']/i);
 	if (!match) return "records";
 	const logicalName = match[1];
 
@@ -343,7 +349,7 @@ function deriveEntitySetName(fetchXml: string): string {
 		activity: "activities",
 		category: "categories",
 		territory: "territories",
-		currency: "transactioncurrencies",
+		transactioncurrency: "transactioncurrencies",
 		systemuser: "systemusers",
 		businessunit: "businessunits",
 		team: "teams",
