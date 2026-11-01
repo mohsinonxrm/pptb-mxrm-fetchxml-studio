@@ -186,6 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **Relative asset URLs (#173).** The build used Vite's default root-absolute `base` (`/assets/…`). That works in PPTB Desktop, which serves each tool at the root of its own origin. The PPTB VS Code extension serves `dist/` from a sub-path, where those URLs miss the tool's folder; the same problem left Command Bar Studio as a blank tab there (Command Bar Studio #89). The build now uses `base: "./"`, so the page, its chunks, the stylesheet and the editor font load from the tool's own folder wherever it's served.
+- **Faster startup: exceljs loads on the first local export (#187).** The local Excel export's library was in the main bundle, so every start parsed it, though most sessions never export. It's now a separate chunk, loaded when you first use Export (Local), alongside the formatting metadata the export already waits for. The main bundle shrinks from 2,576 kB to 1,631 kB (729 kB to 455 kB gzipped). The large-result-set items in #187 stay open.
 - **Release workflow hardening (#188).**
   - **Separate jobs:** `release.yml` is split into `build`, `publish` and `github-release`. The job that installs and runs the dependencies (`npm ci --ignore-scripts`, no cache, tests, build) only reads the repository. Only `publish` can get the npm OIDC token, only for a tag push, and it installs no project dependencies: it publishes the tarball `build` packed. Only `github-release` can write to the repository.
   - **More checks before publishing:** the release build now also runs the runtime audit, lint and the package-contents check, so a tag on a commit that skipped CI can't publish.
