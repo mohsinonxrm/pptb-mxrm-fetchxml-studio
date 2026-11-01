@@ -32,9 +32,10 @@ import { CheckmarkCircle20Regular } from "@fluentui/react-icons";
 import type { BatchDeleteProgress, BatchDeleteResult } from "../../api/pptbClient";
 import { getEntityStateModel, getRecordStatuses } from "../../api/pptbClient";
 import { formatDataverseError } from "../../api/dataverseErrors";
-import { planStateChange, stateNote, type StateAction, type StatePlan, type StateTarget } from "../../model/recordState";
+import { hasCloseMenu, planStateChange, stateNote, type StateAction, type StatePlan, type StateTarget } from "../../model/recordState";
 import { planCloseStateChange, type CloseStateAction } from "../../model/closeActions";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { UndoNote } from "../../../../shared/components/UndoNote";
 
 const useStyles = makeStyles({
 	content: {
@@ -116,6 +117,8 @@ export function SetStateDialog({
 	primaryIdRef.current = primaryIdAttribute;
 
 	const verb = closeAction?.label ?? (action === "activate" ? "Activate" : "Deactivate");
+	// The way back (#69): Activate undoes a Close or Deactivate; Close replaces Deactivate where there's a Close menu
+	const undoVerb = closeAction || action === "deactivate" ? "Activate" : hasCloseMenu(entityLogicalName) ? "Close" : "Deactivate";
 	const count = recordIds.length;
 	const title = closeAction ? closeAction.title(count) : `${verb} ${count === 1 ? "1 record" : `${count} records`}`;
 
@@ -224,6 +227,19 @@ export function SetStateDialog({
 							scope={{ kind: "records", count }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
+						{plan && plan.kind !== "none" &&
+							(plan.undo.available ? (
+								<UndoNote undo="possible">
+									To undo, run {undoVerb} on the records this changes
+									{plan.undo.transitionsEnforced ? ", if this entity's status reason transitions allow it." : "."}
+									{plan.undo.picksStatusReason && " The previous status reason isn't restored, so set it again if needed."}
+								</UndoNote>
+							) : (
+								<UndoNote undo="none">
+									There's no undo here: this entity has no {action === "activate" ? "inactive" : "active"} state to go
+									back to.
+								</UndoNote>
+							))}
 						{closeAction?.note && <Text className={styles.note}>{closeAction.note}</Text>}
 						{plan?.kind === "none" && (
 							<MessageBar intent="warning" layout="multiline">

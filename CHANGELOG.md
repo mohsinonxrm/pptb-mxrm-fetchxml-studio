@@ -184,10 +184,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Check with Dataverse**, on demand only: sends the FetchXML you're looking at to `ValidateFetchXmlExpression`. Matching findings get **Dataverse agrees**; anything else gets a **From Dataverse** row quoting Dataverse's message. The status line says when the query has changed since the check. Off without a connection.
   - Attribute metadata now includes `SourceType`, and String `MaxLength` is read once per entity (cached).
 
+### 🔧 Changed
+
+- **Close dialogs say how to undo too (#69).** As in 1.5.0-beta.18, for the Close actions added in 1.6 (#149):
+  - **Win / Lose opportunity, Resolve case, Fulfill / Cancel order:** "To undo, run Activate on the records this changes. The close activities stay." Activate reopens them; a reopened opportunity's close activity becomes Canceled.
+  - **Win / Close quote:** "There's no undo: won or closed quotes can't be reactivated here."
+  - **Cancel case, Mark as paid / Cancel invoice** (plain state changes): "To undo, run Activate…".
+  - **Activate** on an entity with a Close menu says to undo with Close, not Deactivate.
+
 ### 🏗️ Technical
 
 - **Relative asset URLs (#173).** The build used Vite's default root-absolute `base` (`/assets/…`). That works in PPTB Desktop, which serves each tool at the root of its own origin. The PPTB VS Code extension serves `dist/` from a sub-path, where those URLs miss the tool's folder; the same problem left Command Bar Studio as a blank tab there (Command Bar Studio #89). The build now uses `base: "./"`, so the page, its chunks, the stylesheet and the editor font load from the tool's own folder wherever it's served.
 - **Faster startup: exceljs loads on the first local export (#187).** The local Excel export's library was in the main bundle, so every start parsed it, though most sessions never export. It's now a separate chunk, loaded when you first use Export (Local), alongside the formatting metadata the export already waits for. The main bundle shrinks from 2,576 kB to 1,631 kB (729 kB to 455 kB gzipped). The large-result-set items in #187 stay open.
+- **Repo hygiene, part of #205.** Removed files nothing imports: `ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts` and the Vite template's `src/assets/react.svg`. Also removed two unused exports: `LoadingCellRenderer` and `ValueNode`, which #181 didn't need. `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions supported by jsdom 30 (the Vitest environment). The one-time Prettier reformat and the CI format check follow after 1.5.0 ships, so forward merges from `release/1.5` don't conflict. The ESLint 10 upgrade gets its own PR.
+- **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
+- **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
+- **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
+
+## [1.5.0-beta.18] - 2026-11-01
+
+### 🔧 Changed
+
+- **Confirmations say how to undo the change, or that it can't be undone (#69).** The PPTB [marketplace policy](https://docs.powerplatformtoolbox.com/policies/marketplace) asks a confirmation to offer a way back where feasible and, when there's none, to say so plainly. Delete and Bulk delete already said "This action cannot be undone." Now:
+  - **Run workflow:** "There's no undo: whatever the workflow changes stays changed."
+  - **Save view, overwriting a view:** "There's no undo: the view's current definition is replaced. To keep it, cancel and use Save as instead." For a managed system view, it says that removing the view's unmanaged layer in Power Apps brings the managed definition back.
+  - **Activate / Deactivate:** "To undo, run Deactivate (or Activate) on the records this changes." For an entity that enforces status reason transitions, it adds "if this entity's status reason transitions allow it". When going back offers more than one status reason, it adds that the previous one isn't restored.
+- **README:** "What this tool changes" says where each operation's way back is, and that the publisher and solution you pick are remembered per environment on your machine.
+
+### 🏗️ Technical
+
 - **Release workflow hardening (#188).**
   - **Separate jobs:** `release.yml` is split into `build`, `publish` and `github-release`. The job that installs and runs the dependencies (`npm ci --ignore-scripts`, no cache, tests, build) only reads the repository. Only `publish` can get the npm OIDC token, only for a tag push, and it installs no project dependencies: it publishes the tarball `build` packed. Only `github-release` can write to the repository.
   - **More checks before publishing:** the release build now also runs the runtime audit, lint and the package-contents check, so a tag on a commit that skipped CI can't publish.
@@ -195,11 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Rehearsal:** the workflow can run by hand as a rehearsal: every check and `npm publish --dry-run`, with no npm token and no GitHub Release. A manual run never publishes, even on a tag.
   - **`latest` can't move back:** a stable tag gets `latest` only for main's own version line, and a `support/X.Y` commit is checked first. Support branches merge forward into `main`, so before this, re-running a support release after that merge would have published it to `latest`.
   - **CI:** CI uses `npm ci --ignore-scripts` and the same pins, doesn't keep the checkout's token, and runs the runtime audit on this branch too.
-  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
-- **Repo hygiene, part of #205.** Removed files nothing imports: `ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts` and the Vite template's `src/assets/react.svg`. Also removed two unused exports: `LoadingCellRenderer` and `ValueNode`, which #181 didn't need. `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions supported by jsdom 30 (the Vitest environment). The one-time Prettier reformat and the CI format check follow after 1.5.0 ships, so forward merges from `release/1.5` don't conflict. The ESLint 10 upgrade gets its own PR.
-- **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
-- **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
-- **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
+  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now, tracked in #262. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
 
 ## [1.5.0-beta.17] - 2026-10-31
 

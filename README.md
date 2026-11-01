@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta.17-blue)
+![Version](https://img.shields.io/badge/version-1.5.0--beta.18-blue)
 [![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
 [![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
@@ -157,7 +157,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ## ✏️ What this tool changes
 
-FetchXML Studio only reads from Dataverse until you start one of the operations below. Each one asks for confirmation first, and the confirmation names the target: the environment (connection name, URL and type, with Production highlighted), the entity, and how many records (or which view). For the record operations, on a Production connection, for more than 100 records, or when the total isn't known (Bulk Delete with no rows selected), you type the entity logical name before the button enables. They all run as the connected user, or as the user PPTB is impersonating, so Dataverse applies that user's security roles.
+FetchXML Studio only reads from Dataverse until you start one of the operations below. Each one asks for confirmation first, and the confirmation names the target: the environment (connection name, URL and type, with Production highlighted), the entity, and how many records (or which view). For the record operations, on a Production connection, for more than 100 records, or when the total isn't known (Bulk Delete with no rows selected), you type the entity logical name before the button enables. Each confirmation that changes or removes existing records or views also says how to undo it, or that it can't be undone: deleting, running a workflow and overwriting a view can't be undone from the tool (an overwritten managed view comes back when you remove its unmanaged layer); Activate and Deactivate undo each other, where the entity's status reason transitions allow it; Activate reopens closed opportunities, cases, orders and invoices (their close activities stay), while won or closed quotes can't be reactivated from the tool. They all run as the connected user, or as the user PPTB is impersonating, so Dataverse applies that user's security roles.
 
 | Operation | When | What it does in Dataverse |
 |---|---|---|
@@ -177,7 +177,7 @@ FetchXML Studio only reads from Dataverse until you start one of the operations 
 Nothing else writes to Dataverse:
 - **Export (Server)** asks Dataverse to build an Excel file (`ExportToExcel`) and changes no data.
 - **Export (Local)** writes an `.xlsx` file to the location you choose.
-- **Display settings** (logical names, value format, entity source, Advanced Find only) are stored by Power Platform ToolBox on your machine, not in Dataverse.
+- **Display settings** (logical names, value format, entity source, Advanced Find only) and the **publisher and solution** you last picked for each environment are stored by Power Platform ToolBox on your machine, not in Dataverse.
 
 ## 🖼️ Interface Overview
 

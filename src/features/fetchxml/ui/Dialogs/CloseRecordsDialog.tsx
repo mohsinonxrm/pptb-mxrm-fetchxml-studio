@@ -50,6 +50,7 @@ import {
 	type CloseValues,
 } from "../../model/closeActions";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { UndoNote } from "../../../../shared/components/UndoNote";
 
 const useStyles = makeStyles({
 	surface: {
@@ -462,6 +463,13 @@ export function CloseRecordsDialog({
 							scope={{ kind: "records", count }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
+						{/* The way back (#69): Activate reopens closed opportunities, cases and orders (verified,
+						    see CLOSE_MESSAGE_ENTITIES); it doesn't apply to quotes */}
+						{entityLogicalName?.toLowerCase() === "quote" ? (
+							<UndoNote undo="none">There's no undo: won or closed quotes can't be reactivated here.</UndoNote>
+						) : (
+							<UndoNote undo="possible">To undo, run Activate on the records this changes. The close activities stay.</UndoNote>
+						)}
 						{action.note && <Text className={styles.note}>{action.note}</Text>}
 						{renderStatus()}
 						{action.fields.map(renderField)}

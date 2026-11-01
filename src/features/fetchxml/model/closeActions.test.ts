@@ -115,6 +115,8 @@ describe("planCloseStateChange", () => {
 			target: { statecode: 2, statuscode: 6 },
 			stateLabel: "Cancelled",
 			statusLabel: "Cancelled",
+			// The way back is Activate (#69)
+			undo: { available: true, picksStatusReason: false, transitionsEnforced: false },
 		});
 	});
 
@@ -134,6 +136,7 @@ describe("planCloseStateChange", () => {
 			],
 			defaultTarget: { statecode: 2, statuscode: 100001 },
 			note: undefined,
+			undo: { available: true, picksStatusReason: false, transitionsEnforced: false },
 		});
 		expect(planCloseStateChange(invoice, state("invoice", "cancel"))).toMatchObject({ kind: "simple", target: { statecode: 3, statuscode: 100003 } });
 	});
