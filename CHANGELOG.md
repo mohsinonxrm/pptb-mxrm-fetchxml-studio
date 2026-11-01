@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🏗️ Technical
+
+- **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
+  - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
+  - `package-lock.json`;
+  - the CHANGELOG (a dated `[X.Y.Z]` section with entries, under `[Unreleased]`);
+  - the README badge;
+  - after the build, the bundled icon (the Insider icon for pre-releases).
+
+  The GitHub Release notes are now built from the CHANGELOG section, after a line on the channel and the PPTB requirement. GitHub's PR list follows, instead of the PR list alone, and a rehearsal previews them in the run summary. RELEASING.md has a table of what every release changes and an *After every release* checklist: the npm tag, the published icon, the tracking issue, the forward merge and deprecating the replaced version.
+
 ## [1.5.0-beta.18] - 2026-11-01
 
 ### 🔧 Changed
