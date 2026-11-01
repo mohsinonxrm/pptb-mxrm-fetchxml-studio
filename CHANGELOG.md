@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **The local Excel export keeps each record's currency and shows dates as the grid does (#184).**
+  - **Money:** amounts were always formatted with `$`, so a EUR, GBP or INR amount showed a dollar sign. Each cell now uses its record's currency symbol and decimals from Dataverse's formatted value (`€1.234,50` → `"€"#,##0.00`, `¥1,235` → no decimals). A column with a fixed precision uses it.
+  - **Dates:** date-times were written in UTC while the grid shows your Dataverse time zone. They now match the grid. Date Only columns are written as dates (`yyyy-mm-dd`, no `00:00:00`), and Time Zone Independent columns as stored. Raw values (raw mode, and the "(Raw)" columns) are in UTC, and the header says "(UTC)"; so does the header when your time zone couldn't be read.
+  - **Raw mode** wrote formatted numbers. Raw values now have no number format, apart from dates.
+  - **Precision 0:** a decimal column with precision 0 got the format `0.`, which shows a trailing point. It's `0` now.
+  - **Grid fallbacks:** when a cell has no formatted value, Money no longer gets a `$`, and a Date Only value is no longer shown as the day before west of UTC.
+
 - **Picked dates filter on the day and time you picked (#207, #198).**
   - **Before:** the date picker wrote every value as a UTC instant from the browser's time zone (`toISOString()`), whatever the column. Checked live on a sandbox:
     - **on / on-or-before / on-or-after** compare a date, and Dataverse takes it from the value as written, so the date could shift. Anyone east of UTC who picked 14 March got `2024-03-13T23:00:00.000Z` and filtered on the 13th; west of UTC, picking an evening time did the same to the next day.

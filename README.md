@@ -101,7 +101,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Solution-aware** — Add views to solutions during save
 
 ### 📤 Export & Data Operations
-- **Local Excel export** — Native `.xlsx` generation via ExcelJS with proper data types (numbers, dates, currencies, booleans)
+- **Local Excel export** — Native `.xlsx` generation via ExcelJS with proper data types (numbers, dates, currencies, booleans). Money keeps each record's currency symbol and decimals; date-times are in your Dataverse time zone, as in the grid (raw values in UTC, labelled "(UTC)"), Date Only columns are dates, and Time Zone Independent columns keep their stored time
 - **Dataverse Excel export** — Server-side export via the `ExportToExcel` action (requires a saved view)
 - **Native save dialog** — When running inside PPTB, both export paths use `fileSystem.saveFile` for a native OS save-file dialog; falls back to browser blob download in standalone/dev mode
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns

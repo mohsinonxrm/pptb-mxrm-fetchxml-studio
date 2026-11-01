@@ -4,7 +4,15 @@
  */
 
 import ExcelJS from "exceljs";
-import type { AttributeMetadata } from "./pptbClient";
+import type { AttributeMetadata, FormattingMetadata } from "./pptbClient";
+import { decimalNumberFormat, moneyNumberFormat } from "./excelFormats";
+import {
+	UTC_TIME_ZONE,
+	dateTimeBehavior,
+	resultWallClock,
+	wallClockToExcelDate,
+	type DataverseTimeZone,
+} from "../model/dateTimeValues";
 import { getFormattedValue } from "../ui/RightPane/FormattedValueUtils";
 import type { DisplaySettings } from "../model/displaySettings";
 import { debugLog } from "../../../shared/utils/debug";
@@ -24,6 +32,10 @@ interface ExportToExcelLocalOptions {
 	fileName?: string;
 	/** Display settings for column headers and value modes */
 	displaySettings?: DisplaySettings;
+	/** Date formats and behaviours, money precision, per entity (loadFormattingMetadata, #184) */
+	formattingMetadata?: Map<string, Map<string, FormattingMetadata>>;
+	/** The user's Dataverse time zone, for User Local date-times (#184); UTC when unknown */
+	timeZone?: DataverseTimeZone;
 }
 
 /**
@@ -41,6 +53,8 @@ export async function exportToExcelLocal(
 		entityName,
 		fileName = "export",
 		displaySettings,
+		formattingMetadata,
+		timeZone,
 	} = options;
 
 	// Extract display settings with defaults
@@ -53,8 +67,26 @@ export async function exportToExcelLocal(
 
 	const worksheet = workbook.addWorksheet("Data");
 
+	// An attribute's metadata, with its date and money formatting (#184)
+	const getAttrMeta = (col: string): (AttributeMetadata & FormattingMetadata) | undefined => {
+		const attr = findAttrMeta(col);
+		if (!attr) return undefined;
+		const formatting = findFormatting(attr.LogicalName);
+		return formatting ? { ...attr, ...formatting } : attr;
+	};
+	const findFormatting = (logicalName: string): FormattingMetadata | undefined => {
+		if (!formattingMetadata) return undefined;
+		const own = entityName ? formattingMetadata.get(entityName)?.get(logicalName) : undefined;
+		if (own) return own;
+		for (const [, entityFormatting] of formattingMetadata) {
+			const found = entityFormatting.get(logicalName);
+			if (found) return found;
+		}
+		return undefined;
+	};
+
 	// Helper to get attribute metadata
-	const getAttrMeta = (col: string): AttributeMetadata | undefined => {
+	const findAttrMeta = (col: string): AttributeMetadata | undefined => {
 		if (!attributeMetadata) return undefined;
 
 		// Try with entity name first
@@ -99,6 +131,20 @@ export async function exportToExcelLocal(
 		isRawColumn: boolean;
 	}
 
+	// Raw values are UTC for User Local date-times; formatted ones are in the user's Dataverse time
+	// zone, or UTC when it couldn't be read (#184)
+	const zone = timeZone ?? UTC_TIME_ZONE;
+	const isUtcDateTime = (col: string, raw: boolean): boolean => {
+		const attr = getAttrMeta(col);
+		return (
+			attr?.AttributeType === "DateTime" &&
+			dateTimeBehavior(attr) === "UserLocal" &&
+			attr.Format !== "DateOnly" &&
+			(raw || !timeZone)
+		);
+	};
+	const withUtc = (header: string, col: string, raw: boolean) => (isUtcDateTime(col, raw) ? `${header} (UTC)` : header);
+
 	const exportColumns: ExportColumn[] = [];
 	for (const col of columns) {
 		// Determine header name based on useLogicalNames setting
@@ -107,13 +153,15 @@ export async function exportToExcelLocal(
 
 		if (valueDisplayMode === "both" && hasFormattedValues(col)) {
 			// Add formatted column first, then raw column
-			exportColumns.push({ sourceCol: col, headerName, isRawColumn: false });
-			exportColumns.push({ sourceCol: col, headerName: `${headerName} (Raw)`, isRawColumn: true });
+			exportColumns.push({ sourceCol: col, headerName: withUtc(headerName, col, false), isRawColumn: false });
+			exportColumns.push({ sourceCol: col, headerName: withUtc(`${headerName} (Raw)`, col, true), isRawColumn: true });
 		} else {
-			// Just one column
-			exportColumns.push({ sourceCol: col, headerName, isRawColumn: false });
+			// Just one column; in raw mode it holds raw values
+			exportColumns.push({ sourceCol: col, headerName: withUtc(headerName, col, valueDisplayMode === "raw"), isRawColumn: false });
 		}
 	}
+	/** Whether a column holds raw values: a (Raw) twin, or every column in raw mode */
+	const showsRaw = (ec: ExportColumn) => ec.isRawColumn || valueDisplayMode === "raw";
 
 	// Create header row
 	const headerRow = worksheet.addRow(exportColumns.map((ec) => ec.headerName));
@@ -152,12 +200,31 @@ export async function exportToExcelLocal(
 		return { key: `col_${index}`, width };
 	});
 
+	/**
+	 * A date cell (#184). exceljs writes a Date's UTC reading, so the Date carries the wall clock to
+	 * show: the date for Date Only values and formats, the stored reading for Time Zone Independent
+	 * ones, and for User Local date-times the user's Dataverse time zone (UTC when raw).
+	 */
+	const excelDate = (
+		rawValue: unknown,
+		attr: (AttributeMetadata & FormattingMetadata) | undefined,
+		raw: boolean,
+	): unknown => {
+		if (rawValue instanceof Date) return rawValue;
+		if (typeof rawValue !== "string") return rawValue;
+		const behavior = dateTimeBehavior(attr);
+		const dateFormat = attr?.Format === "DateOnly";
+		const wall = resultWallClock(rawValue, behavior, raw && behavior === "UserLocal" && !dateFormat ? UTC_TIME_ZONE : zone);
+		if (!wall) return rawValue;
+		return wallClockToExcelDate(dateFormat ? { ...wall, hour: 0, minute: 0, second: 0 } : wall);
+	};
+
 	// Helper to get cell value based on display mode and column type
 	const getCellValue = (
 		record: Record<string, unknown>,
 		col: string,
 		isRawColumn: boolean,
-		attr: AttributeMetadata | undefined,
+		attr: (AttributeMetadata & FormattingMetadata) | undefined,
 	): unknown => {
 		const rawValue = record[col];
 		const formattedValue = getFormattedValue(record, col);
@@ -178,12 +245,7 @@ export async function exportToExcelLocal(
 				case "Money":
 					return typeof rawValue === "number" ? rawValue : parseFloat(String(rawValue));
 				case "DateTime":
-					if (rawValue instanceof Date) return rawValue;
-					if (typeof rawValue === "string") {
-						const date = new Date(rawValue);
-						return isNaN(date.getTime()) ? rawValue : date;
-					}
-					return rawValue;
+					return excelDate(rawValue, attr, true);
 				case "Boolean":
 					return rawValue;
 				default:
@@ -207,13 +269,7 @@ export async function exportToExcelLocal(
 				return typeof rawValue === "number" ? rawValue : parseFloat(String(rawValue));
 
 			case "DateTime":
-				// Return as Date object for Excel to format properly
-				if (rawValue instanceof Date) return rawValue;
-				if (typeof rawValue === "string") {
-					const date = new Date(rawValue);
-					return isNaN(date.getTime()) ? rawValue : date;
-				}
-				return rawValue;
+				return excelDate(rawValue, attr, false);
 
 			case "Picklist":
 			case "State":
@@ -249,24 +305,30 @@ export async function exportToExcelLocal(
 			const attr = getAttrMeta(ec.sourceCol);
 			const cell = dataRow.getCell(index + 1);
 
-			// Skip formatting for raw columns (show actual values)
-			if (ec.isRawColumn) return;
+			// Dates always need a format, or Excel shows a serial number
+			if (attr?.AttributeType === "DateTime" && cell.value instanceof Date) {
+				const dateOnly = dateTimeBehavior(attr) === "DateOnly" || attr.Format === "DateOnly";
+				cell.numFmt = dateOnly ? "yyyy-mm-dd" : "yyyy-mm-dd hh:mm:ss";
+				return;
+			}
+
+			// Raw values aren't formatted (raw mode, and the (Raw) columns)
+			if (showsRaw(ec)) return;
 
 			switch (attr?.AttributeType) {
-				case "DateTime":
-					cell.numFmt = "yyyy-mm-dd hh:mm:ss";
-					break;
-				case "Money":
-					// Use currency format
-					cell.numFmt = '"$"#,##0.00';
-					break;
-				case "Decimal":
-				case "Double": {
-					// Get precision from metadata or default to 2
-					const precision = (attr as { Precision?: number })?.Precision ?? 2;
-					cell.numFmt = `0.${"0".repeat(precision)}`;
+				case "Money": {
+					// The record's own currency symbol and decimals, from the formatted value (#184)
+					const raw = record[ec.sourceCol];
+					if (typeof raw !== "number") break;
+					const precision = attr.PrecisionSource === 0 ? attr.Precision : undefined;
+					cell.numFmt = moneyNumberFormat(getFormattedValue(record, ec.sourceCol), raw, precision);
 					break;
 				}
+				case "Decimal":
+				case "Double":
+					// The column's precision; "0" when it has none (#184)
+					cell.numFmt = decimalNumberFormat(attr.Precision);
+					break;
 				case "Integer":
 				case "BigInt":
 					cell.numFmt = "#,##0";

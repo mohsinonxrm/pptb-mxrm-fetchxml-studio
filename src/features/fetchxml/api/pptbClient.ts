@@ -919,7 +919,7 @@ async function retrieveUserTimeZone(): Promise<DataverseTimeZone | undefined> {
 
 /** Date and money formatting metadata of one attribute, for the Excel export (#184) */
 export interface FormattingMetadata {
-	Format?: string;
+	Format?: "DateOnly" | "DateAndTime";
 	DateTimeBehavior?: { Value?: string };
 	Precision?: number;
 	/** Money: 0 = Precision, 1 = the organization's pricing precision, 2 = the currency's precision */
