@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Picked dates filter on the day and time you picked (#207, #198).**
+  - **Before:** the date picker wrote every value as a UTC instant from the browser's time zone (`toISOString()`), whatever the column. Checked live on a sandbox:
+    - **on / on-or-before / on-or-after** compare a date, and Dataverse takes it from the value as written, so the date could shift. Anyone east of UTC who picked 14 March got `2024-03-13T23:00:00.000Z` and filtered on the 13th; west of UTC, picking an evening time did the same to the next day.
+    - **Date Only columns** compare the written date the same way.
+    - **Time Zone Independent columns** compare the time as written, so values were off by the browser's offset.
+    - **Other date and time columns** used the browser's time zone, not your Dataverse one: on the sandbox (Dataverse UTC, computer Pacific), picking 09:00 filtered on 16:00.
+    - The picker also showed Date Only values as the day before for anyone west of UTC (#198).
+  - **Now:** values are written the way Dataverse reads them:
+    - `2024-03-14` for Date Only columns, date-only formats and the **on** operators. Those take a date only, so the time picker is hidden.
+    - The wall clock for Time Zone Independent columns: `2024-03-14T09:00:00`.
+    - The wall clock with your Dataverse time zone's offset for other date and time columns: `2024-03-14T09:00:00+09:00`. It reads like what you picked, and it's exact.
+  - **The pickers:** they show values in the same terms, so a Date Only value is never the day before. The time picker says which time zone applies ("Time in your Dataverse time zone (Tokyo Standard Time)"). The time zone is your Dataverse Personal Options setting, read once per connection, including daylight saving.
+  - **Loaded FetchXML** keeps its values as written until you pick a new date.
+
 - **The generated C# QueryExpression compiles and means what the query does (#178).**
   - **Link-entities:** they were written with `ColumnSet =` and `Criteria =`, which `LinkEntity` doesn't have, so the code didn't compile (CS0117). They use `Columns` and `LinkCriteria` now, as do any/all filters on related rows (`AnyAllFilterLinkEntity`), which leave out the columns Dataverse ignores.
   - **Orders:** `new OrderExpression(...)` had the alias and entity name swapped. It's (attribute, order, alias, entity name) now, per the [SDK reference](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.query.orderexpression.-ctor).
