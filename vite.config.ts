@@ -71,6 +71,10 @@ async function devHarness(command: string, mode: string): Promise<Plugin[]> {
 
 // https://vite.dev/config/
 export default defineConfig(async ({ command, mode }) => ({
+	// Relative asset URLs (#173). PPTB Desktop serves each tool at the root of its own origin, but the
+	// PPTB VS Code extension serves dist/ from a webview resource path, where root-absolute /assets/…
+	// URLs miss the tool's folder (Command Bar Studio #89 / #92). Lazy chunks (#187) need it too.
+	base: "./",
 	plugins: [react(), toolIcon(), monacoDompurify(), ...(await devHarness(command, mode))],
 	// The tool's version, for "Copy details" when a panel fails (#185)
 	define: {

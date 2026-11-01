@@ -78,7 +78,6 @@ import {
 import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
 import { CloseRecordsDialog } from "../features/fetchxml/ui/Dialogs/CloseRecordsDialog";
 import type { CloseMenuItem } from "../features/fetchxml/ui/RightPane/ResultsCommandBar";
-import { exportToExcelLocal, downloadExcelFile } from "../features/fetchxml/api/excelExport";
 import type {
 	AttributeMetadata,
 	LoadedViewInfo,
@@ -1482,7 +1481,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			// Date behaviours and formats, money precision and the user's time zone (#184); the export
 			// still works without them (UTC, labelled; currency and decimals from formatted values)
 			const entityNames = [...(attributeMetadata?.keys() ?? [])];
-			const [formattingEntries, timeZone] = await Promise.all([
+			// exceljs (~1 MB) loads on the first local export, not at startup (#187)
+			const [formattingEntries, timeZone, { exportToExcelLocal, downloadExcelFile }] = await Promise.all([
 				Promise.all(
 					entityNames.map((name) =>
 						loadFormattingMetadata(name)
@@ -1494,6 +1494,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					),
 				),
 				loadUserTimeZone(),
+				import("../features/fetchxml/api/excelExport"),
 			]);
 
 			const { buffer, fileName: finalFileName } = await exportToExcelLocal({
