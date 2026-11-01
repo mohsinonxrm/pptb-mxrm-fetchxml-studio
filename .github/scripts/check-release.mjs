@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Fails when the release metadata doesn't match package.json's version (RELEASING.md): the
-// version's shape, package-lock.json, the CHANGELOG section, the README badge and, with --dist,
+// version's shape, package-lock.json, the CHANGELOG section, the README badges and, with --dist,
 // the bundled icon. With --notes, writes the GitHub Release notes built from the CHANGELOG.
 //
 // Usage:
@@ -8,6 +8,7 @@
 //   node .github/scripts/check-release.mjs --dist                # after the build
 //   node .github/scripts/check-release.mjs --dist --notes notes.md --dist-tag beta --repository owner/repo
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { badges } from "./badges.mjs";
 import { checkReleaseFiles, expectedIconSource, releaseNotes } from "./release-checks.mjs";
 
 const args = process.argv.slice(2);
@@ -18,11 +19,15 @@ const option = (name) => {
 const read = (path) => readFileSync(path, "utf8");
 
 const pkg = JSON.parse(read("package.json"));
+const badgeFiles = Object.fromEntries(
+	badges(pkg).map(({ file }) => [file, existsSync(`assets/badges/${file}`) ? read(`assets/badges/${file}`) : undefined]),
+);
 const problems = checkReleaseFiles({
 	pkg,
 	lock: JSON.parse(read("package-lock.json")),
 	changelog: read("CHANGELOG.md"),
 	readme: read("README.md"),
+	badgeFiles,
 });
 
 if (args.includes("--dist")) {
