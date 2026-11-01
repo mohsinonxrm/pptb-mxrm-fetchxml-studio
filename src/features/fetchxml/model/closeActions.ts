@@ -34,7 +34,7 @@
  * (2/6) and invoice Paid (2/100001, 2/100002) and Canceled (3/100003) by PATCH return 200.
  */
 
-import { transitionFilter, type EntityStateModel, type StateOption, type StatePlan, type StatusOption } from "./recordState";
+import { stateUndo, transitionFilter, type EntityStateModel, type StateOption, type StatePlan, type StatusOption } from "./recordState";
 
 export type CloseField = "revenue" | "date" | "description" | "competitor" | "resolution" | "billable";
 
@@ -316,8 +316,16 @@ export function planCloseStateChange(model: EntityStateModel, action: CloseState
 			reason: "Status reason transitions are enforced, and no target status reason is allowed from the selected records' current status reasons.",
 		};
 	}
+	// The way back is Activate, as from Deactivate (#69)
+	const undo = stateUndo(model, "deactivate");
 	if (allowed.length === 1) {
-		return { kind: "simple", target: { statecode: state.value, statuscode: allowed[0].statuscode }, stateLabel: state.label, statusLabel: allowed[0].label };
+		return {
+			kind: "simple",
+			target: { statecode: state.value, statuscode: allowed[0].statuscode },
+			stateLabel: state.label,
+			statusLabel: allowed[0].label,
+			undo,
+		};
 	}
 	const first = allowed.find((c) => c.statuscode === preselected) ?? allowed[0];
 	return {
@@ -325,6 +333,7 @@ export function planCloseStateChange(model: EntityStateModel, action: CloseState
 		groups: [{ statecode: state.value, label: state.label, choices: allowed }],
 		defaultTarget: { statecode: state.value, statuscode: first.statuscode },
 		note: filter.note,
+		undo,
 	};
 }
 
