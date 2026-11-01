@@ -650,26 +650,27 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	// Check record action privileges when entity changes
 	const entityLogicalName = builder.fetchQuery?.entity.name;
 	useEffect(() => {
-		if (!entityLogicalName || !isDataverseAvailable()) {
-			setRecordActionPrivileges({
-				canDelete: false,
-				canBulkDelete: false,
-				canRunWorkflow: false,
-				privilegesChecked: false,
-			});
-			return;
-		}
+		// Until this entity's checks finish, nothing is allowed: keeping the previous entity's
+		// privileges would enable Delete where it isn't allowed, or the other way round (#179)
+		setRecordActionPrivileges({
+			canDelete: false,
+			canBulkDelete: false,
+			canRunWorkflow: false,
+			privilegesChecked: false,
+		});
+		if (!entityLogicalName || !isDataverseAvailable()) return;
 
+		// A check for an entity that's no longer selected can finish last; its result is dropped (#179)
+		let cancelled = false;
 		const checkRecordPrivileges = async () => {
 			try {
-				// Check delete privilege for this entity
-				const canDelete = await checkDeletePrivilege(entityLogicalName);
-
-				// Check bulk delete privilege
-				const canBulkDelete = await checkBulkDeletePrivilege();
-
-				// Check workflow privileges
-				const canRunWorkflow = await checkWorkflowPrivileges();
+				// Delete is per entity; Bulk Delete and workflow privileges are per user
+				const [canDelete, canBulkDelete, canRunWorkflow] = await Promise.all([
+					checkDeletePrivilege(entityLogicalName),
+					checkBulkDeletePrivilege(),
+					checkWorkflowPrivileges(),
+				]);
+				if (cancelled) return;
 
 				setRecordActionPrivileges({
 					canDelete,
@@ -684,6 +685,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					canRunWorkflow,
 				});
 			} catch (error) {
+				if (cancelled) return;
 				console.error("Failed to check record action privileges:", error);
 				setRecordActionPrivileges({
 					canDelete: false,
@@ -694,7 +696,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			}
 		};
 
-		checkRecordPrivileges();
+		void checkRecordPrivileges();
+		return () => {
+			cancelled = true;
+		};
 	}, [entityLogicalName]);
 
 	// Activate / Deactivate / Close availability (#143, #149): entities whose states need dedicated

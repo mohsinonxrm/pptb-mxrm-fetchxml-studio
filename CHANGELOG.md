@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Record actions use the selected entity's privileges, not the previous entity's (#179).**
+  - **Before:** switching entity started a new privilege check without stopping the previous one. If the previous entity's check finished last, Delete and Bulk delete used its result: enabled where you can't delete, or disabled where you can. Dataverse still refused a delete you weren't allowed to make, but the buttons and confirmations were wrong.
+  - **Now:** an outdated check's result is dropped, and the record actions stay unavailable until the selected entity's check finishes. The three checks also run at the same time instead of one after another.
+
 - **The Code tab no longer sends Dataverse requests on every keystroke (#199).**
   - **Before:** while the Code tab was open, each change to the query sent both `FetchXmlToQueryExpression` (C# QueryExpression) and `FetchXMLToSQL` (SQL), whichever format was selected. Typing a condition value sent a pair per keystroke. That counted against service protection limits, and half-typed queries flashed server errors.
   - **Now:** a format is converted only while it's selected, half a second after typing stops, and once per query and environment, so switching formats back and forth reuses the result. A failed conversion is tried again when you select its format again.
