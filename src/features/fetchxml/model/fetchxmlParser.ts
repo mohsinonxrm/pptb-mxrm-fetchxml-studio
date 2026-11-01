@@ -388,7 +388,8 @@ export function parseFetchXml(xmlString: string): ParseResult {
 	const comments = countComments(doc);
 	if (comments > 0) {
 		issues.push({
-			message: `XML comments aren't kept in the tree; Parse to tree removes ${comments === 1 ? "1 comment" : `${comments} comments`}.`,
+			// Worded for Parse to tree and for loading a saved view (getViewLoadNotice) alike
+			message: `XML comments aren't kept in the tree, so ${comments === 1 ? "1 comment is" : `${comments} comments are`} removed.`,
 			element: "fetch",
 			severity: "info",
 			kind: "dropped",

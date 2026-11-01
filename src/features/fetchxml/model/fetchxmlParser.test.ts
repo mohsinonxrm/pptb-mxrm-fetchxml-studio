@@ -113,12 +113,12 @@ describe("XML comments (#200)", () => {
 		const result = parseFetchXml(`<!-- saved from FXB --><fetch><!-- columns --><entity name="account"><attribute name="name" /><!-- todo --></entity></fetch>`);
 		expect(result.success).toBe(true);
 		expect(getParseToTreeChanges(result)).toEqual([
-			expect.objectContaining({ kind: "dropped", message: "XML comments aren't kept in the tree; Parse to tree removes 3 comments." }),
+			expect.objectContaining({ kind: "dropped", message: "XML comments aren't kept in the tree, so 3 comments are removed." }),
 		]);
 	});
 
 	it("say nothing when there are none, and use the singular for one", () => {
 		expect(getParseToTreeChanges(parseFetchXml(`<fetch><entity name="account" /></fetch>`))).toEqual([]);
-		expect(getParseToTreeChanges(parseFetchXml(`<fetch><!-- x --><entity name="account" /></fetch>`))[0].message).toMatch(/removes 1 comment\.$/);
+		expect(getParseToTreeChanges(parseFetchXml(`<fetch><!-- x --><entity name="account" /></fetch>`))[0].message).toMatch(/so 1 comment is removed\.$/);
 	});
 });

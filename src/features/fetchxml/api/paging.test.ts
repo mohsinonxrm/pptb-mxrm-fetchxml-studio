@@ -177,16 +177,15 @@ describe("pagingAfterFirstPage: count above Dataverse's page size (#209)", () =>
 		expect(pagingAfterFirstPage(first({ pageSize: 1000 }), 1, 500).state).toMatchObject({ pageSize: 500, nextPage: 2 });
 	});
 
-	it("continues a later starting page when it lines up, and otherwise stops with a notice rather than skip rows", () => {
+	it("from a later starting page, stops with a notice: where Dataverse's next page starts isn't documented", () => {
 		// A full page (count 5,000) needs nothing, whatever the starting page
 		expect(pagingAfterFirstPage(first({ pageSize: 5000 }), 3, 5000)).toEqual({ state: first({ pageSize: 5000 }) });
-		// page 2 of count 10,000 skipped 10,000 rows, returned 5,000: rows up to 15,000 loaded, page 4 of 5,000 next
-		expect(pagingAfterFirstPage(first({ pageSize: 10000 }), 2, 5000).state).toMatchObject({ pageSize: 5000, currentPage: 3, nextPage: 4 });
-		// page 2 of count 6,000 skipped 6,000 rows: 11,000 loaded isn't a multiple of 5,000
-		const stopped = pagingAfterFirstPage(first(), 2, 5000);
-		expect(stopped.state).toMatchObject({ moreRecords: false, pageSize: 6000 });
-		expect(stopped.notice).toMatchObject({ kind: "simple" });
-		expect(stopped.notice?.message).toMatch(/fewer than the query's count of 6,000.*from page 2 without skipping rows/);
+		for (const count of [6000, 10000]) {
+			const stopped = pagingAfterFirstPage(first({ pageSize: count }), 2, 5000);
+			expect(stopped.state).toMatchObject({ moreRecords: false, isRetrieveAllInProgress: false, pageSize: count });
+			expect(stopped.notice).toMatchObject({ kind: "pageSize" });
+			expect(stopped.notice?.message).toMatch(new RegExp(`fewer than the query's count of ${count.toLocaleString()}.*Starting from page 2`));
+		}
 	});
 
 	it("leaves cookie paging, views, full pages, the last page and queries without count alone", () => {

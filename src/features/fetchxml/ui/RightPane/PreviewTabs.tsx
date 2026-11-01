@@ -999,7 +999,7 @@ export function PreviewTabs({
 							</div>
 							{pagingNotice && (
 								<div className={styles.messageBarContainer}>
-									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" || pagingNotice.kind === "limit" ? "warning" : "info"} layout="multiline">
+									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" || pagingNotice.kind === "limit" || pagingNotice.kind === "pageSize" ? "warning" : "info"} layout="multiline">
 										<MessageBarBody>
 											<MessageBarTitle>
 												{pagingNotice.kind === "error"
@@ -1008,7 +1008,9 @@ export function PreviewTabs({
 														? "Retrieve all stopped"
 														: pagingNotice.kind === "limit"
 															? `Retrieve all stopped at ${result?.rows.length.toLocaleString() ?? 0} rows`
-															: "Paging without a paging cookie"}
+															: pagingNotice.kind === "pageSize"
+																? "Later pages not loaded"
+																: "Paging without a paging cookie"}
 											</MessageBarTitle>
 											{pagingNotice.kind === "error"
 												? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
