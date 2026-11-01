@@ -4,7 +4,7 @@
  * Prefers formatted values from OData annotations when available
  */
 
-import { Switch, Badge, Label, SkeletonItem, makeStyles, tokens } from "@fluentui/react-components";
+import { Switch, Badge, Label, makeStyles, tokens } from "@fluentui/react-components";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import { HighlightText } from "./HighlightText";
 import { useGridDensity } from "./gridDensityContext";
@@ -333,9 +333,3 @@ export function TextCellRenderer({
 	return <span className={styles.truncateText}><HighlightText text={String(displayValue)} /></span>;
 }
 
-/**
- * Loading skeleton for virtualized cells
- */
-export function LoadingCellRenderer() {
-	return <SkeletonItem />;
-}
