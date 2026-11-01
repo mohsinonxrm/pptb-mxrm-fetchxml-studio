@@ -2,7 +2,8 @@
  * Copying query results to the clipboard (#50)
  *
  * Rows copy as tab-separated values with a header row, so they paste into Excel as cells. Values
- * containing a tab, line break or quote are quoted the way Excel writes them ("a ""b"" c").
+ * containing a tab, line break or quote are quoted the way Excel writes them ("a ""b"" c"). Text a
+ * spreadsheet would run as a formula gets a leading apostrophe (#208).
  */
 
 import { getFormattedValue } from "./FormattedValueUtils";
@@ -46,6 +47,18 @@ export function cellText(record: Record<string, unknown>, column: CopyColumn, mo
 		: formattedText(record, column.sourceCol);
 }
 
+/**
+ * Text a spreadsheet would read as a formula gets a leading apostrophe, so pasting rows into Excel
+ * or Google Sheets shows the text instead of running it (#208). Formulas start with =, +, -, @, a
+ * tab or a carriage return (OWASP, "CSV Injection"). A number's own sign is left alone: when the
+ * raw value is a number or Yes/No, "-5" or "-$5.00" is just a negative number.
+ */
+export function spreadsheetSafe(text: string, raw?: unknown): string {
+	if (!/^[=+\-@\t\r]/.test(text)) return text;
+	if ((typeof raw === "number" || typeof raw === "boolean") && /^[+-]/.test(text)) return text;
+	return `'${text}`;
+}
+
 /** Quotes a value for TSV when it contains a tab, line break or quote */
 export function tsvField(text: string): string {
 	return /[\t\r\n"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -66,14 +79,18 @@ export function rowsToTsv(
 	mode: CopyValueMode = "shown",
 ): string {
 	const cols = copyColumnsFor(columns, mode);
-	const header = cols.map((c) => tsvField(c.header)).join("\t");
-	const lines = records.map((r) => cols.map((c) => tsvField(cellText(r, c, mode))).join("\t"));
+	const header = cols.map((c) => tsvField(spreadsheetSafe(c.header))).join("\t");
+	const lines = records.map((r) => cols.map((c) => tsvField(safeCellText(r, c, mode))).join("\t"));
 	return [header, ...lines].join("\n");
 }
 
+/** A cell's text for pasting into a spreadsheet (#208) */
+const safeCellText = (record: Record<string, unknown>, column: CopyColumn, mode: CopyValueMode): string =>
+	spreadsheetSafe(cellText(record, column, mode), record[column.sourceCol]);
+
 /** One column's values, one per line, no header (e.g. to paste into an "in" condition) */
 export function columnToText(records: Record<string, unknown>[], column: CopyColumn, mode: CopyValueMode = "shown"): string {
-	return records.map((r) => tsvField(cellText(r, column, mode))).join("\n");
+	return records.map((r) => tsvField(safeCellText(r, column, mode))).join("\n");
 }
 
 /** "1 row" / "3 rows" */

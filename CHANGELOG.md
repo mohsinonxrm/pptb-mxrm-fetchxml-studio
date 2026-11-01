@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Copied rows can't paste into a spreadsheet as live formulas (#208).**
+  - **Before:** Copy wrote cell text as it was. A value such as `=HYPERLINK(...)` or `@SUM(...)`, often entered by users or integrations, became a working formula when the rows were pasted into Excel or Google Sheets.
+  - **Now:** in copied rows (Ctrl+C, the Copy menu, the row and selected-rows menu items) and copied columns, text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, as [OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection) recommends, so the spreadsheet shows it as text. A number's sign is left alone (`-5`, `-$5.00`). Copying a single cell still copies it exactly. The local Excel export wasn't affected: it writes text as text cells.
+
 - **Record actions use the selected entity's privileges, not the previous entity's (#179).**
   - **Before:** switching entity started a new privilege check without stopping the previous one. If the previous entity's check finished last, Delete and Bulk delete used its result: enabled where you can't delete, or disabled where you can. Dataverse still refused a delete you weren't allowed to make, but the buttons and confirmations were wrong.
   - **Now:** an outdated check's result is dropped, and the record actions stay unavailable until the selected entity's check finishes. The three checks also run at the same time instead of one after another.
