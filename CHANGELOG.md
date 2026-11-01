@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **The Code tab no longer sends Dataverse requests on every keystroke (#199).**
+  - **Before:** while the Code tab was open, each change to the query sent both `FetchXmlToQueryExpression` (C# QueryExpression) and `FetchXMLToSQL` (SQL), whichever format was selected. Typing a condition value sent a pair per keystroke. That counted against service protection limits, and half-typed queries flashed server errors.
+  - **Now:** a format is converted only while it's selected, half a second after typing stops, and once per query and environment, so switching formats back and forth reuses the result. A failed conversion is tried again when you select its format again.
+
 - **FetchXML editor suggestions and hovers no longer pile up (#194).**
   - **Before:** the editor registered its FetchXML completion and hover providers each time it mounted and never removed them. It remounts on every connection change, so after a few changes each suggestion and hover appeared several times, and memory grew over the session. The providers also answered in the read-only LayoutXML viewer.
   - **Now:** they're registered once, apply only to the FetchXML editor, and are removed when it goes.
