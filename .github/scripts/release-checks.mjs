@@ -16,8 +16,9 @@ export function changelogSections(changelog) {
 	const lines = changelog.split(/\r?\n/);
 	const sections = [];
 	for (const line of lines) {
-		const heading = /^## \[([^\]]+)\](?: - (\S+))?\s*$/.exec(line);
-		if (heading) sections.push({ name: heading[1], date: heading[2], body: [] });
+		// `## [name]`, `## [name] - YYYY-MM-DD`, and anything after the date (`(stable)`, `[YANKED]`)
+		const heading = /^## \[([^\]]+)\](.*)$/.exec(line);
+		if (heading) sections.push({ name: heading[1], date: /^\s+-\s+(\S+)/.exec(heading[2])?.[1], body: [] });
 		else if (sections.length > 0) sections[sections.length - 1].body.push(line);
 	}
 	return sections.map((s) => ({ ...s, body: s.body.join("\n").trim() }));
@@ -77,7 +78,8 @@ export function releaseNotes({ pkg, changelog, distTag, repository }) {
 	const minApi = pkg.features?.minAPI;
 	let lead;
 	if (distTag === "beta") {
-		lead = `**Beta: preview of ${name} ${version.replace(/-.*/, "")}.** Install it from npm \`beta\`; the stable release stays on npm \`latest\`. The gold Insider icon marks this build in the ToolBox.`;
+		const kind = version.includes("-rc.") ? "Release candidate" : "Beta";
+		lead = `**${kind}: preview of ${name} ${version.replace(/-.*/, "")}.** Install it from npm \`beta\`; the stable release stays on npm \`latest\`. The gold Insider icon marks this build in the ToolBox.`;
 	} else if (distTag === "latest") {
 		lead = `**${name} ${version}.** Install or update it from npm \`latest\`.`;
 	} else {

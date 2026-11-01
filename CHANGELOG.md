@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
-- **Releases check what they must update.** A new `check-release.mjs` runs in CI on every PR and push, and in the release build. It fails when any of these don't match `package.json`'s version:
+- **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
   - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
   - `package-lock.json`;
   - the CHANGELOG (a dated `[X.Y.Z]` section with entries, under `[Unreleased]`);

@@ -78,6 +78,15 @@ describe("badgeFor / expectedIconSource / changelogSections", () => {
 		expect(expectedIconSource("1.5.0")).toBe("icons/icon.svg");
 	});
 
+	it("reads the date of headings with text after it, and keeps their bodies apart", () => {
+		const extra = changelog.replace("## [1.5.0-beta.17] - 2026-10-31", "## [1.5.0-beta.17] - 2026-10-31 [YANKED]");
+		const sections = changelogSections(extra);
+		expect(sections[2]).toMatchObject({ name: "1.5.0-beta.17", date: "2026-10-31", body: "- Older." });
+		expect(sections[1].body).not.toContain("Older");
+		const stable = changelog.replace("## [1.5.0-beta.18] - 2026-11-01", "## [1.5.0-beta.18] - 2026-11-01 (stable)");
+		expect(checkReleaseFiles({ ...files, changelog: stable })).toEqual([]);
+	});
+
 	it("reads headings and bodies, normalizing CRLF line endings", () => {
 		const sections = changelogSections(changelog.replace(/\n/g, "\r\n"));
 		expect(sections.map((s) => [s.name, s.date])).toEqual([
@@ -102,6 +111,12 @@ describe("releaseNotes", () => {
 
 See [CHANGELOG.md](https://github.com/o/r/blob/v1.5.0-beta.18/CHANGELOG.md) for earlier versions.
 `);
+	});
+
+	it("calls an rc a release candidate", () => {
+		const rc = { ...pkg, version: "1.5.0-rc.1" };
+		const cl = changelog.replace("[1.5.0-beta.18]", "[1.5.0-rc.1]");
+		expect(releaseNotes({ pkg: rc, changelog: cl, distTag: "beta", repository: "o/r" })).toMatch(/^\*\*Release candidate: preview of Tool Studio 1\.5\.0\.\*\*/);
 	});
 
 	it("words stable and support releases for their channel", () => {

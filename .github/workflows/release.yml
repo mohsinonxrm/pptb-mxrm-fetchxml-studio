@@ -197,11 +197,11 @@ jobs:
         with:
           name: release-notes
       # The notes: the channel, the PPTB requirement and the version's CHANGELOG section, then
-      # GitHub's generated list of PRs and compare link (gh prepends --notes to generated notes)
+      # GitHub's generated list of PRs and compare link (gh puts --notes-file before the generated notes)
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           LATEST: ${{ needs.build.outputs.latest }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "$(cat release-notes.md)" --generate-notes --latest="$LATEST" --prerelease="$PRERELEASE"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md --generate-notes --latest="$LATEST" --prerelease="$PRERELEASE"

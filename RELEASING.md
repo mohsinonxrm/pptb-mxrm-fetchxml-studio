@@ -44,9 +44,13 @@ locally. The same process is used by Command Bar Studio and Dataverse Request St
 When a forward merge conflicts badly because the code has moved on, re-apply the fix on
 the newer branch in a small companion PR instead.
 
-**Resolving forward-merge conflicts** in `CHANGELOG.md` and `package.json`: keep the
-target branch's version and its `[Unreleased]` section on top, and add the incoming dated
-sections in version order.
+**Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json`, `package-lock.json` and
+the README badge: keep the **higher** of the two versions (semver), with its lock fields and
+badge, and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
+version order, highest first. So the newest dated section is always the branch's version, which
+`check-release.mjs` checks. For example, a `1.5.1` hotfix merged into `dev` at `1.5.0` makes
+`dev` `1.5.1`; merged into `dev` at `1.6.0-beta.2`, `dev` stays `1.6.0-beta.2` with `[1.5.1]`
+below its section.
 
 ## Every release: what changes
 
@@ -62,8 +66,14 @@ needs a manual edit:
 | **npm package** | Published by `release.yml` on the tag, with provenance, to `beta`, `latest` or `support-X.Y` | `release.yml` |
 | **GitHub Release** | Created by `release.yml` on the tag: pre-release for betas, latest for stable on `main`. Its notes are the channel, the PPTB requirement and the CHANGELOG section, then GitHub's PR list | `release.yml` |
 
-CI runs `check-release.mjs` on every PR and push, so a release-prep PR that misses one of them
-fails before it merges; on other PRs it confirms the branch is still consistent.
+CI runs `check-release.mjs` on every PR and on pushes to `dev`, `main`, `release/**` and
+`support/**`, so a release-prep PR that misses one of them fails before it merges; on other PRs
+it confirms the branch is still consistent.
+
+Branches cut before the check existed (for example a `support/1.4` cut from a `v1.4.*` tag) run
+the workflow of their own commit: they get neither the check nor the notes from the CHANGELOG.
+Check those by hand against this table, and paste the CHANGELOG section into the GitHub Release
+after it's created.
 
 ## Release lifecycle
 
@@ -115,8 +125,8 @@ Before promoting a beta to `latest`:
 1. Branch `hotfix/1.4.3` from `main`; fix, set the version (`1.4.3`), date its CHANGELOG
    section, update the badge; PR into `main` (merge commit).
 2. Tag `v1.4.3` on `main` → npm `latest`, then run *After every release*.
-3. Merge `main` forward into `release/*` (if one is open) and `dev`, keeping each target's
-   version and `[Unreleased]` entries.
+3. Merge `main` forward into `release/*` (if one is open) and `dev`, keeping the higher version
+   (*Resolving forward-merge conflicts*) and each target's `[Unreleased]` entries.
 
 ## Supported versions
 
@@ -185,8 +195,8 @@ npm token exchange or provenance signing. A manual run never publishes, even on 
 
 1. **npm:** `npm view @mohsinonxrm/pptb-fetchxml-studio dist-tags` shows the new version on its
    tag. The registry can take a few minutes to show it after the run.
-2. **Icon:** unpack the published tarball (`npm pack @mohsinonxrm/pptb-fetchxml-studio@X.Y.Z` in an
-   empty folder) and compare `package/dist/icons/icon.svg` with `icons/icon-insider.svg` (betas) or
+2. **Icon:** unpack the published tarball (`npm pack @mohsinonxrm/pptb-fetchxml-studio@X.Y.Z`, then
+   `tar -xzf *.tgz`, in an empty folder) and compare `package/dist/icons/icon.svg` with `icons/icon-insider.svg` (betas) or
    `icons/icon.svg`.
 3. **GitHub Release:** add any context the CHANGELOG doesn't carry.
 4. **Tracking issue:** comment on the release's tracking issue (the soak restarts with each beta).
