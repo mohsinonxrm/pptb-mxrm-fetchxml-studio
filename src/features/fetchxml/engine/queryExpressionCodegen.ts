@@ -51,6 +51,8 @@ export function generateCSharpQueryExpression(qe: QeQueryExpression): string {
 	if (qe.Distinct) props.push(["Distinct = true"]);
 	if (qe.NoLock) props.push(["NoLock = true"]);
 	if (qe.QueryHints) props.push([`QueryHints = ${csString(qe.QueryHints)}`]);
+	// <fetch datasource="retained">: long-term retained data instead of live data
+	if (qe.DataSource) props.push([`DataSource = ${csString(qe.DataSource)}`]);
 	const paging = emitPageInfo(qe.PageInfo);
 	if (paging) props.push(assign("PageInfo", paging));
 
@@ -70,13 +72,14 @@ export function generateCSharpQueryExpression(qe: QeQueryExpression): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function emitColumnSet(cs: QeColumnSet): Lines {
-	// Aggregate query: AttributeExpressions, with AllColumns left false (not the ColumnSet(bool) constructor)
+	const columns = cs.Columns?.length ? `new ColumnSet(${cs.Columns.map(csString).join(", ")})` : undefined;
+	// Aliased columns and aggregates: AttributeExpressions, next to any plain columns (both come back
+	// for <attribute name="a"/><attribute name="b" alias="x"/>), with AllColumns left false
 	if (cs.AttributeExpressions?.length) {
-		return block("new ColumnSet", [collection("AttributeExpressions", cs.AttributeExpressions.map(emitAttributeExpression))]);
+		return block(columns ?? "new ColumnSet", [collection("AttributeExpressions", cs.AttributeExpressions.map(emitAttributeExpression))]);
 	}
 	if (cs.AllColumns) return ["new ColumnSet(true)"];
-	if (!cs.Columns?.length) return ["new ColumnSet()"];
-	return [`new ColumnSet(${cs.Columns.map(csString).join(", ")})`];
+	return [columns ?? "new ColumnSet()"];
 }
 
 /** Whether a link's Columns says anything (an empty ColumnSet is the default) */
@@ -242,7 +245,8 @@ function formatValue(v: unknown): string {
 	if (typeof value === "boolean") return value ? "true" : "false";
 	if (typeof value === "number") return Number.isFinite(value) ? text : csString(text);
 	if (typeof value === "string") return GUID.test(value) && !type ? `new Guid(${csString(value)})` : csString(value);
-	return `/* ${JSON.stringify(value).replace(/\*\//g, "* /")} */ null`;
+	// Typed as object, like a lone null, so it can't bind to the params object[] overload
+	return `(object)null /* ${JSON.stringify(value).replace(/\*\//g, "* /")} */`;
 }
 
 /** A C# regular string literal: quotes, backslashes, line breaks and control characters escaped */

@@ -202,6 +202,11 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		const key = conversionKey(debouncedXml, environmentUrl);
 		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind])) return;
 		lastRequestedRef.current[kind] = key;
+		// Retrying a failed conversion: show it loading, not the old error
+		if (conversionsRef.current[kind]?.key === key) {
+			conversionsRef.current = { ...conversionsRef.current, [kind]: undefined };
+			setConversions((prev) => ({ ...prev, [kind]: undefined }));
+		}
 
 		const request =
 			kind === "queryexpression"

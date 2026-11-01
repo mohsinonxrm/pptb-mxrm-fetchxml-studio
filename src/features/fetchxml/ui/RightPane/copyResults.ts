@@ -51,13 +51,17 @@ export function cellText(record: Record<string, unknown>, column: CopyColumn, mo
  * Text a spreadsheet would read as a formula gets a leading apostrophe, so pasting rows into Excel
  * or Google Sheets shows the text instead of running it (#208). Formulas start with =, +, -, @, a
  * tab or a carriage return (OWASP, "CSV Injection"). A number's own sign is left alone: when the
- * raw value is a number or Yes/No, "-5" or "-$5.00" is just a negative number.
+ * raw value is a number and the text is a formatted number ("-5", "-$5.00", "-5,00 kr"). A choice
+ * label is shown for a numeric raw value too, so "-Other" or "+HYPERLINK(…)" still gets one.
  */
 export function spreadsheetSafe(text: string, raw?: unknown): string {
 	if (!/^[=+\-@\t\r]/.test(text)) return text;
-	if ((typeof raw === "number" || typeof raw === "boolean") && /^[+-]/.test(text)) return text;
+	if (typeof raw === "number" && FORMATTED_SIGNED_NUMBER.test(text)) return text;
 	return `'${text}`;
 }
+
+/** A sign, up to 4 characters of currency, digits with separators, up to 4 characters of currency or unit */
+const FORMATTED_SIGNED_NUMBER = /^[+-]\D{0,4}?\d[\d.,\s]*\D{0,4}$/;
 
 /** Quotes a value for TSV when it contains a tab, line break or quote */
 export function tsvField(text: string): string {
@@ -88,9 +92,12 @@ export function rowsToTsv(
 const safeCellText = (record: Record<string, unknown>, column: CopyColumn, mode: CopyValueMode): string =>
 	spreadsheetSafe(cellText(record, column, mode), record[column.sourceCol]);
 
-/** One column's values, one per line, no header (e.g. to paste into an "in" condition) */
+/**
+ * One column's values, one per line, no header (e.g. to paste into an "in" condition). Copied
+ * exactly, like a single cell: an apostrophe would end up in the condition's values.
+ */
 export function columnToText(records: Record<string, unknown>[], column: CopyColumn, mode: CopyValueMode = "shown"): string {
-	return records.map((r) => tsvField(safeCellText(r, column, mode))).join("\n");
+	return records.map((r) => tsvField(cellText(r, column, mode))).join("\n");
 }
 
 /** "1 row" / "3 rows" */

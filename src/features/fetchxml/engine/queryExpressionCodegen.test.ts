@@ -164,6 +164,51 @@ describe("C# QueryExpression from the Web API's response (#178)", () => {
 	});
 });
 
+describe("C# QueryExpression: plain and aliased columns, retained data (#178, shapes seen live)", () => {
+	// <fetch><entity name="account"><attribute name="name"/><attribute name="createdon" alias="created"/>
+	//   <link-entity name="contact" from="parentcustomerid" to="accountid" alias="c"><attribute name="fullname"/>
+	//   <attribute name="emailaddress1" alias="mail"/></link-entity></entity></fetch>
+	const aliased = (AttributeName: string, Alias: string) => ({ AttributeName, AggregateType: "None", Alias, HasGroupBy: false, DateTimeGrouping: "None" });
+	const mixed: QeQueryExpression = {
+		EntityName: "account",
+		ColumnSet: { AllColumns: false, Columns: ["name"], AttributeExpressions: [aliased("createdon", "created")] },
+		LinkEntities: [
+			{
+				LinkFromEntityName: "account",
+				LinkToEntityName: "contact",
+				LinkFromAttributeName: "accountid",
+				LinkToAttributeName: "parentcustomerid",
+				JoinOperator: "Inner",
+				EntityAlias: "c",
+				Columns: { AllColumns: false, Columns: ["fullname"], AttributeExpressions: [aliased("emailaddress1", "mail")] },
+			},
+		],
+	};
+
+	it("keeps the plain columns next to the aliased ones", () => {
+		const out = generateCSharpQueryExpression(mixed);
+		expect(out).toContain(
+			[
+				'    ColumnSet = new ColumnSet("name")',
+				"    {",
+				"        AttributeExpressions =",
+				"        {",
+				'            new XrmAttributeExpression("createdon", XrmAggregateType.None, "created"),',
+				"        },",
+				"    },",
+			].join("\n"),
+		);
+		expect(out).toContain('Columns = new ColumnSet("fullname")');
+		expect(out).toContain('new XrmAttributeExpression("emailaddress1", XrmAggregateType.None, "mail"),');
+	});
+
+	it('writes DataSource for <fetch datasource="retained">', () => {
+		const out = generateCSharpQueryExpression({ EntityName: "account", ColumnSet: { AllColumns: false, Columns: ["name"] }, DataSource: "retained" });
+		expect(out).toContain('    DataSource = "retained",');
+		expect(generateCSharpQueryExpression(Q.types)).not.toContain("DataSource");
+	});
+});
+
 describe("C# QueryExpression: cases outside the captured responses (#178)", () => {
 	it("OrderExpression takes (attribute, order, alias, entityName)", () => {
 		const query: QeQueryExpression = {
@@ -213,6 +258,10 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 	it("overload traps: a lone null, and two Yes/No values, compile to the intended constructor", () => {
 		expect(conditionCode({ AttributeName: "x", Operator: "Equal", Values: [null] })).toBe(
 			'new ConditionExpression("x", ConditionOperator.Equal, (object)null),',
+		);
+		// A value object the generator doesn't recognise is kept as a comment, typed the same way
+		expect(conditionCode({ AttributeName: "x", Operator: "Equal", Values: [{ Id: "1", LogicalName: "a" }] })).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, (object)null /* {"Id":"1","LogicalName":"a"} */),',
 		);
 		expect(
 			conditionCode({
