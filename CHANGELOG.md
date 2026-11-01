@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Closing the tool with unsaved Save view edits asks first (#264).** While the Save view dialog has changes to the name, description, view type or default setting, PPTB asks before the tool closes, as it does while a view saves.
 
+- **XML comments are reported when they're removed (#200).** The tree has nowhere to keep comments. They were dropped without a word; Parse to tree's "will change this query" confirmation now lists them under Removed, and loading a saved view that has comments says they're removed and that saving the view saves that change.
+
+- **The opportunity competitor picker matches `%`, `_` and `[` literally (#200),** as record search does: `contains()` treats them as wildcards, so `%` listed every competitor.
+
+- **A `>` inside a `<fetch>` attribute value no longer cuts the tag short (#200)** when the paging attributes are read or set, or the code snippets read it.
+
 - **Advisories follow-ups (#170).**
   - **Paging without a unique order** stays advice. Live, Dataverse broke ties by the primary key in every case tried, but that isn't documented, and [Order rows](https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging) still asks for a unique column. It now also applies when the query's results are paged (more than 5,000 rows, loaded by scrolling or Retrieve All), not only when the query sets `count` or `page`.
   - **Stale check:** after the query changes, an earlier **Check with Dataverse** no longer shows its findings or "Dataverse agrees" tags, and they aren't counted on the tab; they could describe a query Dataverse never saw. The status line says when it was checked and to check again.

@@ -154,3 +154,15 @@ describe("Retrieve All row limit (#183)", () => {
 		expect(retrieveAllLimitReached(10, 10)).toBe(true);
 	});
 });
+
+describe("a raw > inside a <fetch> attribute value (#200)", () => {
+	const xml = '<fetch mapping="a>b" count="50" page="3"><entity name="account" /></fetch>';
+
+	it("reads the paging attributes after it", () => {
+		expect(readFetchPagingOptions(xml)).toEqual({ count: 50, page: 3 });
+	});
+
+	it("sets the paging attributes without cutting the tag", () => {
+		expect(addPagingToFetchXml(xml, 4, undefined, 25)).toBe('<fetch mapping="a>b" page="4" count="25"><entity name="account" /></fetch>');
+	});
+});

@@ -245,6 +245,14 @@ function collectElementAttributes(
 }
 
 /** Unknown child element (including namespaced ones): Dataverse rejects it (0x8004111c). */
+/** The comment nodes in a parsed document, before the root element included (#200) */
+function countComments(doc: Document): number {
+	const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
+	let count = 0;
+	while (walker.nextNode()) count++;
+	return count;
+}
+
 function reportUnknownChild(child: Element, parentName: string, issues: ParseIssue[]): void {
 	issues.push({
 		message: `Unknown element <${child.nodeName}> inside <${parentName}> isn't valid FetchXML (Dataverse rejects it); Parse to tree drops it.`,
@@ -373,6 +381,19 @@ export function parseFetchXml(xmlString: string): ParseResult {
 			],
 			warnings: [],
 		};
+	}
+
+	// XML comments: the tree has nowhere to keep them, so Parse to tree removes them; say so, so the
+	// confirmation lists them rather than dropping them silently (#200)
+	const comments = countComments(doc);
+	if (comments > 0) {
+		issues.push({
+			// Worded for Parse to tree and for loading a saved view (getViewLoadNotice) alike
+			message: `XML comments aren't kept in the tree, so ${comments === 1 ? "1 comment is" : `${comments} comments are`} removed.`,
+			element: "fetch",
+			severity: "info",
+			kind: "dropped",
+		});
 	}
 
 	// Find the entity element (required)
