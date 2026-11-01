@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0-beta.18] - 2026-11-01
+
 ### 🔧 Changed
 
 - **Confirmations say how to undo the change, or that it can't be undone (#69).** The PPTB [marketplace policy](https://docs.powerplatformtoolbox.com/policies/marketplace) asks a confirmation to offer a way back where feasible and, when there's none, to say so plainly. Delete and Bulk delete already said "This action cannot be undone." Now:
@@ -24,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Rehearsal:** the workflow can run by hand as a rehearsal: every check and `npm publish --dry-run`, with no npm token and no GitHub Release. A manual run never publishes, even on a tag.
   - **`latest` can't move back:** a stable tag gets `latest` only for main's own version line, and a `support/X.Y` commit is checked first. Support branches merge forward into `main`, so before this, re-running a support release after that merge would have published it to `latest`.
   - **CI:** CI uses `npm ci --ignore-scripts` and the same pins, doesn't keep the checkout's token, and runs the runtime audit on this branch too.
-  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
+  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now, tracked in #262. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
 
 ## [1.5.0-beta.17] - 2026-10-31
 
