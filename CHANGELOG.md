@@ -186,6 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Changed
 
+- **README badges show in the ToolBox.** Power Platform ToolBox shows a tool's README in a window that only loads images from GitHub, so the `img.shields.io` badges didn't appear there. They're now SVG files in `assets/badges/`, linked from `raw.githubusercontent.com` as in Command Bar Studio, and generated from `package.json` by `npm run badges`: version, Power Platform ToolBox ≥ 1.2.7, `@pptb/types`, React, TypeScript, Fluent UI and license. The `@pptb/types` badge said 1.2.3; it now says 1.2.7. The version badge links to npm, in place of the npm badge. The links point at `main`, so the badges appear there with the 1.5.0 release.
+
 - **Close dialogs say how to undo too (#69).** As in 1.5.0-beta.18, for the Close actions added in 1.6 (#149):
   - **Win / Lose opportunity, Resolve case, Fulfill / Cancel order:** "To undo, run Activate on the records this changes. The close activities stay." Activate reopens them; a reopened opportunity's close activity becomes Canceled.
   - **Win / Close quote:** "There's no undo: won or closed quotes can't be reactivated here."
@@ -198,7 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
   - `package-lock.json`;
   - the CHANGELOG (a dated `[X.Y.Z]` section with entries, under `[Unreleased]`);
-  - the README badge;
+  - the README badges (current `assets/badges/` files, shown in the README, no `img.shields.io`);
   - after the build, the bundled icon (the Insider icon for pre-releases).
 
   The GitHub Release notes are now built from the CHANGELOG section, after a line on the channel and the PPTB requirement. GitHub's PR list follows, instead of the PR list alone, and a rehearsal previews them in the run summary. RELEASING.md has a table of what every release changes and an *After every release* checklist: the npm tag, the published icon, the tracking issue, the forward merge and deprecating the replaced version.

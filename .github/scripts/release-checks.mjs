@@ -1,15 +1,14 @@
 // What every release must update, checked against package.json's version (RELEASING.md):
-// the version's shape, package-lock.json, the CHANGELOG section, the README badge and the bundled
+// the version's shape, package-lock.json, the CHANGELOG section, the README badges and the bundled
 // icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by check-release.mjs;
 // pure functions, so they're unit tested (release-checks.test.mjs).
+
+import { badgeMarkdown, badges } from "./badges.mjs";
 
 /** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N: the shapes release.yml publishes */
 export const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(beta|rc)\.(0|[1-9]\d*))?$/;
 
 export const isPrerelease = (version) => version.includes("-");
-
-/** The shields.io badge path for a version: `-` is written `--` */
-export const badgeFor = (version) => `https://img.shields.io/badge/version-${version.replace(/-/g, "--")}-blue`;
 
 /** The CHANGELOG's `## [name] - date` headings, in order, with their bodies */
 export function changelogSections(changelog) {
@@ -28,9 +27,10 @@ const isIsoDate = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") && !Number.is
 
 /**
  * Problems with the release metadata, or [] when it's consistent.
- * @param {{ pkg: any, lock: any, changelog: string, readme: string }} files
+ * @param {{ pkg: any, lock: any, changelog: string, readme: string, badgeFiles: Record<string, string | undefined> }} files
+ *   badgeFiles: assets/badges/<file> contents by file name (undefined when missing)
  */
-export function checkReleaseFiles({ pkg, lock, changelog, readme }) {
+export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) {
 	const problems = [];
 	const version = pkg.version;
 	if (!VERSION_PATTERN.test(version ?? "")) {
@@ -56,9 +56,14 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme }) {
 	}
 	const duplicates = sections.filter((s) => s.name === version).length;
 	if (duplicates > 1) problems.push(`CHANGELOG.md has ${duplicates} [${version}] sections.`);
-	if (!readme.includes(badgeFor(version))) {
-		problems.push(`README.md's version badge isn't ${version}: expected ${badgeFor(version)}.`);
-	}
+	// README badges: files in assets/badges/ generated from package.json, linked from the README
+	// (PPTB's README viewer blocks img.shields.io)
+	const stale = badges(pkg).filter(({ file, svg }) => badgeFiles?.[file] !== svg).map(({ file }) => file);
+	if (stale.length > 0) problems.push(`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`);
+	const missing = badgeMarkdown(pkg).filter((line) => !readme.includes(line));
+	if (missing.length > 0) problems.push(`README.md doesn't show these badges: ${missing.join(" ")}`);
+	// An image (or <img>) from shields.io; a mention in the text is fine
+	if (/(\]\(|src=["']?)https?:\/\/img\.shields\.io/.test(readme)) problems.push("README.md uses img.shields.io, which PPTB's README viewer blocks: use the badges in assets/badges/.");
 	return problems;
 }
 
