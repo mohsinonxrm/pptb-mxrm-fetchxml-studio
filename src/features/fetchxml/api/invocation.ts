@@ -11,6 +11,8 @@
 
 import { getPrimaryConnection } from "./host";
 import { isGuid, normalizeGuid } from "./recordSearch";
+import { getViewById, type SavedView } from "./pptbClient";
+import { formatDataverseError } from "./dataverseErrors";
 
 /** The host invocation API as typed on the global window.toolboxAPI. */
 type ToolboxInvocationAPI = NonNullable<Window["toolboxAPI"]>["invocation"];
@@ -143,11 +145,15 @@ export async function getLaunchContext(): Promise<Record<string, unknown> | null
 /**
  * The action to take when consuming an inbound launch prefill:
  *  - "fetchxml": load this FetchXML into the builder (root entity is parsed from it)
+ *  - "view":     load this view as Load view does: layout, execution by ID, Save view overwrite (#197)
+ *  - "viewUnavailable": the view couldn't be read; say so (viewPrefillNotice, #197)
  *  - "entity":   start a fresh query rooted at this entity (metadata-driven)
  *  - null:       nothing to prefill (standalone launch or empty payload)
  */
 export type LaunchPrefillAction =
 	| { kind: "fetchxml"; fetchXml: string }
+	| { kind: "view"; view: SavedView; entityLogicalName: string }
+	| { kind: "viewUnavailable"; viewType: "system" | "personal"; id: string; error?: unknown }
 	| { kind: "entity"; entityLogicalName: string }
 	| null;
 
@@ -166,6 +172,7 @@ export type LaunchPrefillAction =
  */
 export async function resolveLaunchPrefill(
 	context: Record<string, unknown> | null,
+	readView: typeof getViewById = getViewById,
 ): Promise<LaunchPrefillAction> {
 	if (!context) return null;
 	const prefill = context as FetchXmlStudioLaunchPrefill;
@@ -175,8 +182,16 @@ export async function resolveLaunchPrefill(
 	}
 
 	if (prefill.viewRef && typeof prefill.viewRef.id === "string") {
-		const fetchXml = await resolveViewRefFetchXml(prefill.viewRef);
-		return fetchXml ? { kind: "fetchxml", fetchXml } : null;
+		const viewType = prefill.viewRef.entityLogicalName === "userquery" ? "personal" : "system";
+		const { id } = prefill.viewRef;
+		// The id goes into $filter unquoted, so it must be a GUID (#176); anything else can't exist
+		if (!isGuid(id)) return { kind: "viewUnavailable", viewType, id };
+		try {
+			const found = await readView(viewType, normalizeGuid(id));
+			return found ? { kind: "view", ...found } : { kind: "viewUnavailable", viewType, id };
+		} catch (error) {
+			return { kind: "viewUnavailable", viewType, id, error };
+		}
 	}
 
 	if (typeof prefill.entityLogicalName === "string" && prefill.entityLogicalName.trim() !== "") {
@@ -187,39 +202,18 @@ export async function resolveLaunchPrefill(
 }
 
 /**
- * The query that reads a view's FetchXML by reference (savedquery / userquery), or null when the id
- * isn't a GUID: it comes from another tool's prefill and goes into $filter unquoted (#176).
+ * The notification for a view another tool asked for that couldn't be opened (#197): not found or
+ * not readable, or Dataverse's error. The id is cut short if it's long: it isn't always a GUID.
  */
-export function viewRefFetchXmlQuery(viewRef: { id: string; entityLogicalName: "savedquery" | "userquery" }): string | null {
-	if (!isGuid(viewRef.id)) return null;
-	const isPersonal = viewRef.entityLogicalName === "userquery";
-	const setName = isPersonal ? "userqueries" : "savedqueries";
-	const idField = isPersonal ? "userqueryid" : "savedqueryid";
-	return `${setName}?$select=${idField},fetchxml&$filter=${idField} eq ${normalizeGuid(viewRef.id)}`;
-}
-
-/**
- * Retrieve a view's FetchXML by reference. Reuses the same dataverseAPI.queryData
- * route that the entity → view picker uses to read view definitions (savedquery /
- * userquery), filtered to a single record by id.
- */
-async function resolveViewRefFetchXml(viewRef: {
-	id: string;
-	entityLogicalName: "savedquery" | "userquery";
-}): Promise<string | null> {
-	const dataverse = window.dataverseAPI;
-	if (!dataverse) return null;
-
-	const query = viewRefFetchXmlQuery(viewRef);
-	if (!query) {
-		console.warn("FetchXML Studio: ignoring a view reference whose id isn't a GUID:", viewRef.id);
-		return null;
-	}
-	const result = await dataverse.queryData(query);
-	const record = result.value?.[0];
-	const fetchXml = record?.fetchxml;
-
-	return typeof fetchXml === "string" && fetchXml.trim() !== "" ? fetchXml : null;
+export function viewPrefillNotice(
+	action: Extract<LaunchPrefillAction, { kind: "viewUnavailable" }>,
+): { title: string; body: string; type: "error" } {
+	const id = action.id.length > 60 ? `${action.id.slice(0, 57)}…` : action.id;
+	const body =
+		action.error === undefined
+			? `The tool that launched FetchXML Studio asked for a ${action.viewType} view (${id}) that doesn't exist or that you can't read.`
+			: `The tool that launched FetchXML Studio asked for a ${action.viewType} view, but Dataverse returned an error: ${formatDataverseError(action.error)}`;
+	return { title: "Couldn't open the view", body, type: "error" };
 }
 
 /** Return data to the invoking tool. No-op when this tool was not launched via T2T. */
