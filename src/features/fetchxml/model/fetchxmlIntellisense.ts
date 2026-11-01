@@ -277,10 +277,13 @@ function createCompletionItem(
 	};
 }
 
+/** Which models a provider answers for; the others (such as the LayoutXML viewer) get nothing (#194) */
+type ModelFilter = (model: Monaco.editor.ITextModel) => boolean;
+
 /**
  * Register FetchXML completion provider with Monaco
  */
-export function registerFetchXmlIntellisense(monaco: typeof Monaco): Monaco.IDisposable {
+export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: ModelFilter): Monaco.IDisposable {
 	return monaco.languages.registerCompletionItemProvider("xml", {
 		triggerCharacters: ["<", " ", "=", '"', "'"],
 
@@ -288,6 +291,7 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco): Monaco.IDis
 			model: Monaco.editor.ITextModel,
 			position: Monaco.Position
 		): Monaco.languages.ProviderResult<Monaco.languages.CompletionList> {
+			if (appliesTo && !appliesTo(model)) return undefined;
 			const word = model.getWordUntilPosition(position);
 			const range: Monaco.IRange = {
 				startLineNumber: position.lineNumber,
@@ -444,12 +448,13 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco): Monaco.IDis
 /**
  * Get FetchXML hover information
  */
-export function registerFetchXmlHoverProvider(monaco: typeof Monaco): Monaco.IDisposable {
+export function registerFetchXmlHoverProvider(monaco: typeof Monaco, appliesTo?: ModelFilter): Monaco.IDisposable {
 	return monaco.languages.registerHoverProvider("xml", {
 		provideHover(
 			model: Monaco.editor.ITextModel,
 			position: Monaco.Position
 		): Monaco.languages.ProviderResult<Monaco.languages.Hover> {
+			if (appliesTo && !appliesTo(model)) return null;
 			const word = model.getWordAtPosition(position);
 			if (!word) return null;
 
@@ -509,4 +514,45 @@ export function registerFetchXmlHoverProvider(monaco: typeof Monaco): Monaco.IDi
 			return null;
 		},
 	});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One registration for every FetchXML editor (#194)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Editors showing FetchXML: the providers answer only for their models */
+const fetchXmlEditors = new Set<Monaco.editor.ICodeEditor>();
+let registration: { monaco: typeof Monaco; disposables: Monaco.IDisposable[] } | undefined;
+
+const isFetchXmlModel: ModelFilter = (model) => [...fetchXmlEditors].some((editor) => editor.getModel() === model);
+
+/**
+ * Gives an editor FetchXML completions and hovers. The providers are registered once, however
+ * often editors mount (the editor remounts on every connection change), and removed when the last
+ * editor's handle is disposed. Other XML editors, such as the LayoutXML viewer, don't get them.
+ */
+export function attachFetchXmlLanguageFeatures(monaco: typeof Monaco, editor: Monaco.editor.ICodeEditor): Monaco.IDisposable {
+	if (registration?.monaco !== monaco) {
+		registration?.disposables.forEach((d) => d.dispose());
+		registration = {
+			monaco,
+			disposables: [
+				registerFetchXmlIntellisense(monaco, isFetchXmlModel),
+				registerFetchXmlHoverProvider(monaco, isFetchXmlModel),
+			],
+		};
+	}
+	fetchXmlEditors.add(editor);
+	let disposed = false;
+	return {
+		dispose() {
+			if (disposed) return;
+			disposed = true;
+			fetchXmlEditors.delete(editor);
+			if (fetchXmlEditors.size === 0 && registration) {
+				registration.disposables.forEach((d) => d.dispose());
+				registration = undefined;
+			}
+		},
+	};
 }

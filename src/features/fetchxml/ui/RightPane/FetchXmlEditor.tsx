@@ -45,10 +45,7 @@ import { generateFetchXml } from "../../model/fetchxml";
 import { copyText } from "../../api/host";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import { ParseChangesDialog } from "./ParseChangesDialog";
-import {
-	registerFetchXmlIntellisense,
-	registerFetchXmlHoverProvider,
-} from "../../model/fetchxmlIntellisense";
+import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -423,9 +420,9 @@ export function FetchXmlEditor({
 	const handleEditorMount = useCallback(
 		(editor: MonacoEditor.editor.IStandaloneCodeEditor, monaco: typeof MonacoEditor) => {
 			editorRef.current = editor;
-			// Register FetchXML intellisense (only in editor mode, but register once)
-			registerFetchXmlIntellisense(monaco);
-			registerFetchXmlHoverProvider(monaco);
+			// FetchXML completions and hovers for this editor only, released with it (#194)
+			const languageFeatures = attachFetchXmlLanguageFeatures(monaco, editor);
+			editor.onDidDispose(() => languageFeatures.dispose());
 		},
 		[],
 	);

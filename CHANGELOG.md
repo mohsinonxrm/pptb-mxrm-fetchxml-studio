@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **FetchXML editor suggestions and hovers no longer pile up (#194).**
+  - **Before:** the editor registered its FetchXML completion and hover providers each time it mounted and never removed them. It remounts on every connection change, so after a few changes each suggestion and hover appeared several times, and memory grew over the session. The providers also answered in the read-only LayoutXML viewer.
+  - **Now:** they're registered once, apply only to the FetchXML editor, and are removed when it goes.
+
 - **Metadata that couldn't load is reported, with Retry (#201).**
   - **Before:** when an entity's columns or details failed to load (a missing privilege, throttling, the network), the property editors silently fell back to free text, the relationship picker showed only "Error loading relationships", and failed display names silently became logical names. "Nothing to show" and "the request failed" looked the same.
   - **Now:** the property editor shows a warning, "Couldn't load columns for account" (or entity details), with Dataverse's reason and **Retry**; the editor still works with free text. The relationship picker shows the reason under the box with **Retry**, and when only display names failed, the list works with logical names and a hint says why. A failed relationship load also no longer crashes the Properties panel, which is what happened before (the error box's Combobox had no selection list). Retry reloads what failed; what loaded comes from the cache. The design was reviewed with the owner.
