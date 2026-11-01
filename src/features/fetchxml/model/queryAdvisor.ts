@@ -281,7 +281,13 @@ function linkLookup(fetch: FetchNode): (key: string | undefined) => LinkEntityNo
  * Advice that needs attribute metadata (#97). Pure. An entity whose metadata isn't in `metadata`
  * (not loaded yet, or the request failed) is skipped, so nothing is guessed.
  */
-export function adviseQueryMetadata(fetch: FetchNode, metadata: AdvisorMetadata): RuleFinding[] {
+/** What the advisor knows about the query's results (#170) */
+export interface AdvisorContext {
+	/** This query's results came in more than one page (Load more, Retrieve All) */
+	resultsPaged?: boolean;
+}
+
+export function adviseQueryMetadata(fetch: FetchNode, metadata: AdvisorMetadata, context: AdvisorContext = {}): RuleFinding[] {
 	const findings: RuleFinding[] = [];
 	const push = (f: RuleFinding) => findings.push(f);
 	const { orders } = walk(fetch);
@@ -350,16 +356,20 @@ export function adviseQueryMetadata(fetch: FetchNode, metadata: AdvisorMetadata)
 	// key would defeat distinct.
 	// https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging
 	// https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
+	// Kept as advice (#170): live, Dataverse broke ties by the primary key in every case tried, but
+	// that isn't documented. Paged means the query sets count or page, or its results came in more
+	// than one page: FetchXML Studio pages any query past 5,000 rows (Load more, Retrieve All).
 	const root = fetch.entity;
 	const primaryId = metadata.get(root.name)?.primaryIdAttribute;
-	const paged = options.count !== undefined || options.page !== undefined;
+	const pagedByQuery = options.count !== undefined || options.page !== undefined;
+	const paged = pagedByQuery || context.resultsPaged === true;
 	if (primaryId && paged && !aggregate && !options.distinct && options.top === undefined && orders.length > 0) {
 		const unique = root.orders.some((o) => o.attribute === primaryId && (!o.entityname || o.entityname === root.name));
 		if (!unique) {
 			// Dataverse applies link-entity orders after the entity's orders (order-rows › Process
 			// link-entity orders first), so a key added to the entity wouldn't be the last order
 			const linkOrders = orders.some(({ container }) => container.type === "link-entity");
-			const problem = `The query is paged, but no order is on a unique attribute such as ${primaryId}, so records can repeat or go missing between pages.`;
+			const problem = `${pagedByQuery ? "The query is paged" : "The results came in more than one page"}, but no order is on a unique attribute such as ${primaryId}, so records can repeat or go missing between pages.`;
 			push({ element: "entity", nodeId: root.id, severity: "info", kind: "advice", rule: "paging-order", target: primaryId,
 				message: linkOrders
 					? `${problem} Dataverse sorts by link-entity orders after the entity's orders: to end with ${primaryId}, first move them to the entity with entityname.`

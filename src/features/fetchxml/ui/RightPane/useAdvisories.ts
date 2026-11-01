@@ -15,15 +15,18 @@ import type { FetchNode } from "../../model/nodes";
  * Metadata for the metadata rules: attribute types and SourceType for every entity in the query,
  * String MaxLength, and the root's primary key. Undefined parts mean "not loaded" (still loading,
  * no connection, or the request failed), and the rules that need them are skipped.
+ *
+ * Loaded only once `enabled` (#170): from the Advisories tab's first open, not as soon as an entity
+ * is chosen (in the spirit of #71). The tab's count then grows when it's opened.
  */
-export function useAdvisorMetadata(fetch: FetchNode | null | undefined): AdvisorMetadata | undefined {
+export function useAdvisorMetadata(fetch: FetchNode | null | undefined, enabled = true): AdvisorMetadata | undefined {
 	const root = fetch?.entity.name;
 	const names = fetch ? advisorEntityNames(fetch) : [];
 	const key = names.join(",");
 	const [state, setState] = useState<{ key: string; metadata: AdvisorMetadata } | undefined>();
 
 	useEffect(() => {
-		if (!root || !key || !isDataverseAvailable()) return;
+		if (!enabled || !root || !key || !isDataverseAvailable()) return;
 		let cancelled = false;
 		const entities = key.split(",");
 		Promise.all(
@@ -57,7 +60,7 @@ export function useAdvisorMetadata(fetch: FetchNode | null | undefined): Advisor
 		return () => {
 			cancelled = true;
 		};
-	}, [root, key]);
+	}, [root, key, enabled]);
 
 	return state && state.key === `${root}|${key}` ? state.metadata : undefined;
 }

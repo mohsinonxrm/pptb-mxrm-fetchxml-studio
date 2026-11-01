@@ -51,6 +51,7 @@ import {
 	getParseToTreeChanges,
 } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
+import { DATAVERSE_DEFAULT_PAGE_SIZE } from "../../api/pageRecovery";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import {
@@ -506,16 +507,25 @@ export function PreviewTabs({
 		if (fetchQuery && parsed.canonical === xml) return { fetch: fetchQuery, key: xml, inTree: true, editorInvalid: false };
 		return { fetch: parsed.fetchNode, key: parsed.canonical, inTree: false, editorInvalid: false };
 	}, [isEditorModeActive, editorText, fetchQuery, xml]);
-	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch);
+	// The metadata rules' metadata loads from the tab's first open (#170)
+	const [advisoriesOpened, setAdvisoriesOpened] = useState(false);
+	if (selectedTab === "advisories" && !advisoriesOpened) setAdvisoriesOpened(true);
+	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch, advisoriesOpened);
 	const dataverseCheck = useDataverseCheck();
 	const checkResult = dataverseCheck.result;
+	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
+	// The results of this query came in more than one page (Load more, Retrieve All, #170)
+	const resultQueryXml = useMemo(() => (result?.query ? generateFetchXml(result.query) : undefined), [result?.query]);
+	const resultsPaged =
+		!!result && (result.moreRecords === true || result.rows.length > DATAVERSE_DEFAULT_PAGE_SIZE) && resultQueryXml === advisorySubject.key;
 	const { advisories, added } = useMemo((): { advisories: Advisory[]; added: number } => {
 		const subject = advisorySubject.fetch;
 		if (!subject) return { advisories: [], added: 0 };
-		const own = collectAdvisories(subject, advisorMetadata);
-		return checkResult ? mergeDataverseCheck(subject, own, checkResult.check) : { advisories: own, added: 0 };
-	}, [advisorySubject.fetch, advisorMetadata, checkResult]);
-	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
+		const own = collectAdvisories(subject, advisorMetadata, { resultsPaged });
+		// A check of an earlier query isn't shown or counted until Check again (#170); its status
+		// line still says when it was
+		return checkResult && !checkStale ? mergeDataverseCheck(subject, own, checkResult.check) : { advisories: own, added: 0 };
+	}, [advisorySubject.fetch, advisorMetadata, checkResult, checkStale, resultsPaged]);
 	const checkDisabledReason = !isDataverseAvailable()
 		? "Dataverse isn't available here. Open FetchXML Studio in Power Platform ToolBox."
 		: connectionKey === ""

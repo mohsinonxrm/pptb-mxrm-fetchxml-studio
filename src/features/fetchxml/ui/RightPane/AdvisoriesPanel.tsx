@@ -125,7 +125,10 @@ function statusText(p: Pick<AdvisoriesPanelProps, "checking" | "checkedAt" | "st
 	if (p.checking) return "Checking with Dataverse…";
 	if (!p.checkedAt) return "From FetchXML Studio. Dataverse can also check choice and large text attributes.";
 	const time = p.checkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-	return p.stale ? `Checked with Dataverse at ${time}. The query has changed since.` : `Checked with Dataverse at ${time}. ${p.added} new.`;
+	// A stale check's findings aren't shown (#170): they could describe a query Dataverse never saw
+	return p.stale
+		? `Checked with Dataverse at ${time}. The query has changed since: check again to see Dataverse's findings.`
+		: `Checked with Dataverse at ${time}. ${p.added} new.`;
 }
 
 const NOT_IN_TREE = "The editor's FetchXML isn't in the tree yet. Use Parse to tree first.";
