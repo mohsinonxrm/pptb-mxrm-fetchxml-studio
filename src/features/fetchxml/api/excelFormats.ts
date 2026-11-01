@@ -19,7 +19,8 @@ export function decimalNumberFormat(precision: number | undefined): string {
 
 /**
  * How many decimals a formatted amount shows. The last "." or "," is the decimal separator unless
- * it groups thousands: three digits after it, no other separator before it, and a whole number.
+ * it groups thousands. With exactly three digits after it, both readings are tried and the one
+ * closer to the raw amount wins ("¥1,235" for 1235 has none, "BD 1.234" for 1.234 has three).
  */
 export function decimalsShown(formatted: string, raw: number): number | undefined {
 	const m = /([.,])(\d+)\D*$/.exec(formatted);
@@ -27,9 +28,12 @@ export function decimalsShown(formatted: string, raw: number): number | undefine
 	const [, separator, digits] = m;
 	if (digits.length !== 3) return digits.length;
 	const before = formatted.slice(0, m.index);
-	const otherSeparator = separator === "." ? "," : ".";
-	const groupsThousands = !before.includes(otherSeparator) && Number.isInteger(raw);
-	return groupsThousands ? 0 : 3;
+	if (before.includes(separator === "." ? "," : ".")) return 3;
+	const whole = before.replace(/\D/g, "");
+	const asDecimals = Number(`${whole || "0"}.${digits}`);
+	const asThousands = Number(`${whole}${digits}`);
+	const amount = Math.abs(raw);
+	return Math.abs(asDecimals - amount) < Math.abs(asThousands - amount) ? 3 : 0;
 }
 
 /**
@@ -41,10 +45,11 @@ export function moneyNumberFormat(formatted: unknown, raw: number, precision?: n
 	const decimals = precision ?? (text ? decimalsShown(text, raw) : undefined) ?? 2;
 	const number = groupedNumberFormat(decimals);
 	if (!text) return number;
-	// The symbol and any space next to it; signs and brackets of negative amounts aren't part of it
-	const unsigned = text.replace(/^[-−(\s]+|[)\s]+$/g, "");
-	const prefix = /^[^\d]+/.exec(unsigned)?.[0] ?? "";
-	const suffix = /[^\d]+$/.exec(unsigned)?.[0] ?? "";
+	// The symbol and any space next to it. Signs and brackets of negative amounts aren't part of it,
+	// wherever Dataverse's negative currency format puts them ("$-1.00", "1.00-$", "1.00 $-")
+	const sign = /[-−()]/g;
+	const prefix = (/^[^\d]+/.exec(text)?.[0] ?? "").replace(sign, "").replace(/^\s+/, "");
+	const suffix = (/[^\d]+$/.exec(text)?.[0] ?? "").replace(sign, "").replace(/\s+$/, "");
 	const literal = (s: string) => `"${s.replace(/"/g, "")}"`;
 	if (prefix.trim()) return `${literal(prefix)}${number}`;
 	if (suffix.trim()) return `${number}${literal(suffix)}`;

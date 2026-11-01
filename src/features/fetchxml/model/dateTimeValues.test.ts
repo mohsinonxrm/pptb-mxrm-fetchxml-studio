@@ -5,13 +5,15 @@ import {
 	formatConditionDate,
 	formatOffset,
 	parseConditionDate,
-	pickerDateToWallClock,
+	pickerDate,
+	pickerTime,
 	resultWallClock,
 	timeZoneFromUserSettings,
 	toWallClock,
 	utcOffsetMinutes,
-	wallClockToPickerDate,
 	wallClockToUtcMs,
+	withPickedDate,
+	withPickedTime,
 	type DataverseTimeZone,
 	type WallClock,
 } from "./dateTimeValues";
@@ -185,9 +187,37 @@ describe("showing a condition's value in the picker (#198, #207)", () => {
 		expect(parseConditionDate("", ctx)).toBeUndefined();
 	});
 
-	it("carries a wall clock through the picker's Date unchanged, whatever the browser's time zone", () => {
-		const w = wall(2024, 3, 14, 9, 30, 15);
-		expect(pickerDateToWallClock(wallClockToPickerDate(w))).toEqual(w);
+	it("a User Local column with a date-only format: eq honours an offset, on ignores it (as Dataverse does)", () => {
+		const userLocalDateFormat = { Format: "DateOnly", DateTimeBehavior: { Value: "UserLocal" } };
+		// 23:00 UTC is 08:00 the next day in Tokyo
+		expect(parseConditionDate("2024-03-14T23:00:00+00:00", dateValueContext(userLocalDateFormat, "eq", TOKYO))).toMatchObject({ day: 15 });
+		expect(parseConditionDate("2024-03-14T23:00:00+00:00", dateValueContext(userLocalDateFormat, "on", TOKYO))).toMatchObject({ day: 14 });
+	});
+
+	it("can't show a User Local instant while the time zone is unknown; other values still show", () => {
+		expect(parseConditionDate("2024-03-13T23:00:00.000Z", dateValueContext(dt, "eq", undefined))).toBeUndefined();
+		expect(parseConditionDate("2024-03-14T09:00:00", dateValueContext(dt, "eq", undefined))).toEqual(wall(2024, 3, 14, 9));
+		expect(parseConditionDate("2024-03-14", dateValueContext(dateOnly, "eq", undefined))).toEqual(wall(2024, 3, 14));
+		expect(parseConditionDate("2024-03-14T09:00:00Z", dateValueContext(tzi, "eq", undefined))).toEqual(wall(2024, 3, 14, 9));
+	});
+});
+
+describe("the pickers' Dates (#207)", () => {
+	it("gives the date picker the date and the time picker the time on a day without clock changes", () => {
+		// 02:30 on 10 March 2024 doesn't exist in a Pacific browser; on the anchor day it does
+		const w = wall(2024, 3, 10, 2, 30, 15);
+		const date = pickerDate(w);
+		expect([date.getFullYear(), date.getMonth() + 1, date.getDate()]).toEqual([2024, 3, 10]);
+		const time = pickerTime(w);
+		expect([time.getHours(), time.getMinutes(), time.getSeconds()]).toEqual([2, 30, 15]);
+	});
+
+	it("picking a date keeps the time; picking a time keeps the date", () => {
+		const w = wall(2024, 3, 10, 2, 30);
+		expect(withPickedDate(w, new Date(2024, 3, 2), false)).toEqual(wall(2024, 4, 2, 2, 30));
+		expect(withPickedDate(w, new Date(2024, 3, 2), true)).toEqual(wall(2024, 4, 2));
+		expect(withPickedDate(undefined, new Date(2024, 3, 2), false)).toEqual(wall(2024, 4, 2));
+		expect(withPickedTime(w, new Date(2000, 0, 15, 17, 45))).toEqual(wall(2024, 3, 10, 17, 45));
 	});
 });
 

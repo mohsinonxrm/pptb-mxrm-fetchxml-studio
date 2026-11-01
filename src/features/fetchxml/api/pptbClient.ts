@@ -903,12 +903,17 @@ async function retrieveUserTimeZone(): Promise<DataverseTimeZone | undefined> {
 		const settings = (await window.dataverseAPI!.queryData(
 			`usersettingscollection(${user.UserId})?$select=${USER_SETTINGS_TIME_ZONE_COLUMNS.join(",")}`,
 		)) as Record<string, unknown>;
+		// The name is only for the hint: without it, the rules still apply
 		let name = "";
 		if (typeof settings.timezonecode === "number") {
-			const definitions = (await window.dataverseAPI!.queryData(
-				`timezonedefinitions?$select=standardname&$filter=timezonecode eq ${settings.timezonecode}`,
-			)) as { value?: { standardname?: string }[] };
-			name = definitions.value?.[0]?.standardname ?? "";
+			try {
+				const definitions = (await window.dataverseAPI!.queryData(
+					`timezonedefinitions?$select=standardname&$filter=timezonecode eq ${settings.timezonecode}`,
+				)) as { value?: { standardname?: string }[] };
+				name = definitions.value?.[0]?.standardname ?? "";
+			} catch (error) {
+				console.error("Failed to read the time zone's name:", error);
+			}
 		}
 		return timeZoneFromUserSettings(settings, name);
 	} catch (error) {
@@ -927,19 +932,22 @@ export interface FormattingMetadata {
 }
 
 /**
- * The formats and behaviours of an entity's date and money attributes (#184), which the attribute
- * list doesn't include: one request per type. Memoized per connection.
+ * The formats and behaviours of an entity's date attributes, and the precision of its money,
+ * decimal and floating point ones (#184), which the attribute list doesn't include: one request
+ * per type. Memoized per connection.
  */
 export function loadFormattingMetadata(entityLogicalName: string): Promise<Map<string, FormattingMetadata>> {
 	return memoizeForSession(`formatting:${entityLogicalName}`, async () => {
 		const result = new Map<string, FormattingMetadata>();
 		if (!isDataverseAvailable()) return result;
 		const base = `EntityDefinitions(LogicalName='${odataString(entityLogicalName)}')/Attributes`;
-		const [dates, money] = await Promise.all([
+		const responses = await Promise.all([
 			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DateTimeAttributeMetadata?$select=LogicalName,Format,DateTimeBehavior`),
 			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.MoneyAttributeMetadata?$select=LogicalName,Precision,PrecisionSource`),
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DecimalAttributeMetadata?$select=LogicalName,Precision`),
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DoubleAttributeMetadata?$select=LogicalName,Precision`),
 		]);
-		for (const row of [...((dates as { value?: unknown[] }).value ?? []), ...((money as { value?: unknown[] }).value ?? [])]) {
+		for (const row of responses.flatMap((response) => (response as { value?: unknown[] }).value ?? [])) {
 			const { LogicalName, ...meta } = row as FormattingMetadata & { LogicalName: string };
 			result.set(LogicalName, meta);
 		}

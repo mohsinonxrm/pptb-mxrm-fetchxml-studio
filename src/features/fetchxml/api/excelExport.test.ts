@@ -80,6 +80,9 @@ describe("exportToExcelLocal", () => {
 			entityName: "account",
 			fileName: "accounts",
 			timeZone: UTC_TIME_ZONE,
+			formattingMetadata: new Map([
+				["account", new Map<string, FormattingMetadata>([["createdon", { Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } }]])],
+			]),
 		});
 
 		expect(fileName).toMatch(/^accounts_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.xlsx$/);
@@ -282,11 +285,24 @@ describe("exportToExcelLocal: currencies, precision, dates and time zones (#184)
 		expect(sheet.getRow(2).getCell(3).numFmt).toBeFalsy();
 	});
 
-	it("labels User Local date-times (UTC) when the time zone couldn't be read", async () => {
+	it("labels User Local date-times (UTC) when the time zone couldn't be read, date-only format too", async () => {
 		const sheet = await run({ timeZone: undefined });
 		expect(sheet.getRow(1).getCell(4).value).toBe("lastonholdtime (UTC)");
 		expect(sheet.getRow(2).getCell(4).value).toEqual(new Date(Date.UTC(2024, 2, 14, 20, 0)));
-		// Other date columns don't depend on a time zone
+		expect(sheet.getRow(1).getCell(7).value).toBe("followup (UTC)");
+		expect(sheet.getRow(2).getCell(7).value).toEqual(new Date(Date.UTC(2024, 2, 14)));
+		// Date Only and Time Zone Independent columns don't depend on a time zone
 		expect(sheet.getRow(1).getCell(5).value).toBe("birthdate");
+		expect(sheet.getRow(1).getCell(6).value).toBe("checkin");
+	});
+
+	it("writes the formatted text for a date column whose behaviour couldn't be loaded", async () => {
+		const sheet = await run({
+			timeZone: TOKYO,
+			formattingMetadata: new Map(),
+			records: [{ fullname: "x", checkin: "2024-03-14T23:30:00Z", [`checkin${FV}`]: "3/14/2024 11:30 PM" }],
+		});
+		expect(sheet.getRow(1).getCell(6).value).toBe("checkin");
+		expect(sheet.getRow(2).getCell(6).value).toBe("3/14/2024 11:30 PM");
 	});
 });

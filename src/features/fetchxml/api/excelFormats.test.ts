@@ -29,9 +29,19 @@ describe("Excel number formats (#184)", () => {
 		expect(moneyNumberFormat("¥1,235", 1235)).toBe('"¥"#,##0');
 	});
 
-	it("negative amounts: the sign and brackets aren't part of the symbol", () => {
+	it("negative amounts: the sign and brackets aren't part of the symbol, wherever they are", () => {
 		expect(moneyNumberFormat("-$5.00", -5)).toBe('"$"#,##0.00');
 		expect(moneyNumberFormat("($5.00)", -5)).toBe('"$"#,##0.00');
+		expect(moneyNumberFormat("$-1,234.50", -1234.5)).toBe('"$"#,##0.00');
+		expect(moneyNumberFormat("1,234.50-$", -1234.5)).toBe('#,##0.00"$"');
+		expect(moneyNumberFormat("1,234.50 $-", -1234.5)).toBe('#,##0.00" $"');
+		expect(moneyNumberFormat("$ -1,234.50", -1234.5)).toBe('"$ "#,##0.00');
+	});
+
+	it("three digits after the separator: the reading closer to the amount", () => {
+		expect(decimalsShown("¥1,235", 1234.5)).toBe(0);
+		expect(decimalsShown("KD 1.000", 1)).toBe(3);
+		expect(decimalsShown("KD 1.000", 1000)).toBe(0);
 	});
 
 	it("uses the column's precision when it's set, and a plain format without a formatted value", () => {

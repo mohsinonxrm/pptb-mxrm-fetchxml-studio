@@ -10,24 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔧 Fixed
 
 - **The local Excel export keeps each record's currency and shows dates as the grid does (#184).**
-  - **Money:** amounts were always formatted with `$`, so a EUR, GBP or INR amount showed a dollar sign. Each cell now uses its record's currency symbol and decimals from Dataverse's formatted value (`€1.234,50` → `"€"#,##0.00`, `¥1,235` → no decimals). A column with a fixed precision uses it.
-  - **Dates:** date-times were written in UTC while the grid shows your Dataverse time zone. They now match the grid. Date Only columns are written as dates (`yyyy-mm-dd`, no `00:00:00`), and Time Zone Independent columns as stored. Raw values (raw mode, and the "(Raw)" columns) are in UTC, and the header says "(UTC)"; so does the header when your time zone couldn't be read.
+  - **Money:** amounts were always formatted with `$`, so a EUR, GBP or INR amount showed a dollar sign. Each cell now uses its record's currency symbol and decimals from Dataverse's formatted value (`€1.234,50` → `"€"#,##0.00`, `¥1,235` → no decimals), wherever your negative currency format puts the sign. A column with a fixed precision uses it.
+  - **Dates:** date-times were written in UTC while the grid shows your Dataverse time zone. They now match the grid. Date Only columns are written as dates (`yyyy-mm-dd`, no `00:00:00`), and Time Zone Independent columns as stored. Raw values (raw mode, and the "(Raw)" columns) are in UTC, and the header says "(UTC)"; so does the header when your time zone couldn't be read. If a column's date behaviour couldn't be loaded, its formatted text is written.
   - **Raw mode** wrote formatted numbers. Raw values now have no number format, apart from dates.
-  - **Precision 0:** a decimal column with precision 0 got the format `0.`, which shows a trailing point. It's `0` now.
+  - **Decimal places:** decimal and floating point columns always got two decimals, because their precision wasn't loaded, and precision 0 would have given `0.`. They now use the column's precision (`0` for none).
   - **Grid fallbacks:** when a cell has no formatted value, Money no longer gets a `$`, and a Date Only value is no longer shown as the day before west of UTC.
 
 - **Picked dates filter on the day and time you picked (#207, #198).**
-  - **Before:** the date picker wrote every value as a UTC instant from the browser's time zone (`toISOString()`), whatever the column. Checked live on a sandbox:
-    - **on / on-or-before / on-or-after** compare a date, and Dataverse takes it from the value as written, so the date could shift. Anyone east of UTC who picked 14 March got `2024-03-13T23:00:00.000Z` and filtered on the 13th; west of UTC, picking an evening time did the same to the next day.
-    - **Date Only columns** compare the written date the same way.
-    - **Time Zone Independent columns** compare the time as written, so values were off by the browser's offset.
-    - **Other date and time columns** used the browser's time zone, not your Dataverse one: on the sandbox (Dataverse UTC, computer Pacific), picking 09:00 filtered on 16:00.
-    - The picker also showed Date Only values as the day before for anyone west of UTC (#198).
+  - **Before:** the date picker wrote every value as a UTC instant from the browser's time zone (`toISOString()`), whatever the column. Checked live on a sandbox, that went wrong whenever the computer's time zone differed from your Dataverse one (on the sandbox, Dataverse UTC and the computer Pacific):
+    - **Date and time columns** were filtered in the computer's time zone, not your Dataverse one: picking 09:00 filtered on 16:00.
+    - **on / on-or-before / on-or-after** take the date of that instant in your Dataverse time zone, so near midnight the date shifted. For example, a computer in Sydney with Dataverse set to UTC turned 14 March into `2024-03-13T23:00:00.000Z`, the 13th.
+    - **Time Zone Independent columns** compare the time as written, so values were off by the computer's offset.
+    - The picker showed Date Only values as the day before for anyone west of UTC (#198); the value written was right.
   - **Now:** values are written the way Dataverse reads them:
     - `2024-03-14` for Date Only columns, date-only formats and the **on** operators. Those take a date only, so the time picker is hidden.
     - The wall clock for Time Zone Independent columns: `2024-03-14T09:00:00`.
     - The wall clock with your Dataverse time zone's offset for other date and time columns: `2024-03-14T09:00:00+09:00`. It reads like what you picked, and it's exact.
-  - **The pickers:** they show values in the same terms, so a Date Only value is never the day before. The time picker says which time zone applies ("Time in your Dataverse time zone (Tokyo Standard Time)"). The time zone is your Dataverse Personal Options setting, read once per connection, including daylight saving.
+  - **The pickers:** they show values in the same terms, so a Date Only value is never the day before. The time picker says which time zone applies ("Time in your Dataverse time zone (Tokyo Standard Time)"). The time zone is your Dataverse Personal Options setting, read once per connection, including its current daylight-saving rule (for dates in years when your time zone followed other rules, the offset can be an hour out).
   - **Loaded FetchXML** keeps its values as written until you pick a new date.
 
 - **The generated C# QueryExpression compiles and means what the query does (#178).**

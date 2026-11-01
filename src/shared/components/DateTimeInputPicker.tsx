@@ -20,9 +20,13 @@ import {
 	dateValueContext,
 	formatConditionDate,
 	parseConditionDate,
-	pickerDateToWallClock,
+	pickerDate,
+	pickerTime,
 	timeZoneHint,
-	wallClockToPickerDate,
+	withPickedDate,
+	withPickedTime,
+	TIME_PICKER_ANCHOR,
+	type WallClock,
 } from "../../features/fetchxml/model/dateTimeValues";
 import { useDataverseTimeZone } from "../hooks/useDataverseTimeZone";
 
@@ -76,50 +80,41 @@ export function DateTimeInputPicker({
 	const styles = useStyles();
 	const timeZone = useDataverseTimeZone();
 	const ctx = dateValueContext(attribute, operator, timeZone);
-	const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-	const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+	// The value's wall clock: the pickers get Dates made from it, never the other way round (#207)
+	const [wall, setWall] = useState<WallClock | undefined>(undefined);
 	const [timePickerValue, setTimePickerValue] = useState<string>("");
 
-	// Sync selected date/time with prop value
-	const { behavior, dateOnly } = ctx;
+	// Sync the wall clock with the value; nothing is written back here, so loaded values stay as written
+	const { behavior, dateOnly, dateOperator } = ctx;
 	useEffect(() => {
-		const wall = value ? parseConditionDate(value, { behavior, dateOnly, timeZone }) : undefined;
-		if (wall) {
-			const dateValue = wallClockToPickerDate(wall);
-			setSelectedDate(dateValue);
-			if (!dateOnly) {
-				setSelectedTime(dateValue);
-				setTimePickerValue(formatDateToTimeString(dateValue));
-			}
-		} else {
-			setSelectedDate(null);
-			setSelectedTime(null);
-			setTimePickerValue("");
-		}
-	}, [value, behavior, dateOnly, timeZone]);
+		const parsed = value ? parseConditionDate(value, { behavior, dateOnly, dateOperator, timeZone }) : undefined;
+		setWall(parsed);
+		setTimePickerValue(parsed && !dateOnly ? formatDateToTimeString(pickerTime(parsed)) : "");
+	}, [value, behavior, dateOnly, dateOperator, timeZone]);
+
+	const selectedDate = wall ? pickerDate(wall) : null;
+	const selectedTime = wall && !ctx.dateOnly ? pickerTime(wall) : null;
+	// A value the picker can't show (or an instant while the time zone is unknown) is kept as it is
+	const unreadable = value && !wall ? `Current value: ${value}` : undefined;
 
 	// Parse min/max dates
 	const minDate = attribute.MinSupportedValue ? new Date(attribute.MinSupportedValue) : undefined;
 	const maxDate = attribute.MaxSupportedValue ? new Date(attribute.MaxSupportedValue) : undefined;
 
-	/** Writes the picked date with a time (or midnight) */
-	const write = (date: Date, time: Date | null) => {
-		const wall = pickerDateToWallClock(date);
-		const withTime =
-			!ctx.dateOnly && time
-				? { ...wall, hour: time.getHours(), minute: time.getMinutes(), second: time.getSeconds() }
-				: { ...wall, hour: 0, minute: 0, second: 0 };
-		onChange(formatConditionDate(withTime, ctx));
+	/** Writes a picked wall clock */
+	const write = (next: WallClock) => {
+		setWall(next);
+		onChange(formatConditionDate(next, ctx));
 	};
 
 	// Handle date selection
 	const handleDateChange = (date: Date | null | undefined) => {
-		setSelectedDate(date ?? null);
 		if (!date) {
+			setWall(undefined);
 			onChange(undefined);
 			return;
 		}
-		write(date, selectedTime);
+		write(withPickedDate(wall, date, ctx.dateOnly));
 	};
 
 	// Handle time selection (only when the time counts)
@@ -127,9 +122,8 @@ export function DateTimeInputPicker({
 		_ev: unknown,
 		data: { selectedTime: Date | null; selectedTimeText?: string }
 	) => {
-		setSelectedTime(data.selectedTime);
 		setTimePickerValue(data.selectedTimeText ?? "");
-		if (selectedDate && data.selectedTime) write(selectedDate, data.selectedTime);
+		if (wall && data.selectedTime) write(withPickedTime(wall, data.selectedTime));
 	};
 
 	// Handle time input (freeform)
@@ -140,16 +134,19 @@ export function DateTimeInputPicker({
 	if (ctx.dateOnly) {
 		// Only the date counts: just show DatePicker
 		return (
-			<DatePicker
-				value={selectedDate}
-				onSelectDate={handleDateChange}
-				placeholder={placeholder}
-				disabled={disabled}
-				minDate={minDate}
-				maxDate={maxDate}
-				allowTextInput
-				className={styles.datePicker}
-			/>
+			<div className={styles.root}>
+				<DatePicker
+					value={selectedDate}
+					onSelectDate={handleDateChange}
+					placeholder={placeholder}
+					disabled={disabled}
+					minDate={minDate}
+					maxDate={maxDate}
+					allowTextInput
+					className={styles.datePicker}
+				/>
+				{unreadable && <span className={styles.hint}>{unreadable}</span>}
+			</div>
 		);
 	}
 
@@ -171,7 +168,7 @@ export function DateTimeInputPicker({
 				<TimePicker
 					placeholder="Select time"
 					freeform
-					dateAnchor={selectedDate ?? undefined}
+					dateAnchor={TIME_PICKER_ANCHOR}
 					selectedTime={selectedTime}
 					onTimeChange={handleTimeChange}
 					value={timePickerValue}
@@ -180,6 +177,7 @@ export function DateTimeInputPicker({
 					className={styles.timePicker}
 				/>
 			</div>
+			{unreadable && <span className={styles.hint}>{unreadable}</span>}
 			{hint && <span className={styles.hint}>{hint}</span>}
 		</div>
 	);

@@ -57,6 +57,8 @@ export interface TransitionRule {
 /**
  * The user's Dataverse time zone (Personal Options), from UserSettings. Bias is in minutes with
  * UTC = local + bias, as in Windows; the daylight rules are absent where there's no daylight saving.
+ * UserSettings holds the current rule only: for a date in a year when the time zone followed other
+ * rules (the US before 2007, Mexico before 2023), the offset can differ from Dataverse's by an hour.
  */
 export interface DataverseTimeZone {
 	/** e.g. "UTC", "Tokyo Standard Time" */
@@ -174,8 +176,10 @@ export function formatOffset(minutes: number): string {
 /** How a value is written and read: the column's behaviour, whether only the date counts, the time zone */
 export interface DateValueContext {
 	behavior: DateTimeBehaviorName;
-	/** A date-only format, or an "on" operator */
+	/** A date-only format, or an "on" operator: written as YYYY-MM-DD */
 	dateOnly: boolean;
+	/** An "on" operator: Dataverse ignores an explicit offset (not Z) in its value */
+	dateOperator: boolean;
 	/** The user's Dataverse time zone; when unknown, User Local values are written without an offset (Dataverse then reads them in the user's time zone) */
 	timeZone?: DataverseTimeZone;
 }
@@ -187,9 +191,11 @@ export function dateValueContext(
 	timeZone: DataverseTimeZone | undefined,
 ): DateValueContext {
 	const behavior = dateTimeBehavior(attribute);
+	const dateOperator = DATE_ONLY_OPERATORS.has(operator ?? "");
 	return {
 		behavior,
-		dateOnly: behavior === "DateOnly" || attribute?.Format === "DateOnly" || DATE_ONLY_OPERATORS.has(operator ?? ""),
+		dateOnly: behavior === "DateOnly" || attribute?.Format === "DateOnly" || dateOperator,
+		dateOperator,
 		timeZone,
 	};
 }
@@ -206,8 +212,9 @@ const VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})
 
 /**
  * A condition value as the wall clock to show in the picker, read the way Dataverse reads it
- * (see the top of this file); undefined when it isn't a date the picker can show. `YYYY-MM-DD`
- * is that date, never shifted by a time zone (#198).
+ * (see the top of this file); undefined when it isn't a date the picker can show, including a
+ * User Local instant while the user's time zone is unknown. `YYYY-MM-DD` is that date, never
+ * shifted by a time zone (#198).
  */
 export function parseConditionDate(value: string, ctx: DateValueContext): WallClock | undefined {
 	const m = VALUE_PATTERN.exec(value.trim());
@@ -218,10 +225,12 @@ export function parseConditionDate(value: string, ctx: DateValueContext): WallCl
 	// Dataverse ignores the zone for Date Only and Time Zone Independent columns, and an explicit
 	// offset (but not Z) for the "on" operators
 	const zoneIgnored =
-		!zone || ctx.behavior !== "UserLocal" || (ctx.dateOnly && zone.toUpperCase() !== "Z") || !ctx.timeZone;
+		!zone || ctx.behavior !== "UserLocal" || (ctx.dateOperator && zone.toUpperCase() !== "Z");
 	if (zoneIgnored) return literal;
+	// An instant can't be shown in a time zone that isn't known
+	if (!ctx.timeZone) return undefined;
 	const offsetMinutes = zone.toUpperCase() === "Z" ? 0 : zoneMinutes(zone);
-	return toWallClock(wallMs(literal) - offsetMinutes * 60_000, ctx.timeZone!);
+	return toWallClock(wallMs(literal) - offsetMinutes * 60_000, ctx.timeZone);
 }
 
 function zoneMinutes(zone: string): number {
@@ -245,19 +254,41 @@ export function timeZoneHint(ctx: DateValueContext, timeZone: DataverseTimeZone 
 // Pickers and Excel
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Fluent's date and time pickers work with Date objects in the browser's time zone; a wall clock
- * is carried as the Date with the same local reading, whatever the browser's time zone.
+/*
+ * Fluent's date and time pickers work with Date objects in the browser's time zone. The picker
+ * keeps the wall clock itself and gives them separate Dates: the date at local midnight, and the
+ * time on a fixed day without a daylight-saving change, so a time that doesn't exist in the
+ * browser's own time zone that day (02:30 when its clocks spring forward) isn't moved an hour.
  */
-export const wallClockToPickerDate = (w: WallClock): Date => new Date(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
 
-export const pickerDateToWallClock = (d: Date): WallClock => ({
-	year: d.getFullYear(),
-	month: d.getMonth() + 1,
-	day: d.getDate(),
-	hour: d.getHours(),
-	minute: d.getMinutes(),
-	second: d.getSeconds(),
+/** The day the time picker's Dates are anchored to: no time zone changes its clocks on 15 January 2000 */
+export const TIME_PICKER_ANCHOR = new Date(2000, 0, 15);
+
+/** The DatePicker's Date for a wall clock (its date at local midnight) */
+export const pickerDate = (w: WallClock): Date => new Date(w.year, w.month - 1, w.day);
+
+/** The TimePicker's Date for a wall clock (its time on the anchor day) */
+export const pickerTime = (w: WallClock): Date => new Date(2000, 0, 15, w.hour, w.minute, w.second);
+
+/** A wall clock with a picked date; the time is kept unless only the date counts */
+export function withPickedDate(current: WallClock | undefined, date: Date, dateOnly: boolean): WallClock {
+	const keepTime = !dateOnly && current;
+	return {
+		year: date.getFullYear(),
+		month: date.getMonth() + 1,
+		day: date.getDate(),
+		hour: keepTime ? current.hour : 0,
+		minute: keepTime ? current.minute : 0,
+		second: keepTime ? current.second : 0,
+	};
+}
+
+/** A wall clock with a picked time (the Date's reading, whatever day it's on) */
+export const withPickedTime = (current: WallClock, time: Date): WallClock => ({
+	...current,
+	hour: time.getHours(),
+	minute: time.getMinutes(),
+	second: time.getSeconds(),
 });
 
 /**

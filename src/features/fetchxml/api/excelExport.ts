@@ -136,10 +136,10 @@ export async function exportToExcelLocal(
 	const zone = timeZone ?? UTC_TIME_ZONE;
 	const isUtcDateTime = (col: string, raw: boolean): boolean => {
 		const attr = getAttrMeta(col);
+		// A User Local value's date or time depends on the time zone, date-only format or not
 		return (
 			attr?.AttributeType === "DateTime" &&
-			dateTimeBehavior(attr) === "UserLocal" &&
-			attr.Format !== "DateOnly" &&
+			attr.DateTimeBehavior?.Value === "UserLocal" &&
 			(raw || !timeZone)
 		);
 	};
@@ -209,9 +209,13 @@ export async function exportToExcelLocal(
 		rawValue: unknown,
 		attr: (AttributeMetadata & FormattingMetadata) | undefined,
 		raw: boolean,
+		formattedValue?: unknown,
 	): unknown => {
 		if (rawValue instanceof Date) return rawValue;
 		if (typeof rawValue !== "string") return rawValue;
+		// Without the column's behaviour (its metadata didn't load), a converted value could be wrong
+		// for Time Zone Independent columns: the formatted text is what the grid shows
+		if (!raw && !attr?.DateTimeBehavior?.Value && formattedValue !== undefined) return String(formattedValue);
 		const behavior = dateTimeBehavior(attr);
 		const dateFormat = attr?.Format === "DateOnly";
 		const wall = resultWallClock(rawValue, behavior, raw && behavior === "UserLocal" && !dateFormat ? UTC_TIME_ZONE : zone);
@@ -269,7 +273,7 @@ export async function exportToExcelLocal(
 				return typeof rawValue === "number" ? rawValue : parseFloat(String(rawValue));
 
 			case "DateTime":
-				return excelDate(rawValue, attr, false);
+				return excelDate(rawValue, attr, false, formattedValue);
 
 			case "Picklist":
 			case "State":
