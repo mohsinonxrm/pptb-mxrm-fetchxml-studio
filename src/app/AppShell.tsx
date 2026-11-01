@@ -1494,7 +1494,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					),
 				),
 				loadUserTimeZone(),
-				import("../features/fetchxml/api/excelExport"),
+				// The chunk is gone if the tool was updated while open; the browser caches the failure
+				import("../features/fetchxml/api/excelExport").catch(() => {
+					throw new Error("Couldn't load the Excel exporter. Reload the tool and try again.");
+				}),
 			]);
 
 			const { buffer, fileName: finalFileName } = await exportToExcelLocal({
