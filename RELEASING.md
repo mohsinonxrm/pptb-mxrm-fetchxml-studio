@@ -134,9 +134,24 @@ tagged commit:
 | `vX.Y.Z` | `main` | `latest` | latest |
 | `vX.Y.Z` | `support/X.Y` | `support-X.Y` | not marked latest |
 
-Any other tag fails before publishing. It then runs the tests, validation and build,
-publishes to npm with provenance and creates the GitHub Release. Afterwards, replace the
-generated release notes with the CHANGELOG section.
+Any other tag fails before publishing. Afterwards, replace the generated release notes with
+the CHANGELOG section.
+
+It runs as three jobs, so the code that installs and runs dependencies never holds publishing
+rights (#188):
+
+| Job | Permissions | What it does |
+|---|---|---|
+| `build` | read the repository | Checks the tag and chooses the channel; `npm ci --ignore-scripts`; the runtime audit (no high or critical findings), lint, tests, validation, build (with the type check), the DOMPurify check; packs the tarball and checks its contents. |
+| `publish` | npm OIDC token (`id-token: write`) | Installs nothing: downloads the tarball and publishes it with provenance, with npm pinned to a version at least 14 days old. |
+| `github-release` | write the repository | Creates the GitHub Release. |
+
+Actions are pinned by full commit SHA (the tag in a comment); Dependabot proposes newer ones
+after the 14-day cooldown. To move the npm pin, change the version in the `publish` job.
+
+**Rehearse a release** before the first tag on a branch whose workflow changed: Actions →
+*Release* → *Run workflow* on that branch runs the same jobs with `npm publish --dry-run` and
+creates no GitHub Release.
 
 ## One-time setup
 

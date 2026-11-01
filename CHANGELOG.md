@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🏗️ Technical
+
+- **Release workflow hardening (#188).**
+  - **Separate jobs:** `release.yml` is split into `build`, `publish` and `github-release`. The job that installs and runs the dependencies (`npm ci --ignore-scripts`, tests, build) only reads the repository. Only `publish` can get the npm OIDC token, and it installs nothing: it publishes the tarball `build` packed. Only `github-release` can write to the repository.
+  - **More checks before publishing:** the release build now also runs the runtime audit, lint and the package-contents check, so a tag on a commit that skipped CI can't publish.
+  - **Pinned versions:** npm is pinned to 11.21.1 instead of `npm@latest`. Actions are pinned by commit SHA (checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2, download-artifact v8.0.2), each at least 14 days old, the project's dependency rule.
+  - **Rehearsal:** the workflow can run by hand as a rehearsal (`npm publish --dry-run`, no GitHub Release).
+  - **CI:** CI uses `npm ci --ignore-scripts` and the same pins, doesn't keep the checkout's token, and runs the runtime audit on this branch too.
+  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
+
 ## [1.5.0-beta.17] - 2026-10-31
 
 ### 🔧 Fixed
