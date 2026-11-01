@@ -48,6 +48,23 @@ the newer branch in a small companion PR instead.
 target branch's version and its `[Unreleased]` section on top, and add the incoming dated
 sections in version order.
 
+## Every release: what changes
+
+Each release-prep PR (beta, rc, stable, hotfix or support) changes exactly these, and nothing else
+needs a manual edit:
+
+| What | How | Checked by |
+|---|---|---|
+| **Version** (semver: `X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`) in `package.json` and `package-lock.json` | `npm version X.Y.Z[-beta.N] --no-git-tag-version` updates both | `check-release.mjs` (CI and `release.yml`); the tag must match too |
+| **CHANGELOG** | Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add an empty `## [Unreleased]` above it | `check-release.mjs`: the newest section is the version, dated, with entries |
+| **README** version badge | `version-X.Y.Z--beta.N-blue` (shields.io writes `-` as `--`) | `check-release.mjs` |
+| **Icon** | Nothing to do: the build bundles the gold Insider icon for `-beta.N` / `-rc.N` and the release icon for `X.Y.Z` | `check-release.mjs --dist` compares `dist/icons/icon.svg` with the right source |
+| **npm package** | Published by `release.yml` on the tag, with provenance, to `beta`, `latest` or `support-X.Y` | `release.yml` |
+| **GitHub Release** | Created by `release.yml` on the tag: pre-release for betas, latest for stable on `main`. Its notes are the channel, the PPTB requirement and the CHANGELOG section, then GitHub's PR list | `release.yml` |
+
+CI runs `check-release.mjs` on every PR and push, so a release-prep PR that misses one of them
+fails before it merges; on other PRs it confirms the branch is still consistent.
+
 ## Release lifecycle
 
 ### 1. Feature freeze: cut the release branch
@@ -64,10 +81,10 @@ git switch dev && git pull && git switch -c release/1.5 && git push -u origin re
 
 1. On a branch from `release/1.5`: `npm version 1.5.0-beta.13 --no-git-tag-version`,
    rename `## [Unreleased]` to `## [1.5.0-beta.13] - YYYY-MM-DD` (add a new empty
-   `## [Unreleased]` above it), update the README version badge, and PR it into
-   `release/1.5`.
-2. Tag that commit on `release/1.5`: `git switch release/1.5 && git pull && git tag v1.5.0-beta.13 && git push origin v1.5.0-beta.13`.
-3. Merge `release/1.5` into `dev` (merge commit) so `dev` has the fixes.
+   `## [Unreleased]` above it), update the README version badge (see *Every release: what
+   changes*), and PR it into `release/1.5`.
+2. Tag the PR's merge commit on `release/1.5`: `git switch release/1.5 && git pull && git tag v1.5.0-beta.13 && git push origin v1.5.0-beta.13`.
+3. Run *After every release* (below), then merge `release/1.5` into `dev` (merge commit) so `dev` has the fixes.
 
 `-beta.N` and `-rc.N` publish to the npm `beta` tag as a GitHub pre-release; `latest`
 doesn't change. The build bundles the gold Insider icon for pre-releases.
@@ -91,13 +108,13 @@ Before promoting a beta to `latest`:
    `[1.4.2]`), and the README badge.
 2. PR `release/1.5` → `main`, merged with a merge commit.
 3. Tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
-4. Merge `main` into `dev` (merge commit), then delete `release/1.5`.
+4. Run *After every release*, then merge `main` into `dev` (merge commit) and delete `release/1.5`.
 
 ## Hotfixes (to the current stable release)
 
 1. Branch `hotfix/1.4.3` from `main`; fix, set the version (`1.4.3`), date its CHANGELOG
    section, update the badge; PR into `main` (merge commit).
-2. Tag `v1.4.3` on `main` → npm `latest`.
+2. Tag `v1.4.3` on `main` → npm `latest`, then run *After every release*.
 3. Merge `main` forward into `release/*` (if one is open) and `dev`, keeping each target's
    version and `[Unreleased]` entries.
 
@@ -137,18 +154,19 @@ tagged commit:
 `support/X.Y` is checked first: it merges forward into `main`, so an older line's commit can
 be on `main` too, and it must never move `latest` back.
 
-Any other tag fails before publishing. Afterwards, replace the generated release notes with
-the CHANGELOG section.
+Any other tag fails before publishing. The GitHub Release notes are built from the CHANGELOG
+section (`check-release.mjs --notes`); edit the release afterwards only to add context, such as
+how a fix was verified or a known issue.
 
 It runs in separate jobs, so the code that installs and runs dependencies never holds
 publishing rights (#188):
 
 | Job | Runs on | Permissions | What it does |
 |---|---|---|---|
-| `build` | always | read the repository | Checks the tag and chooses the channel; `npm ci --ignore-scripts` (no cache); the runtime audit (no high or critical findings), lint, tests, validation, build (with the type check), the DOMPurify check; packs the tarball and checks its contents. |
+| `build` | always | read the repository | Checks the tag and chooses the channel; checks the release metadata (`check-release.mjs`); `npm ci --ignore-scripts` (no cache); the runtime audit (no high or critical findings), lint, tests, validation, build (with the type check), the bundled icon, the DOMPurify check; writes the release notes (previewed in the run summary); packs the tarball and checks its contents. |
 | `publish` | tag push only | npm OIDC token (`id-token: write`) | Installs no project dependencies: downloads the tarball and publishes it with provenance. |
 | `rehearse` | manual run only | none | `npm publish --dry-run` of the tarball, without provenance or an npm token. |
-| `github-release` | tag push only | write the repository | Creates the GitHub Release. |
+| `github-release` | tag push only | write the repository | Creates the GitHub Release with the notes `build` wrote. |
 
 Node (24.22.0), npm (11.21.1) and the actions (by full commit SHA, the tag in a comment) are
 pinned to versions at least 14 days old. Dependabot proposes newer actions on `dev`; other
@@ -162,6 +180,21 @@ once `dev` has the manual trigger). It runs every check and `npm publish --dry-r
 creates no GitHub Release. npm's dry run refuses a version that's already published, so on an
 unbumped branch the rehearsal stops with a notice after the checks. It doesn't exercise the
 npm token exchange or provenance signing. A manual run never publishes, even on a tag.
+
+## After every release
+
+1. **npm:** `npm view @mohsinonxrm/pptb-fetchxml-studio dist-tags` shows the new version on its
+   tag. The registry can take a few minutes to show it after the run.
+2. **Icon:** unpack the published tarball (`npm pack @mohsinonxrm/pptb-fetchxml-studio@X.Y.Z` in an
+   empty folder) and compare `package/dist/icons/icon.svg` with `icons/icon-insider.svg` (betas) or
+   `icons/icon.svg`.
+3. **GitHub Release:** add any context the CHANGELOG doesn't carry.
+4. **Tracking issue:** comment on the release's tracking issue (the soak restarts with each beta).
+5. **Forward merge** into the newer branches (*Where a fix goes*).
+6. **Deprecate** the version it replaces (the previous beta, or the previous patch), with the
+   same message as before. The owner runs it, since npm asks for 2FA:
+   `npm deprecate @mohsinonxrm/pptb-fetchxml-studio@<old> "No longer supported. Install the latest release (npm tag latest) or the current beta (npm tag beta)."`
+7. **Milestone:** close it when its stable release ships.
 
 ## One-time setup
 

@@ -25,6 +25,9 @@ jobs:
           cache: npm
       # Like the release build (#188): only esbuild and fsevents have install scripts, and neither needs them
       - run: npm ci --ignore-scripts
+      # The version, package-lock.json, the CHANGELOG section and the README badge agree (RELEASING.md)
+      - name: Check the release metadata
+        run: node .github/scripts/check-release.mjs
       - name: Audit runtime dependencies (no high or critical findings)
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
@@ -32,6 +35,8 @@ jobs:
       - run: npm test
       - run: npm run validate
       - run: npm run build
+      - name: Check the bundled icon (Insider for pre-releases)
+        run: node .github/scripts/check-release.mjs --dist
       - name: Check the bundled DOMPurify (Monaco ships its own; vite.config.ts replaces it)
         run: node .github/scripts/check-dompurify.mjs
       - name: Check package contents
