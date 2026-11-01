@@ -210,13 +210,19 @@ export function SetStateDialog({
 							scope={{ kind: "records", count }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
-						{plan && plan.kind !== "none" && (
-							<UndoNote undo="possible">
-								To undo, select the records and run {action === "activate" ? "Deactivate" : "Activate"}
-								{plan.transitionsEnforced ? ", if this entity's status reason transitions allow it." : "."}
-								{plan.kind === "choose" && " The previous status reason isn't restored, so set it again if needed."}
-							</UndoNote>
-						)}
+						{plan && plan.kind !== "none" &&
+							(plan.undo.available ? (
+								<UndoNote undo="possible">
+									To undo, run {action === "activate" ? "Deactivate" : "Activate"} on the records this changes
+									{plan.undo.transitionsEnforced ? ", if this entity's status reason transitions allow it." : "."}
+									{plan.undo.picksStatusReason && " The previous status reason isn't restored, so set it again if needed."}
+								</UndoNote>
+							) : (
+								<UndoNote undo="none">
+									There's no undo here: this entity has no {action === "activate" ? "inactive" : "active"} state to go
+									back to.
+								</UndoNote>
+							))}
 						{plan?.kind === "none" && (
 							<MessageBar intent="warning" layout="multiline">
 								<MessageBarBody>

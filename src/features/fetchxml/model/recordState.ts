@@ -194,11 +194,28 @@ export interface StateGroup {
 	choices: StatusChoice[];
 }
 
+/** The way back from a state change (#69): what the opposite action can set */
+export interface StateUndo {
+	/** The opposite action has a state to set */
+	available: boolean;
+	/** It offers more than one status reason, so the previous one isn't restored by itself */
+	picksStatusReason: boolean;
+	/** Status reason transitions are enforced, so going back may not be allowed */
+	transitionsEnforced: boolean;
+}
+
+/** The way back from Activate or Deactivate: the opposite action's target states (#69) */
+export function stateUndo(model: EntityStateModel, action: StateAction): StateUndo {
+	const back = targetStates(model, action === "activate" ? "deactivate" : "activate");
+	const reasons = back.flatMap((state) => statusesOfState(model, state.value));
+	return { available: reasons.length > 0, picksStatusReason: reasons.length > 1, transitionsEnforced: model.enforceTransitions };
+}
+
 export type StatePlan =
 	/** One target, no choice (simple entities) */
-	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string; transitionsEnforced?: true }
+	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string; undo: StateUndo }
 	/** The user picks a status reason, grouped by state */
-	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string; transitionsEnforced?: true }
+	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string; undo: StateUndo }
 	/** Nothing to do, and why */
 	| { kind: "none"; reason: string };
 
@@ -232,8 +249,7 @@ export function planStateChange(
 			target: { statecode: state.value, statuscode },
 			stateLabel: state.label,
 			statusLabel,
-			// The way back may not be allowed either (#69)
-			...(model.enforceTransitions && { transitionsEnforced: true as const }),
+			undo: stateUndo(model, action),
 		};
 	}
 
@@ -261,7 +277,7 @@ export function planStateChange(
 		groups,
 		defaultTarget: { statecode: first.statecode, statuscode: preselected.statuscode },
 		note: filter.note,
-		...(model.enforceTransitions && { transitionsEnforced: true as const }),
+		undo: stateUndo(model, action),
 	};
 }
 

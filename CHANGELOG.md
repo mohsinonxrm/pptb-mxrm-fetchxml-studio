@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Confirmations say how to undo the change, or that it can't be undone (#69).** The PPTB [marketplace policy](https://docs.powerplatformtoolbox.com/policies/marketplace) asks a confirmation to offer a way back where feasible and, when there's none, to say so plainly. Delete and Bulk delete already said "This action cannot be undone." Now:
   - **Run workflow:** "There's no undo: whatever the workflow changes stays changed."
-  - **Save view, overwriting a view:** "There's no undo: the view's current definition is replaced. To keep it, use Save as instead." Publishing a system view adds "Publishing makes the change visible to all users."
-  - **Activate / Deactivate:** "To undo, select the records and run Deactivate" (or Activate). For an entity that enforces status reason transitions it adds "if this entity's status reason transitions allow it". When you pick the status reason, it adds that the previous one isn't restored.
+  - **Save view, overwriting a view:** "There's no undo: the view's current definition is replaced. To keep it, cancel and use Save as instead." For a managed system view, it says that removing the view's unmanaged layer in Power Apps brings the managed definition back.
+  - **Activate / Deactivate:** "To undo, run Deactivate (or Activate) on the records this changes." For an entity that enforces status reason transitions, it adds "if this entity's status reason transitions allow it". When going back offers more than one status reason, it adds that the previous one isn't restored.
 - **README:** "What this tool changes" says where each operation's way back is, and that the publisher and solution you pick are remembered per environment on your machine.
 
 ### 🏗️ Technical

@@ -10,7 +10,8 @@ import { ArrowUndo20Regular, Warning20Regular } from "@fluentui/react-icons";
 const useStyles = makeStyles({
 	row: {
 		display: "flex",
-		alignItems: "center",
+		// The icon stays on the first line when the text wraps
+		alignItems: "flex-start",
 		gap: tokens.spacingHorizontalS,
 	},
 	none: {

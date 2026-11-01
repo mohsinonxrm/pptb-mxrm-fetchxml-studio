@@ -629,12 +629,23 @@ export function SaveViewDialog({
 					<DialogContent className={styles.content}>
 						{/* Environment and scope (#69) */}
 						<TargetScope entityLogicalName={entityLogicalName} scope={{ kind: "text", text: scopeText }} />
-						{isOverwriteMode && loadedView && !isOverwriteBlocked && (
-							<UndoNote undo="none">
-								There's no undo: the view's current definition is replaced. To keep it, use Save as instead.
-								{loadedView.type === "system" && shouldPublish && " Publishing makes the change visible to all users."}
-							</UndoNote>
-						)}
+						{isOverwriteMode &&
+							loadedView &&
+							!isOverwriteBlocked &&
+							!isCheckingAccess &&
+							(isManagedOverwrite ? (
+								// Removing the unmanaged layer brings the managed definition back:
+								// https://learn.microsoft.com/power-apps/maker/data-platform/solution-layers#remove-an-unmanaged-layer
+								<UndoNote undo="possible">
+									To undo, remove the view's unmanaged layer in Power Apps (Solution layers): the managed definition
+									comes back.
+								</UndoNote>
+							) : (
+								<UndoNote undo="none">
+									There's no undo: the view's current definition is replaced. To keep it, cancel and use Save as
+									instead.
+								</UndoNote>
+							))}
 
 						{/* Validation Section */}
 						<div className={styles.validationSection}>
