@@ -27,7 +27,6 @@ import {
 	LONG_RUNNING_RETRY,
 	RetryStoppedError,
 	retryDelayMs,
-	withThrottleRetry,
 	type ThrottleRetryOptions,
 } from "./throttleRetry";
 import { statePatchBody, type StateTarget } from "../model/recordState";
@@ -69,9 +68,11 @@ export function isRecordNotFound(result: BatchResult): boolean {
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+/** Service protection error codes: number of requests, execution time, concurrent requests */
+const SERVICE_PROTECTION_CODES = new Set(["0x80072322", "0x80072321", "0x80072326"]);
 /** An operation the batch answered with a service protection error: Dataverse didn't run it */
 const isThrottledResult = (result: BatchResult) =>
-	result.status === 429 || isServiceProtectionError({ code: batchResultError(result).code, message: "" });
+	result.status === 429 || SERVICE_PROTECTION_CODES.has(batchResultError(result).code?.toLowerCase() ?? "");
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface RecordBatchOptions {
@@ -122,9 +123,14 @@ interface RecordOperation {
 /**
  * Sends one batch, retrying while Dataverse throttles it (LONG_RUNNING_RETRY, #183): the whole
  * batch when it's rejected, and otherwise only the operations it answered with a service protection
- * error, which Dataverse didn't run. After each wait, `shouldContinue` is asked again (#175): the
- * connection can change in place during a wait, and resent requests would run in the new
- * environment. `onWait` gets the wait in seconds, for the progress text.
+ * error, which Dataverse didn't run. One retry budget covers both, so the waits stay within the
+ * policy. A throttled operation's Retry-After is honoured; a longer one than the policy allows
+ * isn't waited for.
+ *
+ * After each wait, `shouldContinue` is asked again (#175): the connection can change in place
+ * during a wait, and resent requests would run in the new environment. If it says stop before
+ * anything ran, RetryStoppedError is thrown; once some operations ran, the ones not sent again are
+ * undefined in the result. `onWait` gets the wait in seconds, for the progress text.
  */
 async function sendWithRetry(
 	requests: BatchRequest[],
@@ -136,35 +142,44 @@ async function sendWithRetry(
 		random?: () => number;
 		policy?: ThrottleRetryOptions;
 	},
-): Promise<BatchResult[]> {
-	const retry: ThrottleRetryOptions = {
-		...policy,
-		sleep: wait,
-		shouldContinue,
-		random,
-		onRetry: ({ delayMs }) => onWait?.(Math.ceil(delayMs / 1000)),
-	};
-	let results = await withThrottleRetry(() => execute(requests), retry);
-	for (let attempt = 1; attempt <= (retry.maxRetries ?? DEFAULT_MAX_RETRIES); attempt++) {
-		if (results.length !== requests.length) return results;
-		const throttled = results.flatMap((r, i) => (isThrottledResult(r) ? [i] : []));
-		if (throttled.length === 0) return results;
-		const delayMs = retryDelayMs(undefined, attempt, retry) ?? 0;
+): Promise<(BatchResult | undefined)[]> {
+	const retry: ThrottleRetryOptions = { ...policy, random };
+	const maxRetries = retry.maxRetries ?? DEFAULT_MAX_RETRIES;
+	// Undefined until the batch has answered; then each operation's latest result
+	let results: (BatchResult | undefined)[] | undefined;
+	let pending = requests.map((_, i) => i);
+	for (let attempt = 1; ; attempt++) {
+		let delayMs: number | undefined;
+		try {
+			const response = await execute(pending.map((i) => requests[i]));
+			if (!results) {
+				// A batch that stopped early is redone one record per batch by the caller
+				if (response.length !== requests.length) return response;
+				results = [...response];
+			} else {
+				if (response.length !== pending.length) return results;
+				pending.forEach((index, k) => (results![index] = response[k]));
+			}
+			pending = pending.filter((i) => isThrottledResult(results![i]!));
+			if (pending.length === 0 || attempt > maxRetries) return results;
+			delayMs = retryDelayMs(results[pending[0]], attempt, retry);
+			if (delayMs === undefined) return results;
+		} catch (error) {
+			const retryable = attempt <= maxRetries && isServiceProtectionError(error);
+			delayMs = retryable ? retryDelayMs(error, attempt, retry) : undefined;
+			if (delayMs === undefined) {
+				// A failed resend leaves the throttled operations with their result (not run)
+				if (results) return results;
+				throw error;
+			}
+		}
 		onWait?.(Math.ceil(delayMs / 1000));
 		await wait(delayMs);
-		// Stopped or failed while resending: the throttled operations keep their result (not run)
-		if (!(await shouldContinue())) return results;
-		let again: BatchResult[];
-		try {
-			again = await withThrottleRetry(() => execute(throttled.map((i) => requests[i])), retry);
-		} catch {
-			return results;
+		if (!(await shouldContinue())) {
+			if (!results) throw new RetryStoppedError();
+			return results.map((r, i) => (pending.includes(i) ? undefined : r));
 		}
-		if (again.length !== throttled.length) return results;
-		const resent = new Map(throttled.map((index, k) => [index, again[k]]));
-		results = results.map((r, i) => resent.get(i) ?? r);
 	}
-	return results;
 }
 
 /**
@@ -279,7 +294,7 @@ async function runRecordBatches(
 		const started = Date.now();
 		const requests = chunk.map(toRequest);
 
-		let results: BatchResult[] | undefined;
+		let results: (BatchResult | undefined)[] | undefined;
 		let failedEarly = false;
 		if (stopped || !(await shouldContinue())) {
 			stopped = true;
@@ -304,7 +319,15 @@ async function runRecordBatches(
 		}
 
 		if (results && results.length === chunk.length) {
-			chunk.forEach((id, i) => record(id, results![i], false));
+			chunk.forEach((id, i) => {
+				const outcome = results![i];
+				if (outcome) record(id, outcome, false);
+				else {
+					// Stopped while waiting to resend it (#175): it didn't run
+					stopped = true;
+					record(id, new Error(stoppedMessage), false);
+				}
+			});
 		} else if (failedEarly || results) {
 			let completedIds = new Set<string>();
 			if (completedInStoppedBatch) {
@@ -323,13 +346,14 @@ async function runRecordBatches(
 					break;
 				}
 				try {
-					const [single] = await send([toRequest(id)]);
-					record(id, single ?? new Error("No response for this record"), true);
+					const sent = await send([toRequest(id)]);
+					if (sent.length > 0 && !sent[0]) throw new RetryStoppedError();
+					record(id, sent[0] ?? new Error("No response for this record"), true);
 				} catch (error) {
 					if (error instanceof RetryStoppedError) {
 						// Stopped while waiting to retry this record (#175): it and the rest weren't sent
 						stopped = true;
-						stop(chunk.slice(i));
+						stop(redo.slice(i));
 						break;
 					}
 					record(id, new Error(errorMessage(error)), true);

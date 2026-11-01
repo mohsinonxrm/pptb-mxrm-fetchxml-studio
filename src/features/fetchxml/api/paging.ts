@@ -152,8 +152,11 @@ export type PagingNotice =
 export const RETRIEVE_ALL_ROW_LIMIT = 100_000;
 
 /** Whether Retrieve All stops before fetching another page, with this many rows loaded */
-export const retrieveAllLimitReached = (loadedRows: number, limit = RETRIEVE_ALL_ROW_LIMIT): boolean => loadedRows >= limit;
+export const retrieveAllLimitReached = (
+	loadedRows: number,
+	limit = RETRIEVE_ALL_ROW_LIMIT,
+): boolean => loadedRows >= limit;
 
 /** The notice when Retrieve All stops at the limit */
 export const RETRIEVE_ALL_LIMIT_MESSAGE =
-	"Retrieve all loads at most 100,000 rows, to keep the tool responsive. Scroll to the end of the grid to load more one page at a time. For every matching record, use Export (Server), or Bulk delete (job) to delete them without loading them.";
+	"Retrieve all stops once 100,000 rows or more are loaded, to keep the tool responsive. Scroll to the end of the grid to load more one page at a time. To delete every matching record without loading them, use Bulk delete (job).";

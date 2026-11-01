@@ -9,7 +9,10 @@ import {
 	nextLinkToQueryPath,
 	parseFetchXmlPagingCookie,
 	readFetchPagingOptions,
-	type PagingState, RETRIEVE_ALL_ROW_LIMIT, retrieveAllLimitReached } from "./paging";
+	RETRIEVE_ALL_ROW_LIMIT,
+	retrieveAllLimitReached,
+	type PagingState,
+} from "./paging";
 import { addPagingToFetchXml } from "../model/fetchxml";
 
 // From https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results (Web API tab)

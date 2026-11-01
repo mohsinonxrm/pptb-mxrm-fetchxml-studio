@@ -514,7 +514,7 @@ export function PreviewTabs({
 	const dataverseCheck = useDataverseCheck();
 	const checkResult = dataverseCheck.result;
 	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
-	// The results of this query came in more than one page (Load more, Retrieve All, #170)
+	// The results of this query are paged: more pages loaded or available (Load more, Retrieve All, #170)
 	const resultQueryXml = useMemo(() => (result?.query ? generateFetchXml(result.query) : undefined), [result?.query]);
 	const resultsPaged =
 		!!result && (result.moreRecords === true || result.rows.length > DATAVERSE_DEFAULT_PAGE_SIZE) && resultQueryXml === advisorySubject.key;

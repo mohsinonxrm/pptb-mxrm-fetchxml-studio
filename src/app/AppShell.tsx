@@ -862,6 +862,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		setPaging(null);
 		setPagingNotice(null);
 		setIsLoadingMore(false);
+		setPagingWaitSeconds(undefined);
 		// A first page still loading for the old results is dropped, so it can't end the spinner
 		setIsExecuting(false);
 	}, [builder.fetchQuery?.entity?.id]);
@@ -1020,6 +1021,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 		setIsExecuting(true);
 		setIsLoadingMore(false);
+		setPagingWaitSeconds(undefined);
 		setQueryResult(null);
 		setPaging(null);
 		setPagingNotice(null);
@@ -1240,6 +1242,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		const releaseClose = holdClose();
 		const retry: ThrottleRetryOptions = {
 			...LONG_RUNNING_RETRY,
+			// Stop or new results during a wait: the page isn't fetched again
+			shouldContinue: isCurrent,
 			onRetry: ({ delayMs }) => {
 				if (isCurrent()) setPagingWaitSeconds(Math.ceil(delayMs / 1000));
 			},

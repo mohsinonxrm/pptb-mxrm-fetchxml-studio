@@ -283,7 +283,7 @@ function linkLookup(fetch: FetchNode): (key: string | undefined) => LinkEntityNo
  */
 /** What the advisor knows about the query's results (#170) */
 export interface AdvisorContext {
-	/** This query's results came in more than one page (Load more, Retrieve All) */
+	/** This query's results are paged: more than one page loaded or available (Load more, Retrieve All) */
 	resultsPaged?: boolean;
 }
 
@@ -369,7 +369,7 @@ export function adviseQueryMetadata(fetch: FetchNode, metadata: AdvisorMetadata,
 			// Dataverse applies link-entity orders after the entity's orders (order-rows › Process
 			// link-entity orders first), so a key added to the entity wouldn't be the last order
 			const linkOrders = orders.some(({ container }) => container.type === "link-entity");
-			const problem = `${pagedByQuery ? "The query is paged" : "The results came in more than one page"}, but no order is on a unique attribute such as ${primaryId}, so records can repeat or go missing between pages.`;
+			const problem = `${pagedByQuery ? "The query is paged" : "The results are paged"}, but no order is on a unique attribute such as ${primaryId}, so records can repeat or go missing between pages.`;
 			push({ element: "entity", nodeId: root.id, severity: "info", kind: "advice", rule: "paging-order", target: primaryId,
 				message: linkOrders
 					? `${problem} Dataverse sorts by link-entity orders after the entity's orders: to end with ${primaryId}, first move them to the entity with entityname.`

@@ -190,12 +190,12 @@ describe("paging without a unique order", () => {
 		expect(rule(C(LINK(`<order attribute="accountid" />`), ` count="50"`), "paging-order")).toHaveLength(1);
 	});
 
-	it("results that came in more than one page count as paging (Load more, Retrieve all, #170)", () => {
+	it("paged results count as paging (Load more, Retrieve all, #170)", () => {
 		const xml = C(`<order attribute="fullname" />`);
 		expect(adviseQueryMetadata(parse(xml), METADATA).filter((f) => f.rule === "paging-order")).toEqual([]);
 		const found = adviseQueryMetadata(parse(xml), METADATA, { resultsPaged: true }).filter((f) => f.rule === "paging-order");
 		expect(found).toHaveLength(1);
-		expect(found[0].message).toMatch(/^The results came in more than one page, but no order is on a unique attribute such as contactid/);
+		expect(found[0].message).toMatch(/^The results are paged, but no order is on a unique attribute such as contactid/);
 		expect(found[0].fix).toEqual({ kind: "add-root-order", attribute: "contactid" });
 		// top caps the results, so the query doesn't page however it was run
 		expect(adviseQueryMetadata(parse(C(`<order attribute="fullname" />`, ` top="50"`)), METADATA, { resultsPaged: true }).filter((f) => f.rule === "paging-order")).toEqual([]);
