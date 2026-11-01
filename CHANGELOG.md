@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **A `count` above 5,000 no longer skips rows when paging (#209).** Dataverse returns at most 5,000 rows a page (500 for elastic tables). Without a paging cookie (for example with `distinct="true"`), later pages are requested by page number, which skips (page − 1) × count rows, so with `count="6000"` page 2 started at row 6,001 and rows 5,001–6,000 were never loaded. When the first page comes back smaller than `count`, scrolling and Retrieve All now page by the size Dataverse returned. If the query starts from a later page where that can't line up, paging stops with a notice instead of skipping rows.
+- **Parse to tree lists the XML comments it removes (#200).** The tree has nowhere to keep comments. They were dropped without a word; the "will change this query" confirmation now lists them under Removed.
+- **The opportunity competitor picker matches `%`, `_` and `[` literally (#200),** as record search does: `contains()` treats them as wildcards, so `%` listed every competitor.
+- **A `>` inside a `<fetch>` attribute value no longer cuts the tag short (#200)** when the paging attributes are read or set, or the code snippets read it.
+
 - **Advisories follow-ups (#170).**
   - **Paging without a unique order** stays advice. Live, Dataverse broke ties by the primary key in every case tried, but that isn't documented, and [Order rows](https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging) still asks for a unique column. It now also applies when the query's results are paged (more than 5,000 rows, loaded by scrolling or Retrieve All), not only when the query sets `count` or `page`.
   - **Stale check:** after the query changes, an earlier **Check with Dataverse** no longer shows its findings or "Dataverse agrees" tags, and they aren't counted on the tab; they could describe a query Dataverse never saw. The status line says when it was checked and to check again.

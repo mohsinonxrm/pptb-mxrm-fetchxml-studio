@@ -90,7 +90,7 @@ function generateCSharpFetchExpression(fetchXml: string): string {
 function generateJavaScript(fetchXml: string): string {
 	// Extract entity name from FetchXML for the JS snippet
 	// name needn't be the first attribute: <entity enableprefiltering="1" name="account"> (#178)
-	const entityNameMatch = fetchXml.match(/<fetch[^>]*>[\s\S]*?<entity\b[^>]*?\sname=["']([^"']+)["']/i);
+	const entityNameMatch = fetchXml.match(/<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<entity\b[^>]*?\sname=["']([^"']+)["']/i);
 	const entityLogicalName = entityNameMatch ? entityNameMatch[1] : "entity_logical_name";
 
 	const encodedXml = encodeForJsTemplate(fetchXml);
@@ -219,7 +219,8 @@ export function generatePowerAutomateSpec(
 ): PowerAutomateActionSpec {
 	const derivedEntitySet = entitySetName ?? deriveEntitySetName(fetchXml);
 	// Top Count is a limit: only the fetch element's top maps to it. count is a page size (#94).
-	const fetchTag = fetchXml.match(/<fetch\b[^>]*>/i)?.[0] ?? "";
+	// A quoted value may contain a raw ">" (#200)
+	const fetchTag = fetchXml.match(/<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>/i)?.[0] ?? "";
 	const topCount = fetchTag.match(/\stop=["'](\d+)["']/i)?.[1] ?? "";
 
 	return {

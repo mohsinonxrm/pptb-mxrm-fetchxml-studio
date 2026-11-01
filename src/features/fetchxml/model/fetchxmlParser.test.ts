@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFetchXml, validateFetchXmlSyntax } from "./fetchxmlParser";
+import { getParseToTreeChanges, parseFetchXml, validateFetchXmlSyntax } from "./fetchxmlParser";
 import { generateFetchXml } from "./fetchxml";
 
 const ISSUE_54_FETCHXML = `<fetch aggregate="true">
@@ -105,5 +105,20 @@ describe("validateFetchXmlSyntax", () => {
 
 	it("rejects a non-fetch root", () => {
 		expect(validateFetchXmlSyntax("<entity name='account' />").valid).toBe(false);
+	});
+});
+
+describe("XML comments (#200)", () => {
+	it("are listed as removed, so the confirmation shows them instead of dropping them silently", () => {
+		const result = parseFetchXml(`<!-- saved from FXB --><fetch><!-- columns --><entity name="account"><attribute name="name" /><!-- todo --></entity></fetch>`);
+		expect(result.success).toBe(true);
+		expect(getParseToTreeChanges(result)).toEqual([
+			expect.objectContaining({ kind: "dropped", message: "XML comments aren't kept in the tree; Parse to tree removes 3 comments." }),
+		]);
+	});
+
+	it("say nothing when there are none, and use the singular for one", () => {
+		expect(getParseToTreeChanges(parseFetchXml(`<fetch><entity name="account" /></fetch>`))).toEqual([]);
+		expect(getParseToTreeChanges(parseFetchXml(`<fetch><!-- x --><entity name="account" /></fetch>`))[0].message).toMatch(/removes 1 comment\.$/);
 	});
 });

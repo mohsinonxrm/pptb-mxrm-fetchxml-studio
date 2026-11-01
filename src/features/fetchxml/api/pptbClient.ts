@@ -28,6 +28,7 @@ import { formatDataverseError } from "./dataverseErrors";
 import { LONG_RUNNING_RETRY, withThrottleRetry, type ThrottleRetryOptions } from "./throttleRetry";
 import { memoizeForSession } from "./sessionCache";
 import { selectedRecordsQuery, withStringConditionValues } from "./bulkDeleteQuery";
+import { escapeWildcards } from "../model/wildcards";
 
 // Connection-change hook (#71): forget the memoized WhoAmI and privilege answers
 export { resetDataverseSessionCache } from "./sessionCache";
@@ -3243,7 +3244,8 @@ export interface CompetitorOption {
 export async function searchCompetitors(text: string): Promise<CompetitorOption[]> {
 	if (!isDataverseAvailable()) return [];
 	const term = text.trim();
-	const filter = term ? `&$filter=${encodeURIComponent(`contains(name,'${odataString(term)}')`)}` : "";
+	// contains() is a LIKE: %, _ and [ in the term are matched literally (#200), as in recordSearch.ts
+	const filter = term ? `&$filter=${encodeURIComponent(`contains(name,'${odataString(escapeWildcards(term))}')`)}` : "";
 	const result = await window.dataverseAPI!.queryData(
 		`${COMPETITOR_ENTITY_SET}?$select=name,websiteurl&$orderby=name&$top=25${filter}`,
 	);

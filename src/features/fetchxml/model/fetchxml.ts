@@ -363,7 +363,8 @@ export function addPagingToFetchXml(
 	pagingCookie?: string,
 	count?: number,
 ): string {
-	const fetchMatch = /<fetch\b([^>]*)>/.exec(fetchXml);
+	// A quoted value may contain a raw ">" (#200)
+	const fetchMatch = /<fetch\b((?:[^>"']|"[^"]*"|'[^']*')*)>/.exec(fetchXml);
 	if (!fetchMatch) return fetchXml;
 
 	const names = count !== undefined ? "page|paging-cookie|count" : "page|paging-cookie";

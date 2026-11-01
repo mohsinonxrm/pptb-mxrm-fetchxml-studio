@@ -54,11 +54,17 @@ export interface FetchPagingOptions {
 }
 
 /**
+ * The <fetch> start tag. A quoted attribute value may contain a raw ">" (XML allows it), so quoted
+ * values are skipped whole rather than ending the match early (#200).
+ */
+export const FETCH_START_TAG = /<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>/i;
+
+/**
  * The paging attributes of the FetchXML that actually ran (not the tree's, which can differ),
  * from the <fetch> start tag. Attribute values may use either quote style.
  */
 export function readFetchPagingOptions(fetchXml: string): FetchPagingOptions {
-	const tag = /<fetch\b[^>]*>/i.exec(fetchXml)?.[0] ?? "";
+	const tag = FETCH_START_TAG.exec(fetchXml)?.[0] ?? "";
 	const read = (name: string) => {
 		const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i").exec(tag);
 		const value = Number((match?.[1] ?? match?.[2] ?? "").trim());
@@ -126,6 +132,39 @@ export function hasNextPage(mode: PagingState["mode"], response: PageResponse): 
  * Dataverse's `pagenumber` hint stays at 2 for queries without a paging cookie (verified), and
  * following it repeated page 2 forever.
  */
+/**
+ * After the first page of a query whose `count` is larger than the page Dataverse returned (#209):
+ * the maximum page size is 5,000 rows (500 for elastic tables), and without a paging cookie later
+ * pages are requested by page number, which skips (page − 1) × count rows. Requesting page 2 with
+ * the query's count would then skip the rows between the returned page and `count`. So paging goes
+ * on by the size Dataverse actually returned, from the row after the ones loaded. When that row
+ * isn't the start of a page of that size (a starting page above 1), paging stops with a notice
+ * rather than skip rows. With a paging cookie, or a full page, nothing changes.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
+ */
+export function pagingAfterFirstPage(
+	state: PagingState,
+	firstPage: number,
+	rowsReturned: number,
+): { state: PagingState; notice?: PagingNotice } {
+	const count = state.pageSize;
+	if (state.mode !== "fetchxml" || state.pagingCookie || !state.moreRecords || !count || rowsReturned <= 0 || rowsReturned >= count) {
+		return { state };
+	}
+	const loadedThrough = (firstPage - 1) * count + rowsReturned;
+	if (loadedThrough % rowsReturned !== 0) {
+		return {
+			state: { ...state, moreRecords: false, isRetrieveAllInProgress: false },
+			notice: {
+				kind: "simple",
+				message: `Dataverse returned ${rowsReturned.toLocaleString()} rows, fewer than the query's count of ${count.toLocaleString()}, and returned no paging cookie. Later pages can't be requested from page ${firstPage} without skipping rows, so they aren't loaded. Set count to ${rowsReturned.toLocaleString()} or less, or start from page 1.`,
+			},
+		};
+	}
+	const currentPage = loadedThrough / rowsReturned;
+	return { state: { ...state, pageSize: rowsReturned, currentPage, nextPage: currentPage + 1 } };
+}
+
 export function advancePaging(state: PagingState, response: PageResponse): PagingState {
 	return {
 		...state,

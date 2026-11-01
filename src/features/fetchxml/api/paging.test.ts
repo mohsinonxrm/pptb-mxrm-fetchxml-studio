@@ -7,6 +7,7 @@ import {
 	advancePaging,
 	hasNextPage,
 	nextLinkToQueryPath,
+	pagingAfterFirstPage,
 	parseFetchXmlPagingCookie,
 	readFetchPagingOptions,
 	RETRIEVE_ALL_ROW_LIMIT,
@@ -152,5 +153,59 @@ describe("Retrieve All row limit (#183)", () => {
 		expect(retrieveAllLimitReached(100_000)).toBe(true);
 		expect(retrieveAllLimitReached(105_000)).toBe(true);
 		expect(retrieveAllLimitReached(10, 10)).toBe(true);
+	});
+});
+
+describe("pagingAfterFirstPage: count above Dataverse's page size (#209)", () => {
+	const first = (overrides: Partial<PagingState> = {}): PagingState => ({
+		mode: "fetchxml",
+		xml: '<fetch count="6000" distinct="true"><entity name="savedquery" /></fetch>',
+		pageSize: 6000,
+		currentPage: 1,
+		nextPage: 2,
+		moreRecords: true,
+		isRetrieveAllInProgress: false,
+		retrieveAll: false,
+		...overrides,
+	});
+
+	it("pages by the 5,000 rows Dataverse returned, so page 2 starts at row 5,001, not 6,001", () => {
+		expect(pagingAfterFirstPage(first(), 1, 5000)).toEqual({ state: first({ pageSize: 5000, currentPage: 1, nextPage: 2 }) });
+		// count 10,000: the same; page 2 of 5,000 skips exactly the 5,000 loaded
+		expect(pagingAfterFirstPage(first({ pageSize: 10000 }), 1, 5000).state).toMatchObject({ pageSize: 5000, nextPage: 2 });
+		// An elastic table's 500-row page
+		expect(pagingAfterFirstPage(first({ pageSize: 1000 }), 1, 500).state).toMatchObject({ pageSize: 500, nextPage: 2 });
+	});
+
+	it("continues a later starting page when it lines up, and otherwise stops with a notice rather than skip rows", () => {
+		// A full page (count 5,000) needs nothing, whatever the starting page
+		expect(pagingAfterFirstPage(first({ pageSize: 5000 }), 3, 5000)).toEqual({ state: first({ pageSize: 5000 }) });
+		// page 2 of count 10,000 skipped 10,000 rows, returned 5,000: rows up to 15,000 loaded, page 4 of 5,000 next
+		expect(pagingAfterFirstPage(first({ pageSize: 10000 }), 2, 5000).state).toMatchObject({ pageSize: 5000, currentPage: 3, nextPage: 4 });
+		// page 2 of count 6,000 skipped 6,000 rows: 11,000 loaded isn't a multiple of 5,000
+		const stopped = pagingAfterFirstPage(first(), 2, 5000);
+		expect(stopped.state).toMatchObject({ moreRecords: false, pageSize: 6000 });
+		expect(stopped.notice).toMatchObject({ kind: "simple" });
+		expect(stopped.notice?.message).toMatch(/fewer than the query's count of 6,000.*from page 2 without skipping rows/);
+	});
+
+	it("leaves cookie paging, views, full pages, the last page and queries without count alone", () => {
+		expect(pagingAfterFirstPage(first({ pagingCookie: "<cookie/>" }), 1, 5000).state.pageSize).toBe(6000);
+		expect(pagingAfterFirstPage(first({ mode: "view" }), 1, 5000).state.pageSize).toBe(6000);
+		expect(pagingAfterFirstPage(first(), 1, 6000).state.pageSize).toBe(6000);
+		expect(pagingAfterFirstPage(first({ moreRecords: false }), 1, 5000).state.pageSize).toBe(6000);
+		expect(pagingAfterFirstPage(first({ pageSize: undefined }), 1, 5000).state.pageSize).toBeUndefined();
+	});
+});
+
+describe("a raw > inside a <fetch> attribute value (#200)", () => {
+	const xml = '<fetch mapping="a>b" count="50" page="3"><entity name="account" /></fetch>';
+
+	it("reads the paging attributes after it", () => {
+		expect(readFetchPagingOptions(xml)).toEqual({ count: 50, page: 3 });
+	});
+
+	it("sets the paging attributes without cutting the tag", () => {
+		expect(addPagingToFetchXml(xml, 4, undefined, 25)).toBe('<fetch mapping="a>b" page="4" count="25"><entity name="account" /></fetch>');
 	});
 });
