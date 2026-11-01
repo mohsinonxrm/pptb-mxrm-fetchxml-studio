@@ -259,6 +259,8 @@ interface PreviewTabsProps {
 	onLoadMore?: () => void;
 	/** Paging notice above the grid: failed page, Stop, simple paging (#60) */
 	pagingNotice?: PagingNotice | null;
+	/** Retrieve All is waiting this long to retry a throttled page (#183) */
+	pagingWaitSeconds?: number;
 	isRetrieveAllInProgress?: boolean;
 	onStopRetrieveAll?: () => void;
 	onRetryPaging?: () => void;
@@ -377,6 +379,7 @@ export function PreviewTabs({
 	isCallee,
 	onLoadMore,
 	pagingNotice,
+	pagingWaitSeconds,
 	isRetrieveAllInProgress,
 	onStopRetrieveAll,
 	onRetryPaging,
@@ -986,14 +989,16 @@ export function PreviewTabs({
 							</div>
 							{pagingNotice && (
 								<div className={styles.messageBarContainer}>
-									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" ? "warning" : "info"} layout="multiline">
+									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" || pagingNotice.kind === "limit" ? "warning" : "info"} layout="multiline">
 										<MessageBarBody>
 											<MessageBarTitle>
 												{pagingNotice.kind === "error"
 													? "Couldn't load all records"
 													: pagingNotice.kind === "stopped"
 														? "Retrieve all stopped"
-														: "Paging without a paging cookie"}
+														: pagingNotice.kind === "limit"
+															? `Retrieve all stopped at ${result?.rows.length.toLocaleString() ?? 0} rows`
+															: "Paging without a paging cookie"}
 											</MessageBarTitle>
 											{pagingNotice.kind === "error"
 												? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
@@ -1022,6 +1027,7 @@ export function PreviewTabs({
 									result={result}
 									isLoading={isExecuting}
 									isLoadingMore={isLoadingMore}
+									throttleWaitSeconds={pagingWaitSeconds}
 									attributeMetadata={attributeMetadata}
 									fetchQuery={fetchQuery}
 									primaryIdAttribute={primaryIdAttribute}

@@ -94,13 +94,15 @@ import {
 	advancePaging,
 	hasNextPage,
 	readFetchPagingOptions,
+	retrieveAllLimitReached,
+	RETRIEVE_ALL_LIMIT_MESSAGE,
 	type PagingNotice,
 	type PagingState,
 } from "../features/fetchxml/api/paging";
 import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
 import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
 import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
-import { withThrottleRetry } from "../features/fetchxml/api/throttleRetry";
+import { LONG_RUNNING_RETRY, withThrottleRetry, type ThrottleRetryOptions } from "../features/fetchxml/api/throttleRetry";
 import { debugLog } from "../shared/utils/debug";
 import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
@@ -431,6 +433,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	// New); pageRun also changes on Stop, which keeps the loaded rows.
 	const resultRunRef = useRef(0);
 	const pageRunRef = useRef(0);
+	// Rows loaded for the current results, for Retrieve All's limit (#183)
+	const loadedRowsRef = useRef(0);
+	// While a Retrieve All page waits to retry because Dataverse is throttling: the wait (#183)
+	const [pagingWaitSeconds, setPagingWaitSeconds] = useState<number | undefined>(undefined);
 	// Unmounting (e.g. the connection changed, #66) stops page loops still running for these results
 	useEffect(
 		() => () => {
@@ -1104,6 +1110,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const moreRecords = !hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
 			const firstPage = options.page ?? 1;
 
+			loadedRowsRef.current = result.records.length;
 			setQueryResult({
 				query,
 				rows: result.records.map((record) => ({ ...record })),
@@ -1181,7 +1188,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	 * Fetch the page after `state` (#58, #60): saved views follow @odata.nextLink; FetchXML sets page,
 	 * the decoded paging cookie (when Dataverse returned one) and the executed query's own count.
 	 */
-	const fetchNextPage = async (state: PagingState): Promise<{ result: FetchXmlResult; next: PagingState }> => {
+	const fetchNextPage = async (
+		state: PagingState,
+		retry?: ThrottleRetryOptions,
+	): Promise<{ result: FetchXmlResult; next: PagingState }> => {
 		// Retried after service protection errors (#96); a page over the host's 16 MB limit is
 		// requested again with half the count, which later pages keep (#68)
 		const { result, state: fetched } = await fetchPageWithRecovery(
@@ -1190,7 +1200,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				s.mode === "view"
 					? executeNextLink(s.nextLink ?? "")
 					: executeFetchXml(addPagingToFetchXml(s.xml, s.nextPage, s.pagingCookie, s.pageSize)),
-			{ onShrink: (s) => debugLog("app", `Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`) },
+			{ retry, onShrink: (s) => debugLog("app", `Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`) },
 		);
 		return { result, next: advancePaging(fetched, result) };
 	};
@@ -1198,6 +1208,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	/** Add a fetched page to the results of run `run` (ignored if the results changed meanwhile). */
 	const appendPage = (run: number, state: PagingState, result: FetchXmlResult, next: PagingState) => {
 		if (run !== resultRunRef.current) return false;
+		loadedRowsRef.current += result.records.length;
 		setQueryResult((prev) =>
 			prev
 				? { ...prev, rows: prev.rows.concat(result.records), moreRecords: next.moreRecords, pagingCookie: next.pagingCookie }
@@ -1207,13 +1218,15 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		// requested without a cookie means Dataverse returned none for this query: say so once.
 		const simple: PagingNotice | null =
 			state.mode === "fetchxml" && !state.pagingCookie ? { kind: "simple", message: SIMPLE_PAGING_MESSAGE } : null;
-		setPagingNotice((prev) => (prev && prev.kind !== "error" && prev.kind !== "stopped" ? prev : simple));
+		setPagingNotice((prev) => (prev && prev.kind !== "error" && prev.kind !== "stopped" && prev.kind !== "limit" ? prev : simple));
 		return true;
 	};
 
 	/**
 	 * Retrieve All: fetch the remaining pages one after another (#60). Stops when there are no more
-	 * pages, when Stop is pressed (pageRun changes) or when the results change (resultRun changes).
+	 * pages, when Stop is pressed (pageRun changes), when the results change (resultRun changes) or
+	 * at RETRIEVE_ALL_ROW_LIMIT rows (#183). Throttled pages get the long back-off, with the wait in
+	 * the status line (#183).
 	 */
 	const loadAllPages = async (run: number) => {
 		const pageRun = ++pageRunRef.current;
@@ -1225,10 +1238,25 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		setPaging(state);
 		// The host warns before the tab closes while Retrieve All runs (#70)
 		const releaseClose = holdClose();
+		const retry: ThrottleRetryOptions = {
+			...LONG_RUNNING_RETRY,
+			onRetry: ({ delayMs }) => {
+				if (isCurrent()) setPagingWaitSeconds(Math.ceil(delayMs / 1000));
+			},
+		};
 		try {
 			while (state?.moreRecords) {
-				const { result, next } = await fetchNextPage(state);
+				if (retrieveAllLimitReached(loadedRowsRef.current)) {
+					// Further pages load one at a time from here, as after Stop
+					state = { ...state, isRetrieveAllInProgress: false, retrieveAll: false };
+					setPaging(state);
+					setPagingNotice({ kind: "limit", message: RETRIEVE_ALL_LIMIT_MESSAGE });
+					debugLog("app", `Retrieve All stopped at ${loadedRowsRef.current} rows (limit)`);
+					return;
+				}
+				const { result, next } = await fetchNextPage(state, retry);
 				if (!isCurrent()) return;
+				setPagingWaitSeconds(undefined);
 				appendPage(run, state, result, next);
 				state = { ...next, isRetrieveAllInProgress: next.moreRecords };
 				setPaging(state);
@@ -1245,6 +1273,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		} finally {
 			releaseClose();
 			if (isCurrent()) {
+				setPagingWaitSeconds(undefined);
 				setIsLoadingMore(false);
 				if (pagingRef.current) setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
 			}
@@ -1257,6 +1286,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		if (!state?.isRetrieveAllInProgress) return;
 		pageRunRef.current++;
 		setIsLoadingMore(false);
+		setPagingWaitSeconds(undefined);
 		// Further pages load one at a time from here (scrolling, or Retry after a failed page)
 		setPaging({ ...state, isRetrieveAllInProgress: false, retrieveAll: false });
 		setPagingNotice({ kind: "stopped", message: "" });
@@ -2019,6 +2049,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					onColumnResize={builder.updateColumnWidth}
 					onLoadMore={handleLoadMore}
 					pagingNotice={pagingNotice}
+					pagingWaitSeconds={pagingWaitSeconds}
 					isRetrieveAllInProgress={pagingState?.isRetrieveAllInProgress ?? false}
 					onStopRetrieveAll={handleStopRetrieveAll}
 					onRetryPaging={handleRetryPaging}

@@ -21,8 +21,15 @@
  */
 
 import type { BatchDeleteProgress, BatchDeleteResult } from "./pptbClient";
-import { formatDataverseError } from "./dataverseErrors";
-import { RetryStoppedError } from "./throttleRetry";
+import { formatDataverseError, isServiceProtectionError } from "./dataverseErrors";
+import {
+	DEFAULT_MAX_RETRIES,
+	LONG_RUNNING_RETRY,
+	RetryStoppedError,
+	retryDelayMs,
+	withThrottleRetry,
+	type ThrottleRetryOptions,
+} from "./throttleRetry";
 import { statePatchBody, type StateTarget } from "../model/recordState";
 
 type HostExecuteBatch = Window["dataverseAPI"]["executeBatch"];
@@ -33,10 +40,6 @@ export type ExecuteBatch = (requests: BatchRequest[]) => Promise<BatchResult[]>;
 /** Records per $batch. Small enough for steady progress and short requests; Learn allows 1,000. */
 export const DELETE_BATCH_SIZE = 25;
 
-/** Service protection errors (429): number of requests, execution time, concurrent requests */
-const THROTTLE_PATTERN = /\b429\b|0x80072322|0x80072321|0x80072326/i;
-/** Waits before retrying a throttled batch. The host doesn't pass on Retry-After from a rejected batch. */
-const THROTTLE_WAITS_MS = [5_000, 15_000, 30_000];
 
 /** `${EntitySetName}(${id})`, the Web API URL of a record (relative, as executeBatch requires) */
 export const recordUrl = (entitySetName: string, recordId: string) => `${entitySetName}(${recordId.replace(/[{}]/g, "")})`;
@@ -66,7 +69,9 @@ export function isRecordNotFound(result: BatchResult): boolean {
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const isThrottled = (error: unknown) => THROTTLE_PATTERN.test(errorMessage(error));
+/** An operation the batch answered with a service protection error: Dataverse didn't run it */
+const isThrottledResult = (result: BatchResult) =>
+	result.status === 429 || isServiceProtectionError({ code: batchResultError(result).code, message: "" });
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface RecordBatchOptions {
@@ -80,6 +85,13 @@ export interface RecordBatchOptions {
 	shouldContinue?: () => boolean | Promise<boolean>;
 	/** Injectable for tests */
 	wait?: (ms: number) => Promise<void>;
+	/** Injectable for tests: the jitter's random number (LONG_RUNNING_RETRY) */
+	random?: () => number;
+	/**
+	 * Back-off after service protection errors (#183): LONG_RUNNING_RETRY by default; a request the
+	 * user is waiting on (one record) passes {} for the short default policy
+	 */
+	retry?: ThrottleRetryOptions;
 }
 
 export type BatchDeleteOptions = RecordBatchOptions;
@@ -108,25 +120,51 @@ interface RecordOperation {
 }
 
 /**
- * Sends one batch, retrying while Dataverse throttles it. After each wait, `shouldContinue` is asked
- * again (#175): the connection can change in place during a 5–30 s wait, and the resent batch would
- * then run in the new environment.
+ * Sends one batch, retrying while Dataverse throttles it (LONG_RUNNING_RETRY, #183): the whole
+ * batch when it's rejected, and otherwise only the operations it answered with a service protection
+ * error, which Dataverse didn't run. After each wait, `shouldContinue` is asked again (#175): the
+ * connection can change in place during a wait, and resent requests would run in the new
+ * environment. `onWait` gets the wait in seconds, for the progress text.
  */
 async function sendWithRetry(
 	requests: BatchRequest[],
 	execute: ExecuteBatch,
-	wait: (ms: number) => Promise<void>,
-	shouldContinue: () => boolean | Promise<boolean>,
+	{ wait, shouldContinue, onWait, random, policy = LONG_RUNNING_RETRY }: {
+		wait: (ms: number) => Promise<void>;
+		shouldContinue: () => boolean | Promise<boolean>;
+		onWait?: (seconds: number) => void;
+		random?: () => number;
+		policy?: ThrottleRetryOptions;
+	},
 ): Promise<BatchResult[]> {
-	for (let attempt = 0; ; attempt++) {
+	const retry: ThrottleRetryOptions = {
+		...policy,
+		sleep: wait,
+		shouldContinue,
+		random,
+		onRetry: ({ delayMs }) => onWait?.(Math.ceil(delayMs / 1000)),
+	};
+	let results = await withThrottleRetry(() => execute(requests), retry);
+	for (let attempt = 1; attempt <= (retry.maxRetries ?? DEFAULT_MAX_RETRIES); attempt++) {
+		if (results.length !== requests.length) return results;
+		const throttled = results.flatMap((r, i) => (isThrottledResult(r) ? [i] : []));
+		if (throttled.length === 0) return results;
+		const delayMs = retryDelayMs(undefined, attempt, retry) ?? 0;
+		onWait?.(Math.ceil(delayMs / 1000));
+		await wait(delayMs);
+		// Stopped or failed while resending: the throttled operations keep their result (not run)
+		if (!(await shouldContinue())) return results;
+		let again: BatchResult[];
 		try {
-			return await execute(requests);
-		} catch (error) {
-			if (!isThrottled(error) || attempt >= THROTTLE_WAITS_MS.length) throw error;
-			await wait(THROTTLE_WAITS_MS[attempt]);
-			if (!(await shouldContinue())) throw new RetryStoppedError();
+			again = await withThrottleRetry(() => execute(throttled.map((i) => requests[i])), retry);
+		} catch {
+			return results;
 		}
+		if (again.length !== throttled.length) return results;
+		const resent = new Map(throttled.map((index, k) => [index, again[k]]));
+		results = results.map((r, i) => resent.get(i) ?? r);
 	}
+	return results;
 }
 
 /**
@@ -195,7 +233,7 @@ export function closeRecordsInBatches(
 /** Sends one request per record in $batch requests of `batchSize` (see the file comment) */
 async function runRecordBatches(
 	recordIds: string[],
-	{ executeBatch, onProgress, batchSize = DELETE_BATCH_SIZE, shouldContinue = () => true, wait = sleep }: RecordBatchOptions,
+	{ executeBatch, onProgress, batchSize = DELETE_BATCH_SIZE, shouldContinue = () => true, wait = sleep, random, retry }: RecordBatchOptions,
 	{ toRequest, stoppedMessage, retriedSuccess = () => false, formatError = (r) => batchResultError(r).message, completedInStoppedBatch }: RecordOperation,
 ): Promise<BatchDeleteResult> {
 	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
@@ -217,6 +255,23 @@ async function runRecordBatches(
 
 	const chunkTimes: number[] = [];
 	let completed = 0;
+	// The last progress reported, repeated with the wait while Dataverse throttles (#183)
+	let lastProgress: BatchDeleteProgress = {
+		completed: 0,
+		total: recordIds.length,
+		succeeded: 0,
+		failed: 0,
+		batchesCompleted: 0,
+		totalBatches: chunks.length,
+	};
+	const send = (requests: BatchRequest[]) =>
+		sendWithRetry(requests, executeBatch, {
+			wait,
+			shouldContinue,
+			random,
+			policy: retry,
+			onWait: (seconds) => onProgress?.({ ...lastProgress, throttleWaitSeconds: seconds }),
+		});
 	let stopped = false;
 	const stop = (ids: string[]) => ids.forEach((id) => record(id, new Error(stoppedMessage), false));
 	for (let index = 0; index < chunks.length; index++) {
@@ -231,7 +286,7 @@ async function runRecordBatches(
 			stop(chunk);
 		} else {
 			try {
-				results = await sendWithRetry(requests, executeBatch, wait, shouldContinue);
+				results = await send(requests);
 			} catch (error) {
 				if (error instanceof RetryStoppedError) {
 					// Stopped while waiting to retry (#175): nothing in this chunk was sent
@@ -268,7 +323,7 @@ async function runRecordBatches(
 					break;
 				}
 				try {
-					const [single] = await sendWithRetry([toRequest(id)], executeBatch, wait, shouldContinue);
+					const [single] = await send([toRequest(id)]);
 					record(id, single ?? new Error("No response for this record"), true);
 				} catch (error) {
 					if (error instanceof RetryStoppedError) {
@@ -286,7 +341,7 @@ async function runRecordBatches(
 		chunkTimes.push(Date.now() - started);
 		const remaining = chunks.length - (index + 1);
 		const average = chunkTimes.reduce((a, b) => a + b, 0) / chunkTimes.length;
-		onProgress?.({
+		lastProgress = {
 			completed,
 			total: recordIds.length,
 			succeeded: result.succeeded,
@@ -294,7 +349,8 @@ async function runRecordBatches(
 			batchesCompleted: index + 1,
 			totalBatches: chunks.length,
 			estimatedSecondsRemaining: chunkTimes.length >= 2 ? Math.ceil((average * remaining) / 1000) : undefined,
-		});
+		};
+		onProgress?.(lastProgress);
 	}
 	return result;
 }

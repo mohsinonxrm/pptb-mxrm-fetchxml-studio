@@ -25,6 +25,7 @@ import {
 } from "@fluentui/react-components";
 import { Play20Regular, CheckmarkCircle20Regular, Warning20Regular } from "@fluentui/react-icons";
 import type { WorkflowInfo, WorkflowBatchProgress } from "../../api/pptbClient";
+import { throttleWaitMessage } from "../../api/throttleRetry";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 
@@ -323,7 +324,11 @@ export function WorkflowPickerDialog({
 										{progress.completed} of {progress.total} completed ({progress.succeeded}{" "}
 										succeeded, {progress.failed} failed)
 									</Text>
-									{progress.estimatedSecondsRemaining !== undefined &&
+									{/* While Dataverse throttles, the wait instead of the estimate (#183) */}
+									{progress.throttleWaitSeconds ? (
+										<Text className={styles.eta}>{throttleWaitMessage(progress.throttleWaitSeconds)}</Text>
+									) : null}
+									{!progress.throttleWaitSeconds && progress.estimatedSecondsRemaining !== undefined &&
 										progress.estimatedSecondsRemaining > 0 && (
 											<Text className={styles.eta}>
 												{formatEta(progress.estimatedSecondsRemaining)}

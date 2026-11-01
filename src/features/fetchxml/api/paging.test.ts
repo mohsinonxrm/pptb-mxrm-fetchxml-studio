@@ -9,8 +9,7 @@ import {
 	nextLinkToQueryPath,
 	parseFetchXmlPagingCookie,
 	readFetchPagingOptions,
-	type PagingState,
-} from "./paging";
+	type PagingState, RETRIEVE_ALL_ROW_LIMIT, retrieveAllLimitReached } from "./paging";
 import { addPagingToFetchXml } from "../model/fetchxml";
 
 // From https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results (Web API tab)
@@ -140,5 +139,15 @@ describe("addPagingToFetchXml (#58, #60)", () => {
 		const fetch = new DOMParser().parseFromString(xml, "application/xml").documentElement;
 		expect(fetch.getAttribute("paging-cookie")).toBe(cookie);
 		expect(fetch.getAttribute("page")).toBe("2");
+	});
+});
+
+describe("Retrieve All row limit (#183)", () => {
+	it("stops at 100,000 rows", () => {
+		expect(RETRIEVE_ALL_ROW_LIMIT).toBe(100_000);
+		expect(retrieveAllLimitReached(99_999)).toBe(false);
+		expect(retrieveAllLimitReached(100_000)).toBe(true);
+		expect(retrieveAllLimitReached(105_000)).toBe(true);
+		expect(retrieveAllLimitReached(10, 10)).toBe(true);
 	});
 });

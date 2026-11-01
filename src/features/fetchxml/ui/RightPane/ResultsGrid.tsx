@@ -57,6 +57,7 @@ import {
 	FilterDismiss20Regular,
 } from "@fluentui/react-icons";
 import { retrieveTotalRecordCount, type AttributeMetadata, type EntityMetadata } from "../../api/pptbClient";
+import { throttleWaitMessage } from "../../api/throttleRetry";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { adviseCondition } from "../../model/queryAdvisor";
 import { entityTotalText, totalCountText } from "./totalCount";
@@ -304,6 +305,8 @@ interface ResultsGridProps {
 	isLoading?: boolean;
 	/** Whether more pages are currently being loaded (for infinite scroll / Retrieve All) */
 	isLoadingMore?: boolean;
+	/** Waiting this long to retry a throttled page (#183) */
+	throttleWaitSeconds?: number;
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null; // For extracting aliases and order state
@@ -342,6 +345,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	result,
 	isLoading,
 	isLoadingMore,
+	throttleWaitSeconds,
 	attributeMetadata,
 	fetchQuery,
 	primaryIdAttribute,
@@ -1397,7 +1401,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								? `${result.rows.length} of ${totalText}`
 								: result.rows.length}
 						{result.moreRecords && !isLoadingMore && " (more available)"}
-						{isLoadingMore && " (loading more...)"}
+						{isLoadingMore && (throttleWaitSeconds ? ` (${throttleWaitMessage(throttleWaitSeconds)})` : " (loading more...)")}
 						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
 						{result.totalRecordCountLimitExceeded && result.entityLogicalName && (
 							<>

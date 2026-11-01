@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Long operations wait out Dataverse throttling, and Retrieve All stops at 100,000 rows (#183).**
+  - **Before:** a throttled request was retried 3 times after 2, 4 and 8 s, 14 s in all, while Dataverse's service protection limits are measured over 5 minutes, so long runs gave up early. Batched deletes and record actions had their own waits (5, 15 and 30 s). An operation that a batch answered with 429 was recorded as failed, not retried. Retrieve All kept loading with no limit, so a wide table could exhaust the tool's memory.
+  - **Now:** one back-off for long operations: Retrieve All, deletes, Activate / Deactivate, Close, workflows on many records, and the one-request-per-record path on older hosts. It waits about 5, 10, 20, 40, 80 and 120 s (± 20% jitter), about 4.5 minutes in all, as [Service protection API limits](https://learn.microsoft.com/power-apps/developer/data-platform/api-limits) suggests. The wait shows in the progress ("Dataverse is limiting requests: trying again in 40s"). A request you're waiting on, such as the first page or a single delete, keeps the short back-off.
+  - **Batches:** only the operations a batch answered with a service protection error are sent again. Dataverse didn't run them, and the others aren't repeated.
+  - **Retrieve All** stops at 100,000 rows with a notice. More pages still load one at a time by scrolling, and Export (Server) or Bulk delete (job) cover every matching record. The limit isn't configurable yet; a Settings option is part of the UI/UX pass.
+
 - **The local Excel export keeps each record's currency and shows dates as the grid does (#184).**
   - **Money:** amounts were always formatted with `$`, so a EUR, GBP or INR amount showed a dollar sign. Each cell now uses its record's currency symbol and decimals from Dataverse's formatted value (`€1.234,50` → `"€"#,##0.00`, `¥1,235` → no decimals), wherever your negative currency format puts the sign. A column with a fixed precision uses it.
   - **Dates:** date-times were written in UTC while the grid shows your Dataverse time zone. They now match the grid. Date Only columns are written as dates (`yyyy-mm-dd`, no `00:00:00`), and Time Zone Independent columns as stored. Raw values (raw mode, and the "(Raw)" columns) are in UTC, and the header says "(UTC)"; so does the header when your time zone couldn't be read. If a column's date behaviour couldn't be loaded, its formatted text is written.

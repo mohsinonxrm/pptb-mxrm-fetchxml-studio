@@ -25,7 +25,7 @@ import { responseHasFormattedValues } from "./formattedValues";
 import { metadataCache } from "../state/cache";
 import { nextLinkToQueryPath, parseFetchXmlPagingCookie } from "./paging";
 import { formatDataverseError } from "./dataverseErrors";
-import { withThrottleRetry } from "./throttleRetry";
+import { LONG_RUNNING_RETRY, withThrottleRetry, type ThrottleRetryOptions } from "./throttleRetry";
 import { memoizeForSession } from "./sessionCache";
 import { selectedRecordsQuery, withStringConditionValues } from "./bulkDeleteQuery";
 
@@ -2322,8 +2322,9 @@ export async function deleteRecord(
 	try {
 		const entitySetName = await deleteEntitySet(entityLogicalName);
 		if (entitySetName) {
-			// The batch path retries service protection errors itself (batchDelete.ts)
-			const result = await deleteRecordsInBatches(entitySetName, [recordId], { executeBatch: hostExecuteBatch, shouldContinue });
+			// The batch path retries service protection errors itself (batchDelete.ts); one record the
+			// user is waiting on gets the short policy, not the long one for many records (#183)
+			const result = await deleteRecordsInBatches(entitySetName, [recordId], { executeBatch: hostExecuteBatch, shouldContinue, retry: {} });
 			if (result.failed > 0) throw new Error(result.errors[0]?.replace(`${recordId}: `, "") || "Delete failed");
 		} else {
 			// Retried after service protection errors (#96): Dataverse rejected the request unprocessed
@@ -2571,6 +2572,8 @@ export async function executeWorkflow(
 	entityLogicalName: string,
 	/** Asked after each throttling wait (#175): false stops instead of retrying */
 	shouldContinue?: () => boolean | Promise<boolean>,
+	/** Back-off after service protection errors; many records use LONG_RUNNING_RETRY (#183) */
+	retry?: ThrottleRetryOptions,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2593,7 +2596,7 @@ export async function executeWorkflow(
 					EntityId: recordId,
 				},
 			}),
-			{ shouldContinue }, // not retried after a connection change (#175)
+			{ ...retry, shouldContinue }, // not retried after a connection change (#175)
 		);
 
 		debugLog("workflowAPI", `✅ Workflow executed successfully`);
@@ -2614,6 +2617,8 @@ export interface WorkflowBatchProgress {
 	batchesCompleted: number;
 	totalBatches: number;
 	estimatedSecondsRemaining?: number;
+	/** Waiting this long before retrying because Dataverse is throttling requests (#183) */
+	throttleWaitSeconds?: number;
 }
 
 /**
@@ -2651,6 +2656,15 @@ export async function executeWorkflowBatch(
 	// Track timing for ETA calculation
 	const batchTimes: number[] = [];
 	let batchesCompleted = 0;
+	// The last progress reported, repeated with the wait while Dataverse throttles (#183)
+	let lastProgress: WorkflowBatchProgress = {
+		completed: 0,
+		total,
+		succeeded: 0,
+		failed: 0,
+		batchesCompleted: 0,
+		totalBatches: batches.length,
+	};
 	// Stop if the tool's connection changes in place (PPTB ≥ 1.2.7, #66): later requests would run
 	// the workflow in the new environment, where the same record IDs can exist
 	const stillOnConnection = await connectionGuard();
@@ -2675,7 +2689,11 @@ export async function executeWorkflowBatch(
 		// Execute workflows in parallel within the batch
 		const workflowPromises = batchRecordIds.map(async (recordId) => {
 			try {
-				await executeWorkflow(workflowId, recordId, entityLogicalName, stillOnConnection);
+				// Many records: the long back-off, with the wait in the progress text (#183)
+				await executeWorkflow(workflowId, recordId, entityLogicalName, stillOnConnection, {
+					...LONG_RUNNING_RETRY,
+					onRetry: ({ delayMs }) => onProgress?.({ ...lastProgress, throttleWaitSeconds: Math.ceil(delayMs / 1000) }),
+				});
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -2711,7 +2729,7 @@ export async function executeWorkflowBatch(
 			estimatedSecondsRemaining = Math.ceil((avgBatchTime * remainingBatches) / 1000);
 		}
 
-		onProgress?.({
+		lastProgress = {
 			completed,
 			total,
 			succeeded: result.succeeded,
@@ -2719,7 +2737,8 @@ export async function executeWorkflowBatch(
 			batchesCompleted,
 			totalBatches: batches.length,
 			estimatedSecondsRemaining,
-		});
+		};
+		onProgress?.(lastProgress);
 	}
 
 	debugLog(
@@ -2760,6 +2779,8 @@ export interface BatchDeleteProgress {
 	batchesCompleted: number;
 	totalBatches: number;
 	estimatedSecondsRemaining?: number;
+	/** Waiting this long before retrying because Dataverse is throttling requests (#183) */
+	throttleWaitSeconds?: number;
 }
 
 export interface BatchDeleteResult {
@@ -2834,7 +2855,10 @@ export async function deleteRecordsBatch(
 			try {
 				// Retried after service protection errors (#96), like deleteRecord's fallback; not after
 				// a connection change (#175)
-				await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), { shouldContinue: stillOnConnection });
+				await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), {
+					...LONG_RUNNING_RETRY, // many records (#183)
+					shouldContinue: stillOnConnection,
+				});
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -3159,6 +3183,14 @@ async function runOneByOne(
 ): Promise<BatchDeleteResult> {
 	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
 	const started = Date.now();
+	let lastProgress: BatchDeleteProgress = {
+		completed: 0,
+		total: recordIds.length,
+		succeeded: 0,
+		failed: 0,
+		batchesCompleted: 0,
+		totalBatches: recordIds.length,
+	};
 	for (const [index, recordId] of recordIds.entries()) {
 		if (!(await shouldContinue())) {
 			for (const id of recordIds.slice(index)) {
@@ -3168,8 +3200,13 @@ async function runOneByOne(
 			break;
 		}
 		try {
-			// not retried after a connection change (#175)
-			await withThrottleRetry(() => send(recordId), { shouldContinue });
+			// Many records: the long back-off, with the wait in the progress text (#183); not retried
+			// after a connection change (#175)
+			await withThrottleRetry(() => send(recordId), {
+				...LONG_RUNNING_RETRY,
+				shouldContinue,
+				onRetry: ({ delayMs }) => onProgress?.({ ...lastProgress, throttleWaitSeconds: Math.ceil(delayMs / 1000) }),
+			});
 			result.succeeded++;
 		} catch (error) {
 			result.failed++;
@@ -3177,7 +3214,7 @@ async function runOneByOne(
 		}
 		const completed = index + 1;
 		const average = (Date.now() - started) / completed;
-		onProgress?.({
+		lastProgress = {
 			completed,
 			total: recordIds.length,
 			succeeded: result.succeeded,
@@ -3186,7 +3223,8 @@ async function runOneByOne(
 			totalBatches: recordIds.length,
 			estimatedSecondsRemaining:
 				completed >= 2 ? Math.ceil((average * (recordIds.length - completed)) / 1000) : undefined,
-		});
+		};
+		onProgress?.(lastProgress);
 	}
 	return result;
 }

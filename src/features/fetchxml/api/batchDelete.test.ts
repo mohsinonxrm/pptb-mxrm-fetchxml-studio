@@ -112,6 +112,54 @@ describe("deleteRecordsInBatches", () => {
 		expect(result.succeeded).toBe(2);
 	});
 
+	it("waits up to about 5 minutes for a throttled batch, and reports each wait (#183)", async () => {
+		const wait = vi.fn((_ms: number) => Promise.resolve());
+		const progress = vi.fn();
+		const throttled = new Error("0x80072322: Number of requests exceeded the limit of 6000 over time window of 300 seconds.");
+		const executeBatch = vi.fn<(requests: BatchRequest[]) => Promise<BatchResult[]>>();
+		for (let i = 0; i < 6; i++) executeBatch.mockRejectedValueOnce(throttled);
+		executeBatch.mockImplementation(async (requests) => requests.map(ok));
+		// random 0.5 is no jitter
+		const result = await deleteRecordsInBatches("accounts", ids(2), { executeBatch, wait, onProgress: progress, random: () => 0.5 });
+		expect(wait.mock.calls.map(([ms]) => ms)).toEqual([5_000, 10_000, 20_000, 40_000, 80_000, 120_000]);
+		expect(result.succeeded).toBe(2);
+		const waits = progress.mock.calls.map(([p]) => p.throttleWaitSeconds).filter((s) => s !== undefined);
+		expect(waits).toEqual([5, 10, 20, 40, 80, 120]);
+		// The progress after the batch has no wait
+		const last = progress.mock.calls.at(-1)?.[0];
+		expect(last).toMatchObject({ completed: 2, succeeded: 2 });
+		expect(last.throttleWaitSeconds).toBeUndefined();
+	});
+
+	it("resends only the operations a batch answered with a service protection error (#183)", async () => {
+		const [a, b, c] = ids(3);
+		const wait = vi.fn(noWait);
+		const sent: string[][] = [];
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			sent.push(requests.map((r) => r.url));
+			// First try: b throttled inside the batch; a and c deleted
+			return sent.length === 1 ? [ok(), fail(429, "0x80072322", "Number of requests exceeded the limit"), ok()] : requests.map(ok);
+		});
+		const result = await deleteRecordsInBatches("accounts", [a, b, c], { executeBatch, wait, random: () => 0.5 });
+		expect(sent).toEqual([[`accounts(${a})`, `accounts(${b})`, `accounts(${c})`], [`accounts(${b})`]]);
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(result).toMatchObject({ succeeded: 3, failed: 0 });
+	});
+
+	it("reports an operation still throttled after every retry as failed, without resending the others", async () => {
+		const [a, b] = ids(2);
+		const wait = vi.fn(noWait);
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) =>
+			requests.map((r) => (r.url.includes(b) ? fail(429, "0x80072322", "Number of requests exceeded the limit") : ok())),
+		);
+		const result = await deleteRecordsInBatches("accounts", [a, b], { executeBatch, wait, random: () => 0.5 });
+		expect(wait).toHaveBeenCalledTimes(6);
+		expect(executeBatch.mock.calls.slice(1).every(([requests]) => requests.length === 1)).toBe(true);
+		expect(result.succeeded).toBe(1);
+		expect(result.failed).toBe(1);
+		expect(result.errors[0]).toContain(b);
+	});
+
 	it("doesn't resend a throttled batch after the connection changed during the wait (#175)", async () => {
 		const wait = vi.fn(noWait);
 		const executeBatch = vi
