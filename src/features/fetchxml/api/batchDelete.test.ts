@@ -112,6 +112,97 @@ describe("deleteRecordsInBatches", () => {
 		expect(result.succeeded).toBe(2);
 	});
 
+	it("waits up to about 5 minutes for a throttled batch, and reports each wait (#183)", async () => {
+		const wait = vi.fn((_ms: number) => Promise.resolve());
+		const progress = vi.fn();
+		const throttled = new Error("0x80072322: Number of requests exceeded the limit of 6000 over time window of 300 seconds.");
+		const executeBatch = vi.fn<(requests: BatchRequest[]) => Promise<BatchResult[]>>();
+		for (let i = 0; i < 6; i++) executeBatch.mockRejectedValueOnce(throttled);
+		executeBatch.mockImplementation(async (requests) => requests.map(ok));
+		// random 0.5 is no jitter
+		const result = await deleteRecordsInBatches("accounts", ids(2), { executeBatch, wait, onProgress: progress, random: () => 0.5 });
+		expect(wait.mock.calls.map(([ms]) => ms)).toEqual([5_000, 10_000, 20_000, 40_000, 80_000, 120_000]);
+		expect(result.succeeded).toBe(2);
+		const waits = progress.mock.calls.map(([p]) => p.throttleWaitSeconds).filter((s) => s !== undefined);
+		expect(waits).toEqual([5, 10, 20, 40, 80, 120]);
+		// The progress after the batch has no wait
+		const last = progress.mock.calls.at(-1)?.[0];
+		expect(last).toMatchObject({ completed: 2, succeeded: 2 });
+		expect(last.throttleWaitSeconds).toBeUndefined();
+	});
+
+	it("resends only the operations a batch answered with a service protection error (#183)", async () => {
+		const [a, b, c] = ids(3);
+		const wait = vi.fn(noWait);
+		const sent: string[][] = [];
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			sent.push(requests.map((r) => r.url));
+			// First try: b throttled inside the batch; a and c deleted
+			return sent.length === 1 ? [ok(), fail(429, "0x80072322", "Number of requests exceeded the limit"), ok()] : requests.map(ok);
+		});
+		const result = await deleteRecordsInBatches("accounts", [a, b, c], { executeBatch, wait, random: () => 0.5 });
+		expect(sent).toEqual([[`accounts(${a})`, `accounts(${b})`, `accounts(${c})`], [`accounts(${b})`]]);
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(result).toMatchObject({ succeeded: 3, failed: 0 });
+	});
+
+	it("reports an operation still throttled after every retry as failed, without resending the others", async () => {
+		const [a, b] = ids(2);
+		const wait = vi.fn(noWait);
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) =>
+			requests.map((r) => (r.url.includes(b) ? fail(429, "0x80072322", "Number of requests exceeded the limit") : ok())),
+		);
+		const result = await deleteRecordsInBatches("accounts", [a, b], { executeBatch, wait, random: () => 0.5 });
+		expect(wait).toHaveBeenCalledTimes(6);
+		expect(executeBatch.mock.calls.slice(1).every(([requests]) => requests.length === 1)).toBe(true);
+		expect(result.succeeded).toBe(1);
+		expect(result.failed).toBe(1);
+		expect(result.errors[0]).toContain(b);
+	});
+
+	it("one retry budget covers rejected resends and throttled operations together (#183 review)", async () => {
+		const [a, b] = ids(2);
+		const wait = vi.fn(noWait);
+		const throttled = new Error("0x80072322: Number of requests exceeded the limit");
+		let calls = 0;
+		// b is throttled inside the batch, then every resend alternates a rejection and a 429 again
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			calls++;
+			if (calls === 1) return [ok(), fail(429, "0x80072322", "throttled")];
+			if (calls % 2 === 0) throw throttled;
+			return requests.map(() => fail(429, "0x80072322", "throttled"));
+		});
+		const result = await deleteRecordsInBatches("accounts", [a, b], { executeBatch, wait, random: () => 0.5 });
+		expect(wait).toHaveBeenCalledTimes(6);
+		expect(result).toMatchObject({ succeeded: 1, failed: 1 });
+	});
+
+	it("honours a throttled operation's Retry-After (#183 review)", async () => {
+		const [a, b] = ids(2);
+		const wait = vi.fn((_ms: number) => Promise.resolve());
+		let calls = 0;
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) =>
+			++calls === 1
+				? [ok(), { ...fail(429, "0x80072322", "throttled"), headers: { "retry-after": "40" } }]
+				: requests.map(ok),
+		);
+		const result = await deleteRecordsInBatches("accounts", [a, b], { executeBatch, wait, random: () => 0.5 });
+		expect(wait.mock.calls.map(([ms]) => ms)).toEqual([40_000]);
+		expect(result.succeeded).toBe(2);
+	});
+
+	it("an operation not resent because the connection changed is reported as not deleted, the rest as done (#175, #183 review)", async () => {
+		const [a, b] = ids(2);
+		let checks = 0;
+		const executeBatch = vi.fn(async () => [ok(), fail(429, "0x80072322", "throttled")]);
+		// On the connection for the batch, changed by the time the wait is over
+		const result = await deleteRecordsInBatches("accounts", [a, b], { executeBatch, wait: noWait, shouldContinue: () => ++checks === 1 });
+		expect(executeBatch).toHaveBeenCalledTimes(1);
+		expect(result.succeeded).toBe(1);
+		expect(result.failed).toBe(1);
+		expect(result.errors).toEqual([`${b}: ${CONNECTION_CHANGED_MESSAGE}`]);
+	});
+
 	it("doesn't resend a throttled batch after the connection changed during the wait (#175)", async () => {
 		const wait = vi.fn(noWait);
 		const executeBatch = vi
@@ -250,6 +341,28 @@ describe("closeRecordsInBatches", () => {
 		expect(result.succeeded).toBe(2);
 		expect(result.failed).toBe(1);
 		expect(result.errors[0]).toMatch(new RegExp(`^${b}: .*The opportunity is already closed`));
+	});
+
+	it("a stop while redoing reports only the records not yet redone, not the closed ones (#183 review)", async () => {
+		const [a, b, c] = ids(3);
+		let checks = 0;
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			if (requests.length > 1) throw new Error("Batch stopped early");
+			// b is throttled; the connection changes while waiting to resend it
+			throw new Error("0x80072322: Number of requests exceeded the limit");
+		});
+		// a was closed by the stopped batch, so only b and c are redone
+		const completedInStoppedBatch = vi.fn(async () => new Set([a]));
+		const result = await closeRecordsInBatches([a, b, c], toRequest, {
+			executeBatch,
+			wait: noWait,
+			completedInStoppedBatch,
+			shouldContinue: () => ++checks <= 2,
+		});
+		expect(result.succeeded + result.failed).toBe(3);
+		expect(result.succeeded).toBe(1);
+		expect(result.errors.map((e) => e.split(":")[0])).toEqual([b, c]);
+		expect(result.errors.every((e) => e.endsWith(CLOSE_CONNECTION_CHANGED_MESSAGE))).toBe(true);
 	});
 
 	it("redoes the whole stopped batch when it can't tell what was closed", async () => {

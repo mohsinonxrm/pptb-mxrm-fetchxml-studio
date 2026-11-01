@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RetryStoppedError, retryDelayMs, withThrottleRetry } from "./throttleRetry";
+import { LONG_RUNNING_RETRY, RetryStoppedError, retryDelayMs, throttleWaitMessage, withThrottleRetry } from "./throttleRetry";
 
 // #96: back-off after service protection errors, with fake timers.
 
@@ -82,5 +82,39 @@ describe("withThrottleRetry (#96)", () => {
 			.mockResolvedValueOnce(1);
 		await expect(withThrottleRetry(operation, { sleep })).resolves.toBe(1);
 		expect(sleep).toHaveBeenCalledWith(2000);
+	});
+});
+
+describe("LONG_RUNNING_RETRY (#183)", () => {
+	const throttled = new Error("0x80072322: Number of requests exceeded the limit");
+
+	it("waits about 5, 10, 20, 40, 80 and 120 s: about 4.5 minutes in all", () => {
+		const delays = [1, 2, 3, 4, 5, 6].map((n) => retryDelayMs(throttled, n, { ...LONG_RUNNING_RETRY, random: () => 0.5 }));
+		expect(delays).toEqual([5_000, 10_000, 20_000, 40_000, 80_000, 120_000]);
+		expect(delays.reduce((a, b) => a! + b!, 0)).toBe(275_000);
+	});
+
+	it("spreads each wait by up to 20% either way", () => {
+		expect(retryDelayMs(throttled, 1, { ...LONG_RUNNING_RETRY, random: () => 0 })).toBe(4_000);
+		expect(retryDelayMs(throttled, 1, { ...LONG_RUNNING_RETRY, random: () => 0.999999 })).toBe(6_000);
+		expect(retryDelayMs(throttled, 6, { ...LONG_RUNNING_RETRY, random: () => 0 })).toBe(96_000);
+	});
+
+	it("honours a Retry-After up to 2 minutes, unspread", () => {
+		const withRetryAfter = (seconds: number) => Object.assign(new Error("0x80072322 throttled"), { retryAfter: seconds });
+		expect(retryDelayMs(withRetryAfter(90), 1, { ...LONG_RUNNING_RETRY, random: () => 0 })).toBe(90_000);
+		expect(retryDelayMs(withRetryAfter(300), 1, LONG_RUNNING_RETRY)).toBeUndefined();
+	});
+
+	it("the default policy stays 2, 4, 8 s, unspread", () => {
+		expect([1, 2, 3].map((n) => retryDelayMs(throttled, n))).toEqual([2_000, 4_000, 8_000]);
+	});
+});
+
+describe("throttleWaitMessage (#183)", () => {
+	it("says how long until the retry", () => {
+		expect(throttleWaitMessage(40)).toBe("Dataverse is limiting requests: trying again in 40s");
+		expect(throttleWaitMessage(120)).toBe("Dataverse is limiting requests: trying again in 2m 0s");
+		expect(throttleWaitMessage(95)).toBe("Dataverse is limiting requests: trying again in 1m 35s");
 	});
 });

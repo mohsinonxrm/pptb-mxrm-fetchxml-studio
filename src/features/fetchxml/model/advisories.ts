@@ -8,7 +8,7 @@
  */
 
 import { validateQueryRules, type AdvisorFix, type AdvisorRuleId, type RuleFinding } from "./fetchxmlRules";
-import { adviseQueryMetadata, type AdvisorMetadata } from "./queryAdvisor";
+import { adviseQueryMetadata, type AdvisorContext, type AdvisorMetadata } from "./queryAdvisor";
 import type { ConditionNode, EntityNode, FetchNode, FilterNode, LinkEntityNode, NodeId, OrderNode } from "./nodes";
 
 export type AdvisoryLevel = "error" | "warning" | "advice";
@@ -180,8 +180,8 @@ export function nodeEntities(fetch: FetchNode): Map<NodeId, AdvisoryEntity> {
  * Every advisory FetchXML Studio finds without a request: the query rules, plus the metadata rules
  * when metadata is given. Sorted by level (stable, so tree order within a level).
  */
-export function collectAdvisories(fetch: FetchNode, metadata?: AdvisorMetadata): Advisory[] {
-	const findings = [...validateQueryRules(fetch), ...(metadata ? adviseQueryMetadata(fetch, metadata) : [])];
+export function collectAdvisories(fetch: FetchNode, metadata?: AdvisorMetadata, context?: AdvisorContext): Advisory[] {
+	const findings = [...validateQueryRules(fetch), ...(metadata ? adviseQueryMetadata(fetch, metadata, context) : [])];
 	const locations = nodeLocations(fetch);
 	const entities = nodeEntities(fetch);
 	const list: Advisory[] = [];

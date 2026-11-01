@@ -51,6 +51,7 @@ import {
 	getParseToTreeChanges,
 } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
+import { DATAVERSE_DEFAULT_PAGE_SIZE } from "../../api/pageRecovery";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import {
@@ -259,6 +260,8 @@ interface PreviewTabsProps {
 	onLoadMore?: () => void;
 	/** Paging notice above the grid: failed page, Stop, simple paging (#60) */
 	pagingNotice?: PagingNotice | null;
+	/** Retrieve All is waiting this long to retry a throttled page (#183) */
+	pagingWaitSeconds?: number;
 	isRetrieveAllInProgress?: boolean;
 	onStopRetrieveAll?: () => void;
 	onRetryPaging?: () => void;
@@ -377,6 +380,7 @@ export function PreviewTabs({
 	isCallee,
 	onLoadMore,
 	pagingNotice,
+	pagingWaitSeconds,
 	isRetrieveAllInProgress,
 	onStopRetrieveAll,
 	onRetryPaging,
@@ -503,16 +507,25 @@ export function PreviewTabs({
 		if (fetchQuery && parsed.canonical === xml) return { fetch: fetchQuery, key: xml, inTree: true, editorInvalid: false };
 		return { fetch: parsed.fetchNode, key: parsed.canonical, inTree: false, editorInvalid: false };
 	}, [isEditorModeActive, editorText, fetchQuery, xml]);
-	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch);
+	// The metadata rules' metadata loads from the tab's first open (#170)
+	const [advisoriesOpened, setAdvisoriesOpened] = useState(false);
+	if (selectedTab === "advisories" && !advisoriesOpened) setAdvisoriesOpened(true);
+	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch, advisoriesOpened);
 	const dataverseCheck = useDataverseCheck();
 	const checkResult = dataverseCheck.result;
+	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
+	// The results of this query are paged: more pages loaded or available (Load more, Retrieve All, #170)
+	const resultQueryXml = useMemo(() => (result?.query ? generateFetchXml(result.query) : undefined), [result?.query]);
+	const resultsPaged =
+		!!result && (result.moreRecords === true || result.rows.length > DATAVERSE_DEFAULT_PAGE_SIZE) && resultQueryXml === advisorySubject.key;
 	const { advisories, added } = useMemo((): { advisories: Advisory[]; added: number } => {
 		const subject = advisorySubject.fetch;
 		if (!subject) return { advisories: [], added: 0 };
-		const own = collectAdvisories(subject, advisorMetadata);
-		return checkResult ? mergeDataverseCheck(subject, own, checkResult.check) : { advisories: own, added: 0 };
-	}, [advisorySubject.fetch, advisorMetadata, checkResult]);
-	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
+		const own = collectAdvisories(subject, advisorMetadata, { resultsPaged });
+		// A check of an earlier query isn't shown or counted until Check again (#170); its status
+		// line still says when it was
+		return checkResult && !checkStale ? mergeDataverseCheck(subject, own, checkResult.check) : { advisories: own, added: 0 };
+	}, [advisorySubject.fetch, advisorMetadata, checkResult, checkStale, resultsPaged]);
 	const checkDisabledReason = !isDataverseAvailable()
 		? "Dataverse isn't available here. Open FetchXML Studio in Power Platform ToolBox."
 		: connectionKey === ""
@@ -986,14 +999,16 @@ export function PreviewTabs({
 							</div>
 							{pagingNotice && (
 								<div className={styles.messageBarContainer}>
-									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" ? "warning" : "info"} layout="multiline">
+									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" || pagingNotice.kind === "limit" ? "warning" : "info"} layout="multiline">
 										<MessageBarBody>
 											<MessageBarTitle>
 												{pagingNotice.kind === "error"
 													? "Couldn't load all records"
 													: pagingNotice.kind === "stopped"
 														? "Retrieve all stopped"
-														: "Paging without a paging cookie"}
+														: pagingNotice.kind === "limit"
+															? `Retrieve all stopped at ${result?.rows.length.toLocaleString() ?? 0} rows`
+															: "Paging without a paging cookie"}
 											</MessageBarTitle>
 											{pagingNotice.kind === "error"
 												? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
@@ -1022,6 +1037,7 @@ export function PreviewTabs({
 									result={result}
 									isLoading={isExecuting}
 									isLoadingMore={isLoadingMore}
+									throttleWaitSeconds={pagingWaitSeconds}
 									attributeMetadata={attributeMetadata}
 									fetchQuery={fetchQuery}
 									primaryIdAttribute={primaryIdAttribute}

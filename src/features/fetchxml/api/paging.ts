@@ -141,4 +141,22 @@ export function advancePaging(state: PagingState, response: PageResponse): Pagin
 export type PagingNotice =
 	| { kind: "error"; page?: number; message: string }
 	| { kind: "stopped"; message: string }
+	| { kind: "limit"; message: string }
 	| { kind: "simple"; message: string };
+
+/**
+ * Retrieve All stops loading once this many rows are loaded (#183): every row is kept in the
+ * webview's memory, with its formatted values, so an unbounded run on a wide table can exhaust it.
+ * Further pages load one at a time by scrolling, as after Stop.
+ */
+export const RETRIEVE_ALL_ROW_LIMIT = 100_000;
+
+/** Whether Retrieve All stops before fetching another page, with this many rows loaded */
+export const retrieveAllLimitReached = (
+	loadedRows: number,
+	limit = RETRIEVE_ALL_ROW_LIMIT,
+): boolean => loadedRows >= limit;
+
+/** The notice when Retrieve All stops at the limit */
+export const RETRIEVE_ALL_LIMIT_MESSAGE =
+	"Retrieve all stops once 100,000 rows or more are loaded, to keep the tool responsive. Scroll to the end of the grid to load more one page at a time. To delete every matching record without loading them, use Bulk delete (job).";
