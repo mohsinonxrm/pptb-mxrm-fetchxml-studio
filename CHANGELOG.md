@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **The generated C# QueryExpression compiles and means what the query does (#178).**
+  - **Link-entities:** they were written with `ColumnSet =` and `Criteria =`, which `LinkEntity` doesn't have, so the code didn't compile (CS0117). They use `Columns` and `LinkCriteria` now, as do any/all filters on related rows (`AnyAllFilterLinkEntity`), which leave out the columns Dataverse ignores.
+  - **Orders:** `new OrderExpression(...)` had the alias and entity name swapped. It's (attribute, order, alias, entity name) now, per the [SDK reference](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.query.orderexpression.-ctor).
+  - **Values:** text that looked like a number (`"00123"`, `"12.50"`, a 20-digit code) was written as a number, changing the query or failing to compile. Each value now keeps the .NET type Dataverse reports, checked against live responses: strings stay quoted, decimals and money get `m` (`1000.5m`), whole numbers stay plain, GUIDs become `new Guid(...)`. Line breaks, tabs and other control characters in names and values are escaped.
+  - **Aggregates:** `hasGroupBy: true` isn't a constructor argument, and a date grouping without an alias picked the wrong constructor. Both are set as properties (`HasGroupBy = true`, `DateTimeGrouping = XrmDateTimeGrouping.Year`).
+  - **Operators:** the numeric operator map didn't match the SDK from 39 on. It does now, and an unknown code is written as a cast that still compiles. (Dataverse returns operator names, so this only mattered for numeric codes.)
+  - **Less noise:** the default `PageInfo` Dataverse always returns is left out unless the query pages. Query hints, `FilterHint` and quick find filters are kept.
+  - **Other snippets:** the Web API URL also encodes `! ' ( ) *`, so the cURL line no longer triggers bash history expansion ("event not found"). The JavaScript and Web API snippets find the entity name when `name` isn't the first attribute, and the offline fallback for `transactioncurrency` is `transactioncurrencies`.
+
 - **Copied rows can't paste into a spreadsheet as live formulas (#208).**
   - **Before:** Copy wrote cell text as it was. A value such as `=HYPERLINK(...)` or `@SUM(...)`, often entered by users or integrations, became a working formula when the rows were pasted into Excel or Google Sheets.
   - **Now:** in copied rows (Ctrl+C, the Copy menu, the row and selected-rows menu items) and copied columns, text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, as [OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection) recommends, so the spreadsheet shows it as text. A number's sign is left alone (`-5`, `-$5.00`). Copying a single cell still copies it exactly. The local Excel export wasn't affected: it writes text as text cells.

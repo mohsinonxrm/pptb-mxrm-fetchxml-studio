@@ -101,3 +101,24 @@ describe("one-line FetchXML for pac and the Web API (#181)", () => {
 		);
 	});
 });
+
+describe("Web API and JavaScript snippets (#178)", () => {
+	it("encodes ! ' ( ) * in the URL, so the cURL line has no bash history expansion", () => {
+		const out = generateFxsSyncCode("webapi", `<fetch><entity name="account"><filter><condition attribute="name" operator="eq" value="Hi!there (O'Neil) *" /></filter></entity></fetch>`, "accounts", "https://contoso.crm.dynamics.com");
+		const curlUrl = out.split("\n").find((l) => l.trim().startsWith('"https://'))!;
+		expect(curlUrl).toContain("Hi%21there%20%28O%27Neil%29%20%2A");
+		expect(curlUrl).not.toMatch(/[!'()*]/);
+		// Still the same query once decoded
+		expect(decodeURIComponent(curlUrl.match(/fetchXml=([^"]+)/)![1])).toContain(`value="Hi!there (O'Neil) *"`);
+	});
+
+	it("finds the entity name when it isn't the first attribute", () => {
+		const xml = `<fetch><entity enableprefiltering="1" name="account"><attribute name="name" /></entity></fetch>`;
+		expect(generateFxsSyncCode("javascript", xml)).toContain('Xrm.WebApi.retrieveMultipleRecords("account"');
+		expect(generateFxsSyncCode("webapi", xml)).toContain("/api/data/v9.2/accounts?");
+	});
+
+	it("falls back to transactioncurrencies for transactioncurrency without metadata", () => {
+		expect(generateFxsSyncCode("webapi", `<fetch><entity name="transactioncurrency" /></fetch>`)).toContain("/api/data/v9.2/transactioncurrencies?");
+	});
+});

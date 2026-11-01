@@ -121,13 +121,13 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 🔀 Code Generation
 - **Code tab** — New tab in the right pane that generates ready-to-use code from the current query in seven formats
-- **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`
+- **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`, any/all filters on related rows, paging and query hints. Values keep the type Dataverse reports (`"00123"` stays a string, decimals get `m`). Converted only while the tab is selected, after typing pauses
 - **C# FetchExpression** — Simple `new FetchExpression(@"...")` wrapper using a verbatim string literal
 - **JavaScript** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
 - **pac CLI** — `pac env fetch --xml '...'` for the Power Platform CLI, as a bash / zsh line and a PowerShell line. The XML is single-quoted, so the shell never expands values such as `$100` or `$(...)`
 - **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI; table name resolved from `EntityDefinitions` metadata (not a heuristic), each field individually copyable; Top Count is taken only from `top` (`count` is a page size)
 - **Web API** — Full OData URL with request headers (including `Prefer: odata.include-annotations="*"` for formatted values and paging cookies), the documented paging-cookie steps, a cURL snippet and a PowerShell `Invoke-RestMethod` example; entity set name resolved from metadata
-- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview)
+- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview); also converted only while selected
 
 ### 🎨 User Experience
 - **Errors stay contained** — If one panel fails to render, only that panel shows an error, with **Try again** and **Copy details**; the rest of the tool keeps working. If the whole tool fails, **Restart with this query** brings it back with your query, or copy the FetchXML first
