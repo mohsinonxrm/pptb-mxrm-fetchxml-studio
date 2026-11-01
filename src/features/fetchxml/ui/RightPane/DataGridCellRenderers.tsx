@@ -221,10 +221,9 @@ export function NumberCellRenderer({
 
 	// Format based on attribute type
 	if (attribute?.AttributeType === "Money") {
-		// Format as currency (would need locale info for proper currency symbol)
+		// No formatted value, so no currency: the amount alone, not a "$" (#184)
 		return (
 			<span className={styles.numberCell}>
-				$
 				{numValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 			</span>
 		);
@@ -271,7 +270,12 @@ export function DateTimeCellRenderer({
 		return <span>—</span>;
 	}
 
-	const dateValue = new Date(String(value));
+	// A Date Only value ("2024-03-14") is that date: new Date() would read it as UTC midnight and
+	// show the day before west of UTC (#184, as #198)
+	const dateOnlyText = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+	const dateValue = dateOnlyText
+		? new Date(Number(dateOnlyText[1]), Number(dateOnlyText[2]) - 1, Number(dateOnlyText[3]))
+		: new Date(String(value));
 
 	if (isNaN(dateValue.getTime())) {
 		return <span>—</span>;
@@ -279,7 +283,7 @@ export function DateTimeCellRenderer({
 
 	// Check if DateOnly format
 	const isDateOnly =
-		attribute?.Format === "DateOnly" || attribute?.DateTimeBehavior?.Value === "DateOnly";
+		!!dateOnlyText || attribute?.Format === "DateOnly" || attribute?.DateTimeBehavior?.Value === "DateOnly";
 
 	if (isDateOnly) {
 		return (

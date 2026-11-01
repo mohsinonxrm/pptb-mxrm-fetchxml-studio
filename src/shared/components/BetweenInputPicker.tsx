@@ -7,6 +7,8 @@ import { Label, makeStyles, tokens } from "@fluentui/react-components";
 import { NumericInputPicker } from "./NumericInputPicker";
 import { DateTimeInputPicker } from "./DateTimeInputPicker";
 import type { AttributeMetadata } from "../../features/fetchxml/api/pptbClient";
+import { dateValueContext, timeZoneHint } from "../../features/fetchxml/model/dateTimeValues";
+import { useDataverseTimeZone } from "../hooks/useDataverseTimeZone";
 
 const useStyles = makeStyles({
 	container: {
@@ -18,6 +20,12 @@ const useStyles = makeStyles({
 	inputWrapper: {
 		flex: 1,
 		minWidth: "120px",
+	},
+	// Like a Field hint, once under both dates (#207)
+	hint: {
+		color: tokens.colorNeutralForeground3,
+		fontSize: tokens.fontSizeBase200,
+		lineHeight: tokens.lineHeightBase200,
 	},
 	separator: {
 		color: tokens.colorNeutralForeground3,
@@ -48,25 +56,9 @@ export function BetweenInputPicker({
 
 	const [value1, value2] = value;
 
-	const handleValue1Change = (newValue: number | string | Date | undefined) => {
-		const val1 =
-			newValue instanceof Date
-				? newValue.toISOString()
-				: typeof newValue === "number" || typeof newValue === "string"
-				? newValue
-				: undefined;
-		onChange([val1, value2]);
-	};
-
-	const handleValue2Change = (newValue: number | string | Date | undefined) => {
-		const val2 =
-			newValue instanceof Date
-				? newValue.toISOString()
-				: typeof newValue === "number" || typeof newValue === "string"
-				? newValue
-				: undefined;
-		onChange([value1, val2]);
-	};
+	// Dates come as the condition's text, written for the column's behaviour (#207)
+	const handleValue1Change = (newValue: number | string | undefined) => onChange([newValue, value2]);
+	const handleValue2Change = (newValue: number | string | undefined) => onChange([value1, newValue]);
 
 	const isNumeric =
 		attribute.AttributeType === "Integer" ||
@@ -75,46 +67,53 @@ export function BetweenInputPicker({
 		attribute.AttributeType === "Double";
 
 	const isDateTime = attribute.AttributeType === "DateTime";
+	const timeZone = useDataverseTimeZone();
+	const hint = isDateTime ? timeZoneHint(dateValueContext(attribute, undefined, timeZone), timeZone) : undefined;
 
 	return (
-		<div className={styles.container}>
-			<div className={styles.inputWrapper}>
-				{isNumeric ? (
-					<NumericInputPicker
-						attribute={attribute}
-						value={typeof value1 === "number" ? value1 : undefined}
-						onChange={handleValue1Change}
-						placeholder={placeholder1}
-					/>
-				) : isDateTime ? (
-					<DateTimeInputPicker
-						attribute={attribute}
-						value={typeof value1 === "string" ? value1 : undefined}
-						onChange={handleValue1Change}
-						placeholder={placeholder1}
-					/>
-				) : null}
-			</div>
+		<div>
+			<div className={styles.container}>
+				<div className={styles.inputWrapper}>
+					{isNumeric ? (
+						<NumericInputPicker
+							attribute={attribute}
+							value={typeof value1 === "number" ? value1 : undefined}
+							onChange={handleValue1Change}
+							placeholder={placeholder1}
+						/>
+					) : isDateTime ? (
+						<DateTimeInputPicker
+							attribute={attribute}
+							value={typeof value1 === "string" ? value1 : undefined}
+							onChange={handleValue1Change}
+							placeholder={placeholder1}
+							showTimeZoneHint={false}
+						/>
+					) : null}
+				</div>
 
-			<Label className={styles.separator}>and</Label>
+				<Label className={styles.separator}>and</Label>
 
-			<div className={styles.inputWrapper}>
-				{isNumeric ? (
-					<NumericInputPicker
-						attribute={attribute}
-						value={typeof value2 === "number" ? value2 : undefined}
-						onChange={handleValue2Change}
-						placeholder={placeholder2}
-					/>
-				) : isDateTime ? (
-					<DateTimeInputPicker
-						attribute={attribute}
-						value={typeof value2 === "string" ? value2 : undefined}
-						onChange={handleValue2Change}
-						placeholder={placeholder2}
-					/>
-				) : null}
+				<div className={styles.inputWrapper}>
+					{isNumeric ? (
+						<NumericInputPicker
+							attribute={attribute}
+							value={typeof value2 === "number" ? value2 : undefined}
+							onChange={handleValue2Change}
+							placeholder={placeholder2}
+						/>
+					) : isDateTime ? (
+						<DateTimeInputPicker
+							attribute={attribute}
+							value={typeof value2 === "string" ? value2 : undefined}
+							onChange={handleValue2Change}
+							placeholder={placeholder2}
+							showTimeZoneHint={false}
+						/>
+					) : null}
+				</div>
 			</div>
+			{hint && <span className={styles.hint}>{hint}</span>}
 		</div>
 	);
 }

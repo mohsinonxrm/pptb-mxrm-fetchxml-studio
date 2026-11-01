@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { exportToExcelLocal } from "./excelExport";
-import type { AttributeMetadata } from "./pptbClient";
+import type { AttributeMetadata, FormattingMetadata } from "./pptbClient";
+import { UTC_TIME_ZONE, timeZoneFromUserSettings } from "../model/dateTimeValues";
 
 // Local Excel export: write the workbook, then read it back with ExcelJS (#145).
 
@@ -78,6 +79,10 @@ describe("exportToExcelLocal", () => {
 			attributeMetadata,
 			entityName: "account",
 			fileName: "accounts",
+			timeZone: UTC_TIME_ZONE,
+			formattingMetadata: new Map([
+				["account", new Map<string, FormattingMetadata>([["createdon", { Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } }]])],
+			]),
 		});
 
 		expect(fileName).toMatch(/^accounts_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.xlsx$/);
@@ -175,5 +180,129 @@ describe("exceljs with the uuid override", () => {
 		expect(rule.x14Id).toMatch(
 			/^\{[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}\}$/,
 		);
+	});
+});
+
+describe("exportToExcelLocal: currencies, precision, dates and time zones (#184)", () => {
+	const TOKYO = timeZoneFromUserSettings({ timezonebias: -540 }, "Tokyo Standard Time");
+	const meta = new Map([
+		[
+			"contact",
+			new Map(
+				[
+					attr("fullname", "String"),
+					attr("creditlimit", "Money"),
+					attr("score", "Decimal"),
+					attr("lastonholdtime", "DateTime"),
+					attr("birthdate", "DateTime"),
+					attr("checkin", "DateTime"),
+					attr("followup", "DateTime"),
+				].map((a) => [a.LogicalName, a]),
+			),
+		],
+	]);
+	const formatting = new Map<string, Map<string, FormattingMetadata>>([
+		[
+			"contact",
+			new Map<string, FormattingMetadata>([
+				["creditlimit", { PrecisionSource: 2 }],
+				["score", { Precision: 0 }],
+				["lastonholdtime", { Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } }],
+				["birthdate", { Format: "DateOnly", DateTimeBehavior: { Value: "DateOnly" } }],
+				["checkin", { Format: "DateAndTime", DateTimeBehavior: { Value: "TimeZoneIndependent" } }],
+				["followup", { Format: "DateOnly", DateTimeBehavior: { Value: "UserLocal" } }],
+			]),
+		],
+	]);
+	const cols = ["fullname", "creditlimit", "score", "lastonholdtime", "birthdate", "checkin", "followup"];
+	const rows: Record<string, unknown>[] = [
+		{
+			fullname: "Euro",
+			creditlimit: 1234.5,
+			[`creditlimit${FV}`]: "€1.234,50",
+			score: 12,
+			lastonholdtime: "2024-03-14T20:00:00Z",
+			birthdate: "2024-03-14",
+			checkin: "2024-03-14T23:30:00Z",
+			followup: "2024-03-14T15:00:00Z",
+		},
+		{ fullname: "Yen", creditlimit: 1235, [`creditlimit${FV}`]: "¥1,235" },
+		{ fullname: "Krona", creditlimit: 99.9, [`creditlimit${FV}`]: "99,90 kr" },
+	];
+	const run = (extra: Partial<Parameters<typeof exportToExcelLocal>[0]>) =>
+		exportToExcelLocal({
+			records: rows,
+			columns: cols,
+			columnDisplayNames: new Map(),
+			attributeMetadata: meta,
+			entityName: "contact",
+			formattingMetadata: formatting,
+			...extra,
+		}).then(({ buffer }) => readBack(buffer));
+
+	it("keeps each record's currency symbol and decimals instead of $", async () => {
+		const sheet = await run({ timeZone: TOKYO });
+		expect(sheet.getRow(2).getCell(2).numFmt).toBe('"€"#,##0.00');
+		expect(sheet.getRow(3).getCell(2).numFmt).toBe('"¥"#,##0');
+		expect(sheet.getRow(4).getCell(2).numFmt).toBe('#,##0.00" kr"');
+	});
+
+	it("writes precision 0 as 0, not 0.", async () => {
+		const sheet = await run({ timeZone: TOKYO });
+		expect(sheet.getRow(2).getCell(3).numFmt).toBe("0");
+	});
+
+	it("dates: User Local in the Dataverse time zone, Date Only as a date, Time Zone Independent as stored", async () => {
+		const sheet = await run({ timeZone: TOKYO });
+		expect(sheet.getRow(1).getCell(4).value).toBe("lastonholdtime");
+		const row = sheet.getRow(2);
+		// 20:00Z is 05:00 on the 15th in Tokyo
+		expect(row.getCell(4).value).toEqual(new Date(Date.UTC(2024, 2, 15, 5, 0)));
+		expect(row.getCell(4).numFmt).toBe("yyyy-mm-dd hh:mm:ss");
+		expect(row.getCell(5).value).toEqual(new Date(Date.UTC(2024, 2, 14)));
+		expect(row.getCell(5).numFmt).toBe("yyyy-mm-dd");
+		expect(row.getCell(6).value).toEqual(new Date(Date.UTC(2024, 2, 14, 23, 30)));
+		// A User Local column with a date-only format: the date in the Dataverse time zone
+		expect(row.getCell(7).value).toEqual(new Date(Date.UTC(2024, 2, 15)));
+		expect(row.getCell(7).numFmt).toBe("yyyy-mm-dd");
+	});
+
+	it("raw mode: no number formats, User Local date-times in UTC and labelled so", async () => {
+		const sheet = await run({
+			timeZone: TOKYO,
+			displaySettings: {
+				useLogicalNames: true,
+				valueDisplayMode: "raw",
+				entityScopeMode: "all",
+				advancedFindOnly: true,
+				gridDensity: "medium",
+				treeIconStyle: "tinted",
+			},
+		});
+		expect(sheet.getRow(1).getCell(4).value).toBe("lastonholdtime (UTC)");
+		expect(sheet.getRow(2).getCell(4).value).toEqual(new Date(Date.UTC(2024, 2, 14, 20, 0)));
+		expect(sheet.getRow(2).getCell(2).numFmt).toBeFalsy();
+		expect(sheet.getRow(2).getCell(3).numFmt).toBeFalsy();
+	});
+
+	it("labels User Local date-times (UTC) when the time zone couldn't be read, date-only format too", async () => {
+		const sheet = await run({ timeZone: undefined });
+		expect(sheet.getRow(1).getCell(4).value).toBe("lastonholdtime (UTC)");
+		expect(sheet.getRow(2).getCell(4).value).toEqual(new Date(Date.UTC(2024, 2, 14, 20, 0)));
+		expect(sheet.getRow(1).getCell(7).value).toBe("followup (UTC)");
+		expect(sheet.getRow(2).getCell(7).value).toEqual(new Date(Date.UTC(2024, 2, 14)));
+		// Date Only and Time Zone Independent columns don't depend on a time zone
+		expect(sheet.getRow(1).getCell(5).value).toBe("birthdate");
+		expect(sheet.getRow(1).getCell(6).value).toBe("checkin");
+	});
+
+	it("writes the formatted text for a date column whose behaviour couldn't be loaded", async () => {
+		const sheet = await run({
+			timeZone: TOKYO,
+			formattingMetadata: new Map(),
+			records: [{ fullname: "x", checkin: "2024-03-14T23:30:00Z", [`checkin${FV}`]: "3/14/2024 11:30 PM" }],
+		});
+		expect(sheet.getRow(1).getCell(6).value).toBe("checkin");
+		expect(sheet.getRow(2).getCell(6).value).toBe("3/14/2024 11:30 PM");
 	});
 });

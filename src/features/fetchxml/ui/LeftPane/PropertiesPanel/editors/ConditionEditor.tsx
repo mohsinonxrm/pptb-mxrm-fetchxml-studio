@@ -208,8 +208,9 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 			return (
 				<DateTimeInputPicker
 					attribute={selectedAttribute}
-					value={typeof node.value === "string" ? node.value : node.value instanceof Date ? node.value : undefined}
-					onChange={(val) => onUpdate({ value: val?.toISOString() })}
+					value={typeof node.value === "string" ? node.value : undefined}
+					operator={node.operator}
+					onChange={(val) => onUpdate({ value: val })}
 					placeholder="Select a date"
 				/>
 			);

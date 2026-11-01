@@ -58,6 +58,8 @@ import {
 	getEntityStateModel,
 	setRecordsState,
 	closeRecords,
+	loadFormattingMetadata,
+	loadUserTimeZone,
 } from "../features/fetchxml/api/pptbClient";
 import {
 	closeMessageReason,
@@ -1443,6 +1445,23 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				entityLogicalName ||
 				"export";
 
+			// Date behaviours and formats, money precision and the user's time zone (#184); the export
+			// still works without them (UTC, labelled; currency and decimals from formatted values)
+			const entityNames = [...(attributeMetadata?.keys() ?? [])];
+			const [formattingEntries, timeZone] = await Promise.all([
+				Promise.all(
+					entityNames.map((name) =>
+						loadFormattingMetadata(name)
+							.then((formatting) => [name, formatting] as const)
+							.catch((error: unknown) => {
+								console.error(`Failed to load formatting metadata for ${name}:`, error);
+								return [name, new Map()] as const;
+							}),
+					),
+				),
+				loadUserTimeZone(),
+			]);
+
 			const { buffer, fileName: finalFileName } = await exportToExcelLocal({
 				records: queryResult.rows,
 				columns,
@@ -1451,6 +1470,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				entityName: entityLogicalName,
 				fileName,
 				displaySettings,
+				formattingMetadata: new Map(formattingEntries),
+				timeZone,
 			});
 
 			// Trigger download

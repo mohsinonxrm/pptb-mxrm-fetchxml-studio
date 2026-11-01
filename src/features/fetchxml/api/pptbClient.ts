@@ -54,6 +54,7 @@ import {
 
 import { functionWithString, odataString } from "./odata";
 import { buildRecordNameQuery, buildRecordSearchQuery, type RecordSearchTarget } from "./recordSearch";
+import { USER_SETTINGS_TIME_ZONE_COLUMNS, timeZoneFromUserSettings, type DataverseTimeZone } from "../model/dateTimeValues";
 export interface EntityMetadata {
 	LogicalName: string;
 	SchemaName: string;
@@ -883,6 +884,75 @@ async function retrieveWhoAmI(): Promise<WhoAmIResponse | null> {
 		console.error("WhoAmI failed:", error);
 		return null;
 	}
+}
+
+/**
+ * The user's Dataverse time zone (Personal Options), for date-time condition values (#207) and
+ * the Excel export (#184). Memoized per connection; undefined when it can't be read, so callers
+ * fall back to values Dataverse reads in the user's time zone anyway.
+ */
+export function loadUserTimeZone(): Promise<DataverseTimeZone | undefined> {
+	return memoizeForSession("userTimeZone", retrieveUserTimeZone, (tz) => tz !== undefined);
+}
+
+async function retrieveUserTimeZone(): Promise<DataverseTimeZone | undefined> {
+	if (!isDataverseAvailable()) return undefined;
+	try {
+		const user = await whoAmI();
+		if (!user) return undefined;
+		const settings = (await window.dataverseAPI!.queryData(
+			`usersettingscollection(${user.UserId})?$select=${USER_SETTINGS_TIME_ZONE_COLUMNS.join(",")}`,
+		)) as Record<string, unknown>;
+		// The name is only for the hint: without it, the rules still apply
+		let name = "";
+		if (typeof settings.timezonecode === "number") {
+			try {
+				const definitions = (await window.dataverseAPI!.queryData(
+					`timezonedefinitions?$select=standardname&$filter=timezonecode eq ${settings.timezonecode}`,
+				)) as { value?: { standardname?: string }[] };
+				name = definitions.value?.[0]?.standardname ?? "";
+			} catch (error) {
+				console.error("Failed to read the time zone's name:", error);
+			}
+		}
+		return timeZoneFromUserSettings(settings, name);
+	} catch (error) {
+		console.error("Failed to read the user's time zone:", error);
+		return undefined;
+	}
+}
+
+/** Date and money formatting metadata of one attribute, for the Excel export (#184) */
+export interface FormattingMetadata {
+	Format?: "DateOnly" | "DateAndTime";
+	DateTimeBehavior?: { Value?: string };
+	Precision?: number;
+	/** Money: 0 = Precision, 1 = the organization's pricing precision, 2 = the currency's precision */
+	PrecisionSource?: number;
+}
+
+/**
+ * The formats and behaviours of an entity's date attributes, and the precision of its money,
+ * decimal and floating point ones (#184), which the attribute list doesn't include: one request
+ * per type. Memoized per connection.
+ */
+export function loadFormattingMetadata(entityLogicalName: string): Promise<Map<string, FormattingMetadata>> {
+	return memoizeForSession(`formatting:${entityLogicalName}`, async () => {
+		const result = new Map<string, FormattingMetadata>();
+		if (!isDataverseAvailable()) return result;
+		const base = `EntityDefinitions(LogicalName='${odataString(entityLogicalName)}')/Attributes`;
+		const responses = await Promise.all([
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DateTimeAttributeMetadata?$select=LogicalName,Format,DateTimeBehavior`),
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.MoneyAttributeMetadata?$select=LogicalName,Precision,PrecisionSource`),
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DecimalAttributeMetadata?$select=LogicalName,Precision`),
+			window.dataverseAPI!.queryData(`${base}/Microsoft.Dynamics.CRM.DoubleAttributeMetadata?$select=LogicalName,Precision`),
+		]);
+		for (const row of responses.flatMap((response) => (response as { value?: unknown[] }).value ?? [])) {
+			const { LogicalName, ...meta } = row as FormattingMetadata & { LogicalName: string };
+			result.set(LogicalName, meta);
+		}
+		return result;
+	});
 }
 
 /**
