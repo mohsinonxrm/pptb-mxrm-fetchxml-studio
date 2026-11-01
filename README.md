@@ -135,7 +135,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ## ✏️ What this tool changes
 
-FetchXML Studio only reads from Dataverse until you start one of the operations below. Each one asks for confirmation first, and the confirmation names the target: the environment (connection name, URL and type, with Production highlighted), the entity, and how many records (or which view). For the record operations, on a Production connection, for more than 100 records, or when the total isn't known (Bulk Delete with no rows selected), you type the entity logical name before the button enables. They all run as the connected user, or as the user PPTB is impersonating, so Dataverse applies that user's security roles.
+FetchXML Studio only reads from Dataverse until you start one of the operations below. Each one asks for confirmation first, and the confirmation names the target: the environment (connection name, URL and type, with Production highlighted), the entity, and how many records (or which view). For the record operations, on a Production connection, for more than 100 records, or when the total isn't known (Bulk Delete with no rows selected), you type the entity logical name before the button enables. Each confirmation also says how to undo the change, or that it can't be undone: deleting, running a workflow and overwriting a view can't be undone from the tool; Activate and Deactivate undo each other. They all run as the connected user, or as the user PPTB is impersonating, so Dataverse applies that user's security roles.
 
 | Operation | When | What it does in Dataverse |
 |---|---|---|
@@ -149,7 +149,7 @@ FetchXML Studio only reads from Dataverse until you start one of the operations 
 Nothing else writes to Dataverse:
 - **Export (Server)** asks Dataverse to build an Excel file (`ExportToExcel`) and changes no data.
 - **Export (Local)** writes an `.xlsx` file to the location you choose.
-- **Display settings** (logical names, value format, entity source, Advanced Find only) are stored by Power Platform ToolBox on your machine, not in Dataverse.
+- **Display settings** (logical names, value format, entity source, Advanced Find only) and the **publisher and solution** you last picked for each environment are stored by Power Platform ToolBox on your machine, not in Dataverse.
 
 ## 🖼️ Interface Overview
 

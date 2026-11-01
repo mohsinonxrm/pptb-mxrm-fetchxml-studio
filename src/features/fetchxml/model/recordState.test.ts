@@ -121,6 +121,13 @@ describe("planStateChange", () => {
 		expect(planStateChange(account, "activate")).toMatchObject({ kind: "simple", target: { statecode: 0, statuscode: 1 } });
 	});
 
+	it("marks plans for entities that enforce transitions, whose way back may not be allowed (#69)", () => {
+		const plan = planStateChange(enforced({ 1: [2, 20] }), "deactivate", [1]);
+		expect(plan).toMatchObject({ kind: "choose", transitionsEnforced: true });
+		expect(planStateChange(lead, "deactivate", undefined, "lead")).not.toHaveProperty("transitionsEnforced");
+		expect(planStateChange(account, "deactivate")).not.toHaveProperty("transitionsEnforced");
+	});
+
 	it("offers status reasons grouped by state for multi-state entities", () => {
 		expect(isSimpleStateModel(lead)).toBe(false);
 		const activate = planStateChange(lead, "activate", undefined, "lead");

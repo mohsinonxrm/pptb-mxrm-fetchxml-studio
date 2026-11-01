@@ -27,6 +27,7 @@ import { Play20Regular, CheckmarkCircle20Regular, Warning20Regular } from "@flue
 import type { WorkflowInfo, WorkflowBatchProgress } from "../../api/pptbClient";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { UndoNote } from "../../../../shared/components/UndoNote";
 
 const useStyles = makeStyles({
 	content: {
@@ -282,6 +283,7 @@ export function WorkflowPickerDialog({
 							scope={{ kind: "records", count: recordCount }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
+						<UndoNote undo="none">There's no undo: whatever the workflow changes stays changed.</UndoNote>
 
 						<Text>
 							Select a workflow to run on {recordCount} {recordCount === 1 ? "record" : "records"}:

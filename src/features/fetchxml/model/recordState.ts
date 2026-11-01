@@ -196,9 +196,9 @@ export interface StateGroup {
 
 export type StatePlan =
 	/** One target, no choice (simple entities) */
-	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string }
+	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string; transitionsEnforced?: true }
 	/** The user picks a status reason, grouped by state */
-	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string }
+	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string; transitionsEnforced?: true }
 	/** Nothing to do, and why */
 	| { kind: "none"; reason: string };
 
@@ -227,7 +227,14 @@ export function planStateChange(
 		const statuscode = defaultStatusOf(model, state);
 		if (statuscode === undefined) return { kind: "none", reason: `The ${state.label} state has no status reason.` };
 		const statusLabel = model.statuses.find((s) => s.value === statuscode)?.label ?? String(statuscode);
-		return { kind: "simple", target: { statecode: state.value, statuscode }, stateLabel: state.label, statusLabel };
+		return {
+			kind: "simple",
+			target: { statecode: state.value, statuscode },
+			stateLabel: state.label,
+			statusLabel,
+			// The way back may not be allowed either (#69)
+			...(model.enforceTransitions && { transitionsEnforced: true as const }),
+		};
 	}
 
 	const filter = transitionFilter(model, currentStatuses);
@@ -249,7 +256,13 @@ export function planStateChange(
 	}
 	const first = groups.find((g) => !stateNote(entityLogicalName, g.statecode)) ?? groups[0];
 	const preselected = first.choices.find((c) => c.isDefault) ?? first.choices[0];
-	return { kind: "choose", groups, defaultTarget: { statecode: first.statecode, statuscode: preselected.statuscode }, note: filter.note };
+	return {
+		kind: "choose",
+		groups,
+		defaultTarget: { statecode: first.statecode, statuscode: preselected.statuscode },
+		note: filter.note,
+		...(model.enforceTransitions && { transitionsEnforced: true as const }),
+	};
 }
 
 /** The body of the state change PATCH: `{ statecode, statuscode }` (Learn: always set both) */

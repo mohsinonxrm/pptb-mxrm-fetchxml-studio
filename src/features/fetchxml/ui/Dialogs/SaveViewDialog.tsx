@@ -65,6 +65,7 @@ import {
 	isSharedView,
 } from "../../model/savedViews";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { UndoNote } from "../../../../shared/components/UndoNote";
 
 const useStyles = makeStyles({
 	surface: {
@@ -628,6 +629,12 @@ export function SaveViewDialog({
 					<DialogContent className={styles.content}>
 						{/* Environment and scope (#69) */}
 						<TargetScope entityLogicalName={entityLogicalName} scope={{ kind: "text", text: scopeText }} />
+						{isOverwriteMode && loadedView && !isOverwriteBlocked && (
+							<UndoNote undo="none">
+								There's no undo: the view's current definition is replaced. To keep it, use Save as instead.
+								{loadedView.type === "system" && shouldPublish && " Publishing makes the change visible to all users."}
+							</UndoNote>
+						)}
 
 						{/* Validation Section */}
 						<div className={styles.validationSection}>

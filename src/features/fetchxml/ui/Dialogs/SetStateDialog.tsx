@@ -34,6 +34,7 @@ import { getEntityStateModel, getRecordStatuses } from "../../api/pptbClient";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { planStateChange, stateNote, type StateAction, type StatePlan, type StateTarget } from "../../model/recordState";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { UndoNote } from "../../../../shared/components/UndoNote";
 
 const useStyles = makeStyles({
 	content: {
@@ -209,6 +210,13 @@ export function SetStateDialog({
 							scope={{ kind: "records", count }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
+						{plan && plan.kind !== "none" && (
+							<UndoNote undo="possible">
+								To undo, select the records and run {action === "activate" ? "Deactivate" : "Activate"}
+								{plan.transitionsEnforced ? ", if this entity's status reason transitions allow it." : "."}
+								{plan.kind === "choose" && " The previous status reason isn't restored, so set it again if needed."}
+							</UndoNote>
+						)}
 						{plan?.kind === "none" && (
 							<MessageBar intent="warning" layout="multiline">
 								<MessageBarBody>
