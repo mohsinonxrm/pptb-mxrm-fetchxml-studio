@@ -239,6 +239,10 @@ interface ValidationState {
 	errorMessage?: string;
 }
 
+/** The fields the user edits, compared with how the dialog opened (#264) */
+const formSnapshot = (form: { name: string; description: string; viewType: string; makeDefault: boolean }) =>
+	JSON.stringify([form.name, form.description, form.viewType, form.makeDefault]);
+
 export function SaveViewDialog({
 	open,
 	onClose,
@@ -309,6 +313,8 @@ export function SaveViewDialog({
 	const [managedSolution, setManagedSolution] = useState<{ friendlyName: string; uniqueName: string } | null>(null);
 	// Set as default view (#142)
 	const [makeDefault, setMakeDefault] = useState(false);
+	// The fields as the dialog opened, to tell edits apart (#264)
+	const [initialForm, setInitialForm] = useState<string | null>(null);
 	const [currentDefaultView, setCurrentDefaultView] = useState<{ id: string; name: string } | null>(null);
 
 	// Check if this is a "Save" to existing view
@@ -331,24 +337,28 @@ export function SaveViewDialog({
 	// Initialize form when dialog opens
 	useEffect(() => {
 		if (open) {
-			if (isOverwriteRequest && loadedView) {
-				setName(loadedView.name);
-				setViewType(loadedView.type);
-				// Overwrite keeps the view's description unless it's edited (#142)
-				setDescription(loadedView.description ?? "");
-				setMakeDefault(loadedView.isDefault === true);
-			} else {
-				setName("");
-				setViewType("personal");
-				setDescription("");
-				setMakeDefault(false);
-			}
+			const initial =
+				isOverwriteRequest && loadedView
+					? // Overwrite keeps the view's description unless it's edited (#142)
+						{ name: loadedView.name, description: loadedView.description ?? "", viewType: loadedView.type, makeDefault: loadedView.isDefault === true }
+					: { name: "", description: "", viewType: "personal" as const, makeDefault: false };
+			setName(initial.name);
+			setViewType(initial.viewType);
+			setDescription(initial.description);
+			setMakeDefault(initial.makeDefault);
+			setInitialForm(formSnapshot(initial));
 			setSavingCopy(false);
 			setSaveError(null);
 			setPartialSave(null);
 			setValidation({ status: "idle", messages: [] });
+		} else {
+			setInitialForm(null);
 		}
 	}, [open, isOverwriteRequest, loadedView]);
+
+	// With edits in the form, PPTB warns before the tool closes (#264); the host shows its own prompt
+	const hasEdits = open && initialForm !== null && formSnapshot({ name, description, viewType, makeDefault }) !== initialForm;
+	useEffect(() => (hasEdits ? holdClose() : undefined), [hasEdits]);
 
 	// Who owns the view, and whether the user can write it (#142). Their own views skip the check.
 	useEffect(() => {

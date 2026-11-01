@@ -19,7 +19,7 @@ import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddC
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
-import { isT2TSupported, resolveLaunchPrefill } from "../features/fetchxml/api/invocation";
+import { isT2TSupported, resolveLaunchPrefill, viewPrefillNotice } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
@@ -60,6 +60,8 @@ import {
 	closeRecords,
 	loadFormattingMetadata,
 	loadUserTimeZone,
+	resolveEntitySet,
+	toLoadedViewInfo,
 } from "../features/fetchxml/api/pptbClient";
 import {
 	closeMessageReason,
@@ -382,6 +384,28 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 				if (action.kind === "entity") {
 					builder.setEntity(action.entityLogicalName);
+					return;
+				}
+
+				// A view: loaded as Load view does, with its layout, execution by ID and Save view's
+				// overwrite; or a notification saying why it couldn't be opened (#197)
+				if (action.kind === "viewUnavailable") {
+					console.warn("T2T prefill: the view couldn't be opened:", action);
+					await window.toolboxAPI?.utils?.showNotification?.(viewPrefillNotice(action));
+					return;
+				}
+				if (action.kind === "view") {
+					let entitySetName: string | undefined;
+					try {
+						entitySetName = (await resolveEntitySet(action.entityLogicalName))?.entitySetName;
+						if (!entitySetName) throw new Error(`${action.entityLogicalName} has no entity set name in metadata.`);
+					} catch (error) {
+						await window.toolboxAPI?.utils?.showNotification?.(
+							viewPrefillNotice({ kind: "viewUnavailable", viewType: action.view.type, id: action.view.id, error }),
+						);
+						return;
+					}
+					applyLoadedViewRef.current(toLoadedViewInfo(action.view, entitySetName));
 					return;
 				}
 
@@ -1825,7 +1849,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	 */
 	const handleExecuteWorkflow = useCallback(
 		async (
-			workflowId: string,
+			workflow: WorkflowInfo,
 			recordIds: string[],
 			onProgress: (progress: WorkflowBatchProgress) => void,
 		): Promise<{ succeeded: number; failed: number; errors: string[] }> => {
@@ -1833,7 +1857,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
 			}
 			// The host warns before the tab closes while workflows are being started (#70)
-			return whileHoldingClose(() => executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress));
+			return whileHoldingClose(() => executeWorkflowBatch(workflow, recordIds, entityLogicalName, onProgress));
 		},
 		[entityLogicalName],
 	);
@@ -1909,6 +1933,41 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 	// ============ END RECORD ACTION HANDLERS ============
 
+	/** Loads a view into the tree as Load view does: its layout, execution by ID, Save view's overwrite (#93, #142, #197) */
+	const applyLoadedView = (viewInfo: LoadedViewInfo) => {
+		// Load the view's FetchXML into the tree while preserving view info
+		// Pass layoutxml for column configuration if available
+		const result = builder.loadView(
+			viewInfo.originalFetchXml,
+			{
+				id: viewInfo.id,
+				type: viewInfo.type,
+				entitySetName: viewInfo.entitySetName,
+				name: viewInfo.name,
+				queryType: viewInfo.queryType,
+				isCustomizable: viewInfo.isCustomizable,
+				description: viewInfo.description,
+				isDefault: viewInfo.isDefault,
+				isManaged: viewInfo.isManaged,
+				solutionId: viewInfo.solutionId,
+				ownerId: viewInfo.ownerId,
+				ownerName: viewInfo.ownerName,
+			},
+			viewInfo.layoutxml,
+		);
+		// A test value belongs to the quick find view it was entered for (#142)
+		setQuickFindValue("");
+		// Say when the view couldn't be loaded, or the tree changed its query (#93)
+		const notice = getViewLoadNotice(viewInfo.name, result);
+		if (notice) {
+			if (!result.success) console.error("Failed to parse view FetchXML:", result.errors);
+			void window.toolboxAPI?.utils?.showNotification?.(notice);
+		}
+	};
+	// The launch prefill runs once, after the first render (#197)
+	const applyLoadedViewRef = useRef(applyLoadedView);
+	applyLoadedViewRef.current = applyLoadedView;
+
 	return (
 		<div className={styles.root} data-app-root>
 			{/* Left Pane */}
@@ -1924,36 +1983,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						onEntityScopeModeChange={(entityScopeMode) => setDisplaySettings({ ...displaySettings, entityScopeMode })}
 						advancedFindOnly={displaySettings.advancedFindOnly}
 						onAdvancedFindOnlyChange={(advancedFindOnly) => setDisplaySettings({ ...displaySettings, advancedFindOnly })}
-						onViewLoad={(viewInfo: LoadedViewInfo) => {
-							// Load the view's FetchXML into the tree while preserving view info
-							// Pass layoutxml for column configuration if available
-							const result = builder.loadView(
-								viewInfo.originalFetchXml,
-								{
-									id: viewInfo.id,
-									type: viewInfo.type,
-									entitySetName: viewInfo.entitySetName,
-									name: viewInfo.name,
-									queryType: viewInfo.queryType,
-									isCustomizable: viewInfo.isCustomizable,
-									description: viewInfo.description,
-									isDefault: viewInfo.isDefault,
-									isManaged: viewInfo.isManaged,
-									solutionId: viewInfo.solutionId,
-									ownerId: viewInfo.ownerId,
-									ownerName: viewInfo.ownerName,
-								},
-								viewInfo.layoutxml,
-							);
-							// A test value belongs to the quick find view it was entered for (#142)
-							setQuickFindValue("");
-							// Say when the view couldn't be loaded, or the tree changed its query (#93)
-							const notice = getViewLoadNotice(viewInfo.name, result);
-							if (notice) {
-								if (!result.success) console.error("Failed to parse view FetchXML:", result.errors);
-								void window.toolboxAPI?.utils?.showNotification?.(notice);
-							}
-						}}
+						onViewLoad={applyLoadedView}
 					/>
 					</PaneErrorBoundary>
 					{builder.fetchQuery ? (
@@ -2313,7 +2343,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				onClose={() => setWorkflowDialogState({ open: false, recordIds: [] })}
 				onFetchWorkflows={handleFetchWorkflows}
 				onExecute={(workflow, onProgress) =>
-					handleExecuteWorkflow(workflow.workflowid, workflowDialogState.recordIds, onProgress)
+					handleExecuteWorkflow(workflow, workflowDialogState.recordIds, onProgress)
 				}
 			/>
 			{/* Activate / Deactivate Dialog (#143) */}
