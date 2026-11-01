@@ -175,6 +175,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **Release workflow hardening (#188).**
+  - **Separate jobs:** `release.yml` is split into `build`, `publish` and `github-release`. The job that installs and runs the dependencies (`npm ci --ignore-scripts`, no cache, tests, build) only reads the repository. Only `publish` can get the npm OIDC token, only for a tag push, and it installs no project dependencies: it publishes the tarball `build` packed. Only `github-release` can write to the repository.
+  - **More checks before publishing:** the release build now also runs the runtime audit, lint and the package-contents check, so a tag on a commit that skipped CI can't publish.
+  - **Pinned versions:** npm is pinned to 11.21.1 instead of `npm@latest`, and Node to 24.22.0. Actions are pinned by commit SHA (checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2, download-artifact v8.0.2). Each is at least 14 days old, the project's dependency rule.
+  - **Rehearsal:** the workflow can run by hand as a rehearsal: every check and `npm publish --dry-run`, with no npm token and no GitHub Release. A manual run never publishes, even on a tag.
+  - **`latest` can't move back:** a stable tag gets `latest` only for main's own version line, and a `support/X.Y` commit is checked first. Support branches merge forward into `main`, so before this, re-running a support release after that merge would have published it to `latest`.
+  - **CI:** CI uses `npm ci --ignore-scripts` and the same pins, doesn't keep the checkout's token, and runs the runtime audit on this branch too.
+  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
 - **Repo hygiene, part of #205.** Removed files nothing imports: `ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts` and the Vite template's `src/assets/react.svg`. Also removed two unused exports: `LoadingCellRenderer` and `ValueNode`, which #181 didn't need. `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions supported by jsdom 30 (the Vitest environment). The one-time Prettier reformat and the CI format check follow after 1.5.0 ships, so forward merges from `release/1.5` don't conflict. The ESLint 10 upgrade gets its own PR.
 - **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
 - **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
