@@ -194,11 +194,28 @@ export interface StateGroup {
 	choices: StatusChoice[];
 }
 
+/** The way back from a state change (#69): what the opposite action can set */
+export interface StateUndo {
+	/** The opposite action has a state to set */
+	available: boolean;
+	/** It offers more than one status reason, so the previous one isn't restored by itself */
+	picksStatusReason: boolean;
+	/** Status reason transitions are enforced, so going back may not be allowed */
+	transitionsEnforced: boolean;
+}
+
+/** The way back from Activate or Deactivate: the opposite action's target states (#69) */
+export function stateUndo(model: EntityStateModel, action: StateAction): StateUndo {
+	const back = targetStates(model, action === "activate" ? "deactivate" : "activate");
+	const reasons = back.flatMap((state) => statusesOfState(model, state.value));
+	return { available: reasons.length > 0, picksStatusReason: reasons.length > 1, transitionsEnforced: model.enforceTransitions };
+}
+
 export type StatePlan =
 	/** One target, no choice (simple entities) */
-	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string }
+	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string; undo: StateUndo }
 	/** The user picks a status reason, grouped by state */
-	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string }
+	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string; undo: StateUndo }
 	/** Nothing to do, and why */
 	| { kind: "none"; reason: string };
 
@@ -227,7 +244,13 @@ export function planStateChange(
 		const statuscode = defaultStatusOf(model, state);
 		if (statuscode === undefined) return { kind: "none", reason: `The ${state.label} state has no status reason.` };
 		const statusLabel = model.statuses.find((s) => s.value === statuscode)?.label ?? String(statuscode);
-		return { kind: "simple", target: { statecode: state.value, statuscode }, stateLabel: state.label, statusLabel };
+		return {
+			kind: "simple",
+			target: { statecode: state.value, statuscode },
+			stateLabel: state.label,
+			statusLabel,
+			undo: stateUndo(model, action),
+		};
 	}
 
 	const filter = transitionFilter(model, currentStatuses);
@@ -249,7 +272,13 @@ export function planStateChange(
 	}
 	const first = groups.find((g) => !stateNote(entityLogicalName, g.statecode)) ?? groups[0];
 	const preselected = first.choices.find((c) => c.isDefault) ?? first.choices[0];
-	return { kind: "choose", groups, defaultTarget: { statecode: first.statecode, statuscode: preselected.statuscode }, note: filter.note };
+	return {
+		kind: "choose",
+		groups,
+		defaultTarget: { statecode: first.statecode, statuscode: preselected.statuscode },
+		note: filter.note,
+		undo: stateUndo(model, action),
+	};
 }
 
 /** The body of the state change PATCH: `{ statecode, statuscode }` (Learn: always set both) */

@@ -4,6 +4,7 @@ import {
 	isSimpleStateModel,
 	parseTransitionData,
 	planStateChange,
+	stateUndo,
 	stateActionUnavailableReason,
 	statePatchBody,
 	toEntityStateModel,
@@ -117,8 +118,35 @@ describe("planStateChange", () => {
 			target: { statecode: 1, statuscode: 2 },
 			stateLabel: "Inactive",
 			statusLabel: "Inactive",
+			undo: { available: true, picksStatusReason: false, transitionsEnforced: false },
 		});
 		expect(planStateChange(account, "activate")).toMatchObject({ kind: "simple", target: { statecode: 0, statuscode: 1 } });
+	});
+
+	it("says what the way back can set (#69)", () => {
+		// Going back to Active offers New and Review, so the previous status reason isn't restored
+		expect(planStateChange(enforced({ 1: [2, 20] }), "deactivate", [1])).toMatchObject({
+			kind: "choose",
+			undo: { available: true, picksStatusReason: true, transitionsEnforced: true },
+		});
+		// One active status reason, more than one inactive: only Deactivate's way back restores it
+		const oneActive: EntityStateModel = {
+			states: [
+				{ value: 0, label: "Active", defaultStatus: 1 },
+				{ value: 1, label: "Inactive", defaultStatus: 2 },
+			],
+			statuses: [
+				{ value: 1, label: "Active", state: 0 },
+				{ value: 2, label: "Inactive", state: 1 },
+				{ value: 3, label: "Archived", state: 1 },
+			],
+			enforceTransitions: false,
+		};
+		expect(stateUndo(oneActive, "deactivate")).toEqual({ available: true, picksStatusReason: false, transitionsEnforced: false });
+		expect(stateUndo(oneActive, "activate")).toEqual({ available: true, picksStatusReason: true, transitionsEnforced: false });
+		// No inactive state: Activate has no way back
+		const single: EntityStateModel = { states: [{ value: 0, label: "Active", defaultStatus: 1 }], statuses: [{ value: 1, label: "Active", state: 0 }], enforceTransitions: false };
+		expect(stateUndo(single, "activate").available).toBe(false);
 	});
 
 	it("offers status reasons grouped by state for multi-state entities", () => {
