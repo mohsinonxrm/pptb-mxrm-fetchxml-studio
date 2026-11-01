@@ -2,12 +2,13 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta.18-blue)
-[![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
-![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
-![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.3-blue)
+[![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
+![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb.svg)
+![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb-types.svg)
+![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/react.svg)
+![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/typescript.svg)
+![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/fluent-ui.svg)
+![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/license.svg)
 
 ## ✨ Features
 
@@ -219,6 +220,8 @@ npm run validate
 ```
 
 **Releases.** CI (`.github/workflows/ci.yml`) runs a runtime dependency audit, typecheck, lint, tests, PPTB validation, the build and a package-contents check on every pull request. CI and the release build also check that the version, `package-lock.json`, the CHANGELOG section, the README badge and the bundled icon agree. The release workflow runs the same checks in a job without publishing rights, then publishes the package it built from a separate job that installs no project dependencies; Node, npm and the actions are pinned. `main` holds the current stable release. A minor release stabilizes on a `release/X.Y` branch, so `dev` is never frozen. A `vX.Y.Z-beta.N` tag there publishes to npm `beta` as a GitHub pre-release, and after a smoke test and a 7-day soak, the `vX.Y.Z` tag on `main` publishes to npm `latest`, both with provenance. Fixes go to the oldest supported branch and merge forward. The previous minor gets critical fixes for 30 days ([SECURITY.md](SECURITY.md)); see [RELEASING.md](RELEASING.md).
+
+**README badges.** The badges above are SVG files in `assets/badges/`, generated from `package.json` by `npm run badges`. Power Platform ToolBox shows this README in its own window, which only loads images from GitHub, so they're linked from `raw.githubusercontent.com` rather than `img.shields.io` ([RELEASING.md](RELEASING.md#readme-images)).
 
 **Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (a two-tone gold corner) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
 

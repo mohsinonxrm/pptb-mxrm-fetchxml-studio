@@ -65,6 +65,7 @@
 		"typecheck": "tsc -b",
 		"lint": "eslint . --max-warnings=0",
 		"test": "vitest run",
+		"badges": "node .github/scripts/write-badges.mjs",
 		"test:watch": "vitest",
 		"validate": "pptb-validate",
 		"format": "prettier --write .",

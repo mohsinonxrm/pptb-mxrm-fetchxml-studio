@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { badgeFor, changelogSections, checkReleaseFiles, expectedIconSource, releaseNotes } from "./release-checks.mjs";
+import { badgeMarkdown, badges, badgeSvg, badgeUrl } from "./badges.mjs";
+import { changelogSections, checkReleaseFiles, expectedIconSource, releaseNotes } from "./release-checks.mjs";
 
-const pkg = { name: "@scope/tool", displayName: "Tool Studio", version: "1.5.0-beta.18", features: { minAPI: "1.2.7" } };
+const pkg = {
+	name: "@scope/tool",
+	displayName: "Tool Studio",
+	version: "1.5.0-beta.18",
+	license: "AGPL-3.0-only",
+	repository: { type: "git", url: "git+https://github.com/owner/tool.git" },
+	features: { minAPI: "1.2.7" },
+	dependencies: { react: "^18.3.1", "@fluentui/react-components": "^9.74.9" },
+	devDependencies: { typescript: "~5.9.3", "@pptb/types": "1.2.7" },
+};
 const lock = { version: "1.5.0-beta.18", packages: { "": { version: "1.5.0-beta.18" } } };
 const changelog = `# Changelog
 
@@ -17,8 +27,12 @@ const changelog = `# Changelog
 
 - Older.
 `;
-const readme = `![Version](${badgeFor("1.5.0-beta.18")})`;
-const files = { pkg, lock, changelog, readme };
+const readme = `# Tool
+
+${badgeMarkdown(pkg).join("\n")}
+`;
+const badgeFiles = Object.fromEntries(badges(pkg).map((b) => [b.file, b.svg]));
+const files = { pkg, lock, changelog, readme, badgeFiles };
 
 describe("checkReleaseFiles", () => {
 	it("passes when everything matches the version", () => {
@@ -59,17 +73,47 @@ describe("checkReleaseFiles", () => {
 		expect(checkReleaseFiles({ ...files, changelog: twice }).join(" ")).toMatch(/2 \[1\.5\.0-beta\.18\] sections/);
 	});
 
-	it("flags a stale README badge", () => {
-		expect(checkReleaseFiles({ ...files, readme: `![Version](${badgeFor("1.5.0-beta.17")})` })).toEqual([
-			expect.stringMatching(/badge isn't 1\.5\.0-beta\.18/),
+	it("flags badge files not regenerated for the version, or missing", () => {
+		const old = badges({ ...pkg, version: "1.5.0-beta.17" }).find((b) => b.file === "version.svg").svg;
+		expect(checkReleaseFiles({ ...files, badgeFiles: { ...badgeFiles, "version.svg": old } })).toEqual([
+			"assets/badges/ is out of date (version.svg): run `npm run badges`.",
 		]);
+		expect(checkReleaseFiles({ ...files, badgeFiles: { ...badgeFiles, "react.svg": undefined } }).join(" ")).toMatch(/out of date \(react\.svg\)/);
+	});
+
+	it("flags a README without the badges, or with img.shields.io", () => {
+		expect(checkReleaseFiles({ ...files, readme: "# Tool\n" }).join(" ")).toMatch(/README\.md doesn't show these badges/);
+		const shields = `${readme}![npm](https://img.shields.io/npm/v/@scope/tool)\n`;
+		expect(checkReleaseFiles({ ...files, readme: shields })).toEqual([expect.stringMatching(/img\.shields\.io, which PPTB's README viewer blocks/)]);
+		expect(checkReleaseFiles({ ...files, readme: `${readme}The badges aren't on img.shields.io.
+` })).toEqual([]);
 	});
 });
 
-describe("badgeFor / expectedIconSource / changelogSections", () => {
-	it("escapes dashes for shields.io", () => {
-		expect(badgeFor("1.5.0-beta.18")).toBe("https://img.shields.io/badge/version-1.5.0--beta.18-blue");
-		expect(badgeFor("1.4.6")).toBe("https://img.shields.io/badge/version-1.4.6-blue");
+describe("badges / expectedIconSource / changelogSections", () => {
+	it("generates every badge from package.json, linked from main on raw.githubusercontent.com", () => {
+		expect(badges(pkg).map((b) => [b.file, b.alt])).toEqual([
+			["version.svg", "Version"],
+			["pptb.svg", "Power Platform ToolBox 1.2.7 or later"],
+			["pptb-types.svg", "@pptb/types 1.2.7"],
+			["react.svg", "React 18"],
+			["typescript.svg", "TypeScript 5.9"],
+			["fluent-ui.svg", "Fluent UI v9"],
+			["license.svg", "License AGPL-3.0-only"],
+		]);
+		expect(badgeUrl(pkg, "react.svg")).toBe("https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/react.svg");
+		// The version badge links to npm and has no version in its alt text, so a release changes only the SVG
+		expect(badgeMarkdown(pkg)[0]).toBe(
+			"[![Version](https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@scope/tool)",
+		);
+	});
+
+	it("colours pre-releases yellow and releases blue, and escapes text", () => {
+		const svgOf = (version) => badges({ ...pkg, version }).find((b) => b.file === "version.svg").svg;
+		expect(svgOf("1.5.0-beta.18")).toContain('fill="#dfb317"');
+		expect(svgOf("1.5.0")).toContain('fill="#007ec6"');
+		expect(svgOf("1.5.0")).toContain('aria-label="version: 1.5.0"');
+		expect(badgeSvg("a<b", "c&d", "#000")).toContain("a&lt;b: c&amp;d");
 	});
 
 	it("bundles the Insider icon for pre-releases only", () => {
