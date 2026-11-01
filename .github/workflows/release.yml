@@ -2,17 +2,19 @@ name: Release
 
 # Pushing a vX.Y.Z (or vX.Y.Z-beta.N / -rc.N) tag publishes the package to npm through
 # trusted publishing (no npm token) and creates the GitHub Release. See RELEASING.md.
-# Running it by hand (Actions → Release → Run workflow) rehearses a release on that branch:
-# every check, then `npm publish --dry-run`. Nothing is published.
+# Running it by hand (Actions → Release → Run workflow, or `gh workflow run release.yml --ref
+# <branch>`) rehearses a release: every check and `npm publish --dry-run`, with no npm token
+# and no GitHub Release. Only a tag push publishes.
 #
 # Supply chain (#188):
-# - build: installs and runs the dependencies with read-only permissions and no install
-#   scripts, and packs the tarball.
-# - publish: the only job that can get the npm OIDC token. It installs nothing and publishes
-#   the tarball build packed.
+# - build: installs and runs the dependencies with read-only permissions, no install scripts
+#   and no cache, and packs the tarball.
+# - publish: the only job that can get the npm OIDC token, and only for a tag push. It installs
+#   no project dependencies and publishes the tarball build packed.
 # - github-release: the only job that can write to the repository.
-# - Actions are pinned by commit and npm by version, both at least 14 days old (the project's
-#   dependency rule); Dependabot proposes newer actions after the same cooldown.
+# - Node, npm and the actions are pinned to versions at least 14 days old (the project's
+#   dependency rule). Dependabot proposes newer actions on dev; other branches get them through
+#   merges.
 
 on:
   push:
@@ -21,12 +23,19 @@ on:
 
 permissions: {}
 
+# One release run per ref at a time; a running publish is never cancelled
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
+      name: ${{ steps.channel.outputs.name }}
+      version: ${{ steps.channel.outputs.version }}
       dist_tag: ${{ steps.channel.outputs.dist_tag }}
       latest: ${{ steps.channel.outputs.latest }}
       prerelease: ${{ steps.channel.outputs.prerelease }}
@@ -38,8 +47,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
-          cache: npm
+          node-version: 24.22.0
       - name: Check the tag matches package.json
         if: github.ref_type == 'tag'
         run: |
@@ -52,9 +60,10 @@ jobs:
         id: channel
         run: |
           # RELEASING.md: -beta.N / -rc.N -> npm "beta" (GitHub pre-release). A stable tag on
-          # main -> "latest". A stable tag on support/X.Y -> "support-X.Y", never "latest".
-          # Anything else fails here, so a stray tag can't replace "latest". A rehearsal checks
-          # the branch's package.json version the same way.
+          # support/X.Y -> "support-X.Y", never "latest". A stable tag on main -> "latest", but
+          # only for main's own release line: support branches merge forward into main, so an
+          # older line's commit can be on main too and mustn't move "latest" back.
+          # Anything else fails here, so a stray tag can't replace "latest".
           version="$(node -p "require('./package.json').version")"
           case "$version" in
             *-beta.*|*-rc.*)
@@ -65,18 +74,21 @@ jobs:
             *)
               prerelease=false
               line="${version%.*}"
-              if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-                dist_tag=latest; latest=true
-              elif git rev-parse --verify --quiet "origin/support/$line" >/dev/null &&
-                   git merge-base --is-ancestor "$GITHUB_SHA" "origin/support/$line"; then
+              main_version="$(git show origin/main:package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
+              if git rev-parse --verify --quiet "origin/support/$line" >/dev/null &&
+                 git merge-base --is-ancestor "$GITHUB_SHA" "origin/support/$line"; then
                 dist_tag="support-$line"; latest=false
+              elif git merge-base --is-ancestor "$GITHUB_SHA" origin/main && [ "$line" = "${main_version%.*}" ]; then
+                dist_tag=latest; latest=true
               else
-                echo "::error::Stable version $version is on neither main nor support/$line. Tag the release → main merge commit (RELEASING.md)."
+                echo "::error::Stable version $version is on neither main's release line ($main_version) nor support/$line. Tag the release → main merge commit (RELEASING.md)."
                 exit 1
               fi ;;
           esac
           echo "Publishing $version to npm \"$dist_tag\" (GitHub latest: $latest, pre-release: $prerelease)"
           {
+            echo "name=$(node -p "require('./package.json').name")"
+            echo "version=$version"
             echo "dist_tag=$dist_tag"
             echo "latest=$latest"
             echo "prerelease=$prerelease"
@@ -108,6 +120,8 @@ jobs:
 
   publish:
     needs: build
+    # Only a tag push can get the npm token; a manual run, even on a tag, rehearses
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest # trusted publishing requires a GitHub-hosted runner
     permissions:
       id-token: write # npm trusted publishing + provenance
@@ -117,7 +131,7 @@ jobs:
           name: package
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: 24.22.0
           registry-url: https://registry.npmjs.org
       - name: Use npm 11.21.1 (trusted publishing needs npm >= 11.5.1)
         run: npm install -g npm@11.21.1 --ignore-scripts
@@ -125,12 +139,40 @@ jobs:
         env:
           DIST_TAG: ${{ needs.build.outputs.dist_tag }}
           TARBALL: ${{ needs.build.outputs.tarball }}
-          DRY_RUN: ${{ github.ref_type == 'tag' && '' || '--dry-run' }}
-        run: npm publish "./$TARBALL" --provenance --access public --tag "$DIST_TAG" $DRY_RUN
+        run: npm publish "./$TARBALL" --provenance --access public --tag "$DIST_TAG"
+
+  rehearse:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions: {} # no npm token: provenance and the token exchange aren't rehearsed
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.0
+          registry-url: https://registry.npmjs.org
+      - name: Use npm 11.21.1
+        run: npm install -g npm@11.21.1 --ignore-scripts
+      - name: Rehearse the publish (npm publish --dry-run)
+        env:
+          DIST_TAG: ${{ needs.build.outputs.dist_tag }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          NAME: ${{ needs.build.outputs.name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          # npm's dry run still refuses a version that's already published
+          if [ -n "$(npm view "$NAME@$VERSION" version 2>/dev/null)" ]; then
+            echo "::notice::$NAME@$VERSION is already on npm; bump the version to rehearse its publish. Every other check passed."
+            exit 0
+          fi
+          npm publish "./$TARBALL" --access public --tag "$DIST_TAG" --dry-run
 
   github-release:
     needs: [build, publish]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub Release

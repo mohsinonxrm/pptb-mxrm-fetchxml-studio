@@ -131,27 +131,37 @@ tagged commit:
 | Tag | Tagged commit must be on | npm tag | GitHub Release |
 |---|---|---|---|
 | `vX.Y.Z-beta.N`, `vX.Y.Z-rc.N` | any branch (normally `release/X.Y`) | `beta` | pre-release |
-| `vX.Y.Z` | `main` | `latest` | latest |
 | `vX.Y.Z` | `support/X.Y` | `support-X.Y` | not marked latest |
+| `vX.Y.Z` | `main`, with `X.Y` = main's own version line | `latest` | latest |
+
+`support/X.Y` is checked first: it merges forward into `main`, so an older line's commit can
+be on `main` too, and it must never move `latest` back.
 
 Any other tag fails before publishing. Afterwards, replace the generated release notes with
 the CHANGELOG section.
 
-It runs as three jobs, so the code that installs and runs dependencies never holds publishing
-rights (#188):
+It runs in separate jobs, so the code that installs and runs dependencies never holds
+publishing rights (#188):
 
-| Job | Permissions | What it does |
-|---|---|---|
-| `build` | read the repository | Checks the tag and chooses the channel; `npm ci --ignore-scripts`; the runtime audit (no high or critical findings), lint, tests, validation, build (with the type check), the DOMPurify check; packs the tarball and checks its contents. |
-| `publish` | npm OIDC token (`id-token: write`) | Installs nothing: downloads the tarball and publishes it with provenance, with npm pinned to a version at least 14 days old. |
-| `github-release` | write the repository | Creates the GitHub Release. |
+| Job | Runs on | Permissions | What it does |
+|---|---|---|---|
+| `build` | always | read the repository | Checks the tag and chooses the channel; `npm ci --ignore-scripts` (no cache); the runtime audit (no high or critical findings), lint, tests, validation, build (with the type check), the DOMPurify check; packs the tarball and checks its contents. |
+| `publish` | tag push only | npm OIDC token (`id-token: write`) | Installs no project dependencies: downloads the tarball and publishes it with provenance. |
+| `rehearse` | manual run only | none | `npm publish --dry-run` of the tarball, without provenance or an npm token. |
+| `github-release` | tag push only | write the repository | Creates the GitHub Release. |
 
-Actions are pinned by full commit SHA (the tag in a comment); Dependabot proposes newer ones
-after the 14-day cooldown. To move the npm pin, change the version in the `publish` job.
+Node (24.22.0), npm (11.21.1) and the actions (by full commit SHA, the tag in a comment) are
+pinned to versions at least 14 days old. Dependabot proposes newer actions on `dev`; other
+branches get them when `dev` reaches them through a release. Move the Node and npm pins by
+hand. Only one release run per ref runs at a time. If a run fails after publishing, use
+*Re-run failed jobs*: a full re-run stops at `publish`, since npm never accepts a version twice.
 
-**Rehearse a release** before the first tag on a branch whose workflow changed: Actions →
-*Release* → *Run workflow* on that branch runs the same jobs with `npm publish --dry-run` and
-creates no GitHub Release.
+**Rehearse a release** after the version bump and before the tag, on a branch whose workflow
+changed: `gh workflow run release.yml --ref <branch>` (or Actions → *Release* → *Run workflow*
+once `dev` has the manual trigger). It runs every check and `npm publish --dry-run`, and
+creates no GitHub Release. npm's dry run refuses a version that's already published, so on an
+unbumped branch the rehearsal stops with a notice after the checks. It doesn't exercise the
+npm token exchange or provenance signing. A manual run never publishes, even on a tag.
 
 ## One-time setup
 
