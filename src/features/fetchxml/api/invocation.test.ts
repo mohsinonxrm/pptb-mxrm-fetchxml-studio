@@ -76,7 +76,7 @@ describe("getViewById (#197)", () => {
 		(window as { dataverseAPI?: unknown }).dataverseAPI = { queryData };
 		const found = await getViewById("system", id);
 		expect(queryData).toHaveBeenCalledWith(
-			`savedqueries?$select=savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid,returnedtypecode&$filter=savedqueryid eq ${id}`,
+			`savedqueries?$select=savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid,returnedtypecode&$filter=savedqueryid eq ${id} and componentstate eq 0 and statecode eq 0`,
 		);
 		expect(found).toMatchObject({ entityLogicalName: "contact", view: { id, name: "Active Contacts", type: "system", layoutxml: "<grid/>", isCustomizable: true } });
 	});

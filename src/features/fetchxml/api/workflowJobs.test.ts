@@ -21,7 +21,7 @@ describe("getWorkflowJobs", () => {
 		(window as { dataverseAPI?: unknown }).dataverseAPI = { queryData };
 		const jobs = await getWorkflowJobs(["def", "act"], [a, `{${b}}`]);
 		expect(queryData).toHaveBeenCalledWith(
-			`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(_workflowactivationid_value eq def or _workflowactivationid_value eq act) and (_regardingobjectid_value eq ${a} or _regardingobjectid_value eq ${b})`,
+			`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(_workflowactivationid_value eq def or _workflowactivationid_value eq act) and (_regardingobjectid_value eq ${a} or _regardingobjectid_value eq ${b})&$orderby=createdon desc`,
 		);
 		expect(jobs).toEqual(new Map([[a, new Set(["job1", "job2"])]]));
 	});

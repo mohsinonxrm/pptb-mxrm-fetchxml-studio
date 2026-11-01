@@ -1480,8 +1480,9 @@ export async function getViewById(
 	if (!isDataverseAvailable()) throw new Error("PPTB Dataverse API not available");
 	const query =
 		type === "system"
-			? `savedqueries?$select=${SYSTEM_VIEW_SELECT},returnedtypecode&$filter=savedqueryid eq ${id}`
-			: `userqueries?$select=${PERSONAL_VIEW_SELECT},returnedtypecode&$filter=userqueryid eq ${id}`;
+			? // Load view lists published, active system views and active personal views
+				`savedqueries?$select=${SYSTEM_VIEW_SELECT},returnedtypecode&$filter=savedqueryid eq ${id} and componentstate eq 0 and statecode eq 0`
+			: `userqueries?$select=${PERSONAL_VIEW_SELECT},returnedtypecode&$filter=userqueryid eq ${id} and statecode eq 0`;
 	const result = await window.dataverseAPI!.queryData(query);
 	const record = result.value?.[0] as Record<string, unknown> | undefined;
 	if (!record || !hasFetchXml(record) || typeof record.returnedtypecode !== "string") return null;
@@ -2668,20 +2669,28 @@ export async function executeWorkflow(
 }
 
 /**
- * The workflow ids a system job of this workflow can point at (asyncoperation.workflowactivationid,
- * a workflow lookup): the definition and, when it's activated, its activation record
- * (activeworkflowid) (#264).
+ * How to find this workflow's system jobs (#264): the workflow ids a job can point at
+ * (asyncoperation.workflowactivationid, a workflow lookup: the definition and, when it's activated,
+ * its activation record, activeworkflowid), or why they can't be relied on:
+ * - the workflow couldn't be read: matching by the definition alone could miss every job;
+ * - it deletes its completed jobs (asyncautodelete): a fast run's job can be gone before the check.
+ * Either way a stopped batch then counts as unknown and isn't sent again.
  * https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/asyncoperation
  */
-async function workflowJobIds(workflowId: string): Promise<string[]> {
+async function workflowJobIds(workflowId: string): Promise<{ ids: string[] } | { unreliable: string }> {
 	const id = workflowId.replace(/[{}]/g, "");
 	try {
-		const result = await window.dataverseAPI!.queryData(`workflows?$select=workflowid,_activeworkflowid_value&$filter=workflowid eq ${id}`);
-		const active = result.value?.[0]?._activeworkflowid_value;
-		return typeof active === "string" && active !== id ? [id, active] : [id];
+		const result = await window.dataverseAPI!.queryData(
+			`workflows?$select=workflowid,_activeworkflowid_value,asyncautodelete&$filter=workflowid eq ${id}`,
+		);
+		const workflow = result.value?.[0];
+		if (!workflow) return { unreliable: "The workflow couldn't be read." };
+		if (workflow.asyncautodelete === true) return { unreliable: "The workflow deletes its completed system jobs." };
+		const active = workflow._activeworkflowid_value;
+		return { ids: typeof active === "string" && active !== id ? [id, active] : [id] };
 	} catch (error) {
-		console.warn("Couldn't read the workflow's activation; matching system jobs by the workflow id only:", error);
-		return [id];
+		console.warn("Couldn't read the workflow, so a batch that stops early won't be sent again:", error);
+		return { unreliable: "The workflow couldn't be read." };
 	}
 }
 
@@ -2691,8 +2700,10 @@ export async function getWorkflowJobs(workflowIds: string[], recordIds: string[]
 	if (recordIds.length === 0) return jobs;
 	const byWorkflow = workflowIds.map((id) => `_workflowactivationid_value eq ${id}`).join(" or ");
 	const byRecord = recordIds.map((id) => `_regardingobjectid_value eq ${id.replace(/[{}]/g, "")}`).join(" or ");
+	// Newest first: queryData returns one page (5,000 rows), and a new job is always on it, so past
+	// jobs beyond the page can't hide one
 	const result = await window.dataverseAPI!.queryData(
-		`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(${byWorkflow}) and (${byRecord})`,
+		`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(${byWorkflow}) and (${byRecord})&$orderby=createdon desc`,
 	);
 	for (const job of result.value ?? []) {
 		const record = String(job._regardingobjectid_value ?? "").toLowerCase();
@@ -2730,7 +2741,8 @@ export interface WorkflowBatchProgress {
  * @param recordIds Array of record GUIDs to run the workflow on
  * @param entityLogicalName Logical name of the entity (unused but kept for API compatibility)
  * @param onProgress Callback for progress updates with batch info and ETA
- * @param batchSize Number of concurrent requests per batch (default: 10)
+ * @param batchSize Concurrent requests at a time for one-request-per-record runs (default: 10); background
+ *   workflows use the batch runner's size (DELETE_BATCH_SIZE)
  */
 export async function executeWorkflowBatch(
 	workflow: Pick<WorkflowInfo, "workflowid" | "mode">,
@@ -2743,12 +2755,12 @@ export async function executeWorkflowBatch(
 	// Background workflows: $batch requests, with a stopped batch checked against system jobs (#264)
 	if (workflow.mode === WORKFLOW_MODE_BACKGROUND && canExecuteBatch()) {
 		debugLog("workflowAPI", `📡 Executing background workflow ${workflowId} on ${recordIds.length} records in $batch requests`);
-		const ids = await workflowJobIds(workflowId);
+		const jobs = await workflowJobIds(workflowId);
 		const batchResult = await runWorkflowInBatches(workflowId, recordIds, {
 			executeBatch: hostExecuteBatch,
 			onProgress,
 			shouldContinue: await connectionGuard(),
-			jobsFor: (chunk) => getWorkflowJobs(ids, chunk),
+			jobsFor: (chunk) => ("ids" in jobs ? getWorkflowJobs(jobs.ids, chunk) : Promise.reject(new Error(jobs.unreliable))),
 		});
 		return { ...batchResult, errors: batchResult.errors.map((error) => `Record ${error}`) };
 	}
