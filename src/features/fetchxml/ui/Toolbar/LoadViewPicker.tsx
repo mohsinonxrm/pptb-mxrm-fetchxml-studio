@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import {
 	getAllViews,
+	toLoadedViewInfo,
 	whoAmI,
 	type SavedView,
 	type EntityMetadata,
@@ -209,24 +210,8 @@ export function LoadViewPicker({
 
 			const view = allViews.find((v) => v.id === data.optionValue);
 			if (view) {
-				// Create LoadedViewInfo with all needed data for execution optimization
-				const viewInfo: LoadedViewInfo = {
-					id: view.id,
-					type: view.type,
-					originalFetchXml: view.fetchxml,
-					entitySetName: selectedEntityMetadata.EntitySetName,
-					name: view.name,
-					layoutxml: view.layoutxml, // Include layoutxml for column configuration
-					queryType: view.queryType,
-					isCustomizable: view.isCustomizable,
-					// Save view: description pre-filled, default view, managed warning, owner (#142)
-					description: view.description,
-					isDefault: view.isDefault,
-					isManaged: view.isManaged,
-					solutionId: view.solutionId,
-					ownerId: view.ownerId,
-					ownerName: view.ownerName,
-				};
+				// Everything execution by ID, the layout and Save view need (shared with #197's prefill)
+				const viewInfo: LoadedViewInfo = toLoadedViewInfo(view, selectedEntityMetadata.EntitySetName);
 				onViewSelect(viewInfo);
 				debugLog("viewAPI", `Selected view: ${view.name} (${view.type}) - ID: ${view.id}`);
 				// Set the selected view name to display in the combobox

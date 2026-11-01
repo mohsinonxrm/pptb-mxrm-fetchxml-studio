@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **A view opened from another tool loads like Load view (#197).**
+  - **Before:** only the view's FetchXML was loaded. Its column layout was ignored, an unchanged view wasn't run by ID, and **Save** offered Save as rather than overwrite. A view that didn't exist, or a failed request, left an empty builder with no message.
+  - **Now:** the view loads the way **Load view** loads it. When it can't be opened, a notification says why: "Couldn't open the view" / "…asked for a personal view (id) that doesn't exist or that you can't read", or Dataverse's error.
+
+- **Run workflow: background workflows in batches, and no workflow runs twice (#264).**
+  - **Background workflows** now go in `$batch` requests, like delete, Activate / Deactivate and Close, with the same per-record errors, progress, throttling back-off and connection guard.
+  - **A batch that stops early** (PPTB doesn't report which of its operations ran): records whose workflow already started a new system job aren't sent again; the others are sent one at a time. System jobs are compared with a snapshot taken just before the batch, so earlier runs don't count. If the jobs can't be read, none of that batch is sent again, and each record says to check its system jobs.
+  - **Real-time workflows** run immediately and leave no system job ([Create real-time workflows](https://learn.microsoft.com/dynamics365/customerengagement/on-premises/developer/create-real-time-workflows)), so they stay one request per record.
+
+- **Closing the tool with unsaved Save view edits asks first (#264).** While the Save view dialog has changes to the name, description, view type or default setting, PPTB asks before the tool closes, as it does while a view saves.
+
 - **Advisories follow-ups (#170).**
   - **Paging without a unique order** stays advice. Live, Dataverse broke ties by the primary key in every case tried, but that isn't documented, and [Order rows](https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging) still asks for a unique column. It now also applies when the query's results are paged (more than 5,000 rows, loaded by scrolling or Retrieve All), not only when the query sets `count` or `page`.
   - **Stale check:** after the query changes, an earlier **Check with Dataverse** no longer shows its findings or "Dataverse agrees" tags, and they aren't counted on the tab; they could describe a query Dataverse never saw. The status line says when it was checked and to check again.

@@ -36,6 +36,7 @@ import { canExecuteBatch, connectionGuard, getPrimaryConnection } from "./host";
 import {
 	closeRecordsInBatches,
 	deleteRecordsInBatches,
+	runWorkflowInBatches,
 	updateRecordStatesInBatches,
 	CLOSE_CONNECTION_CHANGED_MESSAGE,
 	CONNECTION_CHANGED_MESSAGE,
@@ -1407,6 +1408,86 @@ export interface LoadedViewInfo {
 
 // LayoutXML parsing and generation live in model/layoutxml.ts (#81: the copies here were unused)
 
+/** The view columns Load view reads (#93, #142); shared with getViewById (#197) */
+const SYSTEM_VIEW_SELECT = "savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid";
+const PERSONAL_VIEW_SELECT = "userqueryid,name,description,fetchxml,layoutxml,querytype,_ownerid_value";
+
+/** A savedquery row as a system view */
+function toSystemView(record: Record<string, unknown>): SavedView {
+	return {
+		id: record.savedqueryid as string,
+		name: record.name as string,
+		fetchxml: record.fetchxml as string,
+		layoutxml: record.layoutxml as string | undefined,
+		type: "system",
+		description: (record.description as string | null) ?? undefined,
+		isDefault: record.isdefault as boolean | undefined,
+		queryType: record.querytype as number | undefined,
+		isCustomizable: readManagedPropertyValue(record.iscustomizable),
+		isManaged: record.ismanaged as boolean | undefined,
+		solutionId: (record.solutionid as string | null) ?? undefined,
+	};
+}
+
+/** A userquery row as a personal view */
+function toPersonalView(record: Record<string, unknown>): SavedView {
+	return {
+		id: record.userqueryid as string,
+		name: record.name as string,
+		fetchxml: record.fetchxml as string,
+		layoutxml: record.layoutxml as string | undefined,
+		type: "personal",
+		description: (record.description as string | null) ?? undefined,
+		queryType: record.querytype as number | undefined,
+		// The owner's name is the lookup's formatted value: the host asks for all annotations
+		// (Prefer: odata.include-annotations="*"), verified live (#142)
+		// https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query/select-columns#formatted-values
+		ownerId: (record._ownerid_value as string | null) ?? undefined,
+		ownerName: (record["_ownerid_value@OData.Community.Display.V1.FormattedValue"] as string | undefined) ?? undefined,
+	};
+}
+
+/** What Load view passes on for a view (execution by ID, layout, Save view's overwrite details) */
+export function toLoadedViewInfo(view: SavedView, entitySetName: string): LoadedViewInfo {
+	return {
+		id: view.id,
+		type: view.type,
+		originalFetchXml: view.fetchxml,
+		entitySetName,
+		name: view.name,
+		layoutxml: view.layoutxml,
+		queryType: view.queryType,
+		isCustomizable: view.isCustomizable,
+		// Save view: description pre-filled, default view, managed warning, owner (#142)
+		description: view.description,
+		isDefault: view.isDefault,
+		isManaged: view.isManaged,
+		solutionId: view.solutionId,
+		ownerId: view.ownerId,
+		ownerName: view.ownerName,
+	};
+}
+
+/**
+ * One view by id, with the table it returns (returnedtypecode), for a view another tool opens
+ * FetchXML Studio with (#197). Null when it doesn't exist, the user can't read it, or it has no
+ * FetchXML. `id` must already be a GUID: it goes into $filter unquoted (#176).
+ */
+export async function getViewById(
+	type: "system" | "personal",
+	id: string,
+): Promise<{ view: SavedView; entityLogicalName: string } | null> {
+	if (!isDataverseAvailable()) throw new Error("PPTB Dataverse API not available");
+	const query =
+		type === "system"
+			? `savedqueries?$select=${SYSTEM_VIEW_SELECT},returnedtypecode&$filter=savedqueryid eq ${id}`
+			: `userqueries?$select=${PERSONAL_VIEW_SELECT},returnedtypecode&$filter=userqueryid eq ${id}`;
+	const result = await window.dataverseAPI!.queryData(query);
+	const record = result.value?.[0] as Record<string, unknown> | undefined;
+	if (!record || !hasFetchXml(record) || typeof record.returnedtypecode !== "string") return null;
+	return { view: type === "system" ? toSystemView(record) : toPersonalView(record), entityLogicalName: record.returnedtypecode };
+}
+
 /** Views with FetchXML to load; a record without any can't be loaded into the tree. */
 function hasFetchXml(record: Record<string, unknown>): boolean {
 	return typeof record.fetchxml === "string" && record.fetchxml.trim() !== "";
@@ -1433,7 +1514,7 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 		// componentstate = 0: Published (not unpublished/deleted)
 		// statecode = 0: Active views only
 		const query =
-			`savedqueries?$select=savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid` +
+			`savedqueries?$select=${SYSTEM_VIEW_SELECT}` +
 			`&$filter=(returnedtypecode eq '${odataString(entityLogicalName)}' and componentstate eq 0 and statecode eq 0)` +
 			`&$orderby=name asc`;
 
@@ -1442,19 +1523,7 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 		const result = await window.dataverseAPI!.queryData(query);
 
 		const views: SavedView[] = sortViewsByQueryType(
-			(result.value || []).filter(hasFetchXml).map((record) => ({
-				id: record.savedqueryid as string,
-				name: record.name as string,
-				fetchxml: record.fetchxml as string,
-				layoutxml: record.layoutxml as string | undefined,
-				type: "system" as const,
-				description: (record.description as string | null) ?? undefined,
-				isDefault: record.isdefault as boolean | undefined,
-				queryType: record.querytype as number | undefined,
-				isCustomizable: readManagedPropertyValue(record.iscustomizable),
-				isManaged: record.ismanaged as boolean | undefined,
-				solutionId: (record.solutionid as string | null) ?? undefined,
-			})),
+			(result.value || []).filter(hasFetchXml).map(toSystemView),
 		);
 
 		debugLog(
@@ -1490,7 +1559,7 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 		// returnedtypecode: Entity logical name as string
 		// statecode = 0: Active views only
 		const query =
-			`userqueries?$select=userqueryid,name,description,fetchxml,layoutxml,querytype,_ownerid_value` +
+			`userqueries?$select=${PERSONAL_VIEW_SELECT}` +
 			`&$filter=(statecode eq 0 and returnedtypecode eq '${odataString(entityLogicalName)}')` +
 			`&$orderby=name asc`;
 
@@ -1499,21 +1568,7 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 		const result = await window.dataverseAPI!.queryData(query);
 
 		const views: SavedView[] = sortViewsByQueryType(
-			(result.value || []).filter(hasFetchXml).map((record) => ({
-				id: record.userqueryid as string,
-				name: record.name as string,
-				fetchxml: record.fetchxml as string,
-				layoutxml: record.layoutxml as string | undefined,
-				type: "personal" as const,
-				description: (record.description as string | null) ?? undefined,
-				queryType: record.querytype as number | undefined,
-				// The owner's name is the lookup's formatted value: the host asks for all annotations
-				// (Prefer: odata.include-annotations="*"), verified live (#142)
-				// https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query/select-columns#formatted-values
-				ownerId: (record._ownerid_value as string | null) ?? undefined,
-				ownerName:
-					(record["_ownerid_value@OData.Community.Display.V1.FormattedValue"] as string | undefined) ?? undefined,
-			})),
+			(result.value || []).filter(hasFetchXml).map(toPersonalView),
 		);
 
 		debugLog(
@@ -2497,7 +2552,12 @@ export interface WorkflowInfo {
 	category: number; // 0 = Workflow, 2 = Business Rule, etc.
 	type: number; // 1 = Definition, 2 = Activation, 3 = Template
 	statuscode: number;
+	/** 0 = Background, 1 = Real-time (#264): only background workflows run in $batch requests */
+	mode?: number;
 }
+
+/** workflow.mode for a background (asynchronous) workflow */
+export const WORKFLOW_MODE_BACKGROUND = 0;
 
 /**
  * Check if user has privileges to read and execute workflows
@@ -2536,7 +2596,7 @@ export async function getOnDemandWorkflows(entityLogicalName: string): Promise<W
 		// Query for active, on-demand workflows for this entity using OData
 		// statecode=1 (Activated), statuscode=2 (Activated), ondemand=true, category=0 (Workflow), type=1 (Definition)
 		// primaryentity must be quoted as a string value
-		const odataQuery = `workflows?$select=workflowid,name,description,primaryentity,category,type,statuscode&$filter=(statecode eq 1 and statuscode eq 2 and ondemand eq true and category eq 0 and type eq 1 and primaryentity eq '${odataString(entityLogicalName)}')&$orderby=name asc`;
+		const odataQuery = `workflows?$select=workflowid,name,description,primaryentity,category,type,statuscode,mode&$filter=(statecode eq 1 and statuscode eq 2 and ondemand eq true and category eq 0 and type eq 1 and primaryentity eq '${odataString(entityLogicalName)}')&$orderby=name asc`;
 
 		const result = await window.dataverseAPI!.queryData(odataQuery);
 
@@ -2549,6 +2609,7 @@ export async function getOnDemandWorkflows(entityLogicalName: string): Promise<W
 			category: Number(record.category || 0),
 			type: Number(record.type || 0),
 			statuscode: Number(record.statuscode || 0),
+			mode: typeof record.mode === "number" ? record.mode : undefined,
 		}));
 
 		debugLog("workflowAPI", `✅ Found ${workflows.length} on-demand workflows`);
@@ -2607,6 +2668,43 @@ export async function executeWorkflow(
 }
 
 /**
+ * The workflow ids a system job of this workflow can point at (asyncoperation.workflowactivationid,
+ * a workflow lookup): the definition and, when it's activated, its activation record
+ * (activeworkflowid) (#264).
+ * https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/asyncoperation
+ */
+async function workflowJobIds(workflowId: string): Promise<string[]> {
+	const id = workflowId.replace(/[{}]/g, "");
+	try {
+		const result = await window.dataverseAPI!.queryData(`workflows?$select=workflowid,_activeworkflowid_value&$filter=workflowid eq ${id}`);
+		const active = result.value?.[0]?._activeworkflowid_value;
+		return typeof active === "string" && active !== id ? [id, active] : [id];
+	} catch (error) {
+		console.warn("Couldn't read the workflow's activation; matching system jobs by the workflow id only:", error);
+		return [id];
+	}
+}
+
+/** The system jobs (asyncoperation ids) these workflow ids have for each record (#264) */
+export async function getWorkflowJobs(workflowIds: string[], recordIds: string[]): Promise<Map<string, Set<string>>> {
+	const jobs = new Map<string, Set<string>>();
+	if (recordIds.length === 0) return jobs;
+	const byWorkflow = workflowIds.map((id) => `_workflowactivationid_value eq ${id}`).join(" or ");
+	const byRecord = recordIds.map((id) => `_regardingobjectid_value eq ${id.replace(/[{}]/g, "")}`).join(" or ");
+	const result = await window.dataverseAPI!.queryData(
+		`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(${byWorkflow}) and (${byRecord})`,
+	);
+	for (const job of result.value ?? []) {
+		const record = String(job._regardingobjectid_value ?? "").toLowerCase();
+		const match = recordIds.find((id) => id.replace(/[{}]/g, "").toLowerCase() === record);
+		if (!match) continue;
+		if (!jobs.has(match)) jobs.set(match, new Set());
+		jobs.get(match)!.add(String(job.asyncoperationid));
+	}
+	return jobs;
+}
+
+/**
  * Progress info for workflow batch execution
  */
 export interface WorkflowBatchProgress {
@@ -2622,22 +2720,38 @@ export interface WorkflowBatchProgress {
 }
 
 /**
- * Execute a workflow on multiple records using $batch requests for parallelization
- * Uses parallel execution via PPTB dataverseAPI for performance
+ * Run an on-demand workflow on multiple records, with progress and ETA.
+ * - Background workflows: $batch requests (runWorkflowInBatches, #264); a batch that stops early is
+ *   checked against the records' system jobs so no workflow runs twice.
+ * - Real-time workflows (and hosts without executeBatch): one ExecuteWorkflow request per record,
+ *   `batchSize` at a time. A real-time workflow leaves no system job to check, so it isn't batched.
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api
- * @param workflowId GUID of the workflow to execute
+ * @param workflow The workflow to run (its id and mode)
  * @param recordIds Array of record GUIDs to run the workflow on
  * @param entityLogicalName Logical name of the entity (unused but kept for API compatibility)
  * @param onProgress Callback for progress updates with batch info and ETA
  * @param batchSize Number of concurrent requests per batch (default: 10)
  */
 export async function executeWorkflowBatch(
-	workflowId: string,
+	workflow: Pick<WorkflowInfo, "workflowid" | "mode">,
 	recordIds: string[],
 	entityLogicalName: string,
 	onProgress?: (progress: WorkflowBatchProgress) => void,
 	batchSize: number = 10,
 ): Promise<{ succeeded: number; failed: number; errors: string[] }> {
+	const workflowId = workflow.workflowid;
+	// Background workflows: $batch requests, with a stopped batch checked against system jobs (#264)
+	if (workflow.mode === WORKFLOW_MODE_BACKGROUND && canExecuteBatch()) {
+		debugLog("workflowAPI", `📡 Executing background workflow ${workflowId} on ${recordIds.length} records in $batch requests`);
+		const ids = await workflowJobIds(workflowId);
+		const batchResult = await runWorkflowInBatches(workflowId, recordIds, {
+			executeBatch: hostExecuteBatch,
+			onProgress,
+			shouldContinue: await connectionGuard(),
+			jobsFor: (chunk) => getWorkflowJobs(ids, chunk),
+		});
+		return { ...batchResult, errors: batchResult.errors.map((error) => `Record ${error}`) };
+	}
 	const result = { succeeded: 0, failed: 0, errors: [] as string[] };
 	const total = recordIds.length;
 	let completed = 0;

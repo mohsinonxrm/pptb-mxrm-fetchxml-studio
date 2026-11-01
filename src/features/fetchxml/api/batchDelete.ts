@@ -118,6 +118,13 @@ interface RecordOperation {
 	 * completed, which aren't sent again (close messages aren't repeatable, #149)
 	 */
 	completedInStoppedBatch?: (recordIds: string[]) => Promise<Set<string>>;
+	/** Called before each batch is sent, e.g. to note what exists before it (#264) */
+	beforeChunk?: (recordIds: string[]) => Promise<void>;
+	/**
+	 * When completedInStoppedBatch can't tell, the stopped batch's records get this error instead of
+	 * being redone: for operations that mustn't run twice (workflows, #264)
+	 */
+	unknownMessage?: string;
 }
 
 /**
@@ -245,11 +252,73 @@ export function closeRecordsInBatches(
 	});
 }
 
+/** Why records weren't started after shouldContinue said stop (#264) */
+export const WORKFLOW_CONNECTION_CHANGED_MESSAGE = "Not run: the tool's connection changed during the run";
+
+/** A stopped batch's record whose system jobs couldn't be read: it may have started (#264) */
+export const WORKFLOW_UNKNOWN_MESSAGE =
+	"Not sent again: the batch stopped and FetchXML Studio couldn't tell whether the workflow started for this record. Check its system jobs before running the workflow again.";
+
+/**
+ * Background workflows (#264): ExecuteWorkflow once per record in $batch requests, with the
+ * per-record errors, progress, throttling back-off and connection guard of delete and close.
+ * Running a workflow isn't repeatable, so when a batch stops early (see the file comment), the
+ * records that started a system job (asyncoperation) since just before the batch aren't sent
+ * again. The jobs are compared with a snapshot taken before each batch, so earlier runs on the
+ * same records don't count and the computer's clock doesn't matter. If the jobs can't be read, no
+ * record of that batch is sent again: a workflow running twice is worse than one not running, and
+ * the error says to check.
+ *
+ * Real-time workflows run immediately and leave no system job ("Create real-time workflows" on
+ * Microsoft Learn), so executeWorkflowBatch sends them one request per record instead.
+ * https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.executeworkflowresponse.id
+ * @param jobsFor the system job ids this workflow has for each record
+ */
+export function runWorkflowInBatches(
+	workflowId: string,
+	recordIds: string[],
+	options: RecordBatchOptions & { jobsFor: (recordIds: string[]) => Promise<Map<string, Set<string>>> },
+): Promise<BatchDeleteResult> {
+	let before: Map<string, Set<string>> | undefined;
+	return runRecordBatches(recordIds, options, {
+		toRequest: (recordId) => ({
+			method: "POST",
+			url: `${recordUrl("workflows", workflowId)}/Microsoft.Dynamics.CRM.ExecuteWorkflow`,
+			body: { EntityId: recordId.replace(/[{}]/g, "") },
+		}),
+		stoppedMessage: WORKFLOW_CONNECTION_CHANGED_MESSAGE,
+		formatError: (result) => formatDataverseError(result.body && typeof result.body === "object" ? result.body : new Error(batchResultError(result).message)),
+		beforeChunk: async (chunk) => {
+			try {
+				before = await options.jobsFor(chunk);
+			} catch (error) {
+				before = undefined;
+				console.warn("Couldn't read the workflow's system jobs before the batch:", error);
+			}
+		},
+		completedInStoppedBatch: async (chunk) => {
+			const baseline = before;
+			if (!baseline) throw new Error("The system jobs before the batch couldn't be read.");
+			const after = await options.jobsFor(chunk);
+			return new Set(chunk.filter((id) => [...(after.get(id) ?? [])].some((job) => !baseline.get(id)?.has(job))));
+		},
+		unknownMessage: WORKFLOW_UNKNOWN_MESSAGE,
+	});
+}
+
 /** Sends one request per record in $batch requests of `batchSize` (see the file comment) */
 async function runRecordBatches(
 	recordIds: string[],
 	{ executeBatch, onProgress, batchSize = DELETE_BATCH_SIZE, shouldContinue = () => true, wait = sleep, random, retry }: RecordBatchOptions,
-	{ toRequest, stoppedMessage, retriedSuccess = () => false, formatError = (r) => batchResultError(r).message, completedInStoppedBatch }: RecordOperation,
+	{
+		toRequest,
+		stoppedMessage,
+		retriedSuccess = () => false,
+		formatError = (r) => batchResultError(r).message,
+		completedInStoppedBatch,
+		beforeChunk,
+		unknownMessage,
+	}: RecordOperation,
 ): Promise<BatchDeleteResult> {
 	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
 	const size = Math.max(1, Math.min(batchSize, 1000));
@@ -301,6 +370,7 @@ async function runRecordBatches(
 			stop(chunk);
 		} else {
 			try {
+				await beforeChunk?.(chunk);
 				results = await send(requests);
 			} catch (error) {
 				if (error instanceof RetryStoppedError) {
@@ -330,15 +400,18 @@ async function runRecordBatches(
 			});
 		} else if (failedEarly || results) {
 			let completedIds = new Set<string>();
+			let unknown = false;
 			if (completedInStoppedBatch) {
 				try {
 					completedIds = await completedInStoppedBatch(chunk);
 				} catch (error) {
-					console.warn(`Batch ${index + 1}: couldn't tell which records it completed, redoing all:`, error);
+					unknown = unknownMessage !== undefined;
+					console.warn(`Batch ${index + 1}: couldn't tell which records it completed, ${unknown ? "not sending them again" : "redoing all"}:`, error);
 				}
 			}
+			if (unknown) chunk.forEach((id) => record(id, new Error(unknownMessage), false));
 			result.succeeded += chunk.filter((id) => completedIds.has(id)).length;
-			const redo = chunk.filter((id) => !completedIds.has(id));
+			const redo = unknown ? [] : chunk.filter((id) => !completedIds.has(id));
 			for (const [i, id] of redo.entries()) {
 				if (!(await shouldContinue())) {
 					stopped = true;

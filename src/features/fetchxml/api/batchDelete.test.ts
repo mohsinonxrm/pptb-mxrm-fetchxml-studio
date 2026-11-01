@@ -4,6 +4,8 @@ import {
 	CLOSE_CONNECTION_CHANGED_MESSAGE,
 	STATE_CONNECTION_CHANGED_MESSAGE,
 	closeRecordsInBatches,
+	runWorkflowInBatches,
+	WORKFLOW_UNKNOWN_MESSAGE,
 	batchResultError,
 	buildStatePatchRequest,
 	updateRecordStatesInBatches,
@@ -393,5 +395,92 @@ describe("closeRecordsInBatches", () => {
 		});
 		expect(result.succeeded).toBe(1);
 		expect(result.errors).toEqual([`${all[1]}: ${CLOSE_CONNECTION_CHANGED_MESSAGE}`]);
+	});
+});
+
+describe("runWorkflowInBatches (#264, background workflows)", () => {
+	const workflowId = "{11111111-2222-3333-4444-555555555555}";
+	const entityIdOf = (request: BatchRequest) => (request.body as { EntityId: string }).EntityId;
+	/** System jobs per record: `jobs` changes as the workflow "runs" */
+	const jobStore = (initial: Record<string, string[]> = {}) => {
+		const jobs = new Map(Object.entries(initial).map(([id, list]) => [id, new Set(list)]));
+		return {
+			start: (id: string) => {
+				if (!jobs.has(id)) jobs.set(id, new Set());
+				jobs.get(id)!.add(`job-${id}-${jobs.get(id)!.size}`);
+			},
+			jobsFor: vi.fn(async (chunk: string[]) => new Map(chunk.filter((id) => jobs.has(id)).map((id) => [id, new Set(jobs.get(id))]))),
+		};
+	};
+
+	it("POSTs ExecuteWorkflow bound to the workflow once per record, in batches", async () => {
+		const store = jobStore();
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => requests.map(ok));
+		const result = await runWorkflowInBatches(workflowId, ids(3), { executeBatch, batchSize: 2, wait: noWait, jobsFor: store.jobsFor });
+		expect(executeBatch).toHaveBeenCalledTimes(2);
+		expect(executeBatch.mock.calls[0][0][0]).toEqual({
+			method: "POST",
+			url: "workflows(11111111-2222-3333-4444-555555555555)/Microsoft.Dynamics.CRM.ExecuteWorkflow",
+			body: { EntityId: ids(3)[0] },
+		});
+		expect(result).toEqual({ succeeded: 3, failed: 0, errors: [] });
+		// A snapshot of the jobs before each batch, for a batch that stops early
+		expect(store.jobsFor).toHaveBeenCalledTimes(2);
+	});
+
+	it("doesn't resend records whose workflow started in a stopped batch; earlier runs don't count", async () => {
+		const [a, b, c] = ids(3);
+		// c ran this workflow before: an old job that must not count as started now
+		const store = jobStore({ [c]: ["old-job"] });
+		const sent: string[] = [];
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			if (requests.length > 1) {
+				// The batch ran a, then b failed, and it stopped: c never ran
+				store.start(a);
+				throw new Error("Batch stopped early");
+			}
+			const id = entityIdOf(requests[0]);
+			sent.push(id);
+			store.start(id);
+			return [id === b ? fail(400, "0x80040265", "The workflow failed for this record") : ok()];
+		});
+		const result = await runWorkflowInBatches(workflowId, [a, b, c], { executeBatch, wait: noWait, jobsFor: store.jobsFor });
+		expect(sent).toEqual([b, c]);
+		expect(result.succeeded).toBe(2);
+		expect(result.errors).toEqual([expect.stringMatching(new RegExp(`^${b}: `))]);
+	});
+
+	it("sends nothing again when the jobs can't be read: a workflow mustn't run twice", async () => {
+		const [a, b] = ids(2);
+		let reads = 0;
+		const jobsFor = vi.fn(async () => {
+			if (++reads > 1) throw new Error("Principal user is missing prvReadAsyncOperation privilege");
+			return new Map<string, Set<string>>();
+		});
+		const executeBatch = vi.fn(async (requests: BatchRequest[]) => {
+			if (requests.length > 1) throw new Error("Batch stopped early");
+			return [ok()];
+		});
+		const result = await runWorkflowInBatches(workflowId, [a, b], { executeBatch, wait: noWait, jobsFor });
+		expect(executeBatch).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ succeeded: 0, failed: 2, errors: [`${a}: ${WORKFLOW_UNKNOWN_MESSAGE}`, `${b}: ${WORKFLOW_UNKNOWN_MESSAGE}`] });
+	});
+
+	it("without a snapshot from before the batch, a stopped batch is unknown too; a batch that completes is fine", async () => {
+		const [a, b] = ids(2);
+		const jobsFor = vi.fn(async () => {
+			throw new Error("Network error");
+		});
+		const stops = vi.fn(async (requests: BatchRequest[]) => {
+			if (requests.length > 1) throw new Error("Batch stopped early");
+			return [ok()];
+		});
+		expect((await runWorkflowInBatches(workflowId, [a, b], { executeBatch: stops, wait: noWait, jobsFor })).failed).toBe(2);
+		const completes = vi.fn(async (requests: BatchRequest[]) => requests.map(ok));
+		expect(await runWorkflowInBatches(workflowId, [a, b], { executeBatch: completes, wait: noWait, jobsFor })).toEqual({
+			succeeded: 2,
+			failed: 0,
+			errors: [],
+		});
 	});
 });
