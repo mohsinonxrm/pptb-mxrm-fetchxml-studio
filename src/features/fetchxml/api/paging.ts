@@ -128,40 +128,11 @@ export function hasNextPage(mode: PagingState["mode"], response: PageResponse): 
 }
 
 /**
- * After the first page of a query whose `count` is larger than the page Dataverse returned (#209):
- * the maximum page size is 5,000 rows (500 for elastic tables), and without a paging cookie later
- * pages are requested by page number, which skips (page − 1) × count rows. Requesting page 2 with
- * the query's count would then skip the rows between the returned page and `count`. So paging goes
- * on by the size Dataverse actually returned. From a starting page above 1 it stops with a notice
- * instead: whether Dataverse skips (page − 1) × the requested count, or × the size it caps it to, isn't
- * documented, so the next row isn't known. With a paging cookie, or a full page, nothing changes.
- * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
- */
-export function pagingAfterFirstPage(
-	state: PagingState,
-	firstPage: number,
-	rowsReturned: number,
-): { state: PagingState; notice?: PagingNotice } {
-	const count = state.pageSize;
-	if (state.mode !== "fetchxml" || state.pagingCookie || !state.moreRecords || !count || rowsReturned <= 0 || rowsReturned >= count) {
-		return { state };
-	}
-	if (firstPage > 1) {
-		return {
-			state: { ...state, moreRecords: false, isRetrieveAllInProgress: false },
-			notice: {
-				kind: "pageSize",
-				message: `Dataverse returned ${rowsReturned.toLocaleString()} rows, fewer than the query's count of ${count.toLocaleString()}, and no paging cookie. Starting from page ${firstPage}, the next page can't be requested without risking skipped rows, so later pages aren't loaded. Set count to ${rowsReturned.toLocaleString()} or less, or start from page 1.`,
-			},
-		};
-	}
-	return { state: { ...state, pageSize: rowsReturned, currentPage: 1, nextPage: 2 } };
-}
-
-/**
  * The position after fetching page `state.nextPage`. The next page is always that page + 1:
  * Dataverse's `pagenumber` hint stays at 2 for queries without a paging cookie (verified), and
- * following it repeated page 2 forever.
+ * following it repeated page 2 forever. A `count` above Dataverse's 5,000-row page is capped, and
+ * page N without a cookie then starts at row (N − 1) × 5,000 + 1, so keeping the query's count
+ * skips nothing (verified with count 6,000 and 10,000, 2026-11-01, #209).
  */
 export function advancePaging(state: PagingState, response: PageResponse): PagingState {
 	return {
@@ -179,8 +150,6 @@ export type PagingNotice =
 	| { kind: "error"; page?: number; message: string }
 	| { kind: "stopped"; message: string }
 	| { kind: "limit"; message: string }
-	/** Later pages not loaded: a count above Dataverse's page size from a later starting page (#209) */
-	| { kind: "pageSize"; message: string }
 	| { kind: "simple"; message: string };
 
 /**

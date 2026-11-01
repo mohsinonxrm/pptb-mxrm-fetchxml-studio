@@ -7,7 +7,6 @@ import {
 	advancePaging,
 	hasNextPage,
 	nextLinkToQueryPath,
-	pagingAfterFirstPage,
 	parseFetchXmlPagingCookie,
 	readFetchPagingOptions,
 	RETRIEVE_ALL_ROW_LIMIT,
@@ -153,47 +152,6 @@ describe("Retrieve All row limit (#183)", () => {
 		expect(retrieveAllLimitReached(100_000)).toBe(true);
 		expect(retrieveAllLimitReached(105_000)).toBe(true);
 		expect(retrieveAllLimitReached(10, 10)).toBe(true);
-	});
-});
-
-describe("pagingAfterFirstPage: count above Dataverse's page size (#209)", () => {
-	const first = (overrides: Partial<PagingState> = {}): PagingState => ({
-		mode: "fetchxml",
-		xml: '<fetch count="6000" distinct="true"><entity name="savedquery" /></fetch>',
-		pageSize: 6000,
-		currentPage: 1,
-		nextPage: 2,
-		moreRecords: true,
-		isRetrieveAllInProgress: false,
-		retrieveAll: false,
-		...overrides,
-	});
-
-	it("pages by the 5,000 rows Dataverse returned, so page 2 starts at row 5,001, not 6,001", () => {
-		expect(pagingAfterFirstPage(first(), 1, 5000)).toEqual({ state: first({ pageSize: 5000, currentPage: 1, nextPage: 2 }) });
-		// count 10,000: the same; page 2 of 5,000 skips exactly the 5,000 loaded
-		expect(pagingAfterFirstPage(first({ pageSize: 10000 }), 1, 5000).state).toMatchObject({ pageSize: 5000, nextPage: 2 });
-		// An elastic table's 500-row page
-		expect(pagingAfterFirstPage(first({ pageSize: 1000 }), 1, 500).state).toMatchObject({ pageSize: 500, nextPage: 2 });
-	});
-
-	it("from a later starting page, stops with a notice: where Dataverse's next page starts isn't documented", () => {
-		// A full page (count 5,000) needs nothing, whatever the starting page
-		expect(pagingAfterFirstPage(first({ pageSize: 5000 }), 3, 5000)).toEqual({ state: first({ pageSize: 5000 }) });
-		for (const count of [6000, 10000]) {
-			const stopped = pagingAfterFirstPage(first({ pageSize: count }), 2, 5000);
-			expect(stopped.state).toMatchObject({ moreRecords: false, isRetrieveAllInProgress: false, pageSize: count });
-			expect(stopped.notice).toMatchObject({ kind: "pageSize" });
-			expect(stopped.notice?.message).toMatch(new RegExp(`fewer than the query's count of ${count.toLocaleString()}.*Starting from page 2`));
-		}
-	});
-
-	it("leaves cookie paging, views, full pages, the last page and queries without count alone", () => {
-		expect(pagingAfterFirstPage(first({ pagingCookie: "<cookie/>" }), 1, 5000).state.pageSize).toBe(6000);
-		expect(pagingAfterFirstPage(first({ mode: "view" }), 1, 5000).state.pageSize).toBe(6000);
-		expect(pagingAfterFirstPage(first(), 1, 6000).state.pageSize).toBe(6000);
-		expect(pagingAfterFirstPage(first({ moreRecords: false }), 1, 5000).state.pageSize).toBe(6000);
-		expect(pagingAfterFirstPage(first({ pageSize: undefined }), 1, 5000).state.pageSize).toBeUndefined();
 	});
 });
 

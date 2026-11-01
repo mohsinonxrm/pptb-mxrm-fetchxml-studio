@@ -92,7 +92,6 @@ import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/mode
 import {
 	advancePaging,
 	hasNextPage,
-	pagingAfterFirstPage,
 	readFetchPagingOptions,
 	retrieveAllLimitReached,
 	RETRIEVE_ALL_LIMIT_MESSAGE,
@@ -1112,43 +1111,35 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const moreRecords = !hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
 			const firstPage = options.page ?? 1;
 
-			// A first page smaller than the query's count, with no cookie: later pages go by the size
-			// Dataverse returned, so no rows are skipped (#209)
-			const firstPaging = pagingAfterFirstPage(
-				{
-					mode: useViewExecution ? "view" : "fetchxml",
-					xml: xmlToExecute,
-					pageSize: firstPageShrunkTo?.pageSize ?? options.count,
-					// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
-					fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
-					// After a smaller first page (#183), paging continues from the page it was fetched as
-					currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
-					nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
-					pagingCookie: result.pagingCookie,
-					nextLink: result.nextLink,
-					moreRecords,
-					isRetrieveAllInProgress: retrieveAll && moreRecords,
-					retrieveAll,
-				},
-				firstPageShrunkTo?.nextPage ?? firstPage,
-				result.records.length,
-			);
 			loadedRowsRef.current = result.records.length;
 			setQueryResult({
 				query,
 				rows: result.records.map((record) => ({ ...record })),
 				totalRecordCount: result.totalRecordCount,
 				totalRecordCountLimitExceeded: result.totalRecordCountLimitExceeded,
-				moreRecords: firstPaging.state.moreRecords,
+				moreRecords,
 				pagingCookie: result.pagingCookie,
 				entityLogicalName,
 				executionTimeMs,
 			});
-			setPaging(firstPaging.state);
-			if (firstPaging.notice) setPagingNotice(firstPaging.notice);
+			setPaging({
+				mode: useViewExecution ? "view" : "fetchxml",
+				xml: xmlToExecute,
+				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
+				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
+				fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
+				// After a smaller first page (#183), paging continues from the page it was fetched as
+				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
+				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
+				pagingCookie: result.pagingCookie,
+				nextLink: result.nextLink,
+				moreRecords,
+				isRetrieveAllInProgress: retrieveAll && moreRecords,
+				retrieveAll,
+			});
 			setIsExecuting(false);
 
-			if (retrieveAll && firstPaging.state.moreRecords) await loadAllPages(run);
+			if (retrieveAll && moreRecords) await loadAllPages(run);
 		} catch (error) {
 			if (run !== resultRunRef.current) return;
 			console.error("Failed to execute FetchXML:", error);
