@@ -114,6 +114,6 @@ export default defineConfig(async ({ command, mode }) => ({
 	test: {
 		// jsdom provides DOMParser, which the FetchXML parser relies on.
 		environment: "jsdom",
-		include: ["src/**/*.test.ts", "dev/**/*.test.ts"],
+		include: ["src/**/*.test.ts", "dev/**/*.test.ts", ".github/scripts/**/*.test.mjs"],
 	},
 }));

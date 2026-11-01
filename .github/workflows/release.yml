@@ -94,6 +94,9 @@ jobs:
             echo "latest=$latest"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
+      # The version, package-lock.json, the CHANGELOG section and the README badge (RELEASING.md)
+      - name: Check the release metadata
+        run: node .github/scripts/check-release.mjs
       # Only esbuild (its binary comes from its platform package) and fsevents (macOS) have
       # install scripts
       - run: npm ci --ignore-scripts
@@ -103,6 +106,16 @@ jobs:
       - run: npm test
       - run: npm run validate
       - run: npm run build # tsc -b (type check), then vite build
+      - name: Check the bundled icon and write the release notes
+        env:
+          DIST_TAG: ${{ steps.channel.outputs.dist_tag }}
+        run: node .github/scripts/check-release.mjs --dist --notes "$RUNNER_TEMP/release-notes.md" --dist-tag "$DIST_TAG" --repository "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
       - name: Check the bundled DOMPurify
         run: node .github/scripts/check-dompurify.mjs
       - name: Pack and check the package contents
@@ -180,10 +193,15 @@ jobs:
     permissions:
       contents: write # create the GitHub Release
     steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+      # The notes: the channel, the PPTB requirement and the version's CHANGELOG section, then
+      # GitHub's generated list of PRs and compare link (gh puts --notes-file before the generated notes)
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           LATEST: ${{ needs.build.outputs.latest }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes --latest="$LATEST" --prerelease="$PRERELEASE"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md --generate-notes --latest="$LATEST" --prerelease="$PRERELEASE"

@@ -194,6 +194,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
+  - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
+  - `package-lock.json`;
+  - the CHANGELOG (a dated `[X.Y.Z]` section with entries, under `[Unreleased]`);
+  - the README badge;
+  - after the build, the bundled icon (the Insider icon for pre-releases).
+
+  The GitHub Release notes are now built from the CHANGELOG section, after a line on the channel and the PPTB requirement. GitHub's PR list follows, instead of the PR list alone, and a rehearsal previews them in the run summary. RELEASING.md has a table of what every release changes and an *After every release* checklist: the npm tag, the published icon, the tracking issue, the forward merge and deprecating the replaced version.
 - **Relative asset URLs (#173).** The build used Vite's default root-absolute `base` (`/assets/…`). That works in PPTB Desktop, which serves each tool at the root of its own origin. The PPTB VS Code extension serves `dist/` from a sub-path, where those URLs miss the tool's folder; the same problem left Command Bar Studio as a blank tab there (Command Bar Studio #89). The build now uses `base: "./"`, so the page, its chunks, the stylesheet and the editor font load from the tool's own folder wherever it's served.
 - **Faster startup: exceljs loads on the first local export (#187).** The local Excel export's library was in the main bundle, so every start parsed it, though most sessions never export. It's now a separate chunk, loaded when you first use Export (Local), alongside the formatting metadata the export already waits for. The main bundle shrinks from 2,576 kB to 1,631 kB (729 kB to 455 kB gzipped). The large-result-set items in #187 stay open.
 - **Repo hygiene, part of #205.** Removed files nothing imports: `ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts` and the Vite template's `src/assets/react.svg`. Also removed two unused exports: `LoadingCellRenderer` and `ValueNode`, which #181 didn't need. `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions supported by jsdom 30 (the Vitest environment). The one-time Prettier reformat and the CI format check follow after 1.5.0 ships, so forward merges from `release/1.5` don't conflict. The ESLint 10 upgrade gets its own PR.
