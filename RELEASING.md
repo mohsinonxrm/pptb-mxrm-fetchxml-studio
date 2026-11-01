@@ -45,8 +45,8 @@ When a forward merge conflicts badly because the code has moved on, re-apply the
 the newer branch in a small companion PR instead.
 
 **Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json`, `package-lock.json` and
-the README badge: keep the **higher** of the two versions (semver), with its lock fields and
-badge, and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
+the version badge (`assets/badges/version.svg`): keep the **higher** of the two versions (semver), with its lock fields and
+badge (`npm run badges`), and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
 version order, highest first. So the newest dated section is always the branch's version, which
 `check-release.mjs` checks. For example, a `1.5.1` hotfix merged into `dev` at `1.5.0` makes
 `dev` `1.5.1`; merged into `dev` at `1.6.0-beta.2`, `dev` stays `1.6.0-beta.2` with `[1.5.1]`
@@ -61,7 +61,7 @@ needs a manual edit:
 |---|---|---|
 | **Version** (semver: `X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`) in `package.json` and `package-lock.json` | `npm version X.Y.Z[-beta.N] --no-git-tag-version` updates both | `check-release.mjs` (CI and `release.yml`); the tag must match too |
 | **CHANGELOG** | Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add an empty `## [Unreleased]` above it | `check-release.mjs`: the newest section is the version, dated, with entries |
-| **README** version badge | `version-X.Y.Z--beta.N-blue` (shields.io writes `-` as `--`) | `check-release.mjs` |
+| **README badges** | `npm run badges` regenerates `assets/badges/*.svg` from `package.json`: the version (yellow for pre-releases), the PPTB `minAPI`, `@pptb/types`, React, TypeScript, Fluent UI and the license. The README links them and doesn't change | `check-release.mjs`: the files are current, the README shows them, and nothing uses `img.shields.io` |
 | **Icon** | Nothing to do: the build bundles the gold Insider icon for `-beta.N` / `-rc.N` and the release icon for `X.Y.Z` | `check-release.mjs --dist` compares `dist/icons/icon.svg` with the right source |
 | **npm package** | Published by `release.yml` on the tag, with provenance, to `beta`, `latest` or `support-X.Y` | `release.yml` |
 | **GitHub Release** | Created by `release.yml` on the tag: pre-release for betas, latest for stable on `main`. Its notes are the channel, the PPTB requirement and the CHANGELOG section, then GitHub's PR list | `release.yml` |
@@ -91,7 +91,7 @@ git switch dev && git pull && git switch -c release/1.5 && git push -u origin re
 
 1. On a branch from `release/1.5`: `npm version 1.5.0-beta.13 --no-git-tag-version`,
    rename `## [Unreleased]` to `## [1.5.0-beta.13] - YYYY-MM-DD` (add a new empty
-   `## [Unreleased]` above it), update the README version badge (see *Every release: what
+   `## [Unreleased]` above it), run `npm run badges` (see *Every release: what
    changes*), and PR it into `release/1.5`.
 2. Tag the PR's merge commit on `release/1.5`: `git switch release/1.5 && git pull && git tag v1.5.0-beta.13 && git push origin v1.5.0-beta.13`.
 3. Run *After every release* (below), then merge `release/1.5` into `dev` (merge commit) so `dev` has the fixes.
@@ -115,7 +115,7 @@ Before promoting a beta to `latest`:
 
 1. Release-prep PR into `release/1.5`: `npm version 1.5.0 --no-git-tag-version`, a
    `[1.5.0]` CHANGELOG section that summarises the betas above their history (see
-   `[1.4.2]`), and the README badge.
+   `[1.4.2]`), and `npm run badges`.
 2. PR `release/1.5` → `main`, merged with a merge commit.
 3. Tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
 4. Run *After every release*, then merge `main` into `dev` (merge commit) and delete `release/1.5`.
@@ -123,7 +123,7 @@ Before promoting a beta to `latest`:
 ## Hotfixes (to the current stable release)
 
 1. Branch `hotfix/1.4.3` from `main`; fix, set the version (`1.4.3`), date its CHANGELOG
-   section, update the badge; PR into `main` (merge commit).
+   section, run `npm run badges`; PR into `main` (merge commit).
 2. Tag `v1.4.3` on `main` → npm `latest`, then run *After every release*.
 3. Merge `main` forward into `release/*` (if one is open) and `dev`, keeping the higher version
    (*Resolving forward-merge conflicts*) and each target's `[Unreleased]` entries.
@@ -205,6 +205,16 @@ npm token exchange or provenance signing. A manual run never publishes, even on 
    same message as before. The owner runs it, since npm asks for 2FA:
    `npm deprecate @mohsinonxrm/pptb-fetchxml-studio@<old> "No longer supported. Install the latest release (npm tag latest) or the current beta (npm tag beta)."`
 7. **Milestone:** close it when its stable release ships.
+
+## README images
+
+PPTB shows the README in its main window, whose CSP only allows images from GitHub and
+`*.githubusercontent.com`, and escapes raw HTML. So README images are files in the repo, linked
+by absolute `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/main/...` URLs, never
+`img.shields.io` or HTML tags. The badges are generated into `assets/badges/` by
+`npm run badges` (`.github/scripts/badges.mjs`), in shields.io's flat style, as Command Bar Studio
+does. They're read from `main`, so they show the current stable release, and new or renamed badges
+appear once they reach `main`.
 
 ## One-time setup
 
