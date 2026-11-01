@@ -5,7 +5,7 @@ needs before it can merge. Releases are described in [RELEASING.md](RELEASING.md
 
 ## Prerequisites
 
-- **Node.js 22 or later** (`engines` in `package.json`; CI uses Node 24) and npm.
+- **Node.js 22.22.2+, 24.15.0+ or 26+** (`engines` in `package.json`, the range jsdom, the test environment, supports; CI uses Node 24) and npm.
 - **Power Platform ToolBox 1.2.7 or later** to run the tool for real (`minAPI` 1.2.7).
 - For the browser dev harness: the **Azure CLI** (`az login`) and a Dataverse dev org.
 

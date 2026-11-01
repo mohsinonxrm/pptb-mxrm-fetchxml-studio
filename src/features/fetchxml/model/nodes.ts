@@ -284,10 +284,3 @@ export type OperatorType =
 	| "above"
 	| "eq-or-above";
 
-/**
- * Value node - for operators that accept multiple values (e.g., 'in')
- * Not a tree node, but used in FetchXML generation
- */
-export interface ValueNode {
-	value: string | number | boolean;
-}
