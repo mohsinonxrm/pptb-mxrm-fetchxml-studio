@@ -320,7 +320,7 @@ interface PreviewTabsProps {
 	/** Whether user can run workflows */
 	canRunWorkflow?: boolean;
 	/** Fetch available workflows for the entity */
-	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
+	onFetchWorkflows?: (entityLogicalName?: string) => Promise<WorkflowInfo[]>;
 	/** Whether the current query is an aggregate query (disables delete/workflow) */
 	isAggregateQuery?: boolean;
 	/** Whether the query has 1-N or N-N relationships that cause row duplication */
