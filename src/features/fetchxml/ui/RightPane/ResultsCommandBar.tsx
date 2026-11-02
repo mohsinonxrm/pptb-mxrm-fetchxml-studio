@@ -47,6 +47,7 @@ import {
 } from "./AddColumnsPanel";
 import type { LayoutColumn } from "../../model/layoutxml";
 import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
+import { useEntityWorkflows } from "./useEntityWorkflows";
 import type { CopyValueMode } from "./copyResults";
 import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
 import { deleteSelectionUnavailableReason } from "../../model/deleteScope";
@@ -274,26 +275,13 @@ export function ResultsCommandBar({
 	// Copy menu: values as shown in the grid, or raw (#50)
 	const [copyMode, setCopyMode] = useState<CopyValueMode>("shown");
 
-	// Workflow menu state
-	const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
-	const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
-	const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
-
-	// Load workflows when menu opens (lazy loading)
-	const handleWorkflowMenuOpen = useCallback(async () => {
-		if (workflowsLoaded || isLoadingWorkflows || !onFetchWorkflows) return;
-
-		setIsLoadingWorkflows(true);
-		try {
-			const wfs = await onFetchWorkflows();
-			setWorkflows(wfs);
-			setWorkflowsLoaded(true);
-		} catch (err) {
-			console.error("Failed to load workflows:", err);
-		} finally {
-			setIsLoadingWorkflows(false);
-		}
-	}, [workflowsLoaded, isLoadingWorkflows, onFetchWorkflows]);
+	// Workflow menu: loaded when the menu opens, for the results' entity (#182)
+	const {
+		workflows,
+		isLoading: isLoadingWorkflows,
+		loaded: workflowsLoaded,
+		load: handleWorkflowMenuOpen,
+	} = useEntityWorkflows(entityName, onFetchWorkflows);
 
 	const handleEditColumnsClick = useCallback(() => {
 		setEditPanelOpen(true);

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Run workflow lists the current entity's workflows, and the Bulk delete job name is fresh (#182).**
+  - **Run workflow:** the menu loaded the on-demand workflows once and kept them. While you stayed on the Results tab, switching entity and running a query still listed the previous entity's workflows, and picking one opened the Run workflow dialog with nothing selected. The list now belongs to the results' entity. It's loaded again after the entity changes, and a list still loading for the previous entity is dropped.
+  - **Bulk delete:** the default job name was made when the tool started ("Bulk Delete Account - " + the start time), so it usually showed the wrong time and could name the previous entity. It's now made each time the dialog opens. A name you type is kept while the dialog is open.
+
 - **A view opened from another tool loads like Load view (#197).**
   - **Before:** only the view's FetchXML was loaded. Its column layout was ignored, an unchanged view wasn't run by ID, and **Save** offered Save as rather than overwrite. A view that didn't exist, or a failed request, left an empty builder with no message.
   - **Now:** the view loads the way **Load view** loads it. When it can't be opened, a notification says why: "Couldn't open the view" / "…asked for a personal view (id) that doesn't exist or that you can't read", or Dataverse's error.
