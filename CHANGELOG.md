@@ -203,6 +203,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Changed
 
+- **README: screenshots, a Quick start and an AI assistance note (#84).** The README showed no picture of the tool: its "Interface Overview" was ASCII art, out of date (it showed Prev/Next paging). It now has three screenshots of the tool, taken in Power Platform ToolBox on a sandbox with temporary records: the results grid in light, the FetchXML tab in dark, and the Advisories tab. It also gains a Quick start (open the tool, pick an entity, add attributes, Execute) and a short **AI assistance** section, as the [AI-assisted development policy](https://docs.powerplatformtoolbox.com/policies/ai-assisted-development) asks. The images are in `assets/screenshots/`, linked from `main` like the badges, so they show once 1.6.0 reaches `main`. They're not in the npm package.
+
 - **README badges show in the ToolBox.** Power Platform ToolBox shows a tool's README in a window that only loads images from GitHub, so the `img.shields.io` badges didn't appear there. They're now SVG files in `assets/badges/`, linked from `raw.githubusercontent.com` as in Command Bar Studio, and generated from `package.json` by `npm run badges`: version, Power Platform ToolBox ≥ 1.2.7, `@pptb/types`, React, TypeScript, Fluent UI and license. The `@pptb/types` badge said 1.2.3; it now says 1.2.7. The version badge links to npm, in place of the npm badge. The links point at `main`, so the badges appear there with the 1.5.0 release.
 
 - **Close dialogs say how to undo too (#69).** As in 1.5.0-beta.18, for the Close actions added in 1.6 (#149):
@@ -212,6 +214,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Activate** on an entity with a Close menu says to undo with Close, not Deactivate.
 
 ### 🏗️ Technical
+
+- **Dev-only advisories fixed (#84):** vite 7.3.6 → 7.3.7 (launch-editor [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv), Vite [GHSA-9jrq-w75r-8gcw](https://github.com/advisories/GHSA-9jrq-w75r-8gcw) and [GHSA-rq7h-c2jc-7f22](https://github.com/advisories/GHSA-rq7h-c2jc-7f22)), and undici 8.11.2 → 8.12.2 through jsdom ([GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx) and others). Both are build and test tools, not in the shipped bundle, but the Verified review runs `npm audit` on the whole tree, which now reports 0 high or critical. Both versions are more than 14 days old.
 
 - **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
   - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
