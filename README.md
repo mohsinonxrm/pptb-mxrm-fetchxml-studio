@@ -11,6 +11,8 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 ![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/fluent-ui.svg)
 ![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/license.svg)
 
+![FetchXML Studio in Power Platform ToolBox: the query tree and properties on the left, the results grid on the right](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/results-light.png)
+
 ## ✨ Features
 
 ### 🔧 Visual Query Builder
@@ -181,29 +183,13 @@ Nothing else writes to Dataverse:
 
 ## 🖼️ Interface Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  [Entity Selector ▼]  [Load View ▼]  [Save View] [Send to Tool ▼]  [⚙] │
-├──────────────────────┬──────────────────────────────────────────────────┤
-│                      │ [FetchXML] [Layout] [Results] [Advisories] [Code]│
-│   Query Tree         ├──────────────────────────────────────────────────┤
-│                      │                                                   │
-│   📁 fetch           │   Results Grid / Monaco Editor                   │
-│   └─📁 entity        │                                                   │
-│      ├─📋 attribute  │   ┌────────────┬────────────┬──────────────┐     │
-│      ├─📋 attribute  │   │ Column 1   │ Column 2   │ Column 3     │     │
-│      ├─🔽 order      │   ├────────────┼────────────┼──────────────┤     │
-│      ├─🔍 filter     │   │ Value      │ Value      │ Value        │     │
-│      │  └─ condition │   │ Value      │ Value      │ Value        │     │
-│      └─🔗 link-entity│   └────────────┴────────────┴──────────────┘     │
-│                      │                                                   │
-├──────────────────────┤   [◀ Prev] Page 1 of 10 [Next ▶]  100 records    │
-│                      │                                                   │
-│   Properties Panel   │   [+ Add Columns] [✎ Edit Columns] [⬇ Export]   │
-│   (context-aware)    │   [🗑 Delete] [Bulk Delete] [⚡ Run Workflow]    │
-│                      │                                                   │
-└──────────────────────┴──────────────────────────────────────────────────┘
-```
+- **Left:** the entity and view pickers, the query tree (right-click an entity or filter node, or use its **+** (Add…) button, to add attributes, filters, conditions, orders and link-entities) and the properties of the selected node.
+- **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**. **Execute** runs the query.
+- The tool follows the ToolBox's light or dark theme.
+
+![The FetchXML tab with the query in the editor, in the dark theme](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/fetchxml-dark.png)
+
+![The Advisories tab listing suggestions for the query](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/advisories-light.png)
 
 ## 🚀 Getting Started
 
@@ -212,7 +198,16 @@ Nothing else writes to Dataverse:
 - Connection to a Dataverse environment
 
 ### Installation
-FetchXML Studio is available as a tool in Power Platform ToolBox. Install it from the tool gallery or load as a custom tool. The package is published on npm as [`@mohsinonxrm/pptb-fetchxml-studio`](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio).
+FetchXML Studio is available as a tool in Power Platform ToolBox. In Power Platform ToolBox, open **Tools Marketplace**, search for *FetchXML Studio* and install it. The package is published on npm as [`@mohsinonxrm/pptb-fetchxml-studio`](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio).
+
+### Quick start
+1. In Power Platform ToolBox, open **Installed Tools** and select **FetchXML Studio**. Choose a Dataverse connection when it asks.
+2. In **Entity**, pick the table to query, for example *Account*. The query tree shows a **Fetch query** node with that entity under it.
+3. Add columns: right-click the entity node (or use its **+** (Add…) button) and choose **All attributes** or **Select attributes…**. Add an **Order by** the same way. To filter, add a **Filter**, then choose **Condition** from the filter's own menu, and set the attribute, operator and value in the properties panel below the tree.
+4. Select **Execute**. The rows appear on the **Results** tab; scroll to load more. To load every page, select the **Fetch query** node, turn on **Retrieve all records** and select **Execute** again.
+5. Optional: open a saved view with **Load view**, edit the FetchXML on the **FetchXML** tab (turn on **Editor mode**, then **Parse to tree**), or copy generated code from the **Code** tab.
+
+Nothing is written to Dataverse until you choose one of the operations under **What this tool changes**, and each one asks first.
 
 ## 🛠️ Development
 
@@ -473,6 +468,10 @@ UI changes are agreed in the issue (prototype or screenshots) before they're bui
 - [ ] Query history
 - [ ] Query performance insights
 - [ ] Syntax validation in Monaco
+
+## 🤖 AI assistance
+
+Parts of this tool were written with Claude Code (Anthropic) and are reviewed, tested in Power Platform ToolBox against a Dataverse sandbox, and maintained by Mohsin On xRM.
 
 ## 📄 License
 
