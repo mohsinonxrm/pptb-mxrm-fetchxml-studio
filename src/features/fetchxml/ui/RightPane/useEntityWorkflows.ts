@@ -17,7 +17,7 @@ export interface EntityWorkflows {
 
 export function useEntityWorkflows(
 	entityName: string | undefined,
-	onFetchWorkflows: (() => Promise<WorkflowInfo[]>) | undefined,
+	onFetchWorkflows: ((entityLogicalName: string) => Promise<WorkflowInfo[]>) | undefined,
 ): EntityWorkflows {
 	const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
@@ -33,12 +33,13 @@ export function useEntityWorkflows(
 	}, [entityName]);
 
 	const load = useCallback(async () => {
-		if (loaded || isLoading || !onFetchWorkflows) return;
+		if (loaded || isLoading || !onFetchWorkflows || !entityName) return;
 
 		const request = ++requestRef.current;
 		setIsLoading(true);
 		try {
-			const wfs = await onFetchWorkflows();
+			// Fetched for the entity the list is kept for, so the two can't differ
+			const wfs = await onFetchWorkflows(entityName);
 			if (request !== requestRef.current) return;
 			setWorkflows(wfs);
 			setLoaded(true);
@@ -48,7 +49,7 @@ export function useEntityWorkflows(
 		} finally {
 			if (request === requestRef.current) setIsLoading(false);
 		}
-	}, [loaded, isLoading, onFetchWorkflows]);
+	}, [loaded, isLoading, onFetchWorkflows, entityName]);
 
 	return { workflows, isLoading, loaded, load };
 }

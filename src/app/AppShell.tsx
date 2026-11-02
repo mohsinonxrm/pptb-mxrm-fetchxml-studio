@@ -1837,12 +1837,17 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	}, []);
 
 	/**
-	 * Fetch available workflows for the entity
+	 * Fetch available workflows for an entity: the one the Run workflow menu names (the results'
+	 * entity, #182), or the selected entity
 	 */
-	const handleFetchWorkflows = useCallback(async (): Promise<WorkflowInfo[]> => {
-		if (!entityLogicalName) return [];
-		return getOnDemandWorkflows(entityLogicalName);
-	}, [entityLogicalName]);
+	const handleFetchWorkflows = useCallback(
+		async (forEntity?: string): Promise<WorkflowInfo[]> => {
+			const entity = forEntity ?? entityLogicalName;
+			if (!entity) return [];
+			return getOnDemandWorkflows(entity);
+		},
+		[entityLogicalName],
+	);
 
 	/**
 	 * Execute workflow on selected records

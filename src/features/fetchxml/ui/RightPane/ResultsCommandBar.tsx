@@ -107,8 +107,8 @@ export interface CommandBarProps {
 	 * ran yet, so it would delete records the grid doesn't show (#174). Selected records still work.
 	 */
 	deleteAllDisabledReason?: string;
-	/** Fetch available workflows for the entity */
-	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
+	/** Fetch the on-demand workflows of an entity (the results' entity, #182) */
+	onFetchWorkflows?: (entityLogicalName?: string) => Promise<WorkflowInfo[]>;
 	/** Export to Excel via Dataverse ExportToExcel API (requires saved view) */
 	onExport?: () => void;
 	/** Export to Excel locally using exceljs (no view required) */
