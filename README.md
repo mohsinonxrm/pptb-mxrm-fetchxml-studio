@@ -81,7 +81,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Save to Dataverse** — Save your queries as new personal or system views, or update existing ones.
   - Before overwriting a shared personal view, your write access is checked; without it you get **Save a copy…**.
   - Overwriting a managed system view warns first.
-  - Public system views can be **set as the default view**.
+  - Public system views can be **set as the default view**. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise; if it can't be cleared, a notification names it.
   - The description is pre-filled.
 - **Solution-aware** — Add views to solutions during save
 

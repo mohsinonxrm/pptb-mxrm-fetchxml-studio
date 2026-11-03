@@ -6,6 +6,7 @@ import {
 	canOverwriteView,
 	canSetDefaultView,
 	countQuickFindPlaceholders,
+	defaultViewsNotClearedMessage,
 	getQueryTypeLabel,
 	getValidationStatus,
 	getViewLoadNotice,
@@ -281,5 +282,29 @@ describe("quick find test value (#142)", () => {
 		const view = loadView(QUICK_FIND_FETCHXML);
 		expect(countQuickFindPlaceholders(view.originalFetchXml)).toBe(3);
 		expect(countQuickFindPlaceholders(applyQuickFindValue(view.originalFetchXml, "contoso%"))).toBe(0);
+	});
+});
+
+describe("defaultViewsNotClearedMessage (#307)", () => {
+	it("names the view that stayed a default and adds Dataverse's error", () => {
+		const message = defaultViewsNotClearedMessage("FXS view", [{ name: "All Territories", error: "No privilege." }]);
+		expect(message).toBe(
+			`"FXS view" is the default view now, but "All Territories" is still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: No privilege.`,
+		);
+	});
+
+	it("names every view when more than one stayed a default", () => {
+		const message = defaultViewsNotClearedMessage("FXS view", [
+			{ name: "A", error: "E1." },
+			{ name: "B", error: "E2." },
+		]);
+		expect(message).toContain('"A", "B" are still marked as the default too');
+		expect(message).toContain("Details: E1. E2.");
+	});
+
+	it("says it couldn't check when the other defaults couldn't be read", () => {
+		const message = defaultViewsNotClearedMessage("FXS view", [{ name: "", error: "Network error." }]);
+		expect(message).toContain("couldn't check whether another view is still marked as the default too");
+		expect(message).toContain("Details: Network error.");
 	});
 });
