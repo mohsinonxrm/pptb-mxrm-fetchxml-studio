@@ -46,7 +46,49 @@ describe("app: running a query", () => {
 		expect(pages.length).toBeGreaterThanOrEqual(1 + 3);
 		expect(app.dataverse.unknown).toEqual([]);
 	}, 60000);
+
+	it("Stop during Retrieve all keeps the rows already loaded and says so", async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const app = await renderApp({
+			launch: { fetchXml: accountQuery(2) },
+			beforePage: (page) => (page === 2 ? held : undefined),
+		});
+		await app.waitFor(() => !!treeRow("Fetch query"));
+		await click(treeRow("Fetch query"));
+		await app.waitFor(() => !!switchByLabel("Retrieve all records"));
+		await click(switchByLabel("Retrieve all records")!);
+		await click(button("Execute", document));
+		await app.waitFor(() => !!buttonOrNull("Stop"));
+		await click(buttonOrNull("Stop")!);
+		release();
+		await app.waitFor(() => /Stopped after 2 rows/.test(document.body.textContent ?? ""));
+		expect(app.status()).toMatch(/^Rows: 2\b/);
+		const pages = app.dataverse.calls.filter((c) => c.startsWith("queryData accounts?fetchXml="));
+		expect(pages.length).toBe(2);
+	}, 60000);
+
+	it("a query Dataverse rejects shows the error, and the tool stays usable", async () => {
+		let fail = true;
+		const app = await renderApp({
+			launch: { fetchXml: accountQuery() },
+			beforePage: () => {
+				if (fail) throw new Error("0x80041103: 'account' entity doesn't contain attribute with Name = 'nme'.");
+			},
+		});
+		await app.waitFor(() => !!button("Execute", document));
+		await click(button("Execute", document));
+		await app.waitFor(() => /doesn't contain attribute/.test(document.body.textContent ?? ""));
+		expect(app.status()).toBe("");
+		fail = false;
+		await click(button("Execute", document));
+		await app.waitFor(() => /Rows: 5/.test(app.status()));
+	}, 60000);
 });
+
+function buttonOrNull(name: string): HTMLButtonElement | null {
+	return [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === name) ?? null;
+}
 
 const VIEW_ID = "11111111-2222-3333-4444-555555555555";
 const activeAccounts = {
