@@ -39,8 +39,10 @@ import {
 	validateSavedQuery,
 	checkSavedQueryPrivileges,
 	checkUserQueryPrivileges,
+	clearOtherDefaultPublicViews,
 	createSavedQuery,
 	updateSavedQuery,
+	type DefaultViewNotCleared,
 	createUserQuery,
 	updateUserQuery,
 	publishEntityViews,
@@ -63,6 +65,7 @@ import {
 	countQuickFindPlaceholders,
 	getValidationStatus,
 	isSharedView,
+	defaultViewsNotClearedMessage,
 } from "../../model/savedViews";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
@@ -486,10 +489,11 @@ export function SaveViewDialog({
 			let viewId: string;
 			// Overwrite writes the description as shown, so clearing it clears the view's (#142)
 			const savedDescription = description.trim();
-			// Set as default view: sent only to make a view the default; Dataverse keeps one default
-			// public view per entity ("You can set only one active public view as the default view").
+			// Set as default view: sent only to make a view the default. Only one active public view can
+			// be the default, but Dataverse doesn't clear the previous one, so it's cleared below (#307).
 			// https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
 			const setAsDefault = showDefaultOption && makeDefault && !isAlreadyDefault;
+			let defaultsNotCleared: DefaultViewNotCleared[] = [];
 
 			if (viewType === "personal") {
 				// Personal view
@@ -518,6 +522,18 @@ export function SaveViewDialog({
 				const queryType = isOverwriteMode && loadedView ? (loadedView.queryType ?? 0) : 0;
 				await validateSavedQuery(fetchXml, queryType);
 
+				// Right after the save, before any later step can fail: the entity's other default public
+				// views are cleared (#307). Also when the view already was the default, which repairs two
+				// defaults left by earlier versions. A view that stays a default is reported, not a failed save.
+				const clearOtherDefaults = async (savedViewId: string) => {
+					if (!setAsDefault && !(isAlreadyDefault && showDefaultOption)) return;
+					try {
+						defaultsNotCleared = await clearOtherDefaultPublicViews(entityLogicalName, savedViewId);
+					} catch (error) {
+						defaultsNotCleared = [{ id: "", name: "", error: formatDataverseError(error, "Couldn't check the other default views") }];
+					}
+				};
+
 				if (isOverwriteMode && loadedView) {
 					await updateSavedQuery(loadedView.id, {
 						name: name.trim(),
@@ -527,6 +543,7 @@ export function SaveViewDialog({
 						...(setAsDefault ? { isdefault: true } : {}),
 					});
 					viewId = loadedView.id;
+					await clearOtherDefaults(viewId);
 				} else {
 					viewId = await createSavedQuery({
 						name: name.trim(),
@@ -537,6 +554,7 @@ export function SaveViewDialog({
 						querytype: 0,
 						isdefault: setAsDefault,
 					});
+					await clearOtherDefaults(viewId);
 
 					// Add to solution if selected
 					if (selectedSolution) {
@@ -560,6 +578,13 @@ export function SaveViewDialog({
 				description: savedDescription || undefined,
 				isDefault: viewType === "system" ? setAsDefault || isAlreadyDefault : undefined,
 			});
+			if (defaultsNotCleared.length > 0) {
+				void window.toolboxAPI?.utils?.showNotification?.({
+					title: "Another view is still a default view",
+					body: defaultViewsNotClearedMessage(name.trim(), defaultsNotCleared),
+					type: "warning",
+				});
+			}
 		} catch (error) {
 			console.error("Failed to save view:", error);
 			setSaveError(formatDataverseError(error, "Failed to save view")); // (#96)

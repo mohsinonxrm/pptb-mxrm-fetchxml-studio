@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔧 Fixed
+
+- **Set as default view replaces the previous default (#307).** Saving a public system view with **Set as default view** marked it as the default, but the entity's previous default view stayed the default too, so the entity had two default public views. The dialog said it "Replaces" the old one. Only one active public view can be the default ([Customize views](https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view)), but Dataverse doesn't clear the old one when another view is created or updated as the default (verified on a sandbox). The entity's other active default public views are now cleared right after the view saves, before it's added to a solution or the entity is published. Overwriting a view that's already the default clears them too, which repairs two defaults left by earlier 1.5 betas. If one can't be cleared, the view is still saved, and a notification names the view that's still a default, with Dataverse's error.
+
 ### 🔧 Changed
 
 - **README badges show in the ToolBox.** Power Platform ToolBox shows a tool's README in a window that only loads images from GitHub, so the `img.shields.io` badges didn't appear there. They're now SVG files in `assets/badges/`, linked from `raw.githubusercontent.com` as in Command Bar Studio, and generated from `package.json` by `npm run badges`: version, Power Platform ToolBox ≥ 1.2.7, `@pptb/types`, React, TypeScript, Fluent UI and license. The `@pptb/types` badge said 1.2.3; it now says 1.2.7. The version badge links to npm, in place of the npm badge. The links point at `main`, so the badges appear there with the 1.5.0 release.
