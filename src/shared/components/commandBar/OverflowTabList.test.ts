@@ -77,6 +77,8 @@ describe("OverflowTabList", () => {
 		await click(more());
 		await click(menuItems().find((i) => i.textContent?.trim() === "Advisories"));
 		expect(onTabSelect).toHaveBeenCalledWith("advisories");
+		// Focus goes back to More, as in Fluent's TabList overflow example
+		expect(document.activeElement).toBe(more());
 
 		// The owner selects it: it outranks the others now, so it's back on the row
 		await renderTabs("advisories", onTabSelect);

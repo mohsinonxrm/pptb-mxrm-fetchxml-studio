@@ -329,7 +329,7 @@ describe("OverflowToolbar commands that change", () => {
 
 	it("keeps focus on a command that turns busy with a reason", async () => {
 		stubOverflowWidths({ container: 1000 });
-		const run = (extra: Partial<BarCommand> = {}) => button("Run", 0, { pinned: true, priority: undefined, appearance: "primary", ...extra });
+		const run = (extra: Partial<BarCommand> = {}) => ({ ...button("Run", 0), pinned: true, priority: undefined, appearance: "primary", ...extra }) as BarCommand;
 		await renderBar([run(), button("Save", 10)]);
 		await act(async () => onBar("Run")?.focus());
 		expect(document.activeElement).toBe(onBar("Run"));
