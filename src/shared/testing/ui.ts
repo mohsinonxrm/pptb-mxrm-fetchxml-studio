@@ -19,18 +19,54 @@ export async function flush(times = 3): Promise<void> {
 	});
 }
 
-/** jsdom has no ResizeObserver; Fluent's MessageBar, Spinner and Overflow construct one */
-class NoopResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+/** The ResizeObservers alive now, so stubOverflowWidths can fire them */
+const resizeObservers = new Set<RecordingResizeObserver>();
+
+/**
+ * jsdom has no ResizeObserver; Fluent's MessageBar, Spinner and Overflow construct one. This one does
+ * nothing on its own, but records its callback and targets so a test can fire it (stubOverflowWidths).
+ */
+class RecordingResizeObserver {
+	readonly callback: ResizeObserverCallback;
+	readonly targets = new Set<Element>();
+	constructor(callback: ResizeObserverCallback) {
+		this.callback = callback;
+		resizeObservers.add(this);
+	}
+	observe(target: Element): void {
+		this.targets.add(target);
+	}
+	unobserve(target: Element): void {
+		this.targets.delete(target);
+	}
+	disconnect(): void {
+		this.targets.clear();
+		resizeObservers.delete(this);
+	}
+	/** Calls back with one entry per observed element, as a resize would */
+	fire(): void {
+		if (!this.targets.size) return;
+		const entries = [...this.targets].map(
+			(target) => ({ target, contentRect: target.getBoundingClientRect(), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }) as unknown as ResizeObserverEntry,
+		);
+		this.callback(entries, this as unknown as ResizeObserver);
+	}
+}
+
+/**
+ * Installs RecordingResizeObserver. Also replaces the no-op class that @fluentui/react-positioning puts
+ * on window when NODE_ENV is "test" each time it positions a popover (a menu or tooltip opening), or
+ * Overflows mounted after that could never be resized.
+ */
+function installResizeObserver(): void {
+	const win = window as unknown as { ResizeObserver?: unknown };
+	if (win.ResizeObserver !== RecordingResizeObserver) win.ResizeObserver = RecordingResizeObserver;
 }
 
 /** Renders the element inside a light FluentProvider; a second call re-renders the same root */
 export async function render(ui: ReactElement): Promise<void> {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-	const win = window as unknown as { ResizeObserver?: unknown };
-	if (typeof win.ResizeObserver !== "function") win.ResizeObserver = NoopResizeObserver;
+	installResizeObserver();
 	if (!root) {
 		container = document.createElement("div");
 		document.body.appendChild(container);
@@ -43,7 +79,7 @@ export async function render(ui: ReactElement): Promise<void> {
 	await flush();
 }
 
-/** Unmounts and removes everything render added; call it in afterEach */
+/** Unmounts and removes everything render added (and any width stub); call it in afterEach */
 export function cleanup(): void {
 	if (root) {
 		const target = root;
@@ -53,6 +89,91 @@ export function cleanup(): void {
 	root = null;
 	container = null;
 	document.body.innerHTML = "";
+	restoreWidths?.();
+}
+
+/** Widths, in px, that stubOverflowWidths reports. jsdom has no layout, so everything measures 0. */
+export interface OverflowWidths {
+	/** clientWidth of each Overflow container: the element Fluent's Overflow renders as (the Toolbar or TabList root) */
+	container: number;
+	/** offsetWidth of each overflow item; a function gets the element (the button, tab or SplitButton root). Default 80. */
+	item?: number | ((element: HTMLElement) => number);
+	/** offsetWidth of the More button. Default 40. */
+	menu?: number;
+	/** offsetWidth of each divider in the container. Default 24. */
+	divider?: number;
+}
+
+let restoreWidths: (() => void) | null = null;
+
+/**
+ * Lays out Fluent's Overflow in jsdom. @fluentui/priority-overflow measures the container's
+ * `clientWidth` and each visible item's, divider's and More button's `offsetWidth`, then hides the
+ * lowest priority items until the rest fit in `clientWidth - padding`. It measures when it starts
+ * observing (on mount, only if `clientWidth > 0`), when items or the More button register, and when
+ * its ResizeObserver calls back.
+ *
+ * This stubs those two getters, by structure: the container is the element with Overflow's
+ * `fui-Overflow` class; its direct children are the More button (`data-overflow-menu`, which Fluent
+ * sets before registering it), dividers (role="separator") and items (everything else). The item
+ * and divider data attributes aren't used because Fluent adds them only after it first measures.
+ * Everything else keeps jsdom's 0.
+ *
+ * Call it before render so the first layout uses the widths. `resize` changes widths and fires every
+ * recorded ResizeObserver inside act, as a real resize would. cleanup restores the getters.
+ */
+export function stubOverflowWidths(initial: OverflowWidths): { resize: (next: Partial<OverflowWidths>) => Promise<void>; restore: () => void } {
+	restoreWidths?.();
+	installResizeObserver();
+	const widths: OverflowWidths = { ...initial };
+	const proto = HTMLElement.prototype;
+	const own = {
+		offsetWidth: Object.getOwnPropertyDescriptor(proto, "offsetWidth"),
+		clientWidth: Object.getOwnPropertyDescriptor(proto, "clientWidth"),
+	};
+	// jsdom's own getters (offsetWidth on HTMLElement, clientWidth on Element)
+	const fallback = {
+		offsetWidth: own.offsetWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "offsetWidth"),
+		clientWidth: own.clientWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth"),
+	};
+	const isContainer = (element: Element | null) => !!element?.classList.contains("fui-Overflow");
+	const measure = (element: HTMLElement, which: "offsetWidth" | "clientWidth"): number => {
+		if (isContainer(element)) return widths.container;
+		if (which === "offsetWidth" && isContainer(element.parentElement)) {
+			if (element.hasAttribute("data-overflow-menu")) return widths.menu ?? 40;
+			if (element.getAttribute("role") === "separator") return widths.divider ?? 24;
+			const item = widths.item ?? 80;
+			return typeof item === "function" ? item(element) : item;
+		}
+		return (fallback[which]?.get?.call(element) as number | undefined) ?? 0;
+	};
+	for (const which of ["offsetWidth", "clientWidth"] as const) {
+		Object.defineProperty(proto, which, {
+			configurable: true,
+			get(this: HTMLElement) {
+				return measure(this, which);
+			},
+		});
+	}
+	const restore = () => {
+		for (const which of ["offsetWidth", "clientWidth"] as const) {
+			const descriptor = own[which];
+			if (descriptor) Object.defineProperty(proto, which, descriptor);
+			else delete (proto as unknown as Record<string, unknown>)[which];
+		}
+		if (restoreWidths === restore) restoreWidths = null;
+	};
+	restoreWidths = restore;
+	return {
+		restore,
+		resize: async (next) => {
+			Object.assign(widths, next);
+			await act(async () => {
+				for (const observer of [...resizeObservers]) observer.fire();
+			});
+			await flush();
+		},
+	};
 }
 
 /** A real click on an element, inside act */
