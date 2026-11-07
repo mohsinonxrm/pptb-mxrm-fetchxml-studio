@@ -48,7 +48,7 @@ describe("NotifyProvider", () => {
 	it("shows the title and body", async () => {
 		await mount();
 		await show((n) => n.success({ title: 'Saved "Active accounts"', body: "Not published yet" }));
-		expect(toasts()).toEqual(['Saved "Active accounts"Not published yet']);
+		expect(toasts()).toEqual(['Saved "Active accounts". Not published yet.']);
 	});
 
 	// Fluent runs a toast's timeout as a CSS animation on a timer element and dismisses on its
@@ -114,7 +114,7 @@ describe("NotifyProvider", () => {
 		await show((n) => n.success("Copied 3 rows"));
 		await show((n) => n.success("Copied 3 rows"));
 		await advance(1000);
-		expect(toasts()).toEqual(["Copied 3 rows"]);
+		expect(toasts()).toEqual(["Copied 3 rows."]);
 	});
 
 	it("replaces a toast that has the same key", async () => {
@@ -122,7 +122,7 @@ describe("NotifyProvider", () => {
 		await show((n) => n.info({ title: "Loading 100 rows…", key: "load" }));
 		await show((n) => n.info({ title: "Loading 200 rows…", key: "load" }));
 		await advance(1000);
-		expect(toasts()).toEqual(["Loading 200 rows…"]);
+		expect(toasts()).toEqual(["Loading 200 rows…."]);
 	});
 
 	it("queues a 4th toast until one goes", async () => {
@@ -133,10 +133,120 @@ describe("NotifyProvider", () => {
 			n.error("Three");
 			n.error("Four");
 		});
-		expect(toasts()).toEqual(["OneDismiss", "TwoDismiss", "ThreeDismiss"]);
+		expect(toasts()).toEqual(["One. Dismiss", "Two. Dismiss", "Three. Dismiss"]);
 		await click(button("Dismiss", document));
 		await advance(1000);
 		expect(toasts().some((t) => t.startsWith("Four"))).toBe(true);
+	});
+
+	async function fillThree() {
+		await show((n) => {
+			n.error({ title: "One", key: "1" });
+			n.error({ title: "Two", key: "2" });
+			n.error({ title: "Three", key: "3" });
+		});
+	}
+
+	it("keeps one entry when a duplicate key arrives while queued", async () => {
+		await mount();
+		await fillThree();
+		await show((n) => {
+			n.error({ title: "Four", key: "4" });
+			n.error({ title: "Four again", key: "4" });
+		});
+		await act(async () => api!.dismiss("1"));
+		await advance(1000);
+		const shown = toasts();
+		expect(shown.filter((t) => t.startsWith("Four"))).toEqual(["Four again. Dismiss"]);
+		await act(async () => api!.dismiss("2"));
+		await advance(1000);
+		expect(toasts().filter((t) => t.startsWith("Four"))).toHaveLength(1);
+	});
+
+	it("never shows a queued toast that was dismissed", async () => {
+		await mount();
+		await fillThree();
+		let handle: { dismiss: () => void } | undefined;
+		await show((n) => {
+			handle = n.error({ title: "Four", key: "4" });
+		});
+		await act(async () => handle!.dismiss());
+		await act(async () => api!.dismiss("1"));
+		await advance(1000);
+		expect(toasts().some((t) => t.startsWith("Four"))).toBe(false);
+		expect(toasts()).toHaveLength(2);
+		await show((n) => n.error({ title: "Five", key: "5" }));
+		await show((n) => n.error({ title: "Six", key: "6" }));
+		await act(async () => api!.dismiss("5"));
+		await act(async () => api!.dismiss("6"));
+		await advance(1000);
+		expect(toasts().some((t) => t.startsWith("Four"))).toBe(false);
+	});
+
+	it("clears queued toasts when resetKey changes", async () => {
+		await mount("a");
+		await fillThree();
+		await show((n) => n.error({ title: "Four", key: "4" }));
+		await mount("b");
+		await advance(1000);
+		expect(toasts()).toHaveLength(0);
+		await advance(5000);
+		expect(toasts()).toHaveLength(0);
+	});
+
+	it("keeps a toast the remounted subtree raises on mount when resetKey changes", async () => {
+		function Raiser() {
+			const { notify } = useNotify();
+			useEffect(() => {
+				notify.error("From the new subtree");
+			}, [notify]);
+			return null;
+		}
+		const withKey = (key: string) =>
+			createElement(NotifyProvider, { resetKey: key, children: [createElement(Probe, { key: "probe" }), createElement(Raiser, { key })] });
+		await render(withKey("a"));
+		await show((n) => n.error("Old"));
+		expect(toasts()).toHaveLength(2);
+		await render(withKey("b"));
+		await advance(1000);
+		expect(toasts()).toEqual(["From the new subtree. Dismiss"]);
+	});
+
+	it("announces the title and body apart, politely", async () => {
+		await mount();
+		await show((n) => n.error({ title: "The query didn't run", body: "Timeout", action: { label: "Try again", onClick: () => undefined } }));
+		const polite = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
+		expect(polite).toContain("The query didn't run. ");
+		expect(polite).toContain("Timeout. ");
+		expect(document.querySelector('[aria-live="assertive"]')?.textContent ?? "").toBe("");
+	});
+
+	it("dismisses the toast even when the action throws", async () => {
+		await mount();
+		await show((n) =>
+			n.info({
+				title: "Deleted",
+				action: {
+					label: "Undo",
+					onClick: () => {
+						throw new Error("boom");
+					},
+				},
+			}),
+		);
+		const errors: unknown[] = [];
+		const onError = (e: ErrorEvent) => {
+			errors.push(e.error);
+			e.preventDefault();
+		};
+		window.addEventListener("error", onError);
+		try {
+			await click(button("Undo", document));
+		} finally {
+			window.removeEventListener("error", onError);
+		}
+		await advance(1000);
+		expect(toasts()).toHaveLength(0);
 	});
 
 	it("clears every toast when resetKey changes", async () => {
@@ -187,7 +297,7 @@ describe("useCopy", () => {
 		const done = vi.fn();
 		await render(createElement(NotifyProvider, null, createElement(CopyProbe, { onDone: done })));
 		await click(button("Copy", document));
-		expect(toasts()).toEqual(["Copied the job URL"]);
+		expect(toasts()).toEqual(["Copied the job URL."]);
 		expect(done).toHaveBeenCalledWith(true);
 	});
 
