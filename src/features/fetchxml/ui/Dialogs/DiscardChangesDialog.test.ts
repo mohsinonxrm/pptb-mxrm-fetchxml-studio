@@ -1,13 +1,21 @@
 /** The shared "Discard unsaved changes?" dialog (#278, #192): wording, order, focus, saving state. */
 import { act, createElement } from "react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { DiscardChangesDialog, type DiscardChangesDialogProps } from "./DiscardChangesDialog";
 import { button, cleanup, click, dialogText, flush, isDisabled, openDialog, removeHost, render } from "../../../../shared/testing/ui";
 
-// jsdom has no layout, so Tabster (which Fluent uses to find the first focusable) sees nothing as visible
+// jsdom has no layout, so Tabster (which Fluent uses to find the first focusable) sees nothing as visible.
+// The stubs are put back after this file so no other test inherits a fake layout.
+const originalOffsetParent = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetParent");
+const originalRect = HTMLElement.prototype.getBoundingClientRect;
 beforeAll(() => {
 	Object.defineProperty(HTMLElement.prototype, "offsetParent", { configurable: true, get: () => document.body });
 	HTMLElement.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON: () => ({}) });
+});
+
+afterAll(() => {
+	if (originalOffsetParent) Object.defineProperty(HTMLElement.prototype, "offsetParent", originalOffsetParent);
+	HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
 
 afterEach(() => {
