@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0-beta.1] - 2026-11-07
+
 ### ✨ Added
 
 - **Scope chip: where Entities come from, in one button (#227).** A chip heads the left pane and always shows the current scope (`Contoso › Sales Core v1.2.0` with `+N` for more, `All entities`, or a **Choose scope** button when nothing is picked). Its popover holds the scope settings: Show entities from (Publisher → solution, Solution only, All entities), Publishers and Solutions tag pickers, and Advanced Find only. Changes apply right away. A first-run tip points at the chip, once per environment. It replaces the Publishers / Solutions comboboxes, the collapsible Query scope header (#25) and the Entity source and Advanced Find only settings. Same design as Dataverse Request Studio and Command Bar Studio.
