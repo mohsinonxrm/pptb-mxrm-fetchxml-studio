@@ -52,6 +52,7 @@ import {
 	useMergedRefs,
 	useOverflowMenu,
 	useOverflowVisibility,
+	useRestoreFocusTarget,
 	type MenuButtonProps,
 	type MenuProps,
 } from "@fluentui/react-components";
@@ -204,6 +205,9 @@ const menuOpenChange =
 /** One command on the bar. The ref reaches the element Overflow measures (OverflowItem passes it). */
 const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(function BarControl({ command: c }, ref) {
 	const styles = useStyles();
+	// Closing a dialog or drawer a command opened returns focus to that command (Fluent restores it
+	// to the most recently focused target). One that overflowed meanwhile hides, so More takes over.
+	const restoreFocus = useRestoreFocusTarget();
 	const off = isOff(c);
 	const icon = iconOf(c);
 	const className = c.danger && !off ? styles.danger : undefined;
@@ -218,7 +222,7 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 		) : (
 			element
 		);
-	const common = { icon, className, disabledFocusable: off, ...barNameOf(c) };
+	const common = { icon, className, disabledFocusable: off, ...restoreFocus, ...barNameOf(c) };
 
 	if (c.kind === "menu") {
 		return (
@@ -245,7 +249,7 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 				className={className}
 				disabledFocusable={off}
 				menuButton={menuButton}
-				primaryActionButton={{ ...primary, ...barNameOf(c), onClick: off ? undefined : c.onClick }}
+				primaryActionButton={{ ...primary, ...restoreFocus, ...barNameOf(c), onClick: off ? undefined : c.onClick }}
 			>
 				{children}
 			</SplitButton>
@@ -404,6 +408,8 @@ function More({
 	pendingFocus: MutableRefObject<boolean>;
 }) {
 	const { ref, isOverflowing } = useOverflowMenu<HTMLButtonElement>();
+	// The fallback target: a command chosen from More is gone once the menu closes, so focus returns here
+	const restoreFocus = useRestoreFocusTarget();
 	const { itemVisibility } = useOverflowVisibility();
 	const mergedRef = useMergedRefs(ref, buttonRef);
 
@@ -422,7 +428,7 @@ function More({
 		<Menu>
 			<MenuTrigger disableButtonEnhancement>
 				<Tooltip content={label} relationship="label">
-					<ToolbarButton ref={mergedRef} appearance="subtle" icon={<MoreIcon />} />
+					<ToolbarButton ref={mergedRef} appearance="subtle" icon={<MoreIcon />} {...restoreFocus} />
 				</Tooltip>
 			</MenuTrigger>
 			<MenuPopover>
