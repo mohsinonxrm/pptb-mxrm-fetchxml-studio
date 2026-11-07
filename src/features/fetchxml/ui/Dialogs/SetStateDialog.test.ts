@@ -5,7 +5,7 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toEntityStateModel } from "../../model/recordState";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, typeInto } from "../../../../shared/testing/ui";
+import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
 import type { BatchDeleteResult } from "../../api/pptbClient";
 
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
@@ -65,7 +65,7 @@ describe("Activate / Deactivate dialog", () => {
 		await flush();
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
-		expect(text).toContain("2 records");
+		expect(scopeField("Scope")).toBe("2 records");
 		expect(text).toContain("To undo, run Activate");
 
 		const deactivate = () => button("Deactivate");
@@ -73,8 +73,9 @@ describe("Activate / Deactivate dialog", () => {
 		await click(deactivate());
 		expect(onExecute).toHaveBeenCalledTimes(1);
 		expect(onExecute.mock.calls[0][0]).toEqual({ statecode: 1, statuscode: 2 });
-		// Running: the button can't be pressed again
-		expect(isDisabled(deactivate())).toBe(true);
+		// Running: the button is gone and Cancel is disabled
+		expect(deactivate()).toBeUndefined();
+		expect(isDisabled(button("Cancel"))).toBe(true);
 
 		run.resolve(done(2));
 		await flush();

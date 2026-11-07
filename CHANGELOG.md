@@ -221,9 +221,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A safety net of component and golden tests before the UI overhaul (#189, part 1).**
   - **Component-test helpers** (`src/shared/testing/ui.ts`): render in a `FluentProvider` with React's `act`, a stubbed ToolBox host (one connection, notifications collected), and queries that find Fluent's portals. No new dependencies.
-  - **Every destructive dialog** has tests that it names the environment and the scope, shows its undo or no-undo line (#69), asks for the typed confirmation on Production, for more than 100 records or when the total isn't known, and can't be submitted twice while it runs: Delete, Bulk delete, Run workflow, Activate / Deactivate, Close, and Save view. Save view also covers a personal view shared read-only: it can't be overwritten and offers **Save a copy…** (#142).
-  - **Golden snippets:** every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, compared with a snapshot (300 cases). C# QueryExpression keeps its own tests from captured Web API responses.
-  - Checked that the tests catch a regression: removing the Delete dialog's typed-confirmation gate, or letting a read-only share be overwritten, fails them.
+  - **Destructive dialogs:** each dialog's tests check the environment and the scope it names (#69), plus:
+    - **Delete:** no-undo line, typed confirmation for more than 100 records and on a Production connection, none for 100 or fewer, one delete with Delete gone and Cancel disabled while it runs, and Dataverse's error on failure.
+    - **Bulk delete** with no selection: no-undo text, the typed confirmation and the "I understand" box. With a selection: one submission, with Submit gone and Cancel disabled while it's sent.
+    - **Run workflow:** no-undo line, waits for a workflow, runs once, typed confirmation for more than 100 records.
+    - **Activate / Deactivate:** each names the other as the undo. Runs once with the planned status, with Cancel disabled while it runs. Typed confirmation for more than 100 records.
+    - **Close as won:** undo line (Activate; the close activities stay), runs once as Won, typed confirmation for more than 100 records.
+    - **Save view:** overwriting names the view and says there's no undo. A personal view shared read-only can't be overwritten and offers **Save a copy…**, which switches to a new personal view named "… (copy)" (#142). Save view has no typed confirmation.
+  - **Golden snippets:** every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, compared with a snapshot. Cases are named by article. There are also two cases with the entity set name from metadata. C# QueryExpression keeps its own tests from captured Web API responses.
+  - Checked that the tests catch a regression: removing the Delete or Close typed-confirmation gate, or letting a read-only share be overwritten, fails them.
 
 - **Every tag is checked in PPTB first.** Each PR was checked in PPTB on its own build, but the build a tag publishes (every merged change plus the version bump, built by `release.yml`) wasn't run in PPTB until after it was on npm. RELEASING.md's new *Before every tag* step runs the rehearsal's `package` tarball in PPTB, with a short smoke list, before any beta, stable or hotfix tag. The smoke test of the published beta before `latest` stays.
 

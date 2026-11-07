@@ -9,7 +9,7 @@ import { BulkDeleteDialog } from "./BulkDeleteDialog";
 import { DeleteConfirmDialog, type DeleteConfirmDialogProps } from "./DeleteConfirmDialog";
 import { WorkflowPickerDialog, type WorkflowPickerDialogProps } from "./WorkflowPickerDialog";
 import type { WorkflowInfo } from "../../api/pptbClient";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, typeInto } from "../../../../shared/testing/ui";
+import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
 
 afterEach(() => {
 	cleanup();
@@ -36,8 +36,8 @@ describe("Delete record dialog", () => {
 		expect(text).toContain("CRM279420");
 		expect(text).toContain("https://org382cc706.crm.dynamics.com/");
 		expect(text).toContain("Dev");
-		expect(text).toContain("Contact");
-		expect(text).toContain("1 record");
+		expect(scopeField("Entity")).toBe("Contact (contact)");
+		expect(scopeField("Scope")).toBe("1 record");
 		expect(text).toContain("cannot be undone");
 		expect(isDisabled(button("Delete"))).toBe(false);
 	});
@@ -101,8 +101,8 @@ describe("Delete record dialog", () => {
 });
 
 describe("Bulk delete dialog", () => {
-	it("with no rows selected: the typed confirmation and the I understand box, then a job name", async () => {
-		installHost();
+	it("with no rows selected: names the environment and scope, needs the typed confirmation and the I understand box", async () => {
+		installHost({ connection: { name: "CRM279420" } });
 		await render(
 			createElement(BulkDeleteDialog, {
 				open: true,
@@ -117,7 +117,9 @@ describe("Bulk delete dialog", () => {
 			}),
 		);
 		const text = dialogText();
-		expect(text).toContain("Every record the query matches");
+		expect(text).toContain("CRM279420");
+		expect(scopeField("Scope")).toBe("Every record the query matches (4 records when the query last ran)");
+		expect(text).toContain("cannot be undone");
 		expect(text).toContain("Type contact to confirm");
 		const submit = () => button("Submit bulk delete");
 		expect(isDisabled(submit())).toBe(true);
@@ -129,6 +131,30 @@ describe("Bulk delete dialog", () => {
 		);
 		await click(understand);
 		expect(isDisabled(submit())).toBe(false);
+	});
+
+	it("submits the job once, and can't be submitted or cancelled while it's sent", async () => {
+		installHost();
+		const send = deferred<{ asyncOperationId: string; jobUrl: string }>();
+		const onConfirm = vi.fn((_jobName: string) => send.promise);
+		await render(
+			createElement(BulkDeleteDialog, {
+				open: true,
+				recordCount: 3,
+				entityDisplayName: "Contact",
+				entityLogicalName: "contact",
+				onClose: () => {},
+				onConfirm,
+			}),
+		);
+		await click(button("Submit bulk delete"));
+		expect(onConfirm).toHaveBeenCalledTimes(1);
+		expect(onConfirm.mock.calls[0][0]).toMatch(/^Bulk Delete Contact - /);
+		expect(button("Submit bulk delete")).toBeUndefined();
+		expect(isDisabled(button("Cancel"))).toBe(true);
+		send.resolve({ asyncOperationId: "job", jobUrl: "" });
+		await flush();
+		expect(onConfirm).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -152,12 +178,12 @@ describe("Run workflow dialog", () => {
 		await render(createElement(WorkflowPickerDialog, workflowProps()));
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
-		expect(text).toContain("1 record");
+		expect(scopeField("Scope")).toBe("1 record");
 		expect(text).toContain("There's no undo");
 		expect(isDisabled(button("Run workflow"))).toBe(true);
 	});
 
-	it("is ready to run with the workflow picked from the menu, and runs it once", async () => {
+	it("is ready to run with a preselected workflow (as from the Run workflow menu), and runs it once", async () => {
 		installHost();
 		const run = deferred<{ succeeded: number; failed: number; errors: string[] }>();
 		const onExecute = vi.fn((_workflow: WorkflowInfo, _onProgress: unknown) => run.promise);

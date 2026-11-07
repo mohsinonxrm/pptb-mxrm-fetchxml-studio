@@ -85,15 +85,29 @@ export function dialogText(): string {
 	return (openDialog()?.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * A row of the dialog's target block (TargetScope, #69): the value next to its "Environment",
+ * "Entity" or "Scope" label, with each part separated by a space ("Contact (contact)"), or undefined
+ */
+export function scopeField(label: "Environment" | "Entity" | "Scope"): string | undefined {
+	const dialog = openDialog();
+	const labelElement = [...(dialog?.querySelectorAll("span, div") ?? [])].find((e) => e.children.length === 0 && e.textContent === label);
+	const value = labelElement?.nextElementSibling;
+	if (!value) return undefined;
+	const parts = [...value.querySelectorAll("*")].filter((e) => e.children.length === 0).map((e) => e.textContent?.trim()).filter(Boolean);
+	return (parts.length ? parts.join(" ") : (value.textContent ?? "")).trim();
+}
+
 /** A button by its visible text (exact, trimmed) or a pattern, searched in the open dialog first */
 export function button(text: string | RegExp, scope: ParentNode | undefined = openDialog() ?? document): HTMLButtonElement | undefined {
 	const matches = (value: string) => (typeof text === "string" ? value.trim() === text : text.test(value.trim()));
 	return [...(scope ?? document).querySelectorAll<HTMLButtonElement>("button")].find((b) => matches(b.textContent ?? ""));
 }
 
-/** Whether a button can't be pressed: disabled, or Fluent's disabledFocusable */
+/** Whether a button can't be pressed: disabled, or Fluent's disabledFocusable. Throws when it's missing,
+ * so a renamed or removed button fails the test instead of counting as disabled. */
 export function isDisabled(element: HTMLElement | undefined): boolean {
-	if (!element) return true;
+	if (!element) throw new Error("isDisabled: element not found");
 	return (element as HTMLButtonElement).disabled || element.getAttribute("aria-disabled") === "true";
 }
 
@@ -117,9 +131,9 @@ export interface HostStub {
 }
 
 /**
- * Installs window.toolboxAPI and window.dataverseAPI stubs: one connection (CRM279420-like, Dev by
- * default), notifications collected, close holding accepted, and no Dataverse calls unless a test
- * provides them.
+ * Installs window.toolboxAPI and window.dataverseAPI stubs: one connection (Dev by default),
+ * notifications collected, and no Dataverse calls unless a test provides them. There's no
+ * preventClose, so holdClose does nothing.
  */
 export function installHost(options: { connection?: Partial<StubConnection> | null; dataverseAPI?: HostStub["dataverseAPI"] } = {}): HostStub {
 	const connection =

@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLOSE_ACTIONS, type CloseMessageAction } from "../../model/closeActions";
 import { toEntityStateModel } from "../../model/recordState";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, typeInto } from "../../../../shared/testing/ui";
+import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
 import type { BatchDeleteResult } from "../../api/pptbClient";
 
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
@@ -67,7 +67,7 @@ describe("Close as won dialog", () => {
 		await flush();
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
-		expect(text).toContain("2 records");
+		expect(scopeField("Scope")).toBe("2 records");
 		expect(text).toContain("To undo, run Activate on the records this changes. The close activities stay.");
 
 		const closeButton = () => button("Close as won");
@@ -75,7 +75,8 @@ describe("Close as won dialog", () => {
 		await click(closeButton());
 		expect(onExecute).toHaveBeenCalledTimes(1);
 		expect(onExecute.mock.calls[0][0]).toMatchObject({ statuscode: 3 });
-		expect(isDisabled(closeButton())).toBe(true);
+		expect(closeButton()).toBeUndefined();
+		expect(isDisabled(button("Cancel"))).toBe(true);
 
 		run.resolve(done(2));
 		await flush();
