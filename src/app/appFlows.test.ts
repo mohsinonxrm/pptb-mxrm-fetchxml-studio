@@ -19,6 +19,9 @@ afterEach(() => {
 	removeHost();
 });
 
+/** Per test: the first render imports the whole app (about 5 s), and the suite runs in parallel */
+const FLOW_TIMEOUT = 120000;
+
 const accountQuery = (count = 50) => `<fetch count='${count}'><entity name='account'><attribute name='name'/><attribute name='accountid'/><order attribute='name'/></entity></fetch>`;
 
 describe("app: running a query", () => {
@@ -31,7 +34,7 @@ describe("app: running a query", () => {
 		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 		expect(app.dataverse.calls.some((c) => c.startsWith("queryData accounts?fetchXml="))).toBe(true);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 
 	it("a first page shows 'more available', and Retrieve all loads every page", async () => {
 		const app = await renderApp({ launch: { fetchXml: accountQuery(2) } });
@@ -43,11 +46,11 @@ describe("app: running a query", () => {
 		await app.waitFor(() => !!switchByLabel("Retrieve all records"));
 		await click(switchByLabel("Retrieve all records")!);
 		await click(button("Execute", document));
-		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 8000);
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 30000);
 		const pages = app.dataverse.calls.filter((c) => c.startsWith("queryData accounts?fetchXml="));
 		expect(pages.length).toBeGreaterThanOrEqual(1 + 3);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 
 	it("Stop during Retrieve all keeps the rows already loaded and says so", async () => {
 		let release!: () => void;
@@ -69,7 +72,7 @@ describe("app: running a query", () => {
 		const pages = app.dataverse.calls.filter((c) => c.startsWith("queryData accounts?fetchXml="));
 		expect(pages.length).toBe(2);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 
 	it("a query Dataverse rejects shows the error, and the tool stays usable", async () => {
 		let fail = true;
@@ -88,7 +91,7 @@ describe("app: running a query", () => {
 		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 		expect(document.body.textContent).not.toMatch(/doesn't contain attribute/);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 });
 
 describe("app: record actions", () => {
@@ -117,7 +120,7 @@ describe("app: record actions", () => {
 		expect(accounts.rows.map((r) => r.name)).toEqual(["Account 02", "Account 03", "Account 04", "Account 05"]);
 		expect(document.body.textContent).not.toContain("Account 01");
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 });
 
 function buttonOrNull(name: string): HTMLButtonElement | null {
@@ -143,7 +146,7 @@ describe("app: opening a view from another tool", () => {
 		expect(app.dataverse.calls).toContain(`queryData accounts?savedQuery=${VIEW_ID}`);
 		expect(app.notifications).toEqual([]);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 
 	it("a view with more pages follows Dataverse's @odata.nextLink to load the rest", async () => {
 		const paged = { ...activeAccounts, fetchxml: activeAccounts.fetchxml.replace("<fetch>", "<fetch count='2'>") };
@@ -156,11 +159,11 @@ describe("app: opening a view from another tool", () => {
 		await app.waitFor(() => !!switchByLabel("Retrieve all records"));
 		await click(switchByLabel("Retrieve all records")!);
 		await click(button("Execute", document));
-		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 8000);
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 30000);
 		const viewPages = app.dataverse.calls.filter((c) => c.startsWith(`queryData accounts?savedQuery=${VIEW_ID}`));
 		expect(viewPages.some((c) => c.endsWith("&$skiptoken=3"))).toBe(true);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 
 	it("a viewRef to a view that doesn't exist tells the user, and leaves the tool usable", async () => {
 		const missing = "99999999-2222-3333-4444-555555555555";
@@ -172,7 +175,7 @@ describe("app: opening a view from another tool", () => {
 		expect(app.dataverse.calls.some((c) => /\?(fetchXml|savedQuery)=/.test(c))).toBe(false);
 		expect(isDisabled(button("New", document))).toBe(false);
 		app.expectClean();
-	}, 60000);
+	}, FLOW_TIMEOUT);
 });
 
 /** The tree row whose own text is `text` (Fluent TreeItemLayout), for a real click on the label */

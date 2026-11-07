@@ -93,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI and repo:** CI fails on high or critical runtime vulnerabilities (#72); grouped weekly Dependabot updates into `dev` with a 14-day cooldown (#76); `CONTRIBUTING.md` and the PR template (#80); README CI and license badges.
 - **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
 - **The code is formatted with Prettier, and CI checks it (#205).** One formatting-only commit applies `.prettierrc` (tabs, 100 columns) to the 200-odd files that didn't match. It's listed in `.git-blame-ignore-revs`, so `git blame` skips it. `npm run format:check` now runs in CI, after lint. Captured test data (`__fixtures__`) and Markdown are left as written. The built bundle is unchanged apart from where JSX text breaks its spaces (`"Advisories "` → `"Advisories"` + `" "`), which renders the same.
+- **App flow tests wait longer under load.** A wait still returns as soon as its condition holds, but the limits are now 15 s per wait and 2 minutes per test (were 4 s and 1 minute), after 8 flow tests failed once in a busy full run.
 
 ## [1.5.0] - 2026-11-07
 
