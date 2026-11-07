@@ -44,7 +44,9 @@ export class PaneErrorBoundary extends Component<PaneErrorBoundaryProps, CaughtS
 	}
 
 	componentDidCatch(error: unknown, info: ErrorInfo) {
-		console.error(`[FetchXML Studio] ${this.props.where} failed to render: ${errorMessage(error)}`);
+		console.error(
+			`[FetchXML Studio] ${this.props.where} failed to render: ${errorMessage(error)}`,
+		);
 		this.setState({ componentStack: info.componentStack });
 	}
 
@@ -83,7 +85,10 @@ interface ToolErrorBoundaryProps {
 	children: ReactNode;
 }
 
-export class ToolErrorBoundary extends Component<ToolErrorBoundaryProps, CaughtState & { fetchXml?: string }> {
+export class ToolErrorBoundary extends Component<
+	ToolErrorBoundaryProps,
+	CaughtState & { fetchXml?: string }
+> {
 	state: CaughtState & { fetchXml?: string } = NOTHING_CAUGHT;
 
 	static getDerivedStateFromError(error: unknown): CaughtState {

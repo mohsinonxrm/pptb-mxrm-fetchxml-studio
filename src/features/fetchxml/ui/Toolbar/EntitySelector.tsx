@@ -259,16 +259,25 @@ export function EntitySelector({
 	// cleared, and an entity outside the selection shows by its logical name (#57)
 	const onSolutionsChange = useCallback(
 		(ids: string[]) => {
-			if (effectiveScopeMode === "publisher-solution") publisherFilter.updateSelectedSolutions(ids);
-			else if (effectiveScopeMode === "solution-only") solutionFilter.updateSelectedSolutions(ids);
+			if (effectiveScopeMode === "publisher-solution")
+				publisherFilter.updateSelectedSolutions(ids);
+			else if (effectiveScopeMode === "solution-only")
+				solutionFilter.updateSelectedSolutions(ids);
 		},
 		[effectiveScopeMode, publisherFilter, solutionFilter],
 	);
 
 	// Remember the publisher / solution selection for this environment (#25)
-	const { publishersWithSolutions, updateSelectedPublishers, updateSelectedSolutions: updatePublisherSolutions } = publisherFilter;
+	const {
+		publishersWithSolutions,
+		updateSelectedPublishers,
+		updateSelectedSolutions: updatePublisherSolutions,
+	} = publisherFilter;
 	const { updateSelectedSolutions: updateOnlySolutions } = solutionFilter;
-	const availablePublisherIds = useMemo(() => publishersWithSolutions.map((p) => p.publisher.publisherid), [publishersWithSolutions]);
+	const availablePublisherIds = useMemo(
+		() => publishersWithSolutions.map((p) => p.publisher.publisherid),
+		[publishersWithSolutions],
+	);
 	const availableSolutionIds = useCallback(
 		(publisherIds: string[]) =>
 			effectiveScopeMode === "publisher-solution"
@@ -287,11 +296,19 @@ export function EntitySelector({
 				updateOnlySolutions(scope.solutionIds);
 			}
 		},
-		[effectiveScopeMode, updateSelectedPublishers, updatePublisherSolutions, updateOnlySolutions],
+		[
+			effectiveScopeMode,
+			updateSelectedPublishers,
+			updatePublisherSolutions,
+			updateOnlySolutions,
+		],
 	);
 	const rememberedScope = useRememberedScope({
 		mode: accessLoading ? null : effectiveScopeMode,
-		ready: effectiveScopeMode === "publisher-solution" ? publisherFilter.publishersLoaded : solutionFilter.solutionsLoaded,
+		ready:
+			effectiveScopeMode === "publisher-solution"
+				? publisherFilter.publishersLoaded
+				: solutionFilter.solutionsLoaded,
 		availablePublisherIds,
 		availableSolutionIds,
 		publisherIds: publisherFilter.selectedPublisherIds,
@@ -348,7 +365,8 @@ export function EntitySelector({
 
 	// The privilege ceiling for the entity source (#227: chosen in the scope chip, no longer in Settings)
 	const canUsePublisherSolution = !accessSummary || accessSummary.fullFilterMode;
-	const canUseSolutionOnly = !accessSummary || accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode;
+	const canUseSolutionOnly =
+		!accessSummary || accessSummary.fullFilterMode || accessSummary.solutionsOnlyMode;
 
 	// First-run tip (#227): no scope yet, after any remembered one was restored, once per environment
 	const scopeTip = useScopeTip();
@@ -359,7 +377,12 @@ export function EntitySelector({
 				? solutionFilter.solutionsLoaded
 				: true;
 	const hasScope = effectiveScopeMode === "all" || currentSelectedSolutionIds.length > 0;
-	const showScopeTip = scopeTip.ready && !scopeTip.dismissed && rememberedScope.restored && listsReady && !hasScope;
+	const showScopeTip =
+		scopeTip.ready &&
+		!scopeTip.dismissed &&
+		rememberedScope.restored &&
+		listsReady &&
+		!hasScope;
 
 	// Loading state during initial access check
 	if (accessLoading) {
@@ -424,8 +447,14 @@ export function EntitySelector({
 					onPublishersChange={publisherFilter.updateSelectedPublishers}
 					solutions={currentSolutions}
 					selectedSolutionIds={currentSelectedSolutionIds}
-					solutionsLoading={effectiveScopeMode === "solution-only" && solutionFilter.solutionsLoading}
-					solutionsError={effectiveScopeMode === "solution-only" ? solutionFilter.solutionsError : null}
+					solutionsLoading={
+						effectiveScopeMode === "solution-only" && solutionFilter.solutionsLoading
+					}
+					solutionsError={
+						effectiveScopeMode === "solution-only"
+							? solutionFilter.solutionsError
+							: null
+					}
 					onSolutionsChange={onSolutionsChange}
 					advancedFindOnly={advancedFindOnly}
 					onAdvancedFindOnlyChange={onAdvancedFindOnlyChange}
@@ -433,7 +462,13 @@ export function EntitySelector({
 					onTipDismiss={scopeTip.dismiss}
 				/>
 				<Tooltip content="New query" relationship="label">
-					<Button className={styles.newButton} appearance="primary" size="small" icon={<Add20Regular />} onClick={onNewQuery}>
+					<Button
+						className={styles.newButton}
+						appearance="primary"
+						size="small"
+						icon={<Add20Regular />}
+						onClick={onNewQuery}
+					>
 						<span className={styles.newButtonLabel}>New</span>
 					</Button>
 				</Tooltip>
@@ -459,7 +494,9 @@ export function EntitySelector({
 					{entityLoading ? (
 						<Option disabled>Loading…</Option>
 					) : availableEntities.length === 0 ? (
-						<Option disabled>{!hasScope ? "Choose a scope to list entities" : "No entities found"}</Option>
+						<Option disabled>
+							{!hasScope ? "Choose a scope to list entities" : "No entities found"}
+						</Option>
 					) : (
 						filteredEntityOptions
 					)}

@@ -56,12 +56,15 @@ export function SolutionPicker({
 	// Sort solutions by friendly name
 	const sortedSolutions = useMemo(() => {
 		return [...solutions].sort((a, b) =>
-			(a.friendlyname || a.uniquename).localeCompare(b.friendlyname || b.uniquename)
+			(a.friendlyname || a.uniquename).localeCompare(b.friendlyname || b.uniquename),
 		);
 	}, [solutions]);
 
 	// Handle selection change
-	const handleOptionSelect = (_: unknown, data: { optionValue?: string; optionText?: string }) => {
+	const handleOptionSelect = (
+		_: unknown,
+		data: { optionValue?: string; optionText?: string },
+	) => {
 		if (data.optionValue === "__none__") {
 			onSolutionChange(null);
 		} else {
@@ -81,7 +84,9 @@ export function SolutionPicker({
 					disabled={disabled}
 				>
 					<Option value="__none__" text="">
-						<span style={{ fontStyle: "italic", color: tokens.colorNeutralForeground3 }}>
+						<span
+							style={{ fontStyle: "italic", color: tokens.colorNeutralForeground3 }}
+						>
 							None - don't add to any solution
 						</span>
 					</Option>
@@ -106,7 +111,8 @@ export function SolutionPicker({
 			</Field>
 			{solutions.length === 0 && (
 				<Text className={styles.hint}>
-					No unmanaged solutions available. The view will be created in the Default solution.
+					No unmanaged solutions available. The view will be created in the Default
+					solution.
 				</Text>
 			)}
 		</div>

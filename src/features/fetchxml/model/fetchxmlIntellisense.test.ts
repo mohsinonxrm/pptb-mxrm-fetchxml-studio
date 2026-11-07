@@ -37,14 +37,17 @@ const model = (text = '<fetch><entity name="account" /></fetch>') =>
 		getValue: () => text,
 	}) as unknown as Monaco.editor.ITextModel;
 
-const editor = (m: Monaco.editor.ITextModel) => ({ getModel: () => m }) as unknown as Monaco.editor.ICodeEditor;
+const editor = (m: Monaco.editor.ITextModel) =>
+	({ getModel: () => m }) as unknown as Monaco.editor.ICodeEditor;
 
 const position = { lineNumber: 1, column: 3 } as Monaco.Position;
 
 describe("FetchXML language features (#194)", () => {
 	it("registers one completion and one hover provider however many editors mount", () => {
 		const { monaco, live } = fakeMonaco();
-		const handles = [1, 2, 3].map(() => attachFetchXmlLanguageFeatures(monaco, editor(model())));
+		const handles = [1, 2, 3].map(() =>
+			attachFetchXmlLanguageFeatures(monaco, editor(model())),
+		);
 		expect(live.completion.size).toBe(1);
 		expect(live.hover.size).toBe(1);
 		handles.forEach((h) => h.dispose());
@@ -86,7 +89,9 @@ describe("FetchXML language features (#194)", () => {
 
 		expect(completion.provideCompletionItems(layoutXmlModel, position)).toBeUndefined();
 		expect(hover.provideHover(layoutXmlModel, position)).toBeNull();
-		expect(completion.provideCompletionItems(fetchXmlModel, position)).toMatchObject({ suggestions: expect.any(Array) });
+		expect(completion.provideCompletionItems(fetchXmlModel, position)).toMatchObject({
+			suggestions: expect.any(Array),
+		});
 		expect(hover.provideHover(fetchXmlModel, position)).not.toBeNull();
 		handle.dispose();
 	});

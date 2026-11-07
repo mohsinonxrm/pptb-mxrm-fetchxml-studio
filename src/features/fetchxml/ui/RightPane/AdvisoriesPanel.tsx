@@ -31,7 +31,12 @@ import {
 	Warning20Regular,
 	Wrench16Regular,
 } from "@fluentui/react-icons";
-import { LEVEL_LABELS, countByLevel, type Advisory, type AdvisoryLevel } from "../../model/advisories";
+import {
+	LEVEL_LABELS,
+	countByLevel,
+	type Advisory,
+	type AdvisoryLevel,
+} from "../../model/advisories";
 import type { NodeId } from "../../model/nodes";
 
 const useStyles = makeStyles({
@@ -54,7 +59,13 @@ const useStyles = makeStyles({
 		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
 	},
 	status: { color: tokens.colorNeutralForeground3, minWidth: 0, flex: "1 1 240px" },
-	filters: { display: "flex", alignItems: "center", flexWrap: "nowrap", gap: tokens.spacingHorizontalXXS, marginLeft: "auto" },
+	filters: {
+		display: "flex",
+		alignItems: "center",
+		flexWrap: "nowrap",
+		gap: tokens.spacingHorizontalXXS,
+		marginLeft: "auto",
+	},
 	messageBar: { padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS} 0` },
 	scroll: { flex: 1, overflowY: "auto", minHeight: 0 },
 	empty: {
@@ -83,8 +94,18 @@ const useStyles = makeStyles({
 	body: { display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 },
 	secondary: { color: tokens.colorNeutralForeground3 },
 	quote: { color: tokens.colorNeutralForeground3, fontStyle: "italic" },
-	meta: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalS },
-	side: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: tokens.spacingVerticalXS },
+	meta: {
+		display: "flex",
+		flexWrap: "wrap",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+	},
+	side: {
+		display: "flex",
+		flexDirection: "column",
+		alignItems: "flex-end",
+		gap: tokens.spacingVerticalXS,
+	},
 	linkIcon: { verticalAlign: "-3px" },
 });
 
@@ -121,9 +142,12 @@ export interface AdvisoriesPanelProps {
 	checkDisabledReason?: string;
 }
 
-function statusText(p: Pick<AdvisoriesPanelProps, "checking" | "checkedAt" | "stale" | "added">): string {
+function statusText(
+	p: Pick<AdvisoriesPanelProps, "checking" | "checkedAt" | "stale" | "added">,
+): string {
 	if (p.checking) return "Checking with Dataverse…";
-	if (!p.checkedAt) return "From FetchXML Studio. Dataverse can also check choice and large text attributes.";
+	if (!p.checkedAt)
+		return "From FetchXML Studio. Dataverse can also check choice and large text attributes.";
 	const time = p.checkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 	// A stale check's findings aren't shown (#170): they could describe a query Dataverse never saw
 	return p.stale
@@ -149,12 +173,22 @@ function AdvisoryRow({ a, props }: { a: Advisory; props: AdvisoriesPanelProps })
 			</Tooltip>
 		);
 	const fixButton = a.fix && (
-		<Button size="small" icon={<Wrench16Regular />} disabled={!inTree || !onFix} onClick={() => onFix?.(a)}>
+		<Button
+			size="small"
+			icon={<Wrench16Regular />}
+			disabled={!inTree || !onFix}
+			onClick={() => onFix?.(a)}
+		>
 			Add {a.fix.attribute} as the last order
 		</Button>
 	);
 	return (
-		<div className={mergeClasses(s.row, inTree && a.nodeId && a.nodeId === selectedNodeId && s.selected)}>
+		<div
+			className={mergeClasses(
+				s.row,
+				inTree && a.nodeId && a.nodeId === selectedNodeId && s.selected,
+			)}
+		>
 			<span className={s[a.level]} aria-label={LEVEL_LABELS[a.level]} role="img">
 				{LEVEL_ICON[a.level]}
 			</span>
@@ -181,7 +215,11 @@ function AdvisoryRow({ a, props }: { a: Advisory; props: AdvisoriesPanelProps })
 			<div className={s.side}>
 				{a.source !== "fxs" && (
 					<Tooltip
-						content={a.source === "both" ? `Dataverse reported this too: “${a.dataverseText ?? ""}”` : "Only Dataverse reported this"}
+						content={
+							a.source === "both"
+								? `Dataverse reported this too: “${a.dataverseText ?? ""}”`
+								: "Only Dataverse reported this"
+						}
 						relationship="description"
 					>
 						<Badge appearance="tint" color="brand" size="small">
@@ -220,7 +258,12 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 	);
 
 	const toggle = (value: Filter, label: string, count: number) => (
-		<ToggleButton size="small" appearance="subtle" checked={filter === value} onClick={() => setFilter(value)}>
+		<ToggleButton
+			size="small"
+			appearance="subtle"
+			checked={filter === value}
+			onClick={() => setFilter(value)}
+		>
 			{label} ({count})
 		</ToggleButton>
 	);
@@ -234,7 +277,10 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 		empty = (
 			<>
 				<Text>Nothing to report for this query.</Text>
-				<Text size={200}>FetchXML Studio checks documented anti-patterns and limits as you build. Check with Dataverse for Dataverse's own advice.</Text>
+				<Text size={200}>
+					FetchXML Studio checks documented anti-patterns and limits as you build. Check
+					with Dataverse for Dataverse's own advice.
+				</Text>
 			</>
 		);
 	} else if (list.length === 0) {
@@ -273,14 +319,23 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 						</MessageBarBody>
 						<MessageBarActions
 							containerAction={
-								<Button appearance="transparent" icon={<Dismiss16Regular />} onClick={props.onDismissCheckError} aria-label="Dismiss" />
+								<Button
+									appearance="transparent"
+									icon={<Dismiss16Regular />}
+									onClick={props.onDismissCheckError}
+									aria-label="Dismiss"
+								/>
 							}
 						/>
 					</MessageBar>
 				</div>
 			)}
 			<div className={s.scroll}>
-				{empty ? <div className={s.empty}>{empty}</div> : list.map((a) => <AdvisoryRow key={a.id} a={a} props={props} />)}
+				{empty ? (
+					<div className={s.empty}>{empty}</div>
+				) : (
+					list.map((a) => <AdvisoryRow key={a.id} a={a} props={props} />)
+				)}
 			</div>
 			<Text size={200} className={s.footer}>
 				Advice never blocks Execute. Select a location to show it in the tree.

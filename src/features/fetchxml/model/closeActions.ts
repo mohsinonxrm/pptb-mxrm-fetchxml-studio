@@ -34,9 +34,17 @@
  * (2/6) and invoice Paid (2/100001, 2/100002) and Canceled (3/100003) by PATCH return 200.
  */
 
-import { stateUndo, transitionFilter, type EntityStateModel, type StateOption, type StatePlan, type StatusOption } from "./recordState";
+import {
+	stateUndo,
+	transitionFilter,
+	type EntityStateModel,
+	type StateOption,
+	type StatePlan,
+	type StatusOption,
+} from "./recordState";
 
-export type CloseField = "revenue" | "date" | "description" | "competitor" | "resolution" | "billable";
+export type CloseField =
+	"revenue" | "date" | "description" | "competitor" | "resolution" | "billable";
 
 interface CloseActionBase {
 	/** Unique within the entity, e.g. "win" */
@@ -93,7 +101,8 @@ export type CloseAction = CloseMessageAction | CloseStateAction;
 const SDK = "https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages";
 const ENTITIES = "https://learn.microsoft.com/dynamics365/developer/reference/entities";
 
-const plural = (count: number, one: string, many: (n: number) => string) => (count === 1 ? one : many(count));
+const plural = (count: number, one: string, many: (n: number) => string) =>
+	count === 1 ? one : many(count);
 
 /** Close actions per entity (#149), in menu order */
 export const CLOSE_ACTIONS: Readonly<Record<string, readonly CloseAction[]>> = {
@@ -102,7 +111,8 @@ export const CLOSE_ACTIONS: Readonly<Record<string, readonly CloseAction[]>> = {
 			kind: "message",
 			key: "win",
 			label: "Close as won",
-			title: (n) => plural(n, "Close opportunity as won", (c) => `Close ${c} opportunities as won`),
+			title: (n) =>
+				plural(n, "Close opportunity as won", (c) => `Close ${c} opportunities as won`),
 			message: "WinOpportunity",
 			closeEntity: "opportunityclose",
 			closeParameter: "OpportunityClose",
@@ -117,7 +127,8 @@ export const CLOSE_ACTIONS: Readonly<Record<string, readonly CloseAction[]>> = {
 			kind: "message",
 			key: "lose",
 			label: "Close as lost",
-			title: (n) => plural(n, "Close opportunity as lost", (c) => `Close ${c} opportunities as lost`),
+			title: (n) =>
+				plural(n, "Close opportunity as lost", (c) => `Close ${c} opportunities as lost`),
 			message: "LoseOpportunity",
 			closeEntity: "opportunityclose",
 			closeParameter: "OpportunityClose",
@@ -257,11 +268,15 @@ export const CLOSE_ACTIONS: Readonly<Record<string, readonly CloseAction[]>> = {
 };
 
 /** The entity's close actions, or undefined when it has none (#149) */
-export const closeActionsFor = (entityLogicalName: string | undefined): readonly CloseAction[] | undefined =>
+export const closeActionsFor = (
+	entityLogicalName: string | undefined,
+): readonly CloseAction[] | undefined =>
 	entityLogicalName ? CLOSE_ACTIONS[entityLogicalName.toLowerCase()] : undefined;
 
-export const findCloseAction = (entityLogicalName: string | undefined, key: string): CloseAction | undefined =>
-	closeActionsFor(entityLogicalName)?.find((a) => a.key === key);
+export const findCloseAction = (
+	entityLogicalName: string | undefined,
+	key: string,
+): CloseAction | undefined => closeActionsFor(entityLogicalName)?.find((a) => a.key === key);
 
 export interface CloseStatusChoice {
 	statuscode: number;
@@ -277,14 +292,28 @@ export interface CloseStatusChoices {
 }
 
 /** The status reasons of the action's target state, from metadata (default marked) */
-export function closeStatusChoices(model: EntityStateModel, action: CloseAction): CloseStatusChoices {
+export function closeStatusChoices(
+	model: EntityStateModel,
+	action: CloseAction,
+): CloseStatusChoices {
 	const state = model.states.find((s) => s.value === action.targetState);
 	const exclude = action.kind === "state" ? (action.excludeStatuses ?? []) : [];
-	const statuses = model.statuses.filter((s: StatusOption) => s.state === action.targetState && !exclude.includes(s.value));
-	const choices = statuses.map((s) => ({ statuscode: s.value, label: s.label, isDefault: s.value === state?.defaultStatus }));
-	const has = (value: number | undefined) => value !== undefined && choices.some((c) => c.statuscode === value);
+	const statuses = model.statuses.filter(
+		(s: StatusOption) => s.state === action.targetState && !exclude.includes(s.value),
+	);
+	const choices = statuses.map((s) => ({
+		statuscode: s.value,
+		label: s.label,
+		isDefault: s.value === state?.defaultStatus,
+	}));
+	const has = (value: number | undefined) =>
+		value !== undefined && choices.some((c) => c.statuscode === value);
 	const wanted = action.kind === "message" ? action.preselectStatus : undefined;
-	const preselected = has(wanted) ? wanted : has(state?.defaultStatus) ? state?.defaultStatus : choices[0]?.statuscode;
+	const preselected = has(wanted)
+		? wanted
+		: has(state?.defaultStatus)
+			? state?.defaultStatus
+			: choices[0]?.statuscode;
 	return { state, choices, preselected };
 }
 
@@ -292,9 +321,17 @@ export function closeStatusChoices(model: EntityStateModel, action: CloseAction)
  * The status reason to show while the user hasn't picked one: the action's competitorStatus once a
  * competitor is named (when metadata has it), otherwise the preselected one
  */
-export function suggestedCloseStatus(action: CloseMessageAction, choices: CloseStatusChoices, competitorId: string | undefined): number | undefined {
+export function suggestedCloseStatus(
+	action: CloseMessageAction,
+	choices: CloseStatusChoices,
+	competitorId: string | undefined,
+): number | undefined {
 	const competitorStatus = action.competitorStatus;
-	if (competitorId && competitorStatus !== undefined && choices.choices.some((c) => c.statuscode === competitorStatus)) {
+	if (
+		competitorId &&
+		competitorStatus !== undefined &&
+		choices.choices.some((c) => c.statuscode === competitorStatus)
+	) {
 		return competitorStatus;
 	}
 	return choices.preselected;
@@ -305,11 +342,18 @@ export function suggestedCloseStatus(action: CloseMessageAction, choices: CloseS
  * invoice): the target state's status reasons only, limited by enforced transitions like #143. One
  * choice needs none.
  */
-export function planCloseStateChange(model: EntityStateModel, action: CloseStateAction, currentStatuses?: number[]): StatePlan {
+export function planCloseStateChange(
+	model: EntityStateModel,
+	action: CloseStateAction,
+	currentStatuses?: number[],
+): StatePlan {
 	const { state, choices, preselected } = closeStatusChoices(model, action);
-	if (!state || choices.length === 0) return { kind: "none", reason: "This entity has no status reason for this action." };
+	if (!state || choices.length === 0)
+		return { kind: "none", reason: "This entity has no status reason for this action." };
 	const filter = transitionFilter(model, currentStatuses);
-	const allowed = filter.allowed ? choices.filter((c) => filter.allowed!.has(c.statuscode)) : choices;
+	const allowed = filter.allowed
+		? choices.filter((c) => filter.allowed!.has(c.statuscode))
+		: choices;
 	if (allowed.length === 0) {
 		return {
 			kind: "none",
@@ -368,18 +412,24 @@ export function parseRevenue(text: string | undefined): number | undefined | "in
 }
 
 /** Validation messages per field; empty when the values can be sent */
-export function validateCloseValues(action: CloseMessageAction, values: CloseValues): Partial<Record<CloseField, string>> {
+export function validateCloseValues(
+	action: CloseMessageAction,
+	values: CloseValues,
+): Partial<Record<CloseField, string>> {
 	const errors: Partial<Record<CloseField, string>> = {};
 	if (action.fields.includes("revenue") && parseRevenue(values.revenue) === "invalid") {
 		errors.revenue = "Enter an amount, like 25000 or 25000.50.";
 	}
 	if (action.fields.includes("date") && !values.date) errors.date = "Select a close date.";
-	if (action.fields.includes("resolution") && !(values.resolution ?? "").trim()) errors.resolution = "Enter a resolution.";
+	if (action.fields.includes("resolution") && !(values.resolution ?? "").trim())
+		errors.resolution = "Enter a resolution.";
 	if (
 		action.fields.includes("billable") &&
 		values.billableMinutes !== null &&
 		values.billableMinutes !== undefined &&
-		(!Number.isInteger(values.billableMinutes) || values.billableMinutes < 0 || values.billableMinutes > INT_MAX)
+		(!Number.isInteger(values.billableMinutes) ||
+			values.billableMinutes < 0 ||
+			values.billableMinutes > INT_MAX)
 	) {
 		errors.billable = "Enter whole minutes, 0 or more.";
 	}
@@ -397,7 +447,8 @@ export const closeDateValue = (date: Date): string =>
 	new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12).toISOString();
 
 /** The URL of the record, as an @odata.bind value */
-const bindUrl = (entitySetName: string, recordId: string) => `/${entitySetName}(${recordId.replace(/[{}]/g, "")})`;
+const bindUrl = (entitySetName: string, recordId: string) =>
+	`/${entitySetName}(${recordId.replace(/[{}]/g, "")})`;
 
 /** Entity set of competitor (system entity; verified in metadata) */
 export const COMPETITOR_ENTITY_SET = "competitors";
@@ -418,24 +469,29 @@ export function buildCloseParameters(
 		[`${action.parentLookup}@odata.bind`]: bindUrl(entitySetName, recordId),
 	};
 	const fields = new Set(action.fields);
-	if (fields.has("resolution")) activity.subject = (values.resolution ?? "").trim().slice(0, RESOLUTION_MAX_LENGTH);
+	if (fields.has("resolution"))
+		activity.subject = (values.resolution ?? "").trim().slice(0, RESOLUTION_MAX_LENGTH);
 	if (fields.has("revenue")) {
 		const revenue = parseRevenue(values.revenue);
 		if (typeof revenue === "number") activity.actualrevenue = revenue;
 	}
 	if (fields.has("date") && values.date) activity.actualend = closeDateValue(values.date);
-	if (fields.has("billable") && typeof values.billableMinutes === "number") activity.timespent = values.billableMinutes;
+	if (fields.has("billable") && typeof values.billableMinutes === "number")
+		activity.timespent = values.billableMinutes;
 	if (fields.has("competitor") && values.competitorId) {
 		activity["competitorid@odata.bind"] = bindUrl(COMPETITOR_ENTITY_SET, values.competitorId);
 	}
 	const description = (values.description ?? "").trim();
-	if (fields.has("description") && description) activity.description = description.slice(0, action.descriptionMaxLength);
+	if (fields.has("description") && description)
+		activity.description = description.slice(0, action.descriptionMaxLength);
 	return { [action.closeParameter]: activity, Status: values.statuscode };
 }
 
 /** The request URL, relative to the Web API root: the action, or the collection-bound action */
 export const closeRequestUrl = (action: CloseMessageAction, entitySetName: string): string =>
-	action.boundToCollection ? `${entitySetName}/Microsoft.Dynamics.CRM.${action.message}` : action.message;
+	action.boundToCollection
+		? `${entitySetName}/Microsoft.Dynamics.CRM.${action.message}`
+		: action.message;
 
 /**
  * The records a stopped $batch already closed: in the target state now and not before the run. A
@@ -449,7 +505,10 @@ export function completedByStoppedBatch(
 	recordIds: string[],
 ): Set<string> {
 	return new Set(
-		recordIds.filter((id) => after.get(id) === targetState && before.has(id) && before.get(id) !== targetState),
+		recordIds.filter(
+			(id) =>
+				after.get(id) === targetState && before.has(id) && before.get(id) !== targetState,
+		),
 	);
 }
 

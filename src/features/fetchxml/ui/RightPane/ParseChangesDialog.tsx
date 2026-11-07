@@ -27,31 +27,29 @@ const useStyles = makeStyles({
 	},
 });
 
-const COPY: Record<"parse" | EditorSyncAction, { title: string; intro: string; confirm: string }> = {
-	parse: {
-		title: "Parse to tree will change this query",
-		intro: "The tree can't represent everything in this FetchXML. Parsing will make these changes:",
-		confirm: "Parse anyway",
-	},
-	execute: {
-		title: "Executing will change this query",
-		intro:
-			"In editor mode, Execute loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
-		confirm: "Load and execute",
-	},
-	save: {
-		title: "Saving will change this query",
-		intro:
-			"In editor mode, saving loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
-		confirm: "Load and save",
-	},
-	send: {
-		title: "Sending will change this query",
-		intro:
-			"In editor mode, sending loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
-		confirm: "Load and send",
-	},
-};
+const COPY: Record<"parse" | EditorSyncAction, { title: string; intro: string; confirm: string }> =
+	{
+		parse: {
+			title: "Parse to tree will change this query",
+			intro: "The tree can't represent everything in this FetchXML. Parsing will make these changes:",
+			confirm: "Parse anyway",
+		},
+		execute: {
+			title: "Executing will change this query",
+			intro: "In editor mode, Execute loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
+			confirm: "Load and execute",
+		},
+		save: {
+			title: "Saving will change this query",
+			intro: "In editor mode, saving loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
+			confirm: "Load and save",
+		},
+		send: {
+			title: "Sending will change this query",
+			intro: "In editor mode, sending loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
+			confirm: "Load and send",
+		},
+	};
 
 interface ParseChangesDialogProps {
 	/** Which action asked for the confirmation; null hides the dialog */
@@ -61,7 +59,12 @@ interface ParseChangesDialogProps {
 	onCancel: () => void;
 }
 
-export function ParseChangesDialog({ action, changes, onConfirm, onCancel }: ParseChangesDialogProps) {
+export function ParseChangesDialog({
+	action,
+	changes,
+	onConfirm,
+	onCancel,
+}: ParseChangesDialogProps) {
 	const styles = useStyles();
 	const copy = COPY[action ?? "parse"];
 	const removed = changes.filter((c) => c.kind === "dropped");

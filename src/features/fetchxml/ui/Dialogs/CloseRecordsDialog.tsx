@@ -34,7 +34,11 @@ import {
 } from "@fluentui/react-components";
 import { DatePicker } from "@fluentui/react-datepicker-compat";
 import { CheckmarkCircle20Regular } from "@fluentui/react-icons";
-import type { BatchDeleteProgress, BatchDeleteResult, CompetitorOption } from "../../api/pptbClient";
+import type {
+	BatchDeleteProgress,
+	BatchDeleteResult,
+	CompetitorOption,
+} from "../../api/pptbClient";
 import { getEntityStateModel, searchCompetitors } from "../../api/pptbClient";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { openUrl } from "../../api/host";
@@ -108,7 +112,10 @@ export interface CloseRecordsDialogProps {
 	entityDisplayName?: string;
 	onClose: () => void;
 	/** Runs the message on every record with these values; resolves with per-record results */
-	onExecute: (values: CloseValues, onProgress: (progress: BatchDeleteProgress) => void) => Promise<BatchDeleteResult>;
+	onExecute: (
+		values: CloseValues,
+		onProgress: (progress: BatchDeleteProgress) => void,
+	) => Promise<BatchDeleteResult>;
 }
 
 type Phase = "loading" | "confirm" | "running" | "done" | "error";
@@ -206,7 +213,9 @@ export function CloseRecordsDialog({
 		const seq = ++searchSeq.current;
 		const timer = window.setTimeout(() => {
 			setCompetitorsLoading(true);
-			searchCompetitors(competitor && competitorText === competitor.name ? "" : competitorText)
+			searchCompetitors(
+				competitor && competitorText === competitor.name ? "" : competitorText,
+			)
 				.then((list) => {
 					if (seq === searchSeq.current) setCompetitors(list);
 				})
@@ -283,12 +292,17 @@ export function CloseRecordsDialog({
 		if (choices.choices.length === 1) {
 			return (
 				<Text>
-					Sets Status to <strong>{stateLabel}</strong> and {statusLabel} to <strong>{choices.choices[0].label}</strong>.
+					Sets Status to <strong>{stateLabel}</strong> and {statusLabel} to{" "}
+					<strong>{choices.choices[0].label}</strong>.
 				</Text>
 			);
 		}
 		return (
-			<Field label={statusLabel} required hint={`Status reasons of ${stateLabel}, from metadata. The default is marked.`}>
+			<Field
+				label={statusLabel}
+				required
+				hint={`Status reasons of ${stateLabel}, from metadata. The default is marked.`}
+			>
 				<Dropdown
 					value={chosen?.label ?? ""}
 					selectedOptions={status !== undefined ? [String(status)] : []}
@@ -325,13 +339,29 @@ export function CloseRecordsDialog({
 								: "Leave empty to keep the opportunity's own value."
 						}
 					>
-						<Input value={revenue} onChange={(_, d) => setRevenue(d.value)} inputMode="decimal" placeholder="Optional" />
+						<Input
+							value={revenue}
+							onChange={(_, d) => setRevenue(d.value)}
+							inputMode="decimal"
+							placeholder="Optional"
+						/>
 					</Field>
 				);
 			case "date":
 				return (
-					<Field key={kind} label="Close date" required validationState={errors.date ? "error" : "none"} validationMessage={errors.date}>
-						<DatePicker value={date} onSelectDate={(d) => setDate(d ?? null)} placeholder="Select a date..." allowTextInput />
+					<Field
+						key={kind}
+						label="Close date"
+						required
+						validationState={errors.date ? "error" : "none"}
+						validationMessage={errors.date}
+					>
+						<DatePicker
+							value={date}
+							onSelectDate={(d) => setDate(d ?? null)}
+							placeholder="Select a date..."
+							allowTextInput
+						/>
 					</Field>
 				);
 			case "description":
@@ -349,7 +379,11 @@ export function CloseRecordsDialog({
 				);
 			case "competitor":
 				return (
-					<Field key={kind} label="Competitor" hint="Optional. Naming a competitor selects Out-Sold unless you chose a status reason.">
+					<Field
+						key={kind}
+						label="Competitor"
+						hint="Optional. Naming a competitor selects Out-Sold unless you chose a status reason."
+					>
 						<Combobox
 							placeholder="Search competitors..."
 							value={competitorText}
@@ -358,7 +392,8 @@ export function CloseRecordsDialog({
 							clearable
 							onChange={(event) => {
 								setCompetitorText(event.target.value);
-								if (competitor && event.target.value !== competitor.name) setCompetitor(undefined);
+								if (competitor && event.target.value !== competitor.name)
+									setCompetitor(undefined);
 							}}
 							onOptionSelect={(_, data) => {
 								const next = competitors.find((c) => c.id === data.optionValue);
@@ -379,7 +414,11 @@ export function CloseRecordsDialog({
 									<Option key={c.id} value={c.id} text={c.name}>
 										<span className={styles.option}>
 											<span>{c.name}</span>
-											{c.website && <span className={styles.optionSecondary}>{c.website}</span>}
+											{c.website && (
+												<span className={styles.optionSecondary}>
+													{c.website}
+												</span>
+											)}
 										</span>
 									</Option>
 								))
@@ -420,7 +459,12 @@ export function CloseRecordsDialog({
 							step={15}
 							onChange={(_, d) => {
 								if (d.value !== undefined) setBillable(d.value);
-								else if (d.displayValue !== undefined) setBillable(d.displayValue.trim() === "" ? null : Number(d.displayValue));
+								else if (d.displayValue !== undefined)
+									setBillable(
+										d.displayValue.trim() === ""
+											? null
+											: Number(d.displayValue),
+									);
 							}}
 						/>
 					</Field>
@@ -466,9 +510,14 @@ export function CloseRecordsDialog({
 						{/* The way back (#69): Activate reopens closed opportunities, cases and orders (verified,
 						    see CLOSE_MESSAGE_ENTITIES); it doesn't apply to quotes */}
 						{entityLogicalName?.toLowerCase() === "quote" ? (
-							<UndoNote undo="none">There's no undo: won or closed quotes can't be reactivated here.</UndoNote>
+							<UndoNote undo="none">
+								There's no undo: won or closed quotes can't be reactivated here.
+							</UndoNote>
 						) : (
-							<UndoNote undo="possible">To undo, run Activate on the records this changes. The close activities stay.</UndoNote>
+							<UndoNote undo="possible">
+								To undo, run Activate on the records this changes. The close
+								activities stay.
+							</UndoNote>
 						)}
 						{action.note && <Text className={styles.note}>{action.note}</Text>}
 						{renderStatus()}
@@ -479,7 +528,8 @@ export function CloseRecordsDialog({
 								{action.message}
 							</Link>{" "}
 							once per record, in batches like Delete. Each record gets its own{" "}
-							<span className={styles.code}>{action.closeEntity}</span> activity with these values.
+							<span className={styles.code}>{action.closeEntity}</span> activity with
+							these values.
 						</Text>
 					</>
 				);
@@ -489,14 +539,16 @@ export function CloseRecordsDialog({
 						<MessageBar intent="info">
 							<MessageBarBody>
 								<MessageBarTitle>Running {action.message}...</MessageBarTitle>
-								{progress && `Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
+								{progress &&
+									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
 						</MessageBar>
 						{progress ? (
 							<>
 								<ProgressBar value={progress.completed / progress.total} max={1} />
 								<Text size={200}>
-									{progress.completed} of {progress.total} ({progress.succeeded} succeeded, {progress.failed} failed)
+									{progress.completed} of {progress.total} ({progress.succeeded}{" "}
+									succeeded, {progress.failed} failed)
 								</Text>
 							</>
 						) : (
@@ -513,16 +565,22 @@ export function CloseRecordsDialog({
 						<MessageBar intent="warning" layout="multiline">
 							<MessageBarBody>
 								<MessageBarTitle>Partly done</MessageBarTitle>
-								{result.succeeded} of {result.succeeded + result.failed} {action.nouns[1]} closed. {result.failed} failed.
+								{result.succeeded} of {result.succeeded + result.failed}{" "}
+								{action.nouns[1]} closed. {result.failed} failed.
 							</MessageBarBody>
 						</MessageBar>
 						{renderErrors()}
-						<Text className={styles.note}>Successful records stay closed; nothing is rolled back. Run again on the failed ones after fixing them.</Text>
+						<Text className={styles.note}>
+							Successful records stay closed; nothing is rolled back. Run again on the
+							failed ones after fixing them.
+						</Text>
 					</>
 				) : (
 					<div className={styles.success}>
 						<CheckmarkCircle20Regular />
-						<Text weight="semibold">{closedSummary(action, result?.succeeded ?? 0)}</Text>
+						<Text weight="semibold">
+							{closedSummary(action, result?.succeeded ?? 0)}
+						</Text>
 					</div>
 				);
 			case "error":
@@ -549,7 +607,11 @@ export function CloseRecordsDialog({
 						<Button appearance="secondary" onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button appearance="primary" onClick={handleRun} disabled={phase !== "confirm" || !valid || !scopeConfirmed}>
+						<Button
+							appearance="primary"
+							onClick={handleRun}
+							disabled={phase !== "confirm" || !valid || !scopeConfirmed}
+						>
 							{action.label}
 						</Button>
 					</>

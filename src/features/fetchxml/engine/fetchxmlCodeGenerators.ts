@@ -90,7 +90,9 @@ function generateCSharpFetchExpression(fetchXml: string): string {
 function generateJavaScript(fetchXml: string): string {
 	// Extract entity name from FetchXML for the JS snippet
 	// name needn't be the first attribute: <entity enableprefiltering="1" name="account"> (#178)
-	const entityNameMatch = fetchXml.match(/<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<entity\b[^>]*?\sname=["']([^"']+)["']/i);
+	const entityNameMatch = fetchXml.match(
+		/<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<entity\b[^>]*?\sname=["']([^"']+)["']/i,
+	);
 	const entityLogicalName = entityNameMatch ? entityNameMatch[1] : "entity_logical_name";
 
 	const encodedXml = encodeForJsTemplate(fetchXml);
@@ -142,19 +144,21 @@ export function quoteForPowerShell(value: string): string {
  * inside <value> elements, whose text is the value (a value of " " used to become empty, #181).
  */
 export function compactFetchXml(fetchXml: string): string {
-	return fetchXml
-		// An opening <value …> (not a self-closing <value />), its text, and </value>
-		.split(/(<value(?:\s[^>]*)?(?<!\/)>[\s\S]*?<\/value>)/)
-		.map((part, i, parts) => {
-			if (i % 2 === 1) return part;
-			let rest = part.replace(/>\s+</g, "><");
-			// Whitespace next to a <value> element is between tags too
-			if (i > 0) rest = rest.replace(/^\s+/, "");
-			if (i < parts.length - 1) rest = rest.replace(/\s+$/, "");
-			return rest.replace(/\s*\n\s*/g, " ");
-		})
-		.join("")
-		.trim();
+	return (
+		fetchXml
+			// An opening <value …> (not a self-closing <value />), its text, and </value>
+			.split(/(<value(?:\s[^>]*)?(?<!\/)>[\s\S]*?<\/value>)/)
+			.map((part, i, parts) => {
+				if (i % 2 === 1) return part;
+				let rest = part.replace(/>\s+</g, "><");
+				// Whitespace next to a <value> element is between tags too
+				if (i > 0) rest = rest.replace(/^\s+/, "");
+				if (i < parts.length - 1) rest = rest.replace(/\s+$/, "");
+				return rest.replace(/\s*\n\s*/g, " ");
+			})
+			.join("")
+			.trim()
+	);
 }
 
 /**

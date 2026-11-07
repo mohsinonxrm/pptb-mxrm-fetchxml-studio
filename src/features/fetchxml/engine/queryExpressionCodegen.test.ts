@@ -23,7 +23,10 @@ function conditionCode(condition: QeConditionExpression): string {
 		ColumnSet: { AllColumns: false },
 		Criteria: { FilterOperator: "And", Conditions: [condition] },
 	});
-	return out.split("\n").find((l) => l.includes("new ConditionExpression"))!.trim();
+	return out
+		.split("\n")
+		.find((l) => l.includes("new ConditionExpression"))!
+		.trim();
 }
 
 describe("C# QueryExpression from the Web API's response (#178)", () => {
@@ -69,7 +72,9 @@ describe("C# QueryExpression from the Web API's response (#178)", () => {
 	});
 
 	it("values keep the type the API reports: numbers, decimals, Yes/No, GUIDs, dates, lists, column comparisons", () => {
-		const lines = generateCSharpQueryExpression(Q.types).split("\n").map((l) => l.trim());
+		const lines = generateCSharpQueryExpression(Q.types)
+			.split("\n")
+			.map((l) => l.trim());
 		expect(lines).toEqual(
 			expect.arrayContaining([
 				'new ConditionExpression("numberofemployees", ConditionOperator.GreaterThan, 10),',
@@ -88,13 +93,23 @@ describe("C# QueryExpression from the Web API's response (#178)", () => {
 
 	it("operators without values, and newer operators (BeginsWith, OlderThanXDays, EqualUserOrUserTeams)", () => {
 		const out = generateCSharpQueryExpression(Q.dateOps);
-		expect(out).toContain('new ConditionExpression("createdon", ConditionOperator.LastXDays, 7),');
+		expect(out).toContain(
+			'new ConditionExpression("createdon", ConditionOperator.LastXDays, 7),',
+		);
 		expect(out).toContain('new ConditionExpression("createdon", ConditionOperator.ThisYear),');
 		expect(out).toContain('new ConditionExpression("ownerid", ConditionOperator.EqualUserId),');
-		expect(out).toContain('new ConditionExpression("ownerid", ConditionOperator.EqualUserOrUserTeams),');
-		expect(out).toContain('new ConditionExpression("createdon", ConditionOperator.OlderThanXDays, 2),');
-		expect(out).toContain('new ConditionExpression("name", ConditionOperator.BeginsWith, "A"),');
-		expect(out).toContain('new ConditionExpression("name", ConditionOperator.DoesNotEndWith, "z"),');
+		expect(out).toContain(
+			'new ConditionExpression("ownerid", ConditionOperator.EqualUserOrUserTeams),',
+		);
+		expect(out).toContain(
+			'new ConditionExpression("createdon", ConditionOperator.OlderThanXDays, 2),',
+		);
+		expect(out).toContain(
+			'new ConditionExpression("name", ConditionOperator.BeginsWith, "A"),',
+		);
+		expect(out).toContain(
+			'new ConditionExpression("name", ConditionOperator.DoesNotEndWith, "z"),',
+		);
 	});
 
 	it("any/all filter link: AnyAllFilterLinkEntity with LinkCriteria and no columns", () => {
@@ -141,15 +156,22 @@ describe("C# QueryExpression from the Web API's response (#178)", () => {
 
 	it("strings stay strings: digits, decimals in text, line breaks and tabs escaped", () => {
 		const out = generateCSharpQueryExpression(Q.strings);
-		expect(out).toContain('new ConditionExpression("name", ConditionOperator.Equal, "line1\\nline2\\ttab"),');
+		expect(out).toContain(
+			'new ConditionExpression("name", ConditionOperator.Equal, "line1\\nline2\\ttab"),',
+		);
 		expect(out).toContain('new ConditionExpression("name", ConditionOperator.Equal, "12.50"),');
 	});
 
 	it("PageInfo only when the query pages; the API's default PageInfo is left out", () => {
 		expect(generateCSharpQueryExpression(Q.paging)).toContain(
-			["    PageInfo = new PagingInfo", "    {", "        Count = 50,", "        PageNumber = 2,", "        ReturnTotalRecordCount = true,", "    },"].join(
-				"\n",
-			),
+			[
+				"    PageInfo = new PagingInfo",
+				"    {",
+				"        Count = 50,",
+				"        PageNumber = 2,",
+				"        ReturnTotalRecordCount = true,",
+				"    },",
+			].join("\n"),
 		);
 		expect(generateCSharpQueryExpression(Q.types)).not.toContain("PageInfo");
 		expect(generateCSharpQueryExpression(Q.linkAndOrder)).not.toContain("PageInfo");
@@ -157,8 +179,12 @@ describe("C# QueryExpression from the Web API's response (#178)", () => {
 
 	it("query hints, ContainValues and Under", () => {
 		const out = generateCSharpQueryExpression(Q.multiSelect);
-		expect(out).toContain('new ConditionExpression("industrycode", ConditionOperator.ContainValues, 1),');
-		expect(out).toContain('new ConditionExpression("parentaccountid", ConditionOperator.Under, new Guid("00000000-0000-0000-0000-000000000001")),');
+		expect(out).toContain(
+			'new ConditionExpression("industrycode", ConditionOperator.ContainValues, 1),',
+		);
+		expect(out).toContain(
+			'new ConditionExpression("parentaccountid", ConditionOperator.Under, new Guid("00000000-0000-0000-0000-000000000001")),',
+		);
 		expect(out).toContain('    QueryHints = "MaxRecursion",');
 		expect(generateCSharpQueryExpression(Q.types)).not.toContain("QueryHints");
 	});
@@ -168,10 +194,20 @@ describe("C# QueryExpression: plain and aliased columns, retained data (#178, sh
 	// <fetch><entity name="account"><attribute name="name"/><attribute name="createdon" alias="created"/>
 	//   <link-entity name="contact" from="parentcustomerid" to="accountid" alias="c"><attribute name="fullname"/>
 	//   <attribute name="emailaddress1" alias="mail"/></link-entity></entity></fetch>
-	const aliased = (AttributeName: string, Alias: string) => ({ AttributeName, AggregateType: "None", Alias, HasGroupBy: false, DateTimeGrouping: "None" });
+	const aliased = (AttributeName: string, Alias: string) => ({
+		AttributeName,
+		AggregateType: "None",
+		Alias,
+		HasGroupBy: false,
+		DateTimeGrouping: "None",
+	});
 	const mixed: QeQueryExpression = {
 		EntityName: "account",
-		ColumnSet: { AllColumns: false, Columns: ["name"], AttributeExpressions: [aliased("createdon", "created")] },
+		ColumnSet: {
+			AllColumns: false,
+			Columns: ["name"],
+			AttributeExpressions: [aliased("createdon", "created")],
+		},
 		LinkEntities: [
 			{
 				LinkFromEntityName: "account",
@@ -180,7 +216,11 @@ describe("C# QueryExpression: plain and aliased columns, retained data (#178, sh
 				LinkToAttributeName: "parentcustomerid",
 				JoinOperator: "Inner",
 				EntityAlias: "c",
-				Columns: { AllColumns: false, Columns: ["fullname"], AttributeExpressions: [aliased("emailaddress1", "mail")] },
+				Columns: {
+					AllColumns: false,
+					Columns: ["fullname"],
+					AttributeExpressions: [aliased("emailaddress1", "mail")],
+				},
 			},
 		],
 	};
@@ -199,11 +239,17 @@ describe("C# QueryExpression: plain and aliased columns, retained data (#178, sh
 			].join("\n"),
 		);
 		expect(out).toContain('Columns = new ColumnSet("fullname")');
-		expect(out).toContain('new XrmAttributeExpression("emailaddress1", XrmAggregateType.None, "mail"),');
+		expect(out).toContain(
+			'new XrmAttributeExpression("emailaddress1", XrmAggregateType.None, "mail"),',
+		);
 	});
 
 	it('writes DataSource for <fetch datasource="retained">', () => {
-		const out = generateCSharpQueryExpression({ EntityName: "account", ColumnSet: { AllColumns: false, Columns: ["name"] }, DataSource: "retained" });
+		const out = generateCSharpQueryExpression({
+			EntityName: "account",
+			ColumnSet: { AllColumns: false, Columns: ["name"] },
+			DataSource: "retained",
+		});
 		expect(out).toContain('    DataSource = "retained",');
 		expect(generateCSharpQueryExpression(Q.types)).not.toContain("DataSource");
 	});
@@ -215,7 +261,12 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 			EntityName: "account",
 			ColumnSet: { AllColumns: false },
 			Orders: [
-				{ AttributeName: "fullname", OrderType: "Descending", Alias: null, EntityName: "c" },
+				{
+					AttributeName: "fullname",
+					OrderType: "Descending",
+					Alias: null,
+					EntityName: "c",
+				},
 				{ AttributeName: "name", OrderType: 1, Alias: "n", EntityName: "c" },
 			],
 		};
@@ -225,31 +276,52 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 	});
 
 	it("numeric operator codes follow the SDK's ConditionOperator numbering", () => {
-		const cond = (Operator: number, Values: unknown[] = []) => conditionCode({ AttributeName: "x", Operator, Values });
-		expect(cond(27, [{ Type: "System.String", Value: "2024-01-01" }])).toBe('new ConditionExpression("x", ConditionOperator.OnOrAfter, "2024-01-01"),');
-		expect(cond(39, [{ Type: "System.Int32", Value: 2 }])).toBe('new ConditionExpression("x", ConditionOperator.LastXYears, 2),');
+		const cond = (Operator: number, Values: unknown[] = []) =>
+			conditionCode({ AttributeName: "x", Operator, Values });
+		expect(cond(27, [{ Type: "System.String", Value: "2024-01-01" }])).toBe(
+			'new ConditionExpression("x", ConditionOperator.OnOrAfter, "2024-01-01"),',
+		);
+		expect(cond(39, [{ Type: "System.Int32", Value: 2 }])).toBe(
+			'new ConditionExpression("x", ConditionOperator.LastXYears, 2),',
+		);
 		expect(cond(41)).toBe('new ConditionExpression("x", ConditionOperator.EqualUserId),');
-		expect(cond(54, [{ Type: "System.String", Value: "A" }])).toBe('new ConditionExpression("x", ConditionOperator.BeginsWith, "A"),');
-		expect(cond(87, [{ Type: "System.Int32", Value: 1 }])).toBe('new ConditionExpression("x", ConditionOperator.ContainValues, 1),');
+		expect(cond(54, [{ Type: "System.String", Value: "A" }])).toBe(
+			'new ConditionExpression("x", ConditionOperator.BeginsWith, "A"),',
+		);
+		expect(cond(87, [{ Type: "System.Int32", Value: 1 }])).toBe(
+			'new ConditionExpression("x", ConditionOperator.ContainValues, 1),',
+		);
 		// Unknown: a cast, so the code still compiles
 		expect(cond(250)).toBe('new ConditionExpression("x", (ConditionOperator)250),');
 	});
 
 	it("an untyped string is never turned into a number", () => {
-		const cond = (value: unknown) => conditionCode({ AttributeName: "x", Operator: "Equal", Values: [value] });
-		expect(cond("00123")).toBe('new ConditionExpression("x", ConditionOperator.Equal, "00123"),');
-		expect(cond("12345678901234567890")).toBe('new ConditionExpression("x", ConditionOperator.Equal, "12345678901234567890"),');
+		const cond = (value: unknown) =>
+			conditionCode({ AttributeName: "x", Operator: "Equal", Values: [value] });
+		expect(cond("00123")).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, "00123"),',
+		);
+		expect(cond("12345678901234567890")).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, "12345678901234567890"),',
+		);
 		expect(cond(42)).toBe('new ConditionExpression("x", ConditionOperator.Equal, 42),');
-		expect(cond({ value: "abc" })).toBe('new ConditionExpression("x", ConditionOperator.Equal, "abc"),');
+		expect(cond({ value: "abc" })).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, "abc"),',
+		);
 		expect(cond("11111111-1111-1111-1111-111111111111")).toBe(
 			'new ConditionExpression("x", ConditionOperator.Equal, new Guid("11111111-1111-1111-1111-111111111111")),',
 		);
 	});
 
 	it("Int64, Double and DateTime types get matching literals", () => {
-		const cond = (Type: string, Value: unknown) => conditionCode({ AttributeName: "x", Operator: "Equal", Values: [{ Type, Value }] });
-		expect(cond("System.Int64", 9007199254740)).toBe('new ConditionExpression("x", ConditionOperator.Equal, 9007199254740L),');
-		expect(cond("System.Double", 2.5)).toBe('new ConditionExpression("x", ConditionOperator.Equal, 2.5d),');
+		const cond = (Type: string, Value: unknown) =>
+			conditionCode({ AttributeName: "x", Operator: "Equal", Values: [{ Type, Value }] });
+		expect(cond("System.Int64", 9007199254740)).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, 9007199254740L),',
+		);
+		expect(cond("System.Double", 2.5)).toBe(
+			'new ConditionExpression("x", ConditionOperator.Equal, 2.5d),',
+		);
 		expect(cond("System.DateTime", "2026-01-02T00:00:00Z")).toBe(
 			'new ConditionExpression("x", ConditionOperator.Equal, DateTime.Parse("2026-01-02T00:00:00Z")),',
 		);
@@ -260,7 +332,13 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 			'new ConditionExpression("x", ConditionOperator.Equal, (object)null),',
 		);
 		// A value object the generator doesn't recognise is kept as a comment, typed the same way
-		expect(conditionCode({ AttributeName: "x", Operator: "Equal", Values: [{ Id: "1", LogicalName: "a" }] })).toBe(
+		expect(
+			conditionCode({
+				AttributeName: "x",
+				Operator: "Equal",
+				Values: [{ Id: "1", LogicalName: "a" }],
+			}),
+		).toBe(
 			'new ConditionExpression("x", ConditionOperator.Equal, (object)null /* {"Id":"1","LogicalName":"a"} */),',
 		);
 		expect(
@@ -276,9 +354,14 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 	});
 
 	it("a condition on a link-entity's alias passes the entity name first", () => {
-		expect(conditionCode({ EntityName: "c", AttributeName: "fullname", Operator: "Null", Values: [] })).toBe(
-			'new ConditionExpression("c", "fullname", ConditionOperator.Null),',
-		);
+		expect(
+			conditionCode({
+				EntityName: "c",
+				AttributeName: "fullname",
+				Operator: "Null",
+				Values: [],
+			}),
+		).toBe('new ConditionExpression("c", "fullname", ConditionOperator.Null),');
 	});
 
 	it("an aggregate with a date grouping but no alias still compiles", () => {
@@ -286,7 +369,14 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 			EntityName: "account",
 			ColumnSet: {
 				AllColumns: false,
-				AttributeExpressions: [{ AttributeName: "createdon", AggregateType: 0, DateTimeGrouping: 3, HasGroupBy: true }],
+				AttributeExpressions: [
+					{
+						AttributeName: "createdon",
+						AggregateType: 0,
+						DateTimeGrouping: 3,
+						HasGroupBy: true,
+					},
+				],
 			},
 		});
 		expect(out).toContain('new XrmAttributeExpression("createdon", XrmAggregateType.None)');
@@ -301,7 +391,13 @@ describe("C# QueryExpression: cases outside the captured responses (#178)", () =
 				FilterOperator: "Or",
 				IsQuickFindFilter: true,
 				FilterHint: "union",
-				Conditions: [{ AttributeName: "name", Operator: "Like", Values: [{ Type: "System.String", Value: "a%" }] }],
+				Conditions: [
+					{
+						AttributeName: "name",
+						Operator: "Like",
+						Values: [{ Type: "System.String", Value: "a%" }],
+					},
+				],
 			},
 		});
 		expect(out).toContain('FilterHint = "union",');

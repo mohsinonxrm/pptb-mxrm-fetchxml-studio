@@ -24,7 +24,13 @@ export function errorMessage(error: unknown): string {
 	return typeof error === "string" ? error : "Unknown error";
 }
 
-export function errorDetails({ where, error, componentStack, version, time }: ErrorDetailsInput): string {
+export function errorDetails({
+	where,
+	error,
+	componentStack,
+	version,
+	time,
+}: ErrorDetailsInput): string {
 	const stack = (componentStack ?? "")
 		.split("\n")
 		.map((line) => line.trim())
