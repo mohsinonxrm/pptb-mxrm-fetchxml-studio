@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Changed
 
+- **README: the requirements say 1.5 and later need PPTB 1.2.7** (they said 1.5 only), found by the Verified readiness check (#84).
+
 - **README: screenshots, a Quick start and an AI assistance note (#84).** Three screenshots replace the out-of-date ASCII interface overview. A Quick start and a short **AI assistance** section follow the [AI-assisted development policy](https://docs.powerplatformtoolbox.com/policies/ai-assisted-development). The images aren't in the npm package.
 
 - **Close dialogs say how to undo too (#69).** Win / Lose opportunity, Resolve case, Fulfill / Cancel order, Cancel case and the invoice actions say "To undo, run Activate…". Win / Close quote says there's no undo. Activate on an Entity with a Close menu says to undo with Close.
