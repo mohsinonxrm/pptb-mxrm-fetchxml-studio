@@ -25,10 +25,12 @@ describe("app: running a query", () => {
 	it("a query from another tool loads into the tree, and Execute shows its rows", async () => {
 		const app = await renderApp({ launch: { fetchXml: accountQuery() } });
 		await app.waitFor(() => !!button("Execute", document));
+		expect(treeRow("Fetch query")).toBeTruthy();
+		expect(treeRow("name")).toBeTruthy();
 		await click(button("Execute", document));
-		await app.waitFor(() => /Rows: 5/.test(app.status()));
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 		expect(app.dataverse.calls.some((c) => c.startsWith("queryData accounts?fetchXml="))).toBe(true);
-		expect(app.dataverse.unknown).toEqual([]);
+		app.expectClean();
 	}, 60000);
 
 	it("a first page shows 'more available', and Retrieve all loads every page", async () => {
@@ -44,7 +46,7 @@ describe("app: running a query", () => {
 		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 8000);
 		const pages = app.dataverse.calls.filter((c) => c.startsWith("queryData accounts?fetchXml="));
 		expect(pages.length).toBeGreaterThanOrEqual(1 + 3);
-		expect(app.dataverse.unknown).toEqual([]);
+		app.expectClean();
 	}, 60000);
 
 	it("Stop during Retrieve all keeps the rows already loaded and says so", async () => {
@@ -66,6 +68,7 @@ describe("app: running a query", () => {
 		expect(app.status()).toMatch(/^Rows: 2\b/);
 		const pages = app.dataverse.calls.filter((c) => c.startsWith("queryData accounts?fetchXml="));
 		expect(pages.length).toBe(2);
+		app.expectClean();
 	}, 60000);
 
 	it("a query Dataverse rejects shows the error, and the tool stays usable", async () => {
@@ -82,7 +85,9 @@ describe("app: running a query", () => {
 		expect(app.status()).toBe("");
 		fail = false;
 		await click(button("Execute", document));
-		await app.waitFor(() => /Rows: 5/.test(app.status()));
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
+		expect(document.body.textContent).not.toMatch(/doesn't contain attribute/);
+		app.expectClean();
 	}, 60000);
 });
 
@@ -91,7 +96,7 @@ describe("app: record actions", () => {
 		const app = await renderApp({ launch: { fetchXml: accountQuery() } });
 		await app.waitFor(() => !!button("Execute", document));
 		await click(button("Execute", document));
-		await app.waitFor(() => /Rows: 5/.test(app.status()));
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 
 		// The first data row: "Account 01", ordered by name
 		const firstRow = [...document.querySelectorAll<HTMLElement>('[role="grid"] [role="row"]')].find((r) => r.textContent?.includes("Account 01"));
@@ -111,6 +116,7 @@ describe("app: record actions", () => {
 		expect(app.dataverse.deleted).toHaveLength(1);
 		expect(accounts.rows.map((r) => r.name)).toEqual(["Account 02", "Account 03", "Account 04", "Account 05"]);
 		expect(document.body.textContent).not.toContain("Account 01");
+		app.expectClean();
 	}, 60000);
 });
 
@@ -136,7 +142,24 @@ describe("app: opening a view from another tool", () => {
 		await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 		expect(app.dataverse.calls).toContain(`queryData accounts?savedQuery=${VIEW_ID}`);
 		expect(app.notifications).toEqual([]);
-		expect(app.dataverse.unknown).toEqual([]);
+		app.expectClean();
+	}, 60000);
+
+	it("a view with more pages follows Dataverse's @odata.nextLink to load the rest", async () => {
+		const paged = { ...activeAccounts, fetchxml: activeAccounts.fetchxml.replace("<fetch>", "<fetch count='2'>") };
+		const app = await renderApp({ views: [paged], launch: { viewRef: { id: VIEW_ID, entityLogicalName: "savedquery" } } });
+		await app.waitFor(() => !!button("Execute", document) && (document.body.textContent ?? "").includes("Active accounts"));
+		await click(button("Execute", document));
+		await app.waitFor(() => /Rows: 2 \(more available\)/.test(app.status()));
+
+		await click(treeRow("Fetch query"));
+		await app.waitFor(() => !!switchByLabel("Retrieve all records"));
+		await click(switchByLabel("Retrieve all records")!);
+		await click(button("Execute", document));
+		await app.waitFor(() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()), 8000);
+		const viewPages = app.dataverse.calls.filter((c) => c.startsWith(`queryData accounts?savedQuery=${VIEW_ID}`));
+		expect(viewPages.some((c) => c.endsWith("&$skiptoken=3"))).toBe(true);
+		app.expectClean();
 	}, 60000);
 
 	it("a viewRef to a view that doesn't exist tells the user, and leaves the tool usable", async () => {
@@ -145,7 +168,10 @@ describe("app: opening a view from another tool", () => {
 		await app.waitFor(() => app.notifications.length > 0);
 		expect(app.notifications[0]).toMatchObject({ title: "Couldn't open the view", type: "error" });
 		expect(app.notifications[0].body).toContain(missing);
-		expect(app.dataverse.unknown).toEqual([]);
+		// Usable: nothing loaded, and a new query can start
+		expect(app.dataverse.calls.some((c) => /\?(fetchXml|savedQuery)=/.test(c))).toBe(false);
+		expect(isDisabled(button("New", document))).toBe(false);
+		app.expectClean();
 	}, 60000);
 });
 

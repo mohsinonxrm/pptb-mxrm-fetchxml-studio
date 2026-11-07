@@ -8,7 +8,7 @@
  */
 import { createElement } from "react";
 import { act } from "react";
-import { createFakeDataverse, sampleTables, type FakeDataverseOptions, type FakeTable } from "./fakeDataverse";
+import { createFakeDataverse, ORG_URL, sampleTables, type FakeDataverseOptions, type FakeTable } from "./fakeDataverse";
 import { flush, render } from "./ui";
 import { resetDataverseSessionCache } from "../../features/fetchxml/api/sessionCache";
 import { clearMetadataCache } from "../../features/fetchxml/api/dataverseMetadata";
@@ -25,8 +25,15 @@ export interface AppHarnessOptions extends FakeDataverseOptions {
 export interface AppHarness {
 	dataverse: ReturnType<typeof createFakeDataverse>;
 	notifications: { title?: string; body?: string; type?: string }[];
-	/** The text of the status line under the results (e.g. "Rows: 3 | Executed in 2ms"), or "" */
+	/** The status line under the results ("Rows: 3 (more available) | Executed in 2ms"), or "" */
 	status: () => string;
+	/** Close holds taken (toolboxAPI.preventClose) and released: equal once nothing is running */
+	closeHolds: { prevented: number; released: number };
+	/**
+	 * Fails if the run left something behind: a Dataverse request the fake doesn't know, a page sent
+	 * with a missing or wrong paging cookie, or a close hold that was never released
+	 */
+	expectClean: () => void;
 	/** Waits until the predicate holds, flushing React in between; fails after `ms` */
 	waitFor: (predicate: () => boolean, ms?: number) => Promise<void>;
 }
@@ -39,9 +46,10 @@ export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHar
 	metadataCache.clear();
 	clearMetadataLoadErrors();
 	const dataverse = createFakeDataverse(options.tables ?? sampleTables(), options);
-	const connection = options.connection ?? { id: "c1", name: "Test environment", url: "https://test.crm.dynamics.com/", environment: "Dev" };
+	const connection = options.connection ?? { id: "c1", name: "Test environment", url: ORG_URL, environment: "Dev" };
 	const notifications: AppHarness["notifications"] = [];
 	const settings = new Map<string, unknown>();
+	const closeHolds = { prevented: 0, released: 0 };
 	(window as unknown as { dataverseAPI: unknown }).dataverseAPI = dataverse.api;
 	(window as unknown as { toolboxAPI: unknown }).toolboxAPI = {
 		connections: { getConnection: async () => connection, getActiveConnection: async () => connection },
@@ -60,6 +68,13 @@ export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHar
 			},
 			getAll: async () => Object.fromEntries(settings),
 		},
+		// PPTB >= 1.2.6: long operations hold the tab open (host.ts holdClose)
+		preventClose: async () => {
+			closeHolds.prevented++;
+		},
+		releasePreventClose: async () => {
+			closeHolds.released++;
+		},
 		getToolContext: async () => ({ toolId: "local-test", instanceId: "test-instance" }),
 		invocation: options.launch === null ? undefined : { getLaunchContext: async () => options.launch ?? null },
 	};
@@ -77,9 +92,10 @@ export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHar
 	const { AppShell } = await import("../../app/AppShell");
 	await render(createElement(AppShell));
 
+	// The results info bar's first span (ResultsGrid). Document order puts the outermost span first.
 	const status = () => {
-		const text = document.body.textContent ?? "";
-		return /Rows: [^|]*\|?[^A-Z]*/.exec(text)?.[0]?.trim() ?? "";
+		const span = [...document.querySelectorAll("span")].find((e) => e.textContent?.startsWith("Rows:"));
+		return (span?.textContent ?? "").replace(/\s+/g, " ").trim();
 	};
 	const waitFor = async (predicate: () => boolean, ms = 4000) => {
 		const end = Date.now() + ms;
@@ -92,5 +108,13 @@ export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHar
 		await flush();
 	};
 	await waitFor(() => dataverse.calls.some((c) => c.startsWith("execute WhoAmI")));
-	return { dataverse, notifications, status, waitFor };
+	const expectClean = () => {
+		const problems = [
+			...dataverse.unknown.map((q) => `unknown request: ${q}`),
+			...dataverse.pagingErrors,
+			...(closeHolds.prevented !== closeHolds.released ? [`close holds: ${closeHolds.prevented} taken, ${closeHolds.released} released`] : []),
+		];
+		if (problems.length) throw new Error(`The run left problems:\n${problems.join("\n")}`);
+	};
+	return { dataverse, notifications, status, closeHolds, expectClean, waitFor };
 }

@@ -43,6 +43,9 @@ export interface FakeDataverseOptions {
 	beforePage?: (page: number, entity: string) => Promise<void> | void;
 }
 
+/** The connection URL renderApp's host stub reports */
+export const ORG_URL = "https://test.crm.dynamics.com/";
+
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
 
 const ATTRIBUTE_TYPE_NAMES: Record<string, string> = {
@@ -57,7 +60,14 @@ const ATTRIBUTE_TYPE_NAMES: Record<string, string> = {
 };
 
 /** A fetch element's attributes and its root entity, read with the same DOMParser the app uses */
-function readFetch(xml: string): { entity: string; count: number; page: number; attributes: string[]; orders: { attribute: string; descending: boolean }[] } {
+function readFetch(xml: string): {
+	entity: string;
+	count: number;
+	page: number;
+	pagingCookie: string | null;
+	attributes: string[];
+	orders: { attribute: string; descending: boolean }[];
+} {
 	const doc = new DOMParser().parseFromString(xml, "application/xml");
 	const fetch = doc.documentElement;
 	const entity = fetch.querySelector("entity");
@@ -65,6 +75,7 @@ function readFetch(xml: string): { entity: string; count: number; page: number; 
 		entity: entity?.getAttribute("name") ?? "",
 		count: Number(fetch.getAttribute("count") ?? "5000"),
 		page: Number(fetch.getAttribute("page") ?? "1"),
+		pagingCookie: fetch.getAttribute("paging-cookie"),
 		attributes: [...(entity?.querySelectorAll(":scope > attribute") ?? [])].map((a) => a.getAttribute("name") ?? ""),
 		orders: [...(entity?.querySelectorAll(":scope > order") ?? [])].map((o) => ({ attribute: o.getAttribute("attribute") ?? "", descending: o.getAttribute("descending") === "true" })),
 	};
@@ -75,6 +86,8 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 	const calls: string[] = [];
 	const unknown: string[] = [];
 	const deleted: string[] = [];
+	/** Pages asked for with a missing or wrong paging cookie */
+	const pagingErrors: string[] = [];
 	const byName = new Map(tables.map((t) => [t.logicalName, t]));
 	const bySet = new Map(tables.map((t) => [t.entitySetName, t]));
 	const views = options.views ?? [];
@@ -126,11 +139,28 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		},
 	};
 
-	/** One page of a FetchXML query: page-number paging, as Dataverse does without a paging cookie */
-	async function runFetch(set: string, xml: string) {
+	/** Paging cookies this fake handed out, by the page they lead to: page 2 and later must send them back */
+	const issuedCookies = new Map<string, string>();
+	const cookieKey = (entity: string, page: number) => `${entity}:${page}`;
+
+	/**
+	 * One page of a FetchXML query, answered as the Web API does (Learn, "Page results using FetchXml"):
+	 * with more rows, `morerecords` and a `fetchxmlpagingcookie` element whose `pagingcookie` attribute is
+	 * URL-encoded twice; on the last page, neither annotation. Page 2 and later must send back the
+	 * cookie issued for that page in `paging-cookie`, so an app that drops or garbles it fails.
+	 */
+	async function runFetch(set: string, xml: string, view?: { page: number }) {
 		const table = bySet.get(set);
 		const fetch = readFetch(xml);
+		if (view) fetch.page = view.page;
 		if (!table || table.logicalName !== fetch.entity) throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
+		if (!view && fetch.page > 1) {
+			const expected = issuedCookies.get(cookieKey(fetch.entity, fetch.page));
+			if (expected !== undefined && fetch.pagingCookie !== expected) {
+				pagingErrors.push(`page ${fetch.page}: paging-cookie ${JSON.stringify(fetch.pagingCookie)}, expected ${JSON.stringify(expected)}`);
+				throw new Error("0x80040203: Invalid paging cookie.");
+			}
+		}
 		await options.beforePage?.(fetch.page, fetch.entity);
 		const rows = [...table.rows];
 		for (const order of [...fetch.orders].reverse()) {
@@ -143,7 +173,13 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 			return out;
 		});
 		const more = start + fetch.count < rows.length;
-		return { value: pageRows, "@Microsoft.Dynamics.CRM.morerecords": more };
+		if (!more) return { value: pageRows };
+		const last = pageRows[pageRows.length - 1]?.[table.primaryId];
+		const first = pageRows[0]?.[table.primaryId];
+		const cookie = `<cookie page="${fetch.page}"><${table.primaryId} last="{${String(last).toUpperCase()}}" first="{${String(first).toUpperCase()}}" /></cookie>`;
+		issuedCookies.set(cookieKey(fetch.entity, fetch.page + 1), cookie);
+		const annotation = `<cookie pagenumber="${fetch.page + 1}" pagingcookie="${encodeURIComponent(encodeURIComponent(cookie))}" istracking="False" />`;
+		return { value: pageRows, "@Microsoft.Dynamics.CRM.fetchxmlpagingcookie": annotation, "@Microsoft.Dynamics.CRM.morerecords": true };
 	}
 
 	async function queryData(query: string): Promise<unknown> {
@@ -151,20 +187,25 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		const fetchMatch = /^([a-z_]+)\?fetchXml=(.*)$/i.exec(query);
 		if (fetchMatch) return runFetch(fetchMatch[1], decodeURIComponent(fetchMatch[2]));
 
-		// A saved view run by its id: Dataverse runs the view's FetchXML and pages with @odata.nextLink
-		const byId = /^([a-z_]+)\?(savedQuery|userQuery)=([0-9a-f-]+)$/i.exec(query);
+		// A saved view run by its id: Dataverse runs the view's FetchXML and pages with an absolute
+		// @odata.nextLink, to be used as given (Learn, "Page results" for the Web API)
+		const byId = /^([a-z_]+)\?(savedQuery|userQuery)=([0-9a-f-]+)(?:&\$skiptoken=(\d+))?$/i.exec(query);
 		if (byId) {
 			const type = byId[2] === "savedQuery" ? "system" : "personal";
 			const view = views.find((v) => v.type === type && v.id === byId[3]);
 			if (!view) throw new Error(`0x80040217: ${byId[2]} With Id = ${byId[3]} Does Not Exist`);
-			const { "@Microsoft.Dynamics.CRM.morerecords": more, ...page } = await runFetch(byId[1], view.fetchxml);
-			return more ? { ...page, "@odata.nextLink": `${query}&$skiptoken=2` } : page;
+			const page = Number(byId[4] ?? "1");
+			const result = await runFetch(byId[1], view.fetchxml, { page });
+			const rows = { value: result.value };
+			if (!("@Microsoft.Dynamics.CRM.morerecords" in result)) return rows;
+			return { ...rows, "@odata.nextLink": `${ORG_URL}api/data/v9.2/${byId[1]}?${byId[2]}=${byId[3]}&$skiptoken=${page + 1}` };
 		}
 
-		const privilege = /RetrieveUserPrivilegeByPrivilegeName\(PrivilegeName='([^']+)'\)/.exec(query);
+		const privilege = /^systemusers\(([0-9a-f-]+)\)\/Microsoft\.Dynamics\.CRM\.RetrieveUserPrivilegeByPrivilegeName\(PrivilegeName='([^']+)'\)/.exec(query);
 		if (privilege) {
-			const held = options.privileges === undefined || options.privileges === "all" || options.privileges.has(privilege[1]);
-			return { RolePrivileges: held ? [{ PrivilegeName: privilege[1], Depth: "Global" }] : [] };
+			if (privilege[1] !== userId) throw new Error(`0x80040217: systemuser With Id = ${privilege[1]} Does Not Exist`);
+			const held = options.privileges === undefined || options.privileges === "all" || options.privileges.has(privilege[2]);
+			return { RolePrivileges: held ? [{ PrivilegeName: privilege[2], Depth: "Global" }] : [] };
 		}
 
 		const entityScoped = /^EntityDefinitions\(LogicalName='([^']+)'\)(.*)$/.exec(query);
@@ -266,7 +307,7 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		},
 	};
 
-	return { api, calls, unknown, deleted, tables };
+	return { api, calls, unknown, deleted, pagingErrors, tables };
 }
 
 /** Account and contact tables with a few rows each, enough for paging and record actions */
