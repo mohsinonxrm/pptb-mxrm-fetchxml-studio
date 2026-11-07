@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace -- the tests use NBSP and other Unicode spaces on purpose */
 import { describe, expect, it } from "vitest";
 import { formatFetchXml } from "./fetchxmlFormatter";
 
@@ -188,8 +189,152 @@ describe("formatFetchXml", () => {
 		expect(fmt(out)).toBe(out);
 	});
 
-	it("never throws on very deep nesting", () => {
-		const r = formatFetchXml("<a>".repeat(200000) + "</a>".repeat(200000));
+	it("formats 10,000 levels of nesting (no recursion limit)", () => {
+		const r = formatFetchXml("<a>".repeat(10000) + "</a>".repeat(10000), { indent: "" });
+		expect(r.ok).toBe(true);
+		if (r.ok) expect(r.text.split("\n")).toHaveLength(19999);
+		const d = formatFetchXml("<a>".repeat(3000) + "<b/>" + "</a>".repeat(3000));
+		expect(d.ok).toBe(true);
+		if (d.ok) expect(d.text.split("\n")[3000]).toBe(`${"  ".repeat(3000)}<b />`);
+	});
+
+	it("never throws on extreme nesting", () => {
+		const r = formatFetchXml("<a>".repeat(200000) + "</a>".repeat(200000), { indent: "" });
 		expect(typeof r.ok).toBe("boolean");
+	});
+
+	it("handles 8,000 attributes quickly", () => {
+		const attrs = Array.from({ length: 8000 }, (_, i) => `a${i}="${i}"`).join(" ");
+		const t0 = Date.now();
+		const r = formatFetchXml(`<a ${attrs}/>`);
+		expect(r.ok).toBe(true);
+		expect(Date.now() - t0).toBeLessThan(2000);
+	});
+});
+
+describe("formatFetchXml: canonical layout of messy input", () => {
+	const canonical = [
+		"<fetch>",
+		'  <entity name="a">',
+		'    <filter type="and">',
+		'      <condition attribute="x" operator="eq" value="1" />',
+		"    </filter>",
+		"  </entity>",
+		"</fetch>",
+	].join("\n");
+	it.each([
+		[
+			"everything on one line",
+			'<fetch><entity name="a"><filter type="and"><condition attribute="x" operator="eq" value="1"/></filter></entity></fetch>',
+		],
+		[
+			"odd indents",
+			'<fetch>\n      <entity name="a">\n <filter type="and">\n\t\t<condition attribute="x" operator="eq" value="1" />\n</filter>\n   </entity>\n</fetch>',
+		],
+		[
+			"tabs",
+			'<fetch>\n\t<entity name="a">\n\t\t<filter type="and">\n\t\t\t<condition attribute="x" operator="eq" value="1"/>\n\t\t</filter>\n\t</entity>\n</fetch>',
+		],
+		[
+			"blank lines and CRLF",
+			'\r\n<fetch>\r\n\r\n\r\n<entity name="a">\r\n\r\n<filter type="and">\r\n<condition attribute="x" operator="eq" value="1"/>\r\n\r\n</filter></entity>\r\n</fetch>\r\n\r\n',
+		],
+		[
+			"spaces inside tags",
+			'<fetch  ><entity   name="a"  ><filter type = "and" ><condition attribute="x"  operator="eq" value="1" /></filter></entity></fetch >',
+		],
+	])("%s", (_n, src) => {
+		expect(formatFetchXml(src)).toEqual({ ok: true, text: canonical });
+	});
+
+	it("re-indents whitespace-only text between tags, not the leaf data", () => {
+		expect(fmt("<a>\n\n   <b>  x  </b>\n\n</a>")).toBe("<a>\n  <b>  x  </b>\n</a>");
+	});
+});
+
+describe("formatFetchXml: whitespace is XML whitespace only", () => {
+	it("keeps NBSP and other Unicode spaces as text", () => {
+		const nbsp = " ";
+		expect(fmt(`<a>${nbsp}<b/></a>`)).toBe(`<a>${nbsp}<b/></a>`);
+		expect(fmt(`<a>　</a>`)).toBe(`<a>　</a>`);
+		expect(fmt(`<a> <!--c--></a>`)).toBe(`<a> <!--c--></a>`);
+	});
+
+	it("rejects non-XML whitespace outside the root", () => {
+		expect(formatFetchXml(" <a/>").ok).toBe(false);
+		expect(formatFetchXml("<a/> ").ok).toBe(false);
+		expect(formatFetchXml("<a/>﻿").ok).toBe(false);
+	});
+
+	it("keeps the inner content of a leaf with only whitespace and comments or PIs", () => {
+		expect(fmt("<value>  <!--c-->  </value>")).toBe("<value>  <!--c-->  </value>");
+		expect(fmt("<a><value>  <?p x?>  </value></a>")).toBe(
+			"<a>\n  <value>  <?p x?>  </value>\n</a>",
+		);
+	});
+});
+
+describe("formatFetchXml: errors and options", () => {
+	it("reports the line in the original text, after a BOM and with bare CR line breaks", () => {
+		expect(formatFetchXml("﻿<a>\n<b>\n</a>")).toEqual({
+			ok: false,
+			error: "Can't format: the FetchXML isn't well-formed (line 3)",
+		});
+		expect(formatFetchXml("<a>\r<b>\r</a>")).toEqual({
+			ok: false,
+			error: "Can't format: the FetchXML isn't well-formed (line 3)",
+		});
+		expect(formatFetchXml("<a>\r\n<b>\r\n</a>")).toEqual({
+			ok: false,
+			error: "Can't format: the FetchXML isn't well-formed (line 3)",
+		});
+	});
+
+	it("strips a BOM from the output", () => {
+		expect(fmt("﻿<a/>")).toBe("<a />");
+		expect(fmt("﻿<?xml version='1.0'?><a/>")).toBe("<?xml version='1.0'?>\n<a />");
+	});
+
+	it("rejects an indent that isn't spaces or tabs", () => {
+		expect(formatFetchXml("<a><b/></a>", { indent: "x" }).ok).toBe(false);
+		expect(formatFetchXml("<a><b/></a>", { indent: " \n" }).ok).toBe(false);
+		expect(fmt("<a><b/></a>", "    ")).toBe("<a>\n    <b />\n</a>");
+	});
+});
+
+describe("formatFetchXml: accepted and rejected syntax", () => {
+	it("accepts a DOCTYPE with a quoted >", () => {
+		expect(fmt(`<!DOCTYPE a SYSTEM "x>y"><a/>`)).toBe(`<!DOCTYPE a SYSTEM "x>y">\n<a />`);
+	});
+
+	it("accepts combining marks in names", () => {
+		expect(fmt("<á b̀c='1'/>")).toBe("<á b̀c='1' />");
+	});
+
+	it.each([
+		["comment with --", "<a><!-- x -- y --></a>"],
+		["comment ending --->", "<a><!-- x ---></a>"],
+		["declaration not first", "<a/><?xml version='1.0'?>"],
+		["whitespace before declaration", " <?xml version='1.0'?><a/>"],
+		["declaration inside the root", "<a><?xml version='1.0'?></a>"],
+		["<!foo> at the root", "<!foo><a/>"],
+		["PI with no target", "<? x?><a/>"],
+		["control character", "<a>\u0001</a>"],
+		["vertical tab in an attribute", "<a b='\u000B'/>"],
+		["undefined entity in text", "<a>&foo;</a>"],
+		["undefined entity in a value", "<a b='&nbsp;'/>"],
+		["]]> in text", "<a>x ]]> y</a>"],
+		["bad entity in an attribute value", "<a b='x & y'/>"],
+		["no whitespace between attributes", `<a b="1"c="2"/>`],
+		["CDATA at the root", "<![CDATA[x]]><a/>"],
+		["DOCTYPE inside an element", "<a><!DOCTYPE a></a>"],
+		["lone <", "<a>1 < 2</a>"],
+	])("rejects: %s", (_n, src) => {
+		expect(formatFetchXml(src).ok).toBe(false);
+	});
+
+	it("accepts the five predefined and numeric entities", () => {
+		const s = "<a b='&amp;&lt;&gt;&quot;&apos;&#65;&#x41;'>&amp;&lt;&gt;&quot;&apos;</a>";
+		expect(fmt(s)).toBe(s);
 	});
 });
