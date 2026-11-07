@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repo hygiene, part of #205.** Removed unused files (`ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts`, `src/assets/react.svg`) and exports (`LoadingCellRenderer`, `ValueNode`). `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions jsdom 30 supports. The Prettier reformat and CI format check follow after 1.5.0 ships.
 - **CI and repo:** CI fails on high or critical runtime vulnerabilities (#72); grouped weekly Dependabot updates into `dev` with a 14-day cooldown (#76); `CONTRIBUTING.md` and the PR template (#80); README CI and license badges.
 - **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
+- **App notification provider, not used yet (#277).** `NotifyProvider`, `useNotify` and `useCopy` (`src/shared/feedback/`) are added with tests: one Toaster at the bottom end, timeouts by intent, an optional action and de-duplication. Nothing calls them yet; the callers move over in the next change.
 
 ## [1.5.0-beta.19] - 2026-11-06
 
