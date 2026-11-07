@@ -26,7 +26,14 @@ const repoRoot = path.resolve(here, "..", "..");
 export const ALLOWLIST_PATH = path.join(here, "wording-allowlist.json");
 
 /** Props whose string value is a short UI label */
-export const LABEL_PROPS = new Set(["label", "title", "aria-label", "placeholder", "content", "hint"]);
+export const LABEL_PROPS = new Set([
+	"label",
+	"title",
+	"aria-label",
+	"placeholder",
+	"content",
+	"hint",
+]);
 /** Calls whose arguments are developer logs, not UI */
 const LOG_CALL = /^(console\.\w+|debugLog|debugWarn)$/;
 export const MAX_LABEL_WORDS = 6;
@@ -113,7 +120,8 @@ function isLabelValue(node) {
 	if (parent && ts.isJsxAttribute(parent)) return LABEL_PROPS.has(parent.name.getText());
 	const p = node.parent;
 	if (p && ts.isPropertyAssignment(p) && p.initializer === node) {
-		const name = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : undefined;
+		const name =
+			ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : undefined;
 		return name !== undefined && LABEL_PROPS.has(name);
 	}
 	return false;
@@ -126,7 +134,12 @@ function scanSource(file, text, allowlist) {
 	const allowed = (t) => allowlist.some((a) => a.file === file && a.text === t);
 	const report = (pos, rule, t) => {
 		if (allowed(t)) return;
-		findings.push({ file, line: sf.getLineAndCharacterOfPosition(pos).line + 1, rule, text: t });
+		findings.push({
+			file,
+			line: sf.getLineAndCharacterOfPosition(pos).line + 1,
+			rule,
+			text: t,
+		});
 	};
 	const check = (raw, pos, isLabel) => {
 		const t = raw.replace(/\s+/g, " ").trim();
@@ -140,7 +153,11 @@ function scanSource(file, text, allowlist) {
 			check(raw, node.getStart(sf) + (raw.length - raw.trimStart().length), true);
 		} else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
 			const p = node.parent;
-			const skip = ts.isImportDeclaration(p) || ts.isExportDeclaration(p) || ts.isLiteralTypeNode(p) || isLogCall(node, sf);
+			const skip =
+				ts.isImportDeclaration(p) ||
+				ts.isExportDeclaration(p) ||
+				ts.isLiteralTypeNode(p) ||
+				isLogCall(node, sf);
 			if (!skip) check(node.text, node.getStart(sf), isLabelValue(node));
 		} else if (ts.isTemplateExpression(node)) {
 			if (!isLogCall(node, sf)) {
@@ -163,7 +180,11 @@ export function sourceFiles(root = repoRoot) {
 			const p = path.join(dir, e.name);
 			if (e.isDirectory()) {
 				if (e.name !== "__fixtures__") walk(p);
-			} else if (/\.(ts|tsx)$/.test(e.name) && !/\.test\.(ts|tsx)$/.test(e.name) && !/\.d\.ts$/.test(e.name)) {
+			} else if (
+				/\.(ts|tsx)$/.test(e.name) &&
+				!/\.test\.(ts|tsx)$/.test(e.name) &&
+				!/\.d\.ts$/.test(e.name)
+			) {
 				out.push(p);
 			}
 		}
@@ -186,7 +207,8 @@ export function loadAllowlist(file = ALLOWLIST_PATH) {
 export function scan(input, options = {}) {
 	const allowlist = options.allowlist ?? [];
 	const root = options.root ?? repoRoot;
-	if (typeof input === "string") return scanSource(options.file ?? "source.tsx", input, allowlist);
+	if (typeof input === "string")
+		return scanSource(options.file ?? "source.tsx", input, allowlist);
 	return input.flatMap((item) => {
 		if (typeof item === "string") {
 			const rel = path.relative(root, item).replace(/\\/g, "/");
@@ -202,10 +224,13 @@ function main() {
 	const findings = scan(sourceFiles(), { allowlist: loadAllowlist() });
 	for (const f of findings) console.log(formatFinding(f));
 	if (findings.length > 0) {
-		console.error(`\n${findings.length} wording finding(s). See "UI changes" in CONTRIBUTING.md; a justified exception goes in .github/scripts/wording-allowlist.json.`);
+		console.error(
+			`\n${findings.length} wording finding(s). See "UI changes" in CONTRIBUTING.md; a justified exception goes in .github/scripts/wording-allowlist.json.`,
+		);
 		process.exit(1);
 	}
 	console.log("No wording findings.");
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href)
+	main();

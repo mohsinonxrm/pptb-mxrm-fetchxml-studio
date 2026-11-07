@@ -22,6 +22,7 @@ Commands run, and any live-org / PPTB verification (PPTB version: …).
 - [ ] Reviewed with the maintainer before building (prototype or screenshots)
 - [ ] Screenshots in **light and dark** themes
 - [ ] Fluent UI v9 only; sentence case, "…" for ellipses, "Entity" / "Attribute"
+- [ ] New or changed UI text follows the [wording style table](../blob/dev/CONTRIBUTING.md#ui-wording-style) (`npm run check:wording` once it is enforced)
 
 ### Data-changing operations (if any)
 

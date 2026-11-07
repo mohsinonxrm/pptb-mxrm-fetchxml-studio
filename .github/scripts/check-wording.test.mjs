@@ -26,7 +26,7 @@ describe("ascii-ellipsis", () => {
 	it("ignores log calls, spread, comments and the single ellipsis character", () => {
 		const src = [
 			'debugLog("Loading...");',
-			'debugWarn(`retrying ${n}...`);',
+			"debugWarn(`retrying ${n}...`);",
 			'console.error("failed...");',
 			"// Loading... in a comment",
 			"/* Loading... */",
@@ -39,14 +39,22 @@ describe("ascii-ellipsis", () => {
 
 describe("title-case", () => {
 	it('flags "Export (Server)" and Title Case props or JSX text', () => {
-		expect(rules('export const A = () => <Button label="Export (Server)" />;')).toEqual(["title-case"]);
+		expect(rules('export const A = () => <Button label="Export (Server)" />;')).toEqual([
+			"title-case",
+		]);
 		expect(rules('export const ops = [{ label: "Less Than" }];')).toEqual(["title-case"]);
 		expect(rules("export const A = () => <b>Status Reason</b>;")).toEqual(["title-case"]);
 	});
 
 	it('passes "Open in Advanced Find", proper nouns, acronyms and sentence case', () => {
-		expect(rules('export const A = () => <Button label="Open in Advanced Find" />;')).toEqual([]);
-		expect(rules('export const A = () => <Tab title="Copy FetchXML to the Power Automate flow" />;')).toEqual([]);
+		expect(rules('export const A = () => <Button label="Open in Advanced Find" />;')).toEqual(
+			[],
+		);
+		expect(
+			rules(
+				'export const A = () => <Tab title="Copy FetchXML to the Power Automate flow" />;',
+			),
+		).toEqual([]);
 		expect(rules('export const A = () => <Tab title="Export as CSV" />;')).toEqual([]);
 		expect(rules('export const A = () => <Tab title="Not equals" />;')).toEqual([]);
 		expect(titleCaseWords("Done. Close it")).toEqual([]);
@@ -59,12 +67,18 @@ describe("title-case", () => {
 	});
 
 	it("doesn't check case for a 7-word label", () => {
-		expect(rules('export const A = () => <Tip content="One Two Three Four Five Six Seven" />;')).toEqual([]);
-		expect(rules('export const A = () => <Tip content="One Two Three Four Five Six" />;')).toEqual(["title-case"]);
+		expect(
+			rules('export const A = () => <Tip content="One Two Three Four Five Six Seven" />;'),
+		).toEqual([]);
+		expect(
+			rules('export const A = () => <Tip content="One Two Three Four Five Six" />;'),
+		).toEqual(["title-case"]);
 	});
 
 	it("only checks label props and JSX text, not other strings", () => {
-		expect(rules('export const x = { name: "Less Than" }; export const y = "Less Than";')).toEqual([]);
+		expect(
+			rules('export const x = { name: "Less Than" }; export const y = "Less Than";'),
+		).toEqual([]);
 		expect(rules('export const A = () => <Foo className="Less Than" />;')).toEqual([]);
 	});
 });
@@ -72,10 +86,18 @@ describe("title-case", () => {
 describe("allowlist", () => {
 	const src = 'export const A = () => <Spinner label="Loading..." />;';
 	it("skips an exact file and text match, and nothing else", () => {
-		const entry = { file: "src/A.tsx", text: "Loading...", reason: "quoted from another product" };
+		const entry = {
+			file: "src/A.tsx",
+			text: "Loading...",
+			reason: "quoted from another product",
+		};
 		expect(scan([{ file: "src/A.tsx", text: src }], { allowlist: [entry] })).toEqual([]);
 		expect(scan([{ file: "src/B.tsx", text: src }], { allowlist: [entry] })).toHaveLength(1);
-		expect(scan([{ file: "src/A.tsx", text: src }], { allowlist: [{ ...entry, text: "Loading…" }] })).toHaveLength(1);
+		expect(
+			scan([{ file: "src/A.tsx", text: src }], {
+				allowlist: [{ ...entry, text: "Loading…" }],
+			}),
+		).toHaveLength(1);
 		expect(scan(src, { file: "src/A.tsx", allowlist: [entry] })).toEqual([]);
 	});
 });
