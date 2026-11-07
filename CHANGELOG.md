@@ -30,7 +30,7 @@ FetchXML Studio 1.5 moves to Power Platform ToolBox 1.2.7 and its host APIs, mak
   - record links open in the connection's browser profile;
   - changing the tool's connection in place resets everything that came from the old environment.
 - **Tree and scope (#24, #25):** right-click a tree row to add nodes; a collapsible query scope section; the publisher and solution selection is remembered per environment.
-- **Docs-driven helpers (#98)** in the property editors.
+- **Docs-driven helpers (#98):** a wildcard helper for `like` values (with **Match literally**), the total record count, and a record picker for the hierarchy operators.
 
 ### 🔧 Changed
 
