@@ -23,11 +23,10 @@ export interface FormatFetchXmlOptions {
 }
 
 class FormatError extends Error {
-	constructor(
-		message: string,
-		readonly offset: number,
-	) {
+	readonly offset: number;
+	constructor(message: string, offset: number) {
 		super(message);
+		this.offset = offset;
 	}
 }
 
