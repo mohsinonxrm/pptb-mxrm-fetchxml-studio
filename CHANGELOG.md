@@ -217,6 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **A shared overflow command bar and tab row, not used yet (#232).** `OverflowToolbar` and `OverflowTabList` (`src/shared/components/commandBar/`) put a Fluent Toolbar or TabList inside Overflow: commands and tabs that don't fit move into a More menu instead of wrapping, keeping their icon, disabled reason and submenu there; pinned commands and the selected tab stay visible. No bar uses them yet; the bars move onto them in the rest of #232. `stubOverflowWidths` in `ui.ts` lets component tests lay Overflow out in jsdom.
+
 - **A safety net of component and golden tests before the UI overhaul (#189, part 1).**
   - **Component-test helpers** (`src/shared/testing/ui.ts`): render in a `FluentProvider` with React's `act`, a stubbed ToolBox host (one connection, notifications collected), and queries that find Fluent's portals. No new dependencies.
   - **Destructive dialogs:** each dialog's tests check the environment and the scope it names (#69), plus:
