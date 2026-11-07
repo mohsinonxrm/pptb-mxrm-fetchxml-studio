@@ -144,7 +144,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### ⌨️ Keyboard shortcuts
 
-> **Not all active yet.** This is the planned set (#186). The first five rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
+> **Not all active yet.** This is the planned set (#186). The first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
 
 | Action | Keys | Where |
 | --- | --- | --- |
@@ -153,6 +153,9 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 | Keyboard shortcuts | `Ctrl+/` | Outside text fields and the editor |
 | Undo | `Ctrl+Z` | Outside text fields and the editor, which keep their own undo |
 | Redo | `Ctrl+Y` or `Ctrl+Shift+Z` | Outside text fields and the editor |
+| Go to the next area | `Ctrl+F6` | Everywhere, including text fields and the editor. Order: app bar, builder, output |
+| Go to the previous area | `Ctrl+Shift+F6` | Everywhere, including text fields and the editor |
+| Go to the newest notification | `F2` | Everywhere, including text fields and the editor (FetchXML has no rename, so the editor's `F2` is free) |
 | Remove the node | `Delete` | Handled where focus is: a focused tree row |
 | Open the row or cell menu | `Shift+F10` or `Menu` | Handled where focus is: tree row, results cell |
 | Close the top-most popup or drawer | `Escape` | Handled where focus is. It does not stop Retrieve all |

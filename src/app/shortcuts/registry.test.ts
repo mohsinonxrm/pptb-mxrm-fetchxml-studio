@@ -73,6 +73,24 @@ describe("matches", () => {
 		expect(matches(ev("Delete"), "removeNode", win)).toBe(true);
 	});
 
+	it("matches the model-driven app keys, with Ctrl+F6 and Ctrl+Shift+F6 exact", () => {
+		expect(matches(ev("F6", { ctrlKey: true }), "nextArea", win)).toBe(true);
+		expect(matches(ev("F6", { ctrlKey: true, shiftKey: true }), "nextArea", win)).toBe(false);
+		expect(matches(ev("F6", { ctrlKey: true, shiftKey: true }), "previousArea", win)).toBe(true);
+		expect(matches(ev("F6", { ctrlKey: true }), "previousArea", win)).toBe(false);
+		expect(matches(ev("F6"), "nextArea", win)).toBe(false);
+		expect(matches(ev("F6", { metaKey: true }), "nextArea", mac)).toBe(true);
+		expect(matches(ev("F6", { ctrlKey: true }), "nextArea", mac)).toBe(false);
+	});
+
+	it("matches F2 with no modifiers only", () => {
+		expect(matches(ev("F2"), "toasts", win)).toBe(true);
+		expect(matches(ev("F2"), "toasts", mac)).toBe(true);
+		for (const mods of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }]) {
+			expect(matches(ev("F2", mods), "toasts", win), JSON.stringify(mods)).toBe(false);
+		}
+	});
+
 	it("throws for an unknown id", () => {
 		expect(() => matches(ev("a"), "nope", win)).toThrow();
 	});
@@ -101,6 +119,7 @@ describe("isEditableTarget", () => {
 
 	it("goes with the registry: run and save work in fields, undo, redo and the dialog do not", () => {
 		expect(getEntry("run").inEditable && getEntry("save").inEditable).toBe(true);
+		for (const id of ["nextArea", "previousArea", "toasts"]) expect(getEntry(id).inEditable, id).toBe(true);
 		expect(getEntry("undo").inEditable || getEntry("redo").inEditable || getEntry("shortcuts").inEditable).toBe(false);
 	});
 });
@@ -109,7 +128,7 @@ describe("registry shape", () => {
 	const globals = SHORTCUTS.filter((s) => s.scope === "global");
 
 	it("has the decided global entries", () => {
-		expect(globals.map((s) => s.id)).toEqual(["run", "save", "shortcuts", "undo", "redo"]);
+		expect(globals.map((s) => s.id)).toEqual(["run", "save", "shortcuts", "undo", "redo", "nextArea", "previousArea", "toasts"]);
 	});
 
 	it("has unique ids and one aria combination per display key", () => {

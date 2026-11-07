@@ -6,8 +6,12 @@
  * are handled locally (the tree, the grid, a popup, the editor) and are listed for the shortcuts
  * dialog and the README only.
  *
- * TODO(#186 Q5): pane-navigation keys, the toast key and the builder toggle wait for the owner's
- * decision. Not included on purpose: F5 (decided no) and anything PPTB 1.2.7 owns (PPTB_RESERVED).
+ * Owner decision on #186 Q5 (model-driven app keys): Ctrl+F6 and Ctrl+Shift+F6 move between areas,
+ * F2 goes to the newest notification. They type no text, so they work in fields too. F2 also works
+ * inside Monaco: Monaco binds it to "rename symbol", but FetchXML (XML) has no rename provider, so
+ * nothing is lost. The handler must run before Monaco's own key handling for this to hold.
+ * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB 1.2.7 owns
+ * (PPTB_RESERVED).
  */
 
 export type ShortcutScope = "global" | "documented";
@@ -32,6 +36,10 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 	// Text fields and Monaco keep their own undo (owner decision on #192).
 	{ id: "undo", label: "Undo", keys: ["Ctrl+Z"], aria: "Control+Z", scope: "global", inEditable: false },
 	{ id: "redo", label: "Redo", keys: ["Ctrl+Y", "Ctrl+Shift+Z"], aria: "Control+Y Control+Shift+Z", scope: "global", inEditable: false },
+	// Model-driven app keys (#186 Q5). Function keys, so they are safe in text fields and Monaco.
+	{ id: "nextArea", label: "Go to the next area", keys: ["Ctrl+F6"], aria: "Control+F6", scope: "global", inEditable: true },
+	{ id: "previousArea", label: "Go to the previous area", keys: ["Ctrl+Shift+F6"], aria: "Control+Shift+F6", scope: "global", inEditable: true },
+	{ id: "toasts", label: "Go to the newest notification", keys: ["F2"], aria: "F2", scope: "global", inEditable: true },
 	// Documented only: handled where the focus is.
 	{ id: "removeNode", label: "Remove the node", keys: ["Delete"], aria: "Delete", scope: "documented", inEditable: false },
 	{ id: "openMenu", label: "Open the row or cell menu", keys: ["Shift+F10", "Menu"], aria: "Shift+F10 ContextMenu", scope: "documented", inEditable: false },
