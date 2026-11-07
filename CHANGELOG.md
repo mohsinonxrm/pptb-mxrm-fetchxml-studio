@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **A shared, accessible `PaneSplitter` (#234).** The WAI-ARIA window splitter: arrow keys (16 px, Shift 64 px), Home/End and Enter, pointer capture, double-click reset, a debounced commit and a forced-colors look. Built and tested, but not used yet (#234).
 - **Component and golden tests before the UI overhaul (#189, part 1).** Component-test helpers (`src/shared/testing/ui.ts`) render in a `FluentProvider` with a stubbed ToolBox host. Dialog tests cover the destructive dialogs (Delete, Bulk delete, Run workflow, Activate / Deactivate, Close as won, Save view): environment and scope named (#69), undo text, typed confirmation, single submission, and Cancel disabled while running. Golden snippets compare every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, named by article. Removing the typed-confirmation gate or allowing a read-only share to be overwritten fails them.
 - **Every tag is checked in PPTB first.** RELEASING.md's *Before every tag* step runs the rehearsal's `package` tarball in PPTB with a short smoke list before any beta, stable or hotfix tag.
 - **Dev-only advisories fixed (#84):** vite 7.3.6 → 7.3.7 and undici 8.11.2 → 8.12.2 (through jsdom), so `npm audit` reports 0 high or critical. Both are build and test tools, not in the shipped bundle.
