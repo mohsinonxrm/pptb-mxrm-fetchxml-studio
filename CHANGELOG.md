@@ -217,6 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **The code is formatted with Prettier, and CI checks it (#205).** One formatting-only commit applies `.prettierrc` (tabs, 100 columns) to the 200-odd files that didn't match. It's listed in `.git-blame-ignore-revs`, so `git blame` skips it. `npm run format:check` now runs in CI, after lint. Captured test data (`__fixtures__`) and Markdown are left as written. The built bundle is unchanged apart from where JSX text breaks its spaces (`"Advisories "` → `"Advisories"` + `" "`), which renders the same.
+
 - **A safety net of component and golden tests before the UI overhaul (#189, part 1).**
   - **Component-test helpers** (`src/shared/testing/ui.ts`): render in a `FluentProvider` with React's `act`, a stubbed ToolBox host (one connection, notifications collected), and queries that find Fluent's portals. No new dependencies.
   - **Destructive dialogs:** each dialog's tests check the environment and the scope it names (#69), plus:
