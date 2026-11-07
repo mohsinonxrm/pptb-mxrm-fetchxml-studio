@@ -3,10 +3,13 @@
  * pattern: https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/
  *
  * The component is controlled: it reports every size change through `onChange` and reports the
- * settled size through `onCommit` (pointer release, or 250 ms after the last key), which is the
- * moment to persist it. The caller owns the size and the layout it drives.
+ * settled size through `onCommit`, which is the moment to persist it: pointer release (only if the
+ * drag changed the size), a double-click reset (only if it changed), Enter (at once), or 250 ms
+ * after the last arrow, Home or End key (also flushed if the splitter unmounts first). Keys are
+ * ignored while a drag is active, and only the primary pointer drags. The caller owns the size and
+ * the layout it drives.
  */
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { createFocusOutlineStyle, makeStyles, mergeClasses, Tooltip, tokens } from "@fluentui/react-components";
 
 /** Arrow key step in pixels; Shift uses the large step */
@@ -26,7 +29,7 @@ export interface PaneSplitterProps {
 	defaultValue: number;
 	/** Called with the clamped size on every change */
 	onChange: (value: number) => void;
-	/** Called once the change has settled: pointer release or lost capture, a reset, or 250 ms after the last key */
+	/** Called once the change has settled: pointer release or lost capture after a change, a reset, Enter, or 250 ms after the last arrow, Home or End key */
 	onCommit: (value: number) => void;
 	/** The accessible name, for example "Resize the builder pane (size is remembered)" */
 	label: string;
@@ -49,9 +52,11 @@ const useStyles = makeStyles({
 			backgroundColor: tokens.colorNeutralStroke2,
 		},
 		":hover::after": { backgroundColor: tokens.colorBrandStroke1 },
+		":focus-visible::after": { backgroundColor: tokens.colorBrandStroke1 },
 		"@media (forced-colors: active)": {
 			"::after": { backgroundColor: "ButtonBorder", forcedColorAdjust: "none" },
 			":hover::after": { backgroundColor: "Highlight" },
+			":focus-visible::after": { backgroundColor: "Highlight" },
 		},
 		...createFocusOutlineStyle({ style: { outlineOffset: "-2px" } }),
 	},
@@ -61,6 +66,7 @@ const useStyles = makeStyles({
 		cursor: "col-resize",
 		"::after": { top: 0, bottom: 0, left: "calc(50% - 0.5px)", width: "1px" },
 		":hover::after": { left: "calc(50% - 1px)", width: "2px" },
+		":focus-visible::after": { left: "calc(50% - 1px)", width: "2px" },
 	},
 	horizontal: {
 		height: "8px",
@@ -68,8 +74,9 @@ const useStyles = makeStyles({
 		cursor: "row-resize",
 		"::after": { left: 0, right: 0, top: "calc(50% - 0.5px)", height: "1px" },
 		":hover::after": { top: "calc(50% - 1px)", height: "2px" },
+		":focus-visible::after": { top: "calc(50% - 1px)", height: "2px" },
 	},
-	// Focus-visible and drag look like hover. Griffel can't share one rule, so these repeat it.
+	// Drag looks like hover (focus-visible has its own rules above)
 	verticalActive: {
 		"::after": { left: "calc(50% - 1px)", width: "2px", backgroundColor: tokens.colorBrandStroke1 },
 		"@media (forced-colors: active)": { "::after": { backgroundColor: "Highlight" } },
@@ -80,33 +87,40 @@ const useStyles = makeStyles({
 	},
 });
 
-const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+interface DragState {
+	pointerId: number;
+	start: number;
+	startValue: number;
+}
 
 export function PaneSplitter({ orientation, value, min, max, defaultValue, onChange, onCommit, label, description, controls }: PaneSplitterProps) {
 	const styles = useStyles();
 	const vertical = orientation === "vertical";
+	// Tolerate swapped or crossed limits (a window too small for the pane)
+	const lo = Math.min(min, max);
+	const hi = Math.max(min, max);
+	const shown = clamp(value, lo, hi);
 	const [dragging, setDragging] = useState(false);
-	const [focusVisible, setFocusVisible] = useState(false);
+	const [tipVisible, setTipVisible] = useState(false);
 
 	// Latest size and callbacks, so rapid keys and the debounce never use a stale render
-	const latest = useRef(value);
-	latest.current = value;
+	const latest = useRef(shown);
+	latest.current = shown;
 	const callbacks = useRef({ onChange, onCommit });
 	callbacks.current = { onChange, onCommit };
 
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const drag = useRef<{ start: number; startValue: number } | null>(null);
+	const drag = useRef<DragState | null>(null);
 	const previousUserSelect = useRef<string | null>(null);
 
-	const change = useCallback(
-		(next: number) => {
-			const clamped = clamp(next, min, max);
-			latest.current = clamped;
-			callbacks.current.onChange(clamped);
-			return clamped;
-		},
-		[min, max],
-	);
+	const change = (next: number) => {
+		const clamped = clamp(next, lo, hi);
+		latest.current = clamped;
+		callbacks.current.onChange(clamped);
+		return clamped;
+	};
 
 	const clearTimer = () => {
 		if (timer.current !== null) {
@@ -129,9 +143,11 @@ export function PaneSplitter({ orientation, value, min, max, defaultValue, onCha
 
 	useEffect(
 		() => () => {
-			clearTimer();
+			// A key change still waiting for its debounce is saved, not dropped
+			if (timer.current !== null) commitNow();
 			restoreSelection();
 		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- only refs and helpers that read refs
 		[],
 	);
 
@@ -142,85 +158,90 @@ export function PaneSplitter({ orientation, value, min, max, defaultValue, onCha
 		let next: number;
 		if (event.key === decrease) next = latest.current - step;
 		else if (event.key === increase) next = latest.current + step;
-		else if (event.key === "Home") next = min;
-		else if (event.key === "End") next = max;
+		else if (event.key === "Home") next = lo;
+		else if (event.key === "End") next = hi;
 		else if (event.key === "Enter") next = defaultValue;
 		else return;
 		event.preventDefault();
+		if (drag.current) return;
 		change(next);
+		if (event.key === "Enter") {
+			commitNow();
+			return;
+		}
 		clearTimer();
 		timer.current = setTimeout(commitNow, SPLITTER_COMMIT_DELAY_MS);
 	};
 
-	const endDrag = () => {
-		if (!drag.current) return;
+	const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+		const current = drag.current;
+		if (!current || event.pointerId !== current.pointerId) return;
 		drag.current = null;
 		setDragging(false);
 		restoreSelection();
-		commitNow();
+		// A plain click, or a drag that ended where it began, has nothing to save
+		if (latest.current !== current.startValue) commitNow();
 	};
 
 	const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-		if (event.button !== 0) return;
+		if (event.button !== 0 || !event.isPrimary || drag.current) return;
 		event.preventDefault();
 		event.currentTarget.setPointerCapture?.(event.pointerId);
-		drag.current = { start: vertical ? event.clientX : event.clientY, startValue: latest.current };
+		clearTimer();
+		drag.current = { pointerId: event.pointerId, start: vertical ? event.clientX : event.clientY, startValue: latest.current };
 		previousUserSelect.current = document.body.style.userSelect;
 		document.body.style.userSelect = "none";
 		setDragging(true);
 	};
 
 	const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-		if (!drag.current) return;
+		const current = drag.current;
+		if (!current || event.pointerId !== current.pointerId) return;
 		const position = vertical ? event.clientX : event.clientY;
-		change(drag.current.startValue + position - drag.current.start);
+		change(current.startValue + position - current.start);
 	};
 
 	const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-		if (!drag.current) return;
+		const current = drag.current;
+		if (!current || event.pointerId !== current.pointerId) return;
 		try {
 			event.currentTarget.releasePointerCapture?.(event.pointerId);
 		} catch {
 			// Already released
 		}
-		endDrag();
+		endDrag(event);
 	};
 
 	const onDoubleClick = () => {
+		if (drag.current) return;
+		const before = latest.current;
 		change(defaultValue);
-		commitNow();
+		if (latest.current !== before) commitNow();
 	};
 
-	const active = dragging || focusVisible;
 	const splitter = (
 		<div
 			role="separator"
 			aria-orientation={orientation}
 			aria-label={label}
-			aria-valuenow={value}
-			aria-valuemin={min}
-			aria-valuemax={max}
-			aria-valuetext={`${value} pixels`}
+			aria-valuenow={shown}
+			aria-valuemin={lo}
+			aria-valuemax={hi}
+			aria-valuetext={`${shown} pixels`}
 			aria-controls={controls}
 			tabIndex={0}
-			className={mergeClasses(
-				styles.root,
-				vertical ? styles.vertical : styles.horizontal,
-				active && (vertical ? styles.verticalActive : styles.horizontalActive),
-			)}
+			className={mergeClasses(styles.root, vertical ? styles.vertical : styles.horizontal, dragging && (vertical ? styles.verticalActive : styles.horizontalActive))}
 			onKeyDown={onKeyDown}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
 			onPointerUp={onPointerUp}
 			onLostPointerCapture={endDrag}
 			onDoubleClick={onDoubleClick}
-			onFocus={(event) => setFocusVisible(event.currentTarget.matches(":focus-visible"))}
-			onBlur={() => setFocusVisible(false)}
 		/>
 	);
 
 	return description ? (
-		<Tooltip relationship="description" content={description}>
+		<Tooltip relationship="description" content={description} visible={tipVisible && !dragging} onVisibleChange={(_, data) => setTipVisible(data.visible)}>
 			{splitter}
 		</Tooltip>
 	) : (
