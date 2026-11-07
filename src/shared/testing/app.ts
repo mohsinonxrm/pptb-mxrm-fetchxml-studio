@@ -10,6 +10,10 @@ import { createElement } from "react";
 import { act } from "react";
 import { createFakeDataverse, sampleTables, type FakeDataverseOptions, type FakeTable } from "./fakeDataverse";
 import { flush, render } from "./ui";
+import { resetDataverseSessionCache } from "../../features/fetchxml/api/sessionCache";
+import { clearMetadataCache } from "../../features/fetchxml/api/dataverseMetadata";
+import { metadataCache } from "../../features/fetchxml/state/cache";
+import { clearMetadataLoadErrors } from "../../features/fetchxml/ui/LeftPane/PropertiesPanel/metadataLoadErrors";
 
 export interface AppHarnessOptions extends FakeDataverseOptions {
 	tables?: FakeTable[];
@@ -28,6 +32,12 @@ export interface AppHarness {
 }
 
 export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHarness> {
+	// Module-level caches outlive a render: forget the previous test's Dataverse, as a connection
+	// change does (AppShell), so each test starts from a fresh session
+	resetDataverseSessionCache();
+	clearMetadataCache();
+	metadataCache.clear();
+	clearMetadataLoadErrors();
 	const dataverse = createFakeDataverse(options.tables ?? sampleTables(), options);
 	const connection = options.connection ?? { id: "c1", name: "Test environment", url: "https://test.crm.dynamics.com/", environment: "Dev" };
 	const notifications: AppHarness["notifications"] = [];

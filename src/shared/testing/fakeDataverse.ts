@@ -151,6 +151,16 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		const fetchMatch = /^([a-z_]+)\?fetchXml=(.*)$/i.exec(query);
 		if (fetchMatch) return runFetch(fetchMatch[1], decodeURIComponent(fetchMatch[2]));
 
+		// A saved view run by its id: Dataverse runs the view's FetchXML and pages with @odata.nextLink
+		const byId = /^([a-z_]+)\?(savedQuery|userQuery)=([0-9a-f-]+)$/i.exec(query);
+		if (byId) {
+			const type = byId[2] === "savedQuery" ? "system" : "personal";
+			const view = views.find((v) => v.type === type && v.id === byId[3]);
+			if (!view) throw new Error(`0x80040217: ${byId[2]} With Id = ${byId[3]} Does Not Exist`);
+			const { "@Microsoft.Dynamics.CRM.morerecords": more, ...page } = await runFetch(byId[1], view.fetchxml);
+			return more ? { ...page, "@odata.nextLink": `${query}&$skiptoken=2` } : page;
+		}
+
 		const privilege = /RetrieveUserPrivilegeByPrivilegeName\(PrivilegeName='([^']+)'\)/.exec(query);
 		if (privilege) {
 			const held = options.privileges === undefined || options.privileges === "all" || options.privileges.has(privilege[1]);
