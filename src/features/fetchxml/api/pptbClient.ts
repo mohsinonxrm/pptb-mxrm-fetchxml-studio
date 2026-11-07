@@ -55,7 +55,7 @@ import {
 } from "../model/closeActions";
 
 import { functionWithString, odataString } from "./odata";
-import { buildRecordNameQuery, buildRecordSearchQuery, type RecordSearchTarget } from "./recordSearch";
+import { buildRecordNameQuery, buildRecordSearchQuery, isGuid, normalizeGuid, type RecordSearchTarget } from "./recordSearch";
 import { USER_SETTINGS_TIME_ZONE_COLUMNS, timeZoneFromUserSettings, type DataverseTimeZone } from "../model/dateTimeValues";
 export interface EntityMetadata {
 	LogicalName: string;
@@ -1852,6 +1852,42 @@ export async function getDefaultPublicView(entityLogicalName: string): Promise<{
 		console.warn(`getDefaultPublicView(${entityLogicalName}) failed:`, error);
 		return null;
 	}
+}
+
+/** A view that stayed a default public view after another became the default (#307) */
+export interface DefaultViewNotCleared {
+	id: string;
+	name: string;
+	error: string;
+}
+
+/**
+ * After a view becomes the entity's default public view: clears `isdefault` on the entity's other
+ * active default public views. Only one active public view can be the default, but Dataverse doesn't clear
+ * the previous one when another is created or updated with `isdefault` (verified 2026-11-02, #307).
+ * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
+ * @returns The views that couldn't be cleared, with Dataverse's error; empty when all were
+ */
+export async function clearOtherDefaultPublicViews(entityLogicalName: string, defaultViewId: string): Promise<DefaultViewNotCleared[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+	if (!isGuid(defaultViewId)) {
+		throw new Error(`Not a view ID: ${defaultViewId}`);
+	}
+	const result = await window.dataverseAPI!.queryData(
+		`savedqueries?$select=savedqueryid,name&$filter=returnedtypecode eq '${odataString(entityLogicalName)}' and querytype eq 0 and statecode eq 0 and isdefault eq true and savedqueryid ne ${normalizeGuid(defaultViewId)}`,
+	);
+	const notCleared: DefaultViewNotCleared[] = [];
+	for (const view of result.value ?? []) {
+		const id = view.savedqueryid as string;
+		try {
+			await updateSavedQuery(id, { isdefault: false });
+		} catch (error) {
+			notCleared.push({ id, name: view.name as string, error: formatDataverseError(error, "Couldn't clear the default view") });
+		}
+	}
+	return notCleared;
 }
 
 /**
