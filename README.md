@@ -270,6 +270,9 @@ npm run lint
 npm run format:check
 ```
 
+- **Component tests** (`*.test.ts` next to a component) render it in a `FluentProvider` with React's `act` and a stubbed ToolBox host, using the helpers in `src/shared/testing/ui.ts` (`render`, `click`, `typeInto`, `installHost`, …). There's no Testing Library: React and the DOM only. Fluent dialogs and menus render in portals, so the helpers search `document`.
+- **Golden code snippets:** `codeGenerators.golden.test.ts` runs every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, and compares the output with its snapshot. After an intended change, run `npx vitest run -u src/features/fetchxml/engine/codeGenerators.golden.test.ts` and review the snapshot diff in the PR.
+
 ### Debug Logging
 
 Enable debug logging in the browser console:
