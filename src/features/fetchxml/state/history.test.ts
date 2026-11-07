@@ -10,6 +10,7 @@ import {
 	createHistory,
 	lastEntryId,
 	mapSnapshots,
+	nearestExisting,
 	record,
 	redo,
 	redoLabel,
@@ -17,6 +18,7 @@ import {
 	undo,
 	undoLabel,
 	type History,
+	type RestoreContext,
 } from "./history";
 
 // #192: the undo history core, before it is wired into builderStore
@@ -97,15 +99,70 @@ describe("record, undo and redo", () => {
 		expect(h.present.text).toBe("b");
 	});
 
-	it("passes the stored snapshot and the present to restore", () => {
-		let h = createHistory(snap("a"));
+	it("applies the restore given to createHistory on every undo and redo", () => {
+		const calls: RestoreContext[] = [];
+		const restore = (s: Snap, present: Snap, context: RestoreContext): Snap => {
+			calls.push(context);
+			return { ...s, width: present.width };
+		};
+		let h = createHistory(snap("a"), { restore });
 		h = at(h, "b");
 		h = skip(h, { ...h.present, width: 250 }, { keepRedo: true });
-		const carryWidth = (s: Snap, present: Snap): Snap => ({ ...s, width: present.width });
-		h = undo(h, carryWidth);
+		h = undo(h);
 		expect(h.present).toEqual(snap("a", { width: 250 }));
-		h = redo(h, carryWidth);
+		h = redo(h);
 		expect(h.present).toEqual(snap("b", { width: 250 }));
+		expect(calls.map((c) => c.direction)).toEqual(["undo", "redo"]);
+	});
+});
+
+describe("selection target", () => {
+	it("stores the target with the step and hands it to restore both ways", () => {
+		const seen: RestoreContext[] = [];
+		const restore = (s: Snap, _present: Snap, context: RestoreContext): Snap => {
+			seen.push(context);
+			return s;
+		};
+		let h = createHistory(snap("a", { selected: "other" }), { restore });
+		// A context-menu delete of n2 while "other" stays selected
+		h = record(h, snap("b", { selected: "other" }), { label: "Delete filter", target: "n2", now: 0 });
+		expect(h.past[0].target).toBe("n2");
+		h = redo(undo(h));
+		expect(seen).toEqual([
+			{ direction: "undo", target: "n2" },
+			{ direction: "redo", target: "n2" },
+		]);
+	});
+
+	it("gives an undefined target when the step has none", () => {
+		let seen: RestoreContext | undefined;
+		let h = createHistory(snap("a"), {
+			restore: (s, _p, c) => {
+				seen = c;
+				return s;
+			},
+		});
+		h = undo(at(h, "b"));
+		expect(seen).toEqual({ direction: "undo", target: undefined });
+		expect("target" in h.future[0]).toBe(false);
+	});
+
+	it("uses the outermost transaction's target", () => {
+		let h = createHistory(snap("a"));
+		h = beginTransaction(h, { label: "Join", target: "link-1", now: 0 });
+		h = beginTransaction(h, { label: "Inner", target: "inner", now: 0 });
+		h = at(h, "b");
+		h = commitTransaction(commitTransaction(h));
+		expect(h.past[0].target).toBe("link-1");
+	});
+
+	it("nearestExisting picks the target, else its nearest existing ancestor, else null", () => {
+		const inSnapshot = new Set(["root", "filter-1"]);
+		const exists = (id: string) => inSnapshot.has(id);
+		expect(nearestExisting(["filter-1", "root"], exists)).toBe("filter-1");
+		expect(nearestExisting(["cond-9", "filter-2", "filter-1", "root"], exists)).toBe("filter-1");
+		expect(nearestExisting(["gone", "also-gone"], exists)).toBeNull();
+		expect(nearestExisting([], exists)).toBeNull();
 	});
 });
 
@@ -211,6 +268,20 @@ describe("merging", () => {
 		expect(h.past).toHaveLength(3);
 	});
 
+	it("keeps typing one step when the layout sync runs after each keystroke", () => {
+		// UPDATE_NODE sets layoutNeedsSync; an AppShell effect then dispatches SYNC_LAYOUT_WITH_FETCHXML
+		let h = createHistory(snap(""));
+		let text = "";
+		for (let i = 0; i < 5; i++) {
+			text += "x";
+			h = at(h, text, i * 150, key, "Edit condition");
+			h = skip(h, { ...h.present, width: h.present.width + 1 }, { keepRedo: true, endsMerge: false });
+		}
+		expect(h.past).toHaveLength(1);
+		expect(h.present.text).toBe("xxxxx");
+		expect(undo(h).present.text).toBe("");
+	});
+
 	it("keeps the first edit's id and label", () => {
 		let h = createHistory(snap(""));
 		h = at(h, "a", 0, key, "Edit condition");
@@ -310,13 +381,48 @@ describe("transactions", () => {
 		expect(undo(h).present.text).toBe("");
 	});
 
-	it("throws clearly on a commit without a begin, and on undo or redo inside one", () => {
+	it("throws clearly on a commit without a begin, and on one commit too many", () => {
 		let h = createHistory(snap("a"));
 		expect(() => commitTransaction(h)).toThrow(/no transaction is open/);
+		h = commitTransaction(beginTransaction(h, { label: "T", now: 0 }));
+		expect(() => commitTransaction(h)).toThrow(/no transaction is open/);
+	});
+
+	it("leaves undo and redo unchanged while a transaction is open, and says so", () => {
+		let h = createHistory(snap("a"));
 		h = at(h, "b");
+		h = at(h, "c");
+		h = undo(h);
 		h = beginTransaction(h, { label: "T", now: 0 });
-		expect(() => undo(h)).toThrow(/transaction is open/);
-		expect(() => redo(h)).toThrow(/transaction is open/);
+		expect(canUndo(h)).toBe(false);
+		expect(canRedo(h)).toBe(false);
+		expect(undo(h)).toBe(h);
+		expect(redo(h)).toBe(h);
+		h = commitTransaction(h);
+		expect(canUndo(h)).toBe(true);
+		expect(canRedo(h)).toBe(true);
+	});
+
+	it("doesn't merge across a selection change inside a transaction", () => {
+		const key = "n1:value";
+		let h = createHistory(snap(""));
+		h = at(h, "a", 0, key);
+		h = beginTransaction(h, { label: "Select", now: 100 });
+		h = skip(h, { ...h.present, selected: "n2" }, { keepRedo: true });
+		h = skip(h, { ...h.present, selected: "n1" }, { keepRedo: true });
+		h = commitTransaction(h);
+		h = at(h, "ab", 200, key);
+		expect(h.past).toHaveLength(2);
+	});
+
+	it("ends a merge on an outermost commit that records nothing", () => {
+		const key = "n1:value";
+		let h = createHistory(snap(""));
+		h = at(h, "a", 0, key);
+		h = commitTransaction(beginTransaction(h, { label: "Empty", now: 100 }));
+		expect(h.openMerge).toBeNull();
+		h = at(h, "ab", 200, key);
+		expect(h.past).toHaveLength(2);
 	});
 
 	it("restarts from a clear inside it", () => {
@@ -377,14 +483,21 @@ describe("skip and redo", () => {
 		expect(h.present).toEqual(snap("a", { selected: "z" }));
 	});
 
-	it("with keepRedo and a restore that carries the change, redo keeps it", () => {
-		const carryWidth = (s: Snap, present: Snap): Snap => ({ ...s, width: present.width });
-		let h = createHistory(snap("a"));
+	it("with keepRedo and the history's restore carrying the change, redo keeps it", () => {
+		const restore = (s: Snap, present: Snap): Snap => ({ ...s, width: present.width });
+		let h = createHistory(snap("a"), { restore });
 		h = at(h, "b");
-		h = undo(h, carryWidth);
+		h = undo(h);
 		h = skip(h, { ...h.present, width: 300 }, { keepRedo: true });
-		h = redo(h, carryWidth);
+		h = redo(h);
 		expect(h.present).toEqual(snap("b", { width: 300 }));
+	});
+
+	it("ends a merge by default, but not with endsMerge: false", () => {
+		let h = createHistory(snap(""));
+		h = at(h, "a", 0, "k");
+		expect(skip(h, { ...h.present, width: 1 }).openMerge).toBeNull();
+		expect(skip(h, { ...h.present, width: 1 }, { endsMerge: false }).openMerge).toEqual({ key: "k", at: 0 });
 	});
 });
 
@@ -407,6 +520,7 @@ describe("clear", () => {
 		let h = createHistory(snap(""));
 		h = at(h, "a", 0, "k");
 		h = clear(h, snap("new"));
+		expect(h.openMerge).toBeNull();
 		h = at(h, "newx", 100, "k");
 		expect(h.past).toHaveLength(1);
 		expect(undo(h).present.text).toBe("new");
@@ -434,6 +548,12 @@ describe("labels", () => {
 		h = undo(h);
 		expect(undoLabel(h)).toBeNull();
 		expect(redoLabel(h)).toBe("Add filter");
+		h = redo(h);
+		expect(undoLabel(h)).toBe("Add filter");
+		expect(redoLabel(h)).toBe("Delete filter group");
+		h = redo(h);
+		expect(undoLabel(h)).toBe("Delete filter group");
+		expect(redoLabel(h)).toBeNull();
 	});
 
 	it("keeps a step's id across undo and redo", () => {
@@ -456,5 +576,14 @@ describe("mapSnapshots", () => {
 		expect(h.future[0].snapshot.selected).toBe("patched");
 		expect(h.past[0]).toBe(untouched);
 		expect(h.present.selected).toBeNull();
+	});
+
+	it("patches an open transaction's base, so its step undoes to the patched state", () => {
+		let h = createHistory(snap("a"));
+		h = beginTransaction(h, { label: "T", now: 0 });
+		h = at(h, "b");
+		h = mapSnapshots(h, (s) => (s.text === "a" ? { ...s, selected: "patched" } : s));
+		h = commitTransaction(h);
+		expect(undo(h).present).toEqual(snap("a", { selected: "patched" }));
 	});
 });
