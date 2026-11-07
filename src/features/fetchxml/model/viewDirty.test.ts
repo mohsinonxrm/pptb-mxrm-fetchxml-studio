@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isViewDirty, normalizeFetchXml } from "./viewDirty";
-import { generateLayoutXml, parseLayoutXml, reorderColumns, updateColumnWidth } from "./layoutxml";
+import { generateLayoutFromFetchXml, generateLayoutXml, parseLayoutXml, reorderColumns, updateColumnWidth } from "./layoutxml";
+import { parseFetchXml } from "./fetchxmlParser";
 
 /** FetchXML as Dataverse stores the Active Accounts system view: legacy attributes and spelled-out defaults */
 const STORED_FETCHXML = `<fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="false">
@@ -152,9 +153,104 @@ describe("isViewDirty (#278, Q14)", () => {
 		expect(isViewDirty({ baselineFetchXml: null, currentFetchXml: "" })).toEqual({ dirty: false, reasons: [] });
 	});
 
-	it("columns aren't compared without both LayoutXMLs", () => {
-		expect(isViewDirty({ ...withLayout(STORED_LAYOUTXML), baselineLayoutXml: null, currentLayoutXml: "<grid/>" }).dirty).toBe(false);
+	it("columns aren't compared without a current LayoutXML, or without a loaded view", () => {
 		expect(isViewDirty({ ...withLayout(STORED_LAYOUTXML), currentLayoutXml: undefined }).dirty).toBe(false);
+		expect(isViewDirty({ ...withLayout(STORED_LAYOUTXML), currentLayoutXml: "" }).dirty).toBe(false);
+		expect(isViewDirty({ baselineFetchXml: null, currentFetchXml: "", currentLayoutXml: STORED_LAYOUTXML }).dirty).toBe(false);
+	});
+
+	describe("a view without a stored LayoutXML (compared with the layout generated from its FetchXML)", () => {
+		const generated = () => {
+			const parsed = parseFetchXml(STORED_FETCHXML);
+			return generateLayoutFromFetchXml(parsed.fetchNode!);
+		};
+
+		it.each([null, undefined, "", "  "])("baseline %j, layout as generated: clean", (baselineLayoutXml) => {
+			expect(isViewDirty({ ...withLayout(generateLayoutXml(generated())), baselineLayoutXml })).toEqual({ dirty: false, reasons: [] });
+		});
+
+		it("columns reordered: columns", () => {
+			const reordered = generateLayoutXml(reorderColumns(generated(), 0, 2));
+			expect(isViewDirty({ ...withLayout(reordered), baselineLayoutXml: null }).reasons).toEqual(["columns"]);
+		});
+
+		it("a width changed: widths", () => {
+			const wider = generateLayoutXml(updateColumnWidth(generated(), "name", 320));
+			expect(isViewDirty({ ...withLayout(wider), baselineLayoutXml: "" }).reasons).toEqual(["widths"]);
+		});
+
+		it("default widths come from the attribute types passed", () => {
+			const types = new Map([["name", "String"], ["telephone1", "String"]]);
+			const typed = generateLayoutFromFetchXml(parseFetchXml(STORED_FETCHXML).fetchNode!, undefined, types);
+			const layout = generateLayoutXml(typed);
+			expect(isViewDirty({ ...withLayout(layout), baselineLayoutXml: null, attributeTypeMap: types }).dirty).toBe(false);
+			expect(isViewDirty({ ...withLayout(layout), baselineLayoutXml: null }).reasons).toEqual(["widths"]);
+		});
+	});
+
+	describe("widths that aren't numbers", () => {
+		const cells = (width: string) => `<grid name="resultset"><row name="result" id="accountid"><cell name="name" width="${width}" /></row></grid>`;
+		const compare = (before: string, after: string) => isViewDirty({ ...withLayout(cells(after)), baselineLayoutXml: cells(before) });
+
+		it("the same text: clean", () => {
+			expect(compare("auto", "auto").dirty).toBe(false);
+		});
+
+		it("other text, or text against a number: widths", () => {
+			expect(compare("auto", "*").reasons).toEqual(["widths"]);
+			expect(compare("auto", "300").reasons).toEqual(["widths"]);
+		});
+
+		it("numbers compare as numbers", () => {
+			expect(compare("300", "300.0").dirty).toBe(false);
+			expect(compare("300", "301").reasons).toEqual(["widths"]);
+		});
+
+		it("a missing width is the default width", () => {
+			const noWidth = `<grid name="resultset"><row name="result" id="accountid"><cell name="name" /></row></grid>`;
+			expect(isViewDirty({ ...withLayout(cells("150")), baselineLayoutXml: noWidth }).dirty).toBe(false);
+		});
+	});
+
+	describe("paging attributes", () => {
+		it("the same query on page 3 with a paging cookie: clean", () => {
+			const paged = STORED_FETCHXML.replace(
+				'<fetch version="1.0"',
+				`<fetch page="3" paging-cookie="&lt;cookie page=&quot;2&quot;&gt;&lt;accountid last=&quot;{1A2B}&quot; /&gt;&lt;/cookie&gt;" version="1.0"`,
+			);
+			expect(isViewDirty({ baselineFetchXml: STORED_FETCHXML, currentFetchXml: paged })).toEqual({ dirty: false, reasons: [] });
+		});
+
+		it("count and top still count", () => {
+			const withCount = STORED_FETCHXML.replace('<fetch version="1.0"', '<fetch count="50" version="1.0"');
+			const withTop = STORED_FETCHXML.replace('<fetch version="1.0"', '<fetch top="10" version="1.0"');
+			expect(isViewDirty({ baselineFetchXml: STORED_FETCHXML, currentFetchXml: withCount }).reasons).toEqual(["query"]);
+			expect(isViewDirty({ baselineFetchXml: STORED_FETCHXML, currentFetchXml: withTop }).reasons).toEqual(["query"]);
+		});
+	});
+
+	describe("condition values", () => {
+		const inQuery = (value: string) =>
+			`<fetch><entity name="account"><filter><condition attribute="accountnumber" operator="in"><value>${value}</value><value>A2</value></condition></filter></entity></fetch>`;
+
+		it("whitespace inside a <value> counts: query", () => {
+			expect(isViewDirty({ baselineFetchXml: inQuery("0"), currentFetchXml: inQuery(" 0 ") }).reasons).toEqual(["query"]);
+		});
+
+		it("whitespace between <value> elements doesn't", () => {
+			const spaced = inQuery("0").replace("</value><value>", "</value>\n        <value>");
+			expect(isViewDirty({ baselineFetchXml: inQuery("0"), currentFetchXml: spaced }).dirty).toBe(false);
+		});
+
+		it("whitespace inside a value attribute counts: query", () => {
+			const eq = (value: string) => `<fetch><entity name="account"><filter><condition attribute="name" operator="eq" value="${value}" /></filter></entity></fetch>`;
+			expect(isViewDirty({ baselineFetchXml: eq("Contoso"), currentFetchXml: eq("Contoso ") }).reasons).toEqual(["query"]);
+		});
+	});
+
+	it("removing version and output-format counts as a change (Save would write the text without them)", () => {
+		const trimmed = STORED_FETCHXML.replace(' version="1.0" output-format="xml-platform"', "");
+		expect(isViewDirty({ baselineFetchXml: STORED_FETCHXML, currentFetchXml: trimmed }).reasons).toEqual(["query"]);
 	});
 
 	it("a LayoutXML that can't be read is compared as text", () => {
