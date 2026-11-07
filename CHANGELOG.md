@@ -7,240 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🔧 Fixed
-
-- **Run workflow lists the current entity's workflows, and the Bulk delete job name is fresh (#182).**
-  - **Run workflow:** the menu loaded the on-demand workflows once and kept them. While you stayed on the Results tab, switching entity and running a query still listed the previous entity's workflows, and picking one opened the Run workflow dialog with nothing selected. The list now belongs to the results' entity: the menu asks for that entity's workflows, and the list is loaded again for each new run (so it also shows workflows activated since). A list still loading for the previous results is dropped.
-  - **Bulk delete:** the default job name was made when the tool started ("Bulk Delete Account - " + the start time), so it usually showed the wrong time and could name the previous entity. It's now made each time the dialog opens. A name you type is kept while the dialog is open.
-
-- **A view opened from another tool loads like Load view (#197).**
-  - **Before:** only the view's FetchXML was loaded. Its column layout was ignored, an unchanged view wasn't run by ID, and **Save** offered Save as rather than overwrite. A view that didn't exist, or a failed request, left an empty builder with no message.
-  - **Now:** the view loads the way **Load view** loads it. When it can't be opened, a notification says why: "Couldn't open the view" / "…asked for a personal view (id) that doesn't exist or that you can't read", or Dataverse's error.
-
-- **Run workflow: background workflows in batches, and no workflow runs twice (#264).**
-  - **Background workflows** now go in `$batch` requests, like delete, Activate / Deactivate and Close, with the same per-record errors, progress, throttling back-off and connection guard.
-  - **A batch that stops early** (PPTB doesn't report which of its operations ran): records whose workflow already started a new system job aren't sent again; the others are sent one at a time. System jobs are compared with a snapshot taken just before the batch, so earlier runs don't count. If the jobs can't be relied on (they can't be read, or the workflow deletes its completed jobs, so a fast run's job may already be gone), none of that batch is sent again, and each record says to check its system jobs. Another user starting the same workflow on the same record at that moment would make it count as started: it may be skipped, never run twice.
-  - **Real-time workflows** run immediately and leave no system job ([Create real-time workflows](https://learn.microsoft.com/dynamics365/customerengagement/on-premises/developer/create-real-time-workflows)), so they stay one request per record.
-
-- **Closing the tool with unsaved Save view edits asks first (#264).** While the Save view dialog has changes to the name, description, view type or default setting, PPTB asks before the tool closes, as it does while a view saves.
-
-- **XML comments are reported when they're removed (#200).** The tree has nowhere to keep comments. They were dropped without a word; Parse to tree's "will change this query" confirmation now lists them under Removed, and loading a saved view that has comments says they're removed and that saving the view saves that change.
-
-- **The opportunity competitor picker matches `%`, `_` and `[` literally (#200),** as record search does: `contains()` treats them as wildcards, so `%` listed every competitor.
-
-- **A `>` inside a `<fetch>` attribute value no longer cuts the tag short (#200)** when the paging attributes are read or set, or the code snippets read it.
-
-- **Advisories follow-ups (#170).**
-  - **Paging without a unique order** stays advice. Live, Dataverse broke ties by the primary key in every case tried, but that isn't documented, and [Order rows](https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging) still asks for a unique column. It now also applies when the query's results are paged (more than 5,000 rows, loaded by scrolling or Retrieve All), not only when the query sets `count` or `page`.
-  - **Stale check:** after the query changes, an earlier **Check with Dataverse** no longer shows its findings or "Dataverse agrees" tags, and they aren't counted on the tab; they could describe a query Dataverse never saw. The status line says when it was checked and to check again.
-  - **Metadata loading:** the metadata for the metadata rules (attribute types, text lengths, the primary key) loads when the Advisories tab is first opened, not as soon as an entity is chosen (as #71 intended). The tab's count can grow when you open it.
-
-- **Long operations wait out Dataverse throttling, and Retrieve All stops at 100,000 rows (#183).**
-  - **Before:** a throttled request was retried 3 times after 2, 4 and 8 s, 14 s in all, while Dataverse's service protection limits are measured over 5 minutes, so long runs gave up early. Batched deletes and record actions had their own waits (5, 15 and 30 s). An operation that a batch answered with 429 was recorded as failed, not retried. Retrieve All kept loading with no limit, so a wide table could exhaust the tool's memory.
-  - **Now:** one back-off for long operations: Retrieve All, deletes of 4 records or more, Activate / Deactivate, Close, workflows on many records, and the one-request-per-record path on older hosts. It waits about 5, 10, 20, 40, 80 and 120 s (± 20% jitter), about 4.5 minutes in all, as [Service protection API limits](https://learn.microsoft.com/power-apps/developer/data-platform/api-limits) suggests. The wait shows in Retrieve All's status line and in the Delete and Run workflow dialogs ("Dataverse is limiting requests: trying again in 40s"); Activate / Deactivate and Close wait the same way but don't show it yet (UI/UX pass). A request you're waiting on, such as the first page or a delete of 1 to 3 records (sent one at a time), keeps the short back-off.
-  - **Batches:** only the operations a batch answered with a service protection error are sent again. Dataverse didn't run them, and the others aren't repeated.
-  - **Retrieve All** stops once 100,000 rows or more are loaded (it can overshoot by up to one page), with a notice. More pages still load one at a time by scrolling, and Bulk delete (job) deletes every matching record without loading them. The limit isn't configurable yet; a Settings option is part of the UI/UX pass.
-
-- **The local Excel export keeps each record's currency and shows dates as the grid does (#184).**
-  - **Money:** amounts were always formatted with `$`, so a EUR, GBP or INR amount showed a dollar sign. Each cell now uses its record's currency symbol and decimals from Dataverse's formatted value (`€1.234,50` → `"€"#,##0.00`, `¥1,235` → no decimals), wherever your negative currency format puts the sign. A column with a fixed precision uses it.
-  - **Dates:** date-times were written in UTC while the grid shows your Dataverse time zone. They now match the grid. Date Only columns are written as dates (`yyyy-mm-dd`, no `00:00:00`), and Time Zone Independent columns as stored. Raw values (raw mode, and the "(Raw)" columns) are in UTC, and the header says "(UTC)"; so does the header when your time zone couldn't be read. If a column's date behaviour couldn't be loaded, its formatted text is written.
-  - **Raw mode** wrote formatted numbers. Raw values now have no number format, apart from dates.
-  - **Decimal places:** decimal and floating point columns always got two decimals, because their precision wasn't loaded, and precision 0 would have given `0.`. They now use the column's precision (`0` for none).
-  - **Grid fallbacks:** when a cell has no formatted value, Money no longer gets a `$`, and a Date Only value is no longer shown as the day before west of UTC.
-
-- **Picked dates filter on the day and time you picked (#207, #198).**
-  - **Before:** the date picker wrote every value as a UTC instant from the browser's time zone (`toISOString()`), whatever the column. Checked live on a sandbox, that went wrong whenever the computer's time zone differed from your Dataverse one (on the sandbox, Dataverse UTC and the computer Pacific):
-    - **Date and time columns** were filtered in the computer's time zone, not your Dataverse one: picking 09:00 filtered on 16:00.
-    - **on / on-or-before / on-or-after** take the date of that instant in your Dataverse time zone, so near midnight the date shifted. For example, a computer in Sydney with Dataverse set to UTC turned 14 March into `2024-03-13T23:00:00.000Z`, the 13th.
-    - **Time Zone Independent columns** compare the time as written, so values were off by the computer's offset.
-    - The picker showed Date Only values as the day before for anyone west of UTC (#198); the value written was right.
-  - **Now:** values are written the way Dataverse reads them:
-    - `2024-03-14` for Date Only columns, date-only formats and the **on** operators. Those take a date only, so the time picker is hidden.
-    - The wall clock for Time Zone Independent columns: `2024-03-14T09:00:00`.
-    - The wall clock with your Dataverse time zone's offset for other date and time columns: `2024-03-14T09:00:00+09:00`. It reads like what you picked, and it's exact.
-  - **The pickers:** they show values in the same terms, so a Date Only value is never the day before. The time picker says which time zone applies ("Time in your Dataverse time zone (Tokyo Standard Time)"). The time zone is your Dataverse Personal Options setting, read once per connection, including its current daylight-saving rule (for dates in years when your time zone followed other rules, the offset can be an hour out).
-  - **Loaded FetchXML** keeps its values as written until you pick a new date.
-
-- **The generated C# QueryExpression compiles and means what the query does (#178).**
-  - **Link-entities:** they were written with `ColumnSet =` and `Criteria =`, which `LinkEntity` doesn't have, so the code didn't compile (CS0117). They use `Columns` and `LinkCriteria` now, as do any/all filters on related rows (`AnyAllFilterLinkEntity`), which leave out the columns Dataverse ignores.
-  - **Orders:** `new OrderExpression(...)` had the alias and entity name swapped. It's (attribute, order, alias, entity name) now, per the [SDK reference](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.query.orderexpression.-ctor).
-  - **Values:** text that looked like a number (`"00123"`, `"12.50"`, a 20-digit code) was written as a number, changing the query or failing to compile. Each value now keeps the .NET type Dataverse reports, checked against live responses: strings stay quoted, decimals and money get `m` (`1000.5m`), whole numbers stay plain, GUIDs become `new Guid(...)`. Line breaks, tabs and other control characters in names and values are escaped.
-  - **Columns:** a query with both plain and aliased columns (`<attribute name="name"/><attribute name="createdon" alias="created"/>`) lost the plain ones. Both are written now: `new ColumnSet("name") { AttributeExpressions = { ... } }`.
-  - **Aggregates:** `hasGroupBy: true` isn't a constructor argument, and a date grouping without an alias picked the wrong constructor. Both are set as properties (`HasGroupBy = true`, `DateTimeGrouping = XrmDateTimeGrouping.Year`).
-  - **Operators:** the numeric operator map didn't match the SDK from 39 on. It does now, and an unknown code is written as a cast that still compiles. (Dataverse returns operator names, so this only mattered for numeric codes.)
-  - **Less noise:** the default `PageInfo` Dataverse always returns is left out unless the query pages. Query hints, `DataSource` (`datasource="retained"`), `FilterHint` and quick find filters are kept.
-  - **Other snippets:** the Web API URL also encodes `! ' ( ) *`, so the cURL line no longer triggers bash history expansion ("event not found"). The JavaScript and Web API snippets find the entity name when `name` isn't the first attribute, and the offline fallback for `transactioncurrency` is `transactioncurrencies`.
-
-- **Copied rows can't paste into a spreadsheet as live formulas (#208).**
-  - **Before:** Copy wrote cell text as it was. A value such as `=HYPERLINK(...)` or `@SUM(...)`, often entered by users or integrations, became a working formula when the rows were pasted into Excel or Google Sheets.
-  - **Now:** in copied rows (Ctrl+C on rows, the Copy menu, the row and selected-rows menu items), text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, as [OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection) recommends, so the spreadsheet shows it as text. A formatted number's sign is left alone (`-5`, `-$5.00`), but a choice label such as `-Other` is protected too. Copying a single cell or a column (for example to paste into an `in` condition) still copies it exactly. The local Excel export wasn't affected: it writes text as text cells.
-
-- **Record actions use the selected entity's privileges, not the previous entity's (#179).**
-  - **Before:** switching entity started a new privilege check without stopping the previous one. If the previous entity's check finished last, Delete and Bulk delete used its result: enabled where you can't delete, or disabled where you can. Dataverse still refused a delete you weren't allowed to make, but the buttons and confirmations were wrong.
-  - **Now:** an outdated check's result is dropped, and the record actions stay unavailable until the selected entity's check finishes. The three checks also run at the same time instead of one after another.
-
-- **The Code tab no longer sends Dataverse requests on every keystroke (#199).**
-  - **Before:** while the Code tab was open, each change to the query sent both `FetchXmlToQueryExpression` (C# QueryExpression) and `FetchXMLToSQL` (SQL), whichever format was selected. Typing a condition value sent a pair per keystroke. That counted against service protection limits, and half-typed queries flashed server errors.
-  - **Now:** a format is converted only while it's selected, half a second after typing stops, and once per query and environment, so switching formats back and forth reuses the result. A failed conversion is tried again when you select its format again.
-
-- **FetchXML editor suggestions and hovers no longer pile up (#194).**
-  - **Before:** the editor registered its FetchXML completion and hover providers each time it mounted and never removed them. It remounts on every connection change, so after a few changes each suggestion and hover appeared several times, and memory grew over the session. The providers also answered in the read-only LayoutXML viewer.
-  - **Now:** they're registered once, apply only to the FetchXML editor, and are removed when it goes.
-
-- **Metadata that couldn't load is reported, with Retry (#201).**
-  - **Before:** when an entity's columns or details failed to load (a missing privilege, throttling, the network), the property editors silently fell back to free text, the relationship picker showed only "Error loading relationships", and failed display names silently became logical names. "Nothing to show" and "the request failed" looked the same.
-  - **Now:** the property editor shows a warning, "Couldn't load columns for account" (or entity details), with Dataverse's reason and **Retry**; the editor still works with free text. The relationship picker shows the reason under the box with **Retry**, and when only display names failed, the list works with logical names and a hint says why. A failed relationship load also no longer crashes the Properties panel, which is what happened before (the error box's Combobox had no selection list). Retry reloads what failed; what loaded comes from the cache. The design was reviewed with the owner.
-
-- **Parse to tree and Save View keep values exactly as written (#181).**
-  - **Lookup display names on `<value>`:** a saved view's `<value uiname="Contoso" uitype="account">{id}</value>` lost `uiname` and `uitype` when the query went through the tree, so loading a view and saving it again stripped the names model-driven apps show in the view's filter. They're kept now, for each value. Changing or removing a value drops only its own.
-  - **Long decimals** kept only 10 decimal places (`0.12345678901234` became `0.123456789`). Every digit is kept now; only scientific notation (`1e-12`) is written out in full.
-  - **Line breaks and tabs** in an attribute value turned into spaces. They're written as `&#10;`, `&#13;` and `&#9;` now.
-  - **Spaces in `<value>` text** were trimmed, so `<value> </value>` became empty; the pac CLI and Web API snippets did the same. They're kept now.
-  - **`top`, `count`, `page` and `utc-offset`** accepted partly numeric text: `top="10abc"` became `top="10"` without a word. Such values are now reported like any other invalid value; Dataverse rejects them (verified live: "Input string was not in a correct format"). A sign and surrounding spaces are still accepted, as Dataverse accepts them.
-
-- **Save View: no duplicate views after a failed step, and no closing mid-save (#180).**
-  - **Before:** saving a new system view creates it, adds it to the chosen solution, then publishes. If adding to the solution or publishing failed, the dialog said "Save failed" and stayed on "Save as new", so pressing Save again created a second view with the same name. A publish failure after an overwrite also said "Save failed", though the view was saved. And Esc, a click outside or the title-bar X closed the dialog while it was still saving, so the outcome was never shown.
-  - **Now:** a warning says what was saved and which step failed ("Saved, but not added to the solution" or "Saved, but not published"), with Dataverse's message. The form locks, and the main button retries only that step (and publishing after it, if requested). **Close** loads the saved view, so the next Save overwrites it.
-  - While saving, Esc and clicks outside are ignored and the X is disabled, like Cancel. The design was reviewed with the owner.
-
-- **An apostrophe in a value no longer breaks Check with Dataverse or Save View validation (#176).**
-  - **Before:** a condition value like `O'Brien` ended the OData string literal the FetchXML was sent in. **Check with Dataverse** failed with 0x80060888 "Syntax error", and Save View's validation quietly said it was unavailable. Verified live.
-  - **Now:** the FetchXML is passed as a parameter alias, with quotes doubled and the value URL-encoded, as [Use Web API functions](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-functions#passing-parameters-to-a-function) recommends.
-  - **The Code tab (SQL, C# QueryExpression) and Bulk Delete's query conversion** now build the same request themselves instead of relying on the host to escape the FetchXML. PPTB Desktop did escape it; the PPTB VS Code extension doesn't (#173), so `'`, `&`, `#`, `%` or `+` in a value could break those requests or change the value there. Verified live on Desktop: the result is identical for a value with all five.
-  - A view ID passed in by another tool must be a GUID before it's used in a query, and the privilege name in the privilege check is quoted like other values.
-
-- **Deleting more than 100 selected records needs the Bulk Delete privilege (#177).**
-  - **Before:** more than 100 selected records are deleted by a Bulk Delete job, which needs `prvBulkDelete`. Without it, the tool fell back to deleting every selected record itself, one request per record in batches, while the README said Delete covers 1–100 rows.
-  - **Now:** without the privilege, Delete is unavailable for more than 100 selected records. "Delete unavailable" beside it says why and names the privilege, the same way as "Delete all unavailable" (#174). Selecting 100 or fewer works as before, and with the privilege nothing changes.
-
-- **A render error no longer blanks the whole tool (#185).**
-  - **Before:** an exception while drawing any part of FetchXML Studio unmounted everything. PPTB then showed an empty tab, and the query in progress was lost (as in #217).
-  - **One panel fails:** the scope, query tree, properties, FetchXML editor, results, advisories, LayoutXML and Code panels each have their own error boundary. A failing panel shows an error message bar with **Try again** and **Copy details**, and the rest of the tool keeps working. The panel also tries again by itself when what it shows changes, for example another node, new results or a different query.
-  - **The whole tool fails:** a page shows your query's FetchXML with **Restart with this query**, which re-mounts the tool and reloads the last good query, the same way as after a connection change. It also offers **Start a new query**, **Copy FetchXML** and **Copy details**. Reloading the page doesn't work in PPTB.
-  - **Details:** "Copy details" gives the error, where it happened, the version and the time, never record data. Each error is logged once to the console.
-  - The look was reviewed as a prototype (variant A).
-
-- **The query tree shows which node is selected (#229).**
-  - **Before:** the selected node drove the properties panel, but its row had no highlight once the mouse moved away, and screen readers weren't told it was selected.
-  - **Now:** the selected row has a subtle selected background, semibold text and a brand indicator bar (as in Fluent Nav). It's marked `aria-selected`, and Windows high contrast shows it in the system highlight colours.
-  - **Keyboard:** Enter selects the focused node, like a click.
-
-- **Check with Dataverse no longer throws on an unfinished condition (#97, found by the #217 incomplete-node test).** Matching Dataverse's findings to the query read `condition.attribute.toLowerCase()`, so a condition whose attribute had just been cleared crashed the Advisories tab. A blank link-entity name had the same problem. The incomplete-node test now also runs the Advisories list, the metadata rules and the Dataverse merge.
-
 ### ✨ Added
 
-- **Scope chip: where entities come from, in one button (#227).** It's the design shared with Dataverse Request Studio and Command Bar Studio (variant A).
-  - **The chip** heads the left pane and always shows the current scope:
-    - `Contoso › Sales Core v1.2.0`, with `+N` for more;
-    - `All entities`;
-    - a primary **Choose scope** when nothing is picked yet.
+- **Scope chip: where Entities come from, in one button (#227).** A chip heads the left pane and always shows the current scope (`Contoso › Sales Core v1.2.0` with `+N` for more, `All entities`, or a **Choose scope** button when nothing is picked). Its popover holds the scope settings: Show entities from (Publisher → solution, Solution only, All entities), Publishers and Solutions tag pickers, and Advanced Find only. Changes apply right away. A first-run tip points at the chip, once per environment. It replaces the Publishers / Solutions comboboxes, the collapsible Query scope header (#25) and the Entity source and Advanced Find only settings. Same design as Dataverse Request Studio and Command Bar Studio.
 
-    A solution shows its first three version parts, so a patch differs from its parent. A tooltip shows every publisher and solution when the label is cut off.
-  - **Its popover** holds the scope settings, and changes apply right away:
-    - **Show entities from:** Publisher → solution, Solution only, All entities. Options your privileges don't allow are off.
-    - **Publishers** and **Solutions**, as tag pickers. Solutions show the unique name and version, grouped Unmanaged / Managed, and search matches the name, unique name or version.
-    - **Advanced Find only.**
-    - **Done** returns focus to the chip.
-  - **First run:** a tip points at the chip ("Choose where entities come from"). Its **Choose scope** opens the popover. It's shown once per environment, and only after any remembered scope has been restored.
-  - **Entity picker:** says "Choose a scope to list entities" until there is one, and shows how many entities are in scope.
-  - **Replaced:**
-    - the always-visible Publishers / Solutions comboboxes;
-    - the collapsible Query scope header and its summary (#25);
-    - the "remembered for this environment" note (remembering is now simply how it works);
-    - the Entity source and Advanced Find only settings in the Settings drawer.
+- **Query tree icons say what each node is, coloured by what it does (#230).** Every node type has its own icon, tinted by role: query, Entities and link-entities, Attributes, filters and conditions, orders. Attributes show their Dataverse type (all 24 types on Microsoft Learn), with a badge for calculated, rollup, formula and prompt Attributes. The new Settings option **Display › Tree icons** switches between Tinted icons (default) and Color icons. In Windows high contrast both use the plain filled icon.
 
-- **Query tree icons say what each node is, and are coloured by what it does (#230).**
-  - **Colours,** from Fluent palette tokens that adapt to light, dark and high contrast:
+- **Density for the results grid and the query tree (#228).** A **Density** menu in the results command bar offers Medium (as before), Small and Extra small, so wide results fit more on screen. It's saved with the display settings.
 
-    | Colour | Nodes |
-    |---|---|
-    | Brand | the query |
-    | Blue | tables: entity and link-entities |
-    | Teal | columns: attributes |
-    | Orange | criteria: filters and conditions |
-    | Grape | sort: orders |
+- **Close dialogs for opportunity, case, quote, order and invoice (#149).** In the results command bar, **Close** replaces Deactivate for these Entities:
+  - **Opportunity:** Close as won / Close as lost, with actual revenue, close date, description and, for lost, a competitor.
+  - **Case:** Resolve case, with resolution, resolution type, billable time and remarks. **Cancel case** is a plain state change; Merged isn't offered.
+  - **Quote:** Win quote / Close quote. **Order:** Fulfill order / Cancel order. **Invoice:** Mark as paid (Complete or Partial) / Cancel invoice.
+  - The same values go to every selected record, in batches with progress, per-record errors, throttle retry and the connection guard, and the query re-runs afterwards. Items are off without Write on the Entity or Create on activities.
+  - **Activate** now reopens closed opportunities, cases, orders and invoices (not quotes or contracts).
 
-  - **Every node type has its own icon.** Fetch and Entity, and Filter and Condition, used to share one.
-    - Fetch `</>`, Entity a table, link-entity a joined table.
-    - Condition an operators icon, order an up or down arrow by direction, All attributes three columns.
-  - **Attributes show their Dataverse column type**, from the `AttributeTypeName` FXS already loads, so there are no new requests. All 24 types on Microsoft Learn are covered, for example:
-    - Text, Multiple lines, Whole number, Decimal, Currency, Yes/No, Date and time;
-    - Choice, Choices, Status, Status reason;
-    - Lookup, Customer, Owner, Image, File;
-    - a key for the primary key.
-
-    While metadata loads, a generic column icon shows. Calculated, rollup, formula and prompt columns get a badge.
-  - **New Settings option, Display › Tree icons:**
-    - **Tinted icons** (default): one colour per icon.
-    - **Color icons:** Fluent's multicolour icons where they exist, filled tinted icons elsewhere. In Windows high contrast they switch to the plain filled icon, as Fluent's icon package advises.
-  - **Add menus:** All attributes, Condition and Link-entity use the matching icons.
-
-- **Density for the results grid and the query tree (#228), as in Dataverse Request Studio.**
-  - **Where:** a **Density** menu in the results command bar: **Medium** (as before), **Small** and **Extra small**. Wide results with many columns fit more on screen.
-  - **How it applies:**
-    - One setting drives both. The grid uses Fluent's `DataGrid size`: rows of 42, 34 and 24 px.
-    - The tree uses Fluent's `Tree size`. Small and Extra small both use the small tree, because Fluent's Tree has no extra-small size.
-    - The Yes/No switch, choice badges and lookup cells shrink to fit the smaller rows.
-  - Saved with the display settings. A saved value from an older version, or an unknown one, falls back to Medium.
-
-- **Close dialogs for opportunity, case, quote, order and invoice (#149, verified live on temporary records):** in the results command bar, **Close** replaces Deactivate for these entities.
-  - **Opportunity:** Close as won / Close as lost (`WinOpportunity` / `LoseOpportunity`), with actual revenue (left empty, each opportunity keeps its own), close date, description and, for lost, a competitor that suggests Out-Sold.
-  - **Case:** Resolve case (`CloseIncident`), with resolution, resolution type, billable time and remarks. **Cancel case** is a plain state change to Cancelled; Merged isn't offered.
-  - **Quote:** Win quote / Close quote (`WinQuote` / `CloseQuote`). Lost is preselected rather than the metadata default Revised.
-  - **Order:** Fulfill order / Cancel order (`FulfillSalesOrder`, bound to the salesorder collection / `CancelSalesOrder`).
-  - **Invoice:** Mark as paid (Complete or Partial) / Cancel invoice, plain state changes; invoices have no close message.
-  - **How it runs:**
-    - Status reasons come from the target state in metadata. Each dialog starts with the environment and scope check.
-    - The same values go to every selected record. Each record gets one request, and its own close activity (`opportunityclose`, `incidentresolution`, `quoteclose`, `orderclose`). Requests are batched with progress, per-record errors, throttle retry and the connection guard, and the query re-runs afterwards.
-    - A batch that stops early doesn't resend the records it already closed.
-    - Items are off without Write on the entity or Create on activities.
-- **Activate reopens** closed opportunities, cases, orders and invoices (back to statecode 0; verified live). It stays off for quotes and contracts.
-- **Query Advisor: Advisories tab and Check with Dataverse (#97, verified live, read-only):**
-  - **Advisories tab** between Results and Code, with a count on the tab. One list of what Dataverse will reject, might reject, and performance advice, with filters. Each row has an explanation, a Microsoft Learn link, and its location, which selects the node in the tree. Advice never blocks Execute. Validate's messages get **View all in Advisories**; the tree, the properties panel and Validate are unchanged.
-  - **New checks that use metadata** (skipped while metadata isn't loaded):
-    - order on a choice, status, status reason or Yes/No attribute (not with `useraworderby`);
-    - any condition on a large text attribute: multiline text, or text longer than 850 characters;
-    - a condition on a calculated or formula attribute (not rollup);
-    - a paged query without the primary key in its orders, with the quick fix **Add {primary key} as the last order**. It isn't offered when link-entities have orders, because Dataverse applies those after the entity's orders.
-  - **Check with Dataverse**, on demand only: sends the FetchXML you're looking at to `ValidateFetchXmlExpression`. Matching findings get **Dataverse agrees**; anything else gets a **From Dataverse** row quoting Dataverse's message. The status line says when the query has changed since the check. Off without a connection.
-  - Attribute metadata now includes `SourceType`, and String `MaxLength` is read once per entity (cached).
+- **Advisories tab and Check with Dataverse (#97).** A new tab between Results and Code lists what Dataverse will reject, might reject, and performance advice, with filters and a count. Each row has an explanation, a Microsoft Learn link and its location, which selects the node in the tree. Advice never blocks Execute. New metadata-based checks: ordering on a choice, status or Yes/No Attribute; a condition on a large text Attribute or on a calculated or formula Attribute; and a paged query without the primary key in its orders (quick fix **Add {primary key} as the last order**). **Check with Dataverse** sends the FetchXML you're looking at to `ValidateFetchXmlExpression`: matching findings get **Dataverse agrees**, anything else gets a **From Dataverse** row. Validate's messages get **View all in Advisories**.
 
 ### 🔧 Changed
 
-- **README: screenshots, a Quick start and an AI assistance note (#84).** The README showed no picture of the tool: its "Interface Overview" was ASCII art, out of date (it showed Prev/Next paging). It now has three screenshots of the tool, taken in Power Platform ToolBox on a sandbox with temporary records: the results grid in light, the FetchXML tab in dark, and the Advisories tab. It also gains a Quick start (open the tool, pick an entity, add attributes, Execute) and a short **AI assistance** section, as the [AI-assisted development policy](https://docs.powerplatformtoolbox.com/policies/ai-assisted-development) asks. The images are in `assets/screenshots/`, linked from `main` like the badges, so they show once 1.6.0 reaches `main`. They're not in the npm package.
+- **README: screenshots, a Quick start and an AI assistance note (#84).** Three screenshots replace the out-of-date ASCII interface overview. A Quick start and a short **AI assistance** section follow the [AI-assisted development policy](https://docs.powerplatformtoolbox.com/policies/ai-assisted-development). The images aren't in the npm package.
 
-- **Close dialogs say how to undo too (#69).** As in 1.5.0-beta.18, for the Close actions added in 1.6 (#149):
-  - **Win / Lose opportunity, Resolve case, Fulfill / Cancel order:** "To undo, run Activate on the records this changes. The close activities stay." Activate reopens them; a reopened opportunity's close activity becomes Canceled.
-  - **Win / Close quote:** "There's no undo: won or closed quotes can't be reactivated here."
-  - **Cancel case, Mark as paid / Cancel invoice** (plain state changes): "To undo, run Activate…".
-  - **Activate** on an entity with a Close menu says to undo with Close, not Deactivate.
+- **Close dialogs say how to undo too (#69).** Win / Lose opportunity, Resolve case, Fulfill / Cancel order, Cancel case and the invoice actions say "To undo, run Activate…". Win / Close quote says there's no undo. Activate on an Entity with a Close menu says to undo with Close.
+
+### 🔧 Fixed
+
+- **Run workflow lists the current Entity's workflows, and the Bulk delete job name is fresh (#182).** After switching Entity, the Run workflow menu still listed the previous Entity's workflows and opened with nothing selected. It now loads the results' Entity's workflows for each run. The Bulk delete default job name was fixed at tool start; it's now made each time the dialog opens, and a name you type is kept.
+
+- **A view opened from another tool loads like Load view (#197).** The column layout is kept, an unchanged view runs by ID, and **Save** offers overwrite. When the view can't be opened, a notification says why instead of leaving an empty builder.
+
+- **Run workflow: background workflows in batches, and no workflow runs twice (#264).** Background workflows go in `$batch` requests with per-record errors, progress and throttling back-off. If a batch stops early, records whose workflow already started a system job aren't sent again; if the jobs can't be relied on, none of that batch is sent again and each record says to check its system jobs. Real-time workflows stay one request per record.
+
+- **Closing the tool with unsaved Save view edits asks first (#264).**
+
+- **XML comments are reported when they're removed (#200).** Parse to tree's confirmation lists them under Removed, and loading a saved view with comments says they're removed.
+
+- **The opportunity competitor picker matches `%`, `_` and `[` literally (#200),** as record search does.
+
+- **A `>` inside a `<fetch>` attribute value no longer cuts the tag short (#200)** when paging attributes are read or set, or the code snippets read it.
+
+- **Advisories follow-ups (#170).** Paging without a unique order stays advice, and now also applies when results are paged by scrolling or Retrieve All. After the query changes, an earlier **Check with Dataverse** no longer shows its findings, and the status line says to check again. Metadata for the metadata rules loads when the Advisories tab is first opened, so its count can grow then.
+
+- **Long operations wait out Dataverse throttling, and Retrieve All stops at 100,000 rows (#183).** Retrieve All, deletes of 4 or more records, Activate / Deactivate, Close and workflows on many records now wait about 5, 10, 20, 40, 80 and 120 s (about 4.5 minutes), as [Service protection API limits](https://learn.microsoft.com/power-apps/developer/data-platform/api-limits) suggests. The wait shows in Retrieve All and the Delete and Run workflow dialogs. Only the operations a batch answered with a service protection error are sent again. Retrieve All stops once 100,000 or more rows are loaded, with a notice; further pages still load by scrolling.
+
+- **The local Excel export keeps each record's currency and shows dates as the grid does (#184).** Money cells use the record's currency symbol and decimals instead of `$`. Date-times use your Dataverse time zone, Date Only values are written as dates, and Time Zone Independent values as stored. Raw values are UTC and the header says "(UTC)". Raw mode no longer writes formatted numbers, and decimal and floating point Attributes use their precision instead of always two decimals. In the grid, a Money cell with no formatted value no longer gets `$`, and a Date Only value is no longer shown as the day before west of UTC.
+
+- **Picked dates filter on the day and time you picked (#207, #198).** The date picker wrote every value as a UTC instant from the computer's time zone, so date-time filters were off whenever it differed from your Dataverse time zone, and **on** operators could land on the wrong date. Values are now `2024-03-14` for Date Only and **on** operators (time picker hidden), `2024-03-14T09:00:00` for Time Zone Independent, and `2024-03-14T09:00:00+09:00` for other date and time Attributes. The picker names the time zone that applies and no longer shows Date Only values as the day before. Loaded FetchXML keeps its values until you pick a new date.
+
+- **The generated C# QueryExpression compiles and means what the query does (#178).** Link-entities use `Columns` and `LinkCriteria`; `OrderExpression` arguments are in the right order; text that looks like a number stays a string, with decimals and money as `m` and GUIDs as `new Guid(...)`; plain and aliased Attributes are both written; `HasGroupBy` and `DateTimeGrouping` are set as properties; numeric operators match the SDK; and the default `PageInfo` is left out unless the query pages. The Web API URL also encodes `! ' ( ) *`, so the cURL line no longer triggers bash "event not found". The JavaScript and Web API snippets find the Entity name when `name` isn't the first attribute, and the offline fallback for `transactioncurrency` is `transactioncurrencies`.
+
+- **Copied rows can't paste into a spreadsheet as live formulas (#208).** In copied rows, text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, as [OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection) recommends. Formatted numbers keep their sign. Copying a single cell or an Attribute is unchanged, and the Excel export wasn't affected.
+
+- **Record actions use the selected Entity's privileges (#179).** After switching Entity, an outdated privilege check could enable Delete and Bulk delete where you can't delete, or disable them where you can. Outdated results are now dropped, and the actions stay unavailable until the selected Entity's check finishes.
+
+- **The Code tab no longer sends Dataverse requests on every keystroke (#199).** A format is converted only while it's selected, half a second after typing stops, and once per query and environment.
+
+- **FetchXML editor suggestions and hovers no longer pile up (#194).** After connection changes, suggestions and hovers appeared several times and memory grew. They're now registered once, only for the FetchXML editor.
+
+- **Metadata that couldn't load is reported, with Retry (#201).** When an Entity's Attributes or details fail to load, the property editor shows "Couldn't load columns for account" with Dataverse's reason and **Retry**, and still works with free text. The relationship picker shows the reason with **Retry**, and when only display names failed it works with logical names and says why.
+
+- **Parse to tree and Save View keep `top`, `count`, `page` and `utc-offset` values valid (#181).** Partly numeric text such as `top="10abc"` was silently changed to `top="10"`; it's now reported as invalid, as Dataverse rejects it. A sign and surrounding spaces are still accepted.
+
+- **Save View: no duplicate views after a failed step, and no closing mid-save (#180).** If adding the new view to the solution or publishing fails, a warning says what was saved and which step failed ("Saved, but not added to the solution" or "Saved, but not published"), and the main button retries only that step. **Close** loads the saved view, so the next Save overwrites it. While saving, Esc and clicks outside are ignored and the X is disabled.
+
+- **An apostrophe in a value no longer breaks Check with Dataverse or Save View validation (#176).** A value like `O'Brien` ended the OData string, failing with 0x80060888 "Syntax error". The FetchXML is now passed as a parameter alias, as [Use Web API functions](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-functions#passing-parameters-to-a-function) recommends. The Code tab and Bulk Delete's query conversion build the same request themselves, so `'`, `&`, `#`, `%` or `+` in a value no longer break them in the PPTB VS Code extension (#173). A view ID passed in by another tool must be a GUID.
+
+- **Deleting more than 100 selected records needs the Bulk Delete privilege (#177).** Without `prvBulkDelete`, the tool used to delete every selected record itself. Delete is now unavailable for more than 100 selected records, with "Delete unavailable" saying why, as for "Delete all unavailable" (#174).
+
+- **A render error no longer blanks the whole tool (#185).** Each panel has its own error boundary: a failing panel shows a message bar with **Try again** and **Copy details**, and the rest keeps working. If the whole tool fails, a page shows your query's FetchXML with **Restart with this query**, **Start a new query**, **Copy FetchXML** and **Copy details**. Details never include record data.
+
+- **The query tree shows which node is selected (#229).** The selected row has a background, semibold text and a brand indicator bar, is marked `aria-selected`, and shows in the system highlight colours in high contrast. Enter selects the focused node.
+
+- **Check with Dataverse no longer throws on an unfinished condition (#97).** Clearing a condition's Attribute, or leaving a link-entity name blank, crashed the Advisories tab.
 
 ### 🏗️ Technical
 
+- **Component and golden tests before the UI overhaul (#189, part 1).** Component-test helpers (`src/shared/testing/ui.ts`) render in a `FluentProvider` with a stubbed ToolBox host. Dialog tests cover the destructive dialogs (Delete, Bulk delete, Run workflow, Activate / Deactivate, Close as won, Save view): environment and scope named (#69), undo text, typed confirmation, single submission, and Cancel disabled while running. Golden snippets compare every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, named by article. Removing the typed-confirmation gate or allowing a read-only share to be overwritten fails them.
+- **Every tag is checked in PPTB first.** RELEASING.md's *Before every tag* step runs the rehearsal's `package` tarball in PPTB with a short smoke list before any beta, stable or hotfix tag.
+- **Dev-only advisories fixed (#84):** vite 7.3.6 → 7.3.7 and undici 8.11.2 → 8.12.2 (through jsdom), so `npm audit` reports 0 high or critical. Both are build and test tools, not in the shipped bundle.
+- **Relative asset URLs (#173).** The build uses `base: "./"`, so the page, chunks, stylesheet and editor font load from the tool's own folder, including in the PPTB VS Code extension (Command Bar Studio #89).
+- **Faster startup (#187).** exceljs loads on the first local export. The main bundle shrinks from 2,576 kB to 1,631 kB (729 kB to 455 kB gzipped). The large-result-set items in #187 stay open.
+- **Repo hygiene, part of #205.** Removed unused files (`ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts`, `src/assets/react.svg`) and exports (`LoadingCellRenderer`, `ValueNode`). `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions jsdom 30 supports. The Prettier reformat and CI format check follow after 1.5.0 ships.
+- **CI and repo:** CI fails on high or critical runtime vulnerabilities (#72); grouped weekly Dependabot updates into `dev` with a 14-day cooldown (#76); `CONTRIBUTING.md` and the PR template (#80); README CI and license badges.
 - **A shared overflow command bar and tab row, not used yet (#232).** `OverflowToolbar` and `OverflowTabList` (`src/shared/components/commandBar/`) put a Fluent Toolbar or TabList inside Overflow: commands and tabs that don't fit move into a More menu instead of wrapping, keeping their icon, disabled reason and submenu there; pinned commands and the selected tab stay visible. No bar uses them yet; the bars move onto them in the rest of #232. `stubOverflowWidths` in `ui.ts` lets component tests lay Overflow out in jsdom.
-
-- **A safety net of component and golden tests before the UI overhaul (#189, part 1).**
-  - **Component-test helpers** (`src/shared/testing/ui.ts`): render in a `FluentProvider` with React's `act`, a stubbed ToolBox host (one connection, notifications collected), and queries that find Fluent's portals. No new dependencies.
-  - **Destructive dialogs:** each dialog's tests check the environment and the scope it names (#69), plus:
-    - **Delete:** no-undo line, typed confirmation for more than 100 records and on a Production connection, none for 100 or fewer, one delete with Delete gone and Cancel disabled while it runs, and Dataverse's error on failure.
-    - **Bulk delete** with no selection: no-undo text, the typed confirmation and the "I understand" box. With a selection: one submission, with Submit gone and Cancel disabled while it's sent.
-    - **Run workflow:** no-undo line, waits for a workflow, runs once, typed confirmation for more than 100 records.
-    - **Activate / Deactivate:** each names the other as the undo. Runs once with the planned status, with Cancel disabled while it runs. Typed confirmation for more than 100 records.
-    - **Close as won:** undo line (Activate; the close activities stay), runs once as Won, typed confirmation for more than 100 records.
-    - **Save view:** overwriting names the view and says there's no undo. A personal view shared read-only can't be overwritten and offers **Save a copy…**, which switches to a new personal view named "… (copy)" (#142). Save view has no typed confirmation.
-  - **Golden snippets:** every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, compared with a snapshot. Cases are named by article. There are also two cases with the entity set name from metadata. C# QueryExpression keeps its own tests from captured Web API responses.
-  - Checked that the tests catch a regression: removing the Delete or Close typed-confirmation gate, or letting a read-only share be overwritten, fails them.
-
-- **Every tag is checked in PPTB first.** Each PR was checked in PPTB on its own build, but the build a tag publishes (every merged change plus the version bump, built by `release.yml`) wasn't run in PPTB until after it was on npm. RELEASING.md's new *Before every tag* step runs the rehearsal's `package` tarball in PPTB, with a short smoke list, before any beta, stable or hotfix tag. The smoke test of the published beta before `latest` stays.
-
-- **Dev-only advisories fixed (#84):** vite 7.3.6 → 7.3.7 (high: launch-editor [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm); also GHSA-698v-4r3x-3vcv, GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22), and undici 8.11.2 → 8.12.2 through jsdom (high: [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c), [GHSA-4w7w-5xrc-9h26](https://github.com/advisories/GHSA-4w7w-5xrc-9h26), [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx), [GHSA-qrxm-fqhp-jwvm](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm); also moderates). Both are build and test tools, not in the shipped bundle, but the Verified review runs `npm audit` on the whole tree, which now reports 0 high or critical. Both versions are more than 14 days old.
-
-- **Relative asset URLs (#173).** The build used Vite's default root-absolute `base` (`/assets/…`). That works in PPTB Desktop, which serves each tool at the root of its own origin. The PPTB VS Code extension serves `dist/` from a sub-path, where those URLs miss the tool's folder; the same problem left Command Bar Studio as a blank tab there (Command Bar Studio #89). The build now uses `base: "./"`, so the page, its chunks, the stylesheet and the editor font load from the tool's own folder wherever it's served.
-- **Faster startup: exceljs loads on the first local export (#187).** The local Excel export's library was in the main bundle, so every start parsed it, though most sessions never export. It's now a separate chunk, loaded when you first use Export (Local), alongside the formatting metadata the export already waits for. The main bundle shrinks from 2,576 kB to 1,631 kB (729 kB to 455 kB gzipped). The large-result-set items in #187 stay open.
-- **Repo hygiene, part of #205.** Removed files nothing imports: `ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts` and the Vite template's `src/assets/react.svg`. Also removed two unused exports: `LoadingCellRenderer` and `ValueNode`, which #181 didn't need. `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions supported by jsdom 30 (the Vitest environment). The one-time Prettier reformat and the CI format check follow after 1.5.0 ships, so forward merges from `release/1.5` don't conflict. The ESLint 10 upgrade gets its own PR.
-- **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
-- **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
-- **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
 
 ## [1.5.0-beta.19] - 2026-11-06
 
