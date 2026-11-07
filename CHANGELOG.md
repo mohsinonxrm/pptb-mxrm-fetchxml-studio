@@ -219,6 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **Every tag is checked in PPTB first.** Each PR was checked in PPTB on its own build, but the build a tag publishes (every merged change plus the version bump, built by `release.yml`) wasn't run in PPTB until after it was on npm. RELEASING.md's new *Before every tag* step runs the rehearsal's `package` tarball in PPTB, with a short smoke list, before any beta, stable or hotfix tag. The smoke test of the published beta before `latest` stays.
+
 - **Dev-only advisories fixed (#84):** vite 7.3.6 → 7.3.7 (high: launch-editor [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm); also GHSA-698v-4r3x-3vcv, GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22), and undici 8.11.2 → 8.12.2 through jsdom (high: [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c), [GHSA-4w7w-5xrc-9h26](https://github.com/advisories/GHSA-4w7w-5xrc-9h26), [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx), [GHSA-qrxm-fqhp-jwvm](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm); also moderates). Both are build and test tools, not in the shipped bundle, but the Verified review runs `npm audit` on the whole tree, which now reports 0 high or critical. Both versions are more than 14 days old.
 
 - **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
