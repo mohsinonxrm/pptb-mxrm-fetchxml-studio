@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.5.0] - 2026-11-14
+## [1.5.0] - 2026-11-07
 
 FetchXML Studio 1.5 moves to Power Platform ToolBox 1.2.7 and its host APIs, makes every change to Dataverse name its target and its way back (the marketplace policy for tools that change data), and adds the Query Advisor, Activate / Deactivate and saved-view follow-ups. It was tested through 19 betas; their sections below have the detail.
 
