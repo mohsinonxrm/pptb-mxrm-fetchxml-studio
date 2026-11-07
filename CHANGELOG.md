@@ -217,6 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Technical
 
+- **App notification provider, not used yet (#277).** `NotifyProvider`, `useNotify` and `useCopy` (`src/shared/feedback/`) are added with tests: one Toaster at the bottom end, timeouts by intent, an optional action and de-duplication. Nothing calls them yet; the callers move over in the next change.
+
 - **A safety net of component and golden tests before the UI overhaul (#189, part 1).**
   - **Component-test helpers** (`src/shared/testing/ui.ts`): render in a `FluentProvider` with React's `act`, a stubbed ToolBox host (one connection, notifications collected), and queries that find Fluent's portals. No new dependencies.
   - **Destructive dialogs:** each dialog's tests check the environment and the scope it names (#69), plus:
