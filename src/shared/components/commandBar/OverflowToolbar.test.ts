@@ -3,8 +3,8 @@
  * their order, reasons and submenus, pinned and end commands stay, and focus follows an overflowed
  * command to More. jsdom has no layout, so widths come from stubOverflowWidths (ui.ts).
  */
-import { act, createElement } from "react";
-import { MenuItem, MenuList } from "@fluentui/react-components";
+import { act, createElement, useState } from "react";
+import { Dialog, DialogBody, DialogSurface, DialogTitle, MenuItem, MenuList } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, click, render, stubOverflowWidths } from "../../testing/ui";
 import { OverflowToolbar, type OverflowToolbarProps } from "./OverflowToolbar";
@@ -401,5 +401,68 @@ describe("OverflowToolbar details", () => {
 		const c = onBar("C") as HTMLElement;
 		expect(a.compareDocumentPosition(shownDividers[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(c.compareDocumentPosition(shownDividers[0]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+	});
+});
+
+/** A bar whose "Export" command opens a modal Fluent Dialog, as the app's bar commands do */
+function BarWithDialog({ barOnly }: { barOnly?: boolean }) {
+	const [open, setOpen] = useState(false);
+	const commands = [button("Open", 50), button("Export", barOnly ? 50 : 10, { onClick: () => setOpen(true) })];
+	return createElement(
+		"div",
+		null,
+		createElement(OverflowToolbar, { ariaLabel: "Test commands", commands }),
+		createElement(
+			Dialog,
+			{
+				modalType: "modal",
+				open,
+				onOpenChange: (_: unknown, data: { open: boolean }) => setOpen(data.open),
+				children: createElement(DialogSurface, null, createElement(DialogBody, null, createElement(DialogTitle, null, "Export dialog"))),
+			},
+		),
+	);
+}
+
+const dialogOpen = () => !!document.querySelector('[role="dialog"]');
+/** Escape on the focused element, then lets Fluent's dialog unmount and Tabster's async restore (a 0 ms timer) run */
+async function closeWithEscape() {
+	await act(async () => {
+		(document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	});
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	});
+}
+
+describe("OverflowToolbar focus return", () => {
+	it("returns focus to a bar command after the dialog it opened closes", async () => {
+		stubOverflowWidths({ container: 1000 });
+		await render(createElement(BarWithDialog, { barOnly: true }));
+		const exportButton = onBar("Export");
+		await act(async () => exportButton?.focus());
+		await click(exportButton);
+		expect(dialogOpen()).toBe(true);
+		expect(document.activeElement).not.toBe(exportButton);
+
+		await closeWithEscape();
+		expect(dialogOpen()).toBe(false);
+		expect(document.activeElement).toBe(exportButton);
+	});
+
+	it("returns focus to More after a dialog opened from an overflowed command closes", async () => {
+		stubOverflowWidths({ container: fits(80 + 40) });
+		await render(createElement(BarWithDialog));
+		expect(overflowed(onBar("Export"))).toBe(true);
+		const moreButton = more();
+		await act(async () => moreButton?.focus());
+		await click(moreButton);
+		await click(item(menus()[0], "Export"));
+		expect(dialogOpen()).toBe(true);
+		expect(menus()).toHaveLength(0);
+
+		await closeWithEscape();
+		expect(dialogOpen()).toBe(false);
+		expect(document.activeElement).toBe(moreButton);
 	});
 });
