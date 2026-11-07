@@ -138,10 +138,28 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
 - **Intelligent caching** — In-memory cache prevents duplicate API calls per session
 - **Resizable panes** — Adjust split-pane layout to your preference
-- **Keyboard shortcuts** — `Ctrl+Enter` to execute query, copy XML to clipboard
 - **Display settings** — Toggle logical names vs display names in column headers; choose formatted, raw, or both value modes in the grid and exports
 - **Entity source** — In the scope chip: *Publisher → solution* (full filter), *Solution only*, or *All entities* (no filter). Options your privileges don't allow are off. Persisted across sessions.
 - **Advanced Find only** (in the scope chip) — When on (default), entities, attributes and relationships are limited to the ones Advanced Find shows (`IsValidForAdvancedFind`), in every entity scope. Turn it off to build queries Advanced Find can't: system and customization entities (saved views, forms, plug-in steps, solution components), intersect entities (team membership, user roles), and hidden attributes and relationships. Attributes that can't be read (`IsValidForRead = false`) are never listed. Hidden label attributes (such as `statuscodename`) can be filtered and sorted. Toggling is instant: metadata is fetched once and filtered locally. Attributes already in a query keep their operators and value inputs either way.
+
+### ⌨️ Keyboard shortcuts
+
+> **Not all active yet.** This is the planned set (#186). The first five rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
+
+| Action | Keys | Where |
+| --- | --- | --- |
+| Run query | `Ctrl+Enter` | Everywhere, including text fields and the editor |
+| Save view | `Ctrl+S` | Everywhere, including text fields and the editor |
+| Keyboard shortcuts | `Ctrl+/` | Outside text fields and the editor |
+| Undo | `Ctrl+Z` | Outside text fields and the editor, which keep their own undo |
+| Redo | `Ctrl+Y` or `Ctrl+Shift+Z` | Outside text fields and the editor |
+| Remove the node | `Delete` | Handled where focus is: a focused tree row |
+| Open the row or cell menu | `Shift+F10` or `Menu` | Handled where focus is: tree row, results cell |
+| Close the top-most popup or drawer | `Escape` | Handled where focus is. It does not stop Retrieve all |
+| Format FetchXML | `Shift+Alt+F` | Handled where focus is: the FetchXML editor |
+| Copy | `Ctrl+C` | Handled where focus is: the results grid |
+
+Power Platform ToolBox owns some keys (reload, zoom, settings, tool feedback and the Edit menu's cut, copy, paste and select all), so the tool doesn't use them.
 
 ### 🔗 Tool-to-Tool (T2T) Integration
 - **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).
