@@ -294,4 +294,112 @@ describe("OverflowToolbar More button", () => {
 		await layout.resize({ container: fits(2 * 80 + 40) });
 		expect(document.activeElement).toBe(openButton);
 	});
+
+	it("doesn't take focus back after it left the toolbar for the page", async () => {
+		const layout = stubOverflowWidths({ container: 1000 });
+		await renderBar([button("Open", 50), button("Copy", 30), button("Export", 10)]);
+		const exportButton = onBar("Export");
+		await act(async () => exportButton?.focus());
+		// A click on empty space: focus goes to the body, the button still showing
+		await act(async () => exportButton?.blur());
+		await layout.resize({ container: fits(2 * 80 + 40) });
+		expect(overflowed(exportButton)).toBe(true);
+		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe("OverflowToolbar commands that change", () => {
+	it("still overflows a command after it gains a disabled reason", async () => {
+		const layout = stubOverflowWidths({ container: 1000 });
+		await renderBar([button("Open", 50), button("Delete", 10)]);
+		// A Tooltip now wraps Delete, so it's a new element; Overflow must measure that one
+		await renderBar([button("Open", 50), button("Delete", 10, { disabledReason: "Select a row to delete it" })]);
+		await layout.resize({ container: fits(80 + 40) });
+		expect(overflowed(onBar("Delete"))).toBe(true);
+		await click(more());
+		expect(item(menus()[0], "Delete")?.getAttribute("aria-disabled")).toBe("true");
+
+		// And back without the reason, wider then narrower again
+		await renderBar([button("Open", 50), button("Delete", 10)]);
+		await layout.resize({ container: 1000 });
+		expect(overflowed(onBar("Delete"))).toBe(false);
+		await layout.resize({ container: fits(80 + 40) });
+		expect(overflowed(onBar("Delete"))).toBe(true);
+	});
+
+	it("keeps focus on a command that turns busy with a reason", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const run = (extra: Partial<BarCommand> = {}) => button("Run", 0, { pinned: true, priority: undefined, appearance: "primary", ...extra });
+		await renderBar([run(), button("Save", 10)]);
+		await act(async () => onBar("Run")?.focus());
+		expect(document.activeElement).toBe(onBar("Run"));
+
+		await renderBar([run({ busy: true, disabledReason: "The query is running" }), button("Save", 10)]);
+		const busyRun = onBar("Run");
+		expect(document.activeElement).toBe(busyRun);
+		expect(busyRun?.getAttribute("aria-disabled")).toBe("true");
+		expect(description(busyRun)).toBe("The query is running");
+
+		await renderBar([run(), button("Save", 10)]);
+		expect(document.activeElement).toBe(onBar("Run"));
+	});
+});
+
+describe("OverflowToolbar details", () => {
+	it("keeps room for More when moreExtra makes it always show", async () => {
+		// Room for exactly 2 items, but More is always there: only 1 fits beside it
+		stubOverflowWidths({ container: fits(2 * 80) });
+		await renderBar([button("Open", 50), button("Export", 10)], { moreExtra: createElement(MenuItem, null, "Settings…") });
+		expect(visibleOnBar(["Open", "Export"])).toEqual(["Open"]);
+		await click(more());
+		expect(textsOf(menus()[0])).toEqual(["Export", "Settings…"]);
+	});
+
+	it("doesn't pick a disabled radio", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const onWarnings = vi.fn();
+		await renderBar([
+			{ id: "all", label: "All", kind: "toggle", radioName: "show", priority: 5, checked: true, onClick: () => {} },
+			{ id: "warnings", label: "Warnings", kind: "toggle", radioName: "show", priority: 5, checked: false, onClick: onWarnings, disabledReason: "No warnings" },
+		]);
+		const warnings = onBar("Warnings");
+		expect(warnings?.getAttribute("aria-disabled")).toBe("true");
+		// ToolbarRadioButton reports the click to the Toolbar even when disabledFocusable
+		await click(warnings);
+		expect(onWarnings).not.toHaveBeenCalled();
+	});
+
+	it("keeps a toggle whose id is also a radio group's name apart from that group", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const onToggle = vi.fn();
+		const onRadio = vi.fn();
+		await renderBar([
+			{ id: "show", label: "Show", kind: "toggle", priority: 5, checked: false, onClick: onToggle },
+			{ id: "errors", label: "Errors", kind: "toggle", radioName: "show", priority: 5, checked: false, onClick: onRadio },
+		]);
+		await click(onBar("Show"));
+		expect(onToggle).toHaveBeenCalledTimes(1);
+		expect(onRadio).not.toHaveBeenCalled();
+		await click(onBar("Errors"));
+		expect(onRadio).toHaveBeenCalledTimes(1);
+	});
+
+	it("names an icon-only command with its ariaLabel and keeps the reason", async () => {
+		stubOverflowWidths({ container: 1000 });
+		await renderBar([{ id: "copy", label: "Copy", ariaLabel: "Copy LayoutXML", kind: "button", iconOnly: true, priority: 1, disabledReason: "There is no LayoutXML to copy" }]);
+		expect(toolbar()?.querySelector('button[aria-label="Copy LayoutXML: There is no LayoutXML to copy"]')).not.toBeNull();
+	});
+
+	it("keeps one divider between a and c when group b is all in More", async () => {
+		stubOverflowWidths({ container: fits(2 * 80 + 24 + 40) });
+		await renderBar([button("A", 50, { group: "a" }), button("B", 10, { group: "b" }), button("C", 50, { group: "c" })]);
+		expect(visibleOnBar(["A", "B", "C"])).toEqual(["A", "C"]);
+		const shownDividers = [...(toolbar()?.querySelectorAll('[role="separator"]') ?? [])].filter(shown);
+		expect(shownDividers).toHaveLength(1);
+		// It sits between A and C
+		const a = onBar("A") as HTMLElement;
+		const c = onBar("C") as HTMLElement;
+		expect(a.compareDocumentPosition(shownDividers[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(c.compareDocumentPosition(shownDividers[0]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+	});
 });
