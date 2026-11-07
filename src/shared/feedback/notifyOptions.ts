@@ -10,6 +10,11 @@ export interface NotifyInput {
 	body?: string;
 	/** One optional action (Undo, Try again, View in operations); it runs, then the toast goes */
 	action?: { label: string; onClick: () => void };
+	/**
+	 * A second action (Copy FetchXML), shown after `action`; it runs, then the toast goes. Needs
+	 * `action`: a secondary action without a primary one is a programming error and is ignored.
+	 */
+	secondaryAction?: { label: string; onClick: () => void };
 	/** Toasts with the same key replace each other; defaults to intent, title and body */
 	key?: string;
 	/** Overrides the intent's default; "sticky" stays until dismissed */
@@ -37,7 +42,14 @@ export function dedupeKey(intent: NotifyIntent, input: NotifyInput): string {
 export function resolveOptions(intent: NotifyIntent, input: NotifyInput): ResolvedOptions {
 	const key = dedupeKey(intent, input);
 	const requested: number | "sticky" =
-		input.timeout ?? (intent === "success" ? SUCCESS_MS : intent === "info" ? INFO_MS : intent === "warning" ? WARNING_MS : "sticky");
+		input.timeout ??
+		(intent === "success"
+			? SUCCESS_MS
+			: intent === "info"
+				? INFO_MS
+				: intent === "warning"
+					? WARNING_MS
+					: "sticky");
 	if (requested === "sticky") return { timeout: -1, sticky: true, politeness: "polite", key };
 	const timeout = input.action ? Math.max(requested, ACTION_MIN_MS) : requested;
 	return { timeout, sticky: false, politeness: "polite", key };

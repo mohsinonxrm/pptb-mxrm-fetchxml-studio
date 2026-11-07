@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+	Fragment,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	type ReactNode,
+} from "react";
 import {
 	Link,
 	Toast,
@@ -11,7 +19,12 @@ import {
 	useId,
 	useToastController,
 } from "@fluentui/react-components";
-import { resolveOptions, type NotifyInput, type NotifyIntent, type ResolvedOptions } from "./notifyOptions";
+import {
+	resolveOptions,
+	type NotifyInput,
+	type NotifyIntent,
+	type ResolvedOptions,
+} from "./notifyOptions";
 import { NotifyContext, createNotify, type NotifyApi, type NotifyHandle } from "./useNotify";
 
 export interface NotifyProviderProps {
@@ -67,7 +80,8 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 
 	const release = useCallback((entry: Entry) => {
 		visible.current.delete(entry.toastId);
-		if (byKey.current.get(entry.options.key) === entry.toastId) byKey.current.delete(entry.options.key);
+		if (byKey.current.get(entry.options.key) === entry.toastId)
+			byKey.current.delete(entry.options.key);
 		pump.current();
 	}, []);
 
@@ -76,7 +90,8 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 			const queued = pending.current.indexOf(entry);
 			if (queued >= 0) {
 				pending.current.splice(queued, 1);
-				if (byKey.current.get(entry.options.key) === entry.toastId) byKey.current.delete(entry.options.key);
+				if (byKey.current.get(entry.options.key) === entry.toastId)
+					byKey.current.delete(entry.options.key);
 				return;
 			}
 			if (!visible.current.has(entry.toastId)) return;
@@ -91,23 +106,30 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 			const { input, options, intent, toastId } = entry;
 			visible.current.add(toastId);
 			const dismiss = () => dismissEntry(entry);
-			const action = input.action;
 			const separator = <span className={styles.separator}>. </span>;
-			const actionLink = action ? (
+			// A secondary action without a primary one is ignored (see NotifyInput)
+			const actions = [input.action, input.action ? input.secondaryAction : undefined].filter(
+				(a) => a !== undefined,
+			);
+			const actionLink = actions.length ? (
 				<>
-					<Link
-						as="button"
-						onClick={() => {
-							try {
-								action.onClick();
-							} finally {
-								dismiss();
-							}
-						}}
-					>
-						{action.label}
-					</Link>
-					{separator}
+					{actions.map((action) => (
+						<Fragment key={action.label}>
+							<Link
+								as="button"
+								onClick={() => {
+									try {
+										action.onClick();
+									} finally {
+										dismiss();
+									}
+								}}
+							>
+								{action.label}
+							</Link>
+							{separator}
+						</Fragment>
+					))}
 				</>
 			) : undefined;
 			dispatchToast(
@@ -141,7 +163,11 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 					timeout: options.timeout,
 					politeness: options.politeness,
 					onStatusChange: (_event, data) => {
-						if ((data.status === "dismissed" || data.status === "unmounted") && visible.current.has(toastId)) release(entry);
+						if (
+							(data.status === "dismissed" || data.status === "unmounted") &&
+							visible.current.has(toastId)
+						)
+							release(entry);
 					},
 				},
 			);
@@ -182,7 +208,12 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 			const options = resolveOptions(intent, input);
 			// The same key replaces the toast, shown or waiting: a fresh id, because Fluent ignores a repeated one
 			dismissKey(options.key);
-			const entry: Entry = { toastId: `${toasterId}-${++counter.current}`, intent, input, options };
+			const entry: Entry = {
+				toastId: `${toasterId}-${++counter.current}`,
+				intent,
+				input,
+				options,
+			};
 			byKey.current.set(options.key, entry.toastId);
 			if (visible.current.size < MAX_VISIBLE) dispatchEntry(entry);
 			else pending.current.push(entry);
@@ -203,11 +234,20 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 	// Keep the queue honest if the provider unmounts
 	useEffect(() => () => void (pending.current = []), []);
 
-	const api = useMemo<NotifyApi>(() => ({ notify: createNotify(show), dismiss: dismissKey, dismissAll }), [show, dismissKey, dismissAll]);
+	const api = useMemo<NotifyApi>(
+		() => ({ notify: createNotify(show), dismiss: dismissKey, dismissAll }),
+		[show, dismissKey, dismissAll],
+	);
 
 	return (
 		<NotifyContext.Provider value={api}>
-			<Toaster toasterId={toasterId} position="bottom-end" offset={{ vertical: 48, horizontal: 16 }} pauseOnHover pauseOnWindowBlur />
+			<Toaster
+				toasterId={toasterId}
+				position="bottom-end"
+				offset={{ vertical: 48, horizontal: 16 }}
+				pauseOnHover
+				pauseOnWindowBlur
+			/>
 			{children}
 		</NotifyContext.Provider>
 	);

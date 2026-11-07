@@ -24,9 +24,13 @@ export interface NotifyApi {
 
 const noopHandle: NotifyHandle = { dismiss: () => undefined };
 
-export function createNotify(show: (intent: NotifyIntent, input: NotifyInput) => NotifyHandle): Notify {
-	const normalize = (input: NotifyInput | string): NotifyInput => (typeof input === "string" ? { title: input } : input);
-	const notify = ((intent: NotifyIntent, input: NotifyInput | string) => show(intent, normalize(input))) as Notify;
+export function createNotify(
+	show: (intent: NotifyIntent, input: NotifyInput) => NotifyHandle,
+): Notify {
+	const normalize = (input: NotifyInput | string): NotifyInput =>
+		typeof input === "string" ? { title: input } : input;
+	const notify = ((intent: NotifyIntent, input: NotifyInput | string) =>
+		show(intent, normalize(input))) as Notify;
 	notify.success = (input) => show("success", normalize(input));
 	notify.info = (input) => show("info", normalize(input));
 	notify.warning = (input) => show("warning", normalize(input));
@@ -35,7 +39,11 @@ export function createNotify(show: (intent: NotifyIntent, input: NotifyInput) =>
 }
 
 /** Outside a provider (a component rendered on its own) every call does nothing */
-const noopApi: NotifyApi = { notify: createNotify(() => noopHandle), dismiss: () => undefined, dismissAll: () => undefined };
+const noopApi: NotifyApi = {
+	notify: createNotify(() => noopHandle),
+	dismiss: () => undefined,
+	dismissAll: () => undefined,
+};
 
 export const NotifyContext = createContext<NotifyApi>(noopApi);
 

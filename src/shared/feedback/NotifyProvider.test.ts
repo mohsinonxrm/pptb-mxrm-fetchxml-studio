@@ -1,6 +1,15 @@
 import { act, createElement, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { button, cleanup, click, flush, installHost, removeHost, render, toasts } from "../testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	flush,
+	installHost,
+	removeHost,
+	render,
+	toasts,
+} from "../testing/ui";
 import { NotifyProvider } from "./NotifyProvider";
 import { useCopy } from "./useCopy";
 import { useNotify, type NotifyApi } from "./useNotify";
@@ -47,7 +56,9 @@ afterEach(() => {
 describe("NotifyProvider", () => {
 	it("shows the title and body", async () => {
 		await mount();
-		await show((n) => n.success({ title: 'Saved "Active accounts"', body: "Not published yet" }));
+		await show((n) =>
+			n.success({ title: 'Saved "Active accounts"', body: "Not published yet" }),
+		);
 		expect(toasts()).toEqual(['Saved "Active accounts". Not published yet.']);
 	});
 
@@ -62,15 +73,27 @@ describe("NotifyProvider", () => {
 			n.success({ title: "s", key: "s" });
 			n.info({ title: "i", key: "i" });
 			n.warning({ title: "w", key: "w" });
-			n.success({ title: "a", key: "a", action: { label: "Undo", onClick: () => undefined } });
+			n.success({
+				title: "a",
+				key: "a",
+				action: { label: "Undo", onClick: () => undefined },
+			});
 			n.error({ title: "e", key: "e" });
 		});
 		// limit is 3, so check in two rounds
-		expect(timers().map((t) => t.style.animationDuration)).toEqual(["4000ms", "5000ms", "8000ms"]);
+		expect(timers().map((t) => t.style.animationDuration)).toEqual([
+			"4000ms",
+			"5000ms",
+			"8000ms",
+		]);
 		await act(async () => api!.dismissAll());
 		await advance(1000);
 		await show((n) => {
-			n.success({ title: "a", key: "a", action: { label: "Undo", onClick: () => undefined } });
+			n.success({
+				title: "a",
+				key: "a",
+				action: { label: "Undo", onClick: () => undefined },
+			});
 			n.error({ title: "e", key: "e" });
 		});
 		expect(timers().map((t) => t.style.animationDuration)).toEqual(["8000ms"]);
@@ -91,11 +114,77 @@ describe("NotifyProvider", () => {
 	it("runs the action and dismisses the toast", async () => {
 		await mount();
 		const onClick = vi.fn();
-		await show((n) => n.info({ title: "Deleted 2 records", action: { label: "Undo", onClick } }));
+		await show((n) =>
+			n.info({ title: "Deleted 2 records", action: { label: "Undo", onClick } }),
+		);
 		await click(button("Undo", document));
 		expect(onClick).toHaveBeenCalledTimes(1);
 		await advance(1000);
 		expect(toasts()).toHaveLength(0);
+	});
+
+	describe("with a secondary action", () => {
+		const two =
+			(onTry: () => void, onCopy: () => void, timeout?: number | "sticky") =>
+			(n: NotifyApi["notify"]) =>
+				n.error({
+					title: "Return FetchXML failed",
+					body: "Timeout",
+					timeout,
+					action: { label: "Try again", onClick: onTry },
+					secondaryAction: { label: "Copy FetchXML", onClick: onCopy },
+				});
+
+		it("renders both as buttons, in order", async () => {
+			await mount();
+			await show(two(vi.fn(), vi.fn(), 10000));
+			const labels = [...document.querySelectorAll("button")].map((b) => b.textContent);
+			expect(labels.indexOf("Try again")).toBeGreaterThanOrEqual(0);
+			expect(labels.indexOf("Copy FetchXML")).toBe(labels.indexOf("Try again") + 1);
+		});
+
+		it.each(["Try again", "Copy FetchXML"])(
+			"runs %s once and dismisses the toast",
+			async (label) => {
+				{
+					await mount();
+					const onTry = vi.fn();
+					const onCopy = vi.fn();
+					await show(two(onTry, onCopy));
+					await click(button(label, document));
+					expect(onTry).toHaveBeenCalledTimes(label === "Try again" ? 1 : 0);
+					expect(onCopy).toHaveBeenCalledTimes(label === "Copy FetchXML" ? 1 : 0);
+					await advance(1000);
+					expect(toasts()).toHaveLength(0);
+				}
+			},
+		);
+
+		it("puts both in the footer of a sticky toast", async () => {
+			await mount();
+			await show(two(vi.fn(), vi.fn()));
+			const footer = document.querySelector("[class*='ToastFooter'], .fui-ToastFooter");
+			expect(footer?.textContent).toContain("Try again");
+			expect(footer?.textContent).toContain("Copy FetchXML");
+		});
+
+		it("announces both labels, separated", async () => {
+			await mount();
+			await show(two(vi.fn(), vi.fn()));
+			const polite = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
+			expect(polite).toContain("Try again. Copy FetchXML. ");
+		});
+
+		it("ignores a secondary action without a primary one", async () => {
+			await mount();
+			await show((n) =>
+				n.info({
+					title: "Hi",
+					secondaryAction: { label: "Copy FetchXML", onClick: () => undefined },
+				}),
+			);
+			expect(button("Copy FetchXML", document)).toBeUndefined();
+		});
 	});
 
 	it("keeps an error toast, with Dismiss, until it's dismissed", async () => {
@@ -203,7 +292,10 @@ describe("NotifyProvider", () => {
 			return null;
 		}
 		const withKey = (key: string) =>
-			createElement(NotifyProvider, { resetKey: key, children: [createElement(Probe, { key: "probe" }), createElement(Raiser, { key })] });
+			createElement(NotifyProvider, {
+				resetKey: key,
+				children: [createElement(Probe, { key: "probe" }), createElement(Raiser, { key })],
+			});
 		await render(withKey("a"));
 		await show((n) => n.error("Old"));
 		expect(toasts()).toHaveLength(2);
@@ -214,7 +306,13 @@ describe("NotifyProvider", () => {
 
 	it("announces the title and body apart, politely", async () => {
 		await mount();
-		await show((n) => n.error({ title: "The query didn't run", body: "Timeout", action: { label: "Try again", onClick: () => undefined } }));
+		await show((n) =>
+			n.error({
+				title: "The query didn't run",
+				body: "Timeout",
+				action: { label: "Try again", onClick: () => undefined },
+			}),
+		);
 		const polite = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
 		expect(polite).toContain("The query didn't run. ");
 		expect(polite).toContain("Timeout. ");
@@ -289,13 +387,19 @@ describe("useNotify outside the provider", () => {
 describe("useCopy", () => {
 	function CopyProbe({ onDone }: { onDone: (ok: boolean) => void }) {
 		const copy = useCopy();
-		return createElement("button", { onClick: () => void copy("text", "the job URL").then(onDone) }, "Copy");
+		return createElement(
+			"button",
+			{ onClick: () => void copy("text", "the job URL").then(onDone) },
+			"Copy",
+		);
 	}
 
 	it("toasts 'Copied …' and resolves true when the clipboard works", async () => {
 		installHost();
 		const done = vi.fn();
-		await render(createElement(NotifyProvider, null, createElement(CopyProbe, { onDone: done })));
+		await render(
+			createElement(NotifyProvider, null, createElement(CopyProbe, { onDone: done })),
+		);
 		await click(button("Copy", document));
 		expect(toasts()).toEqual(["Copied the job URL."]);
 		expect(done).toHaveBeenCalledWith(true);
@@ -303,14 +407,21 @@ describe("useCopy", () => {
 
 	it("toasts an error and resolves false when it doesn't", async () => {
 		const host = installHost();
-		(window as unknown as { toolboxAPI: { utils: { copyToClipboard: () => Promise<void> } } }).toolboxAPI.utils.copyToClipboard = async () => {
+		(
+			window as unknown as { toolboxAPI: { utils: { copyToClipboard: () => Promise<void> } } }
+		).toolboxAPI.utils.copyToClipboard = async () => {
 			throw new Error("denied");
 		};
 		vi.spyOn(console, "warn").mockImplementation(() => undefined);
-		Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => Promise.reject(new Error("no")) } });
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { writeText: async () => Promise.reject(new Error("no")) },
+		});
 		void host;
 		const done = vi.fn();
-		await render(createElement(NotifyProvider, null, createElement(CopyProbe, { onDone: done })));
+		await render(
+			createElement(NotifyProvider, null, createElement(CopyProbe, { onDone: done })),
+		);
 		await click(button("Copy", document));
 		expect(toasts()[0]).toContain("Couldn't copy to the clipboard");
 		expect(done).toHaveBeenCalledWith(false);
