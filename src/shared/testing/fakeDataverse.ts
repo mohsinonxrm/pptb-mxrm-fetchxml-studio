@@ -132,7 +132,7 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		const fetch = readFetch(xml);
 		if (!table || table.logicalName !== fetch.entity) throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
 		await options.beforePage?.(fetch.page, fetch.entity);
-		let rows = [...table.rows];
+		const rows = [...table.rows];
 		for (const order of [...fetch.orders].reverse()) {
 			rows.sort((a, b) => String(a[order.attribute] ?? "").localeCompare(String(b[order.attribute] ?? "")) * (order.descending ? -1 : 1));
 		}

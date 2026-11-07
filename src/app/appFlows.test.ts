@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderApp } from "../shared/testing/app";
-import { button, cleanup, click, removeHost } from "../shared/testing/ui";
+import { button, cleanup, click, isDisabled, openDialog, removeHost, scopeField } from "../shared/testing/ui";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -83,6 +83,34 @@ describe("app: running a query", () => {
 		fail = false;
 		await click(button("Execute", document));
 		await app.waitFor(() => /Rows: 5/.test(app.status()));
+	}, 60000);
+});
+
+describe("app: record actions", () => {
+	it("deleting a selected row confirms first, names the target, deletes that record and re-runs", async () => {
+		const app = await renderApp({ launch: { fetchXml: accountQuery() } });
+		await app.waitFor(() => !!button("Execute", document));
+		await click(button("Execute", document));
+		await app.waitFor(() => /Rows: 5/.test(app.status()));
+
+		// The first data row: "Account 01", ordered by name
+		const firstRow = [...document.querySelectorAll<HTMLElement>('[role="grid"] [role="row"]')].find((r) => r.textContent?.includes("Account 01"));
+		const checkbox = firstRow?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+		expect(checkbox).toBeTruthy();
+		await click(checkbox!);
+		await app.waitFor(() => !!buttonOrNull("Delete"));
+		await click(buttonOrNull("Delete")!);
+
+		await app.waitFor(() => !!openDialog() && !isDisabled(button("Delete")));
+		expect(scopeField("Environment")).toContain("Test environment");
+		expect(app.dataverse.deleted).toEqual([]);
+		await click(button("Delete"));
+
+		await app.waitFor(() => /Rows: 4\b/.test(app.status()));
+		const accounts = app.dataverse.tables.find((t) => t.logicalName === "account")!;
+		expect(app.dataverse.deleted).toHaveLength(1);
+		expect(accounts.rows.map((r) => r.name)).toEqual(["Account 02", "Account 03", "Account 04", "Account 05"]);
+		expect(document.body.textContent).not.toContain("Account 01");
 	}, 60000);
 });
 

@@ -239,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI fails on high or critical runtime vulnerabilities (#72):** `npm audit --omit=dev --audit-level=high` runs before the other checks. The README now has CI and license badges.
 - **Dependabot (#76):** grouped weekly npm and GitHub Actions updates into `dev`, with a 14-day cooldown so only versions published at least two weeks ago are proposed. React majors are reviewed manually.
 - **`CONTRIBUTING.md` and the PR template (#80):** setup, the branch and PR workflow, what every PR includes, the product rules (ground in Microsoft Learn, never refuse supported FetchXML, confirmations name the environment and scope), the UI and wording rules, and the dependency rules. The PR template asks for the target branch, light and dark screenshots for UI changes, and the release-prep checks.
+- **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
 
 ## [1.5.0-beta.19] - 2026-11-06
 
