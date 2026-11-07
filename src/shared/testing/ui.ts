@@ -53,9 +53,14 @@ class RecordingResizeObserver {
 	}
 }
 
+/**
+ * Installs RecordingResizeObserver. Also replaces the no-op class that @fluentui/react-positioning puts
+ * on window when NODE_ENV is "test" each time it positions a popover (a menu or tooltip opening), or
+ * Overflows mounted after that could never be resized.
+ */
 function installResizeObserver(): void {
 	const win = window as unknown as { ResizeObserver?: unknown };
-	if (typeof win.ResizeObserver !== "function") win.ResizeObserver = RecordingResizeObserver;
+	if (win.ResizeObserver !== RecordingResizeObserver) win.ResizeObserver = RecordingResizeObserver;
 }
 
 /** Renders the element inside a light FluentProvider; a second call re-renders the same root */

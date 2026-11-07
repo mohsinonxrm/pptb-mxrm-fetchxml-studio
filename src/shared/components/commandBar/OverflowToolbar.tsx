@@ -126,6 +126,12 @@ const useStyles = makeStyles({
 	},
 });
 
+/**
+ * The accessible name override, only when set: an explicit `aria-label={undefined}` would also wipe
+ * the one a label Tooltip gives (Tooltip spreads the child's own props over its aria props).
+ */
+const nameOf = (command: BarCommand) => (command.ariaLabel ? { "aria-label": command.ariaLabel } : {});
+
 /** Can't be pressed: it has a reason, or it's running */
 const isOff = (command: BarCommand) => !!command.disabledReason || !!command.busy;
 
@@ -194,7 +200,7 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 		) : (
 			element
 		);
-	const common = { icon, className, disabledFocusable: off, "aria-label": c.ariaLabel };
+	const common = { icon, className, disabledFocusable: off, ...nameOf(c) };
 
 	if (c.kind === "menu") {
 		return (
@@ -221,7 +227,7 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 				className={className}
 				disabledFocusable={off}
 				menuButton={menuButton}
-				primaryActionButton={{ ...primary, "aria-label": c.ariaLabel, onClick: off ? undefined : c.onClick }}
+				primaryActionButton={{ ...primary, ...nameOf(c), onClick: off ? undefined : c.onClick }}
 			>
 				{children}
 			</SplitButton>
@@ -298,7 +304,11 @@ function splitMenu(command: BarCommand, icon: ReactElement | undefined): ReactEl
 	return cloneElement(menu, undefined, primary, ...Children.toArray(menu.props.children));
 }
 
-/** One overflowed command in More: the same command as a menu entry */
+/**
+ * One overflowed command in More: the same command as a menu entry. Menu items take `disabled`, which
+ * in Fluent v9 is already focusable (aria-disabled); their `disabledFocusable` is deprecated and does
+ * nothing.
+ */
 function MoreEntry({ command: c }: { command: BarCommand }) {
 	const styles = useStyles();
 	const off = isOff(c);
@@ -318,7 +328,7 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 			<Menu onOpenChange={menuOpenChange(c)}>
 				<MenuTrigger disableButtonEnhancement>
 					{withReason(
-						<MenuItem icon={icon} className={className} disabledFocusable={off} aria-label={c.ariaLabel}>
+						<MenuItem icon={icon} className={className} disabled={off} {...nameOf(c)}>
 							{c.label}
 						</MenuItem>,
 					)}
@@ -330,18 +340,18 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 	if (c.kind === "toggle") {
 		return withReason(
 			c.radioName ? (
-				<MenuItemRadio name={c.radioName} value={c.id} icon={icon} disabledFocusable={off} aria-label={c.ariaLabel}>
+				<MenuItemRadio name={c.radioName} value={c.id} icon={icon} disabled={off} {...nameOf(c)}>
 					{c.label}
 				</MenuItemRadio>
 			) : (
-				<MenuItemCheckbox name={c.id} value={c.id} icon={icon} disabledFocusable={off} aria-label={c.ariaLabel}>
+				<MenuItemCheckbox name={c.id} value={c.id} icon={icon} disabled={off} {...nameOf(c)}>
 					{c.label}
 				</MenuItemCheckbox>
 			),
 		);
 	}
 	return withReason(
-		<MenuItem icon={icon} className={className} disabledFocusable={off} aria-label={c.ariaLabel} onClick={off ? undefined : c.onClick}>
+		<MenuItem icon={icon} className={className} disabled={off} {...nameOf(c)} onClick={off ? undefined : c.onClick}>
 			{c.label}
 		</MenuItem>,
 	);
