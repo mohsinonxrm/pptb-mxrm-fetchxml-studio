@@ -22,6 +22,7 @@ import {
 	Popover,
 	PopoverSurface,
 	Button,
+	Link,
 	Text,
 	Tooltip,
 	TagGroup,
@@ -55,7 +56,10 @@ import {
 	Filter20Regular,
 	FilterDismiss20Regular,
 } from "@fluentui/react-icons";
-import type { AttributeMetadata } from "../../api/pptbClient";
+import { retrieveTotalRecordCount, type AttributeMetadata, type EntityMetadata } from "../../api/pptbClient";
+import { formatDataverseError } from "../../api/dataverseErrors";
+import { adviseCondition } from "../../model/queryAdvisor";
+import { entityTotalText, totalCountText } from "./totalCount";
 import { getCellRenderer } from "./getCellRenderer";
 import { buildRowIdentity } from "./rowIdentity";
 import { getFormattedValue } from "./FormattedValueUtils";
@@ -82,6 +86,7 @@ import {
 	type CopyColumn,
 	type CopyValueMode,
 } from "./copyResults";
+import { debugLog } from "../../../../shared/utils/debug";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -163,6 +168,8 @@ const useStyles = makeStyles({
 	},
 	infoBar: {
 		display: "flex",
+		flexWrap: "wrap",
+		columnGap: tokens.spacingHorizontalL,
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: "8px 16px",
@@ -276,7 +283,10 @@ export interface QueryResult {
 	/** The query that produced the rows; the columns come from the query (resultColumns.ts, #91) */
 	query?: FetchNode | null;
 	rows: Record<string, unknown>[];
+	/** returntotalrecordcount: matching records up to the limit, -1 when not requested (totalCount.ts, #98) */
 	totalRecordCount?: number;
+	/** More records match than totalRecordCount counts (5,000, or 500 for elastic entities) */
+	totalRecordCountLimitExceeded?: boolean;
 	moreRecords?: boolean;
 	pagingCookie?: string;
 	entityLogicalName?: string; // NEW: for loading attribute metadata
@@ -356,16 +366,16 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) {
-			console.log("[ResultsGrid] ResizeObserver: container ref is null");
+			debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: container ref is null");
 			return;
 		}
 
-		console.log("[ResultsGrid] ResizeObserver: setting up observer on container", container);
+		debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: setting up observer on container", container);
 
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				const { width, height } = entry.contentRect;
-				console.log("[ResultsGrid] ResizeObserver: dimensions updated", { width, height });
+				debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: dimensions updated", { width, height });
 				setGridDimensions({ width, height });
 			}
 		});
@@ -381,7 +391,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 
 		const observer = new ResizeObserver(() => {
 			const height = header.offsetHeight;
-			console.log("[ResultsGrid] Header height:", height);
+			debugLog("resultsGrid", "[ResultsGrid] Header height:", height);
 			setHeaderHeight(height);
 		});
 
@@ -390,8 +400,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	}, [result]);
 
 	// Clear selection when results change, and tell the command bar: otherwise it keeps the old
-	// count and record IDs, and a record action after a refresh (Delete, Activate, Close) would run
-	// on rows that are no longer selected (#149)
+	// count and record IDs, and a record action after a refresh (Delete, Activate, Run workflow)
+	// would run on rows that are no longer selected (#158)
 	const selectionCallbacksRef = useRef({ onSelectedCountChange, onSelectionChange });
 	selectionCallbacksRef.current = { onSelectedCountChange, onSelectionChange };
 	useEffect(() => {
@@ -620,18 +630,25 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 				// - For 1:N (one-to-many): Show the related entity display name (e.g., "Contact")
 				let relatedDisplayName = displayInfo.linkEntityAlias;
 
-				if (displayInfo.lookupAttribute) {
-					// N:1 relationship - get the lookup attribute display name from root entity
-					const rootEntityName = fetchQuery?.entity?.name;
-					if (rootEntityName) {
-						const lookupAttr = getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute);
-						if (lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
-							relatedDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
-						}
-					}
+				// N:1: 'to' is a lookup on the parent, so name the lookup ("Primary Contact"). 1:N (and N:N
+				// through an intersect entity): 'to' is the parent's key, which says nothing about the
+				// related side, so name the related entity ("Contact")
+				const rootEntityName = fetchQuery?.entity?.name;
+				const lookupAttr =
+					displayInfo.lookupAttribute && rootEntityName
+						? getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute)
+						: undefined;
+				const toIsLookup = ["Lookup", "Customer", "Owner"].includes(lookupAttr?.AttributeType ?? "");
+				if (toIsLookup && lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
+					relatedDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
 				} else {
-					// 1:N relationship - get the entity display name
-					const entityMetadata = metadataCache.getEntityMetadata(displayInfo.entityName);
+					// Entity details are cached per entity once opened; the entity lists have every entity
+					const byName = (list: EntityMetadata[] | undefined) =>
+						list?.find((e) => e.LogicalName === displayInfo.entityName);
+					const entityMetadata =
+						metadataCache.getEntityMetadata(displayInfo.entityName) ??
+						byName(metadataCache.getAllEntityMetadata()) ??
+						byName(metadataCache.getAllEntities());
 					if (entityMetadata?.DisplayName?.UserLocalizedLabel?.Label) {
 						relatedDisplayName = entityMetadata.DisplayName.UserLocalizedLabel.Label;
 					}
@@ -877,6 +894,27 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		},
 		[onSortChange, sortStateMap, queryKeyOf],
 	);
+
+	// ---- Total record count (#98): the query's count from returntotalrecordcount, and on request the
+	// entity's unfiltered total (RetrieveTotalRecordCount) when the count reaches its limit. The
+	// unfiltered total is kept per entity: it ignores the query, so it holds for any query on it.
+	const [entityTotal, setEntityTotal] = useState<{ entity: string; status: "loading" | "done" | "error"; text: string } | null>(null);
+	const countEntityTotal = useCallback((entity: string) => {
+		setEntityTotal({ entity, status: "loading", text: `Counting all ${entity} records…` });
+		retrieveTotalRecordCount(entity).then(
+			(total) =>
+				setEntityTotal(
+					total === undefined
+						? { entity, status: "error", text: `Dataverse returned no total for ${entity}.` }
+						: { entity, status: "done", text: entityTotalText(entity, total) },
+				),
+			(error: unknown) =>
+				setEntityTotal({ entity, status: "error", text: `Couldn't count all ${entity} records. ${formatDataverseError(error)}` }),
+		);
+	}, []);
+	const totalText = result
+		? totalCountText(result.totalRecordCount, result.totalRecordCountLimitExceeded, result.rows.length)
+		: undefined;
 
 	// ---- Quick search over the loaded rows (#23) ----
 	const search = searchText.trim();
@@ -1243,7 +1281,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			const threshold = Math.min(10, Math.max(1, Math.floor(rowCount * 0.1))); // 10 rows or 10% of data, whichever is smaller
 
 			if (visibleStopIndex >= rowCount - threshold && result.moreRecords) {
-				console.log("[ResultsGrid] Near bottom, triggering load more:", {
+				debugLog("resultsGrid", "[ResultsGrid] Near bottom, triggering load more:", {
 					visibleStopIndex,
 					rowCount,
 					threshold,
@@ -1270,7 +1308,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		);
 
 	if (isLoading) {
-		return withFilterBar(<div className={styles.emptyState}>Loading results...</div>);
+		return withFilterBar(<div className={styles.emptyState}>Loading results…</div>);
 	}
 
 	if (!result) {
@@ -1281,7 +1319,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		return withFilterBar(<div className={styles.emptyState}>No records found</div>);
 	}
 
-	console.log("[ResultsGrid] Rendering grid:", {
+	debugLog("resultsGrid", "[ResultsGrid] Rendering grid:", {
 		rowCount: result.rows.length,
 		columnCount: columns.length,
 		gridDimensions,
@@ -1341,10 +1379,30 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 				</div>
 				<div className={styles.infoBar}>
 					<span>
-						Rows: {search ? `${visibleRows.length} of ${result.rows.length} loaded match the search` : result.rows.length}
+						Rows:{" "}
+						{search
+							? `${visibleRows.length} of ${result.rows.length} loaded match the search${totalText ? ` (${totalText})` : ""}`
+							: totalText
+								? `${result.rows.length} of ${totalText}`
+								: result.rows.length}
 						{result.moreRecords && !isLoadingMore && " (more available)"}
 						{isLoadingMore && " (loading more...)"}
 						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
+						{result.totalRecordCountLimitExceeded && result.entityLogicalName && (
+							<>
+								{" | "}
+								{entityTotal?.entity === result.entityLogicalName && entityTotal.status !== "error" ? (
+									entityTotal.text
+								) : (
+									<>
+										{entityTotal?.entity === result.entityLogicalName && `${entityTotal.text} `}
+										<Link as="button" inline onClick={() => countEntityTotal(result.entityLogicalName!)}>
+											{`Count all ${result.entityLogicalName} records (unfiltered snapshot)`}
+										</Link>
+									</>
+								)}
+							</>
+						)}
 					</span>
 					<span>
 						Selected: {selectedItems.size}
@@ -1447,7 +1505,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								node={draftCondition}
 								entityName={filterFor.target.entityName}
 								fetchQuery={fetchQuery}
-								findings={[]}
+								findings={adviseCondition(draftCondition)}
 								onUpdate={(updates) => setDraftCondition((d) => (d ? { ...d, ...updates } : d))}
 							/>
 							<Text size={200} className={styles.filterNote}>

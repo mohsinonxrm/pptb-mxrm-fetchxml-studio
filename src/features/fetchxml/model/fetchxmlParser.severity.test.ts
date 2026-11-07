@@ -108,7 +108,8 @@ describe("supported: documented, or undocumented but verified to work", () => {
 		const f = findings(
 			`<fetch aggregate="true"><entity name="task"><attribute name="prioritycode" alias="p" groupby="true" /><attribute name="activityid" alias="n" aggregate="count" /><order alias="n" descending="true" /></entity></fetch>`,
 		);
-		expect(f.result.warnings).toEqual([]);
+		// Only the Query Advisor's 50,000 record aggregate limit advice (no filter, #97)
+		expect(f.result.warnings).toEqual([expect.objectContaining({ kind: "advice", attribute: "aggregate", severity: "info" })]);
 		expect(f.result.fetchNode!.entity.orders).toEqual([
 			expect.objectContaining({ alias: "n", descending: true }),
 		]);

@@ -70,6 +70,10 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 	const entityInfo = useEntityInfo(node.entity.name);
 	const [showTeachingPopover, setShowTeachingPopover] = useState(false);
 	const [aggregateOffPlan, setAggregateOffPlan] = useState<AggregateOffPlan | null>(null);
+	// The fetch node whose UTC offset has been shown: clearing the field keeps it until another query (#98)
+	const [utcOffsetShownFor, setUtcOffsetShownFor] = useState<string | null>(null);
+	if (options.utcOffset !== undefined && utcOffsetShownFor !== node.id) setUtcOffsetShownFor(node.id);
+	const showUtcOffset = options.utcOffset !== undefined || utcOffsetShownFor === node.id;
 
 	const handleRetrieveAllChange = (_: unknown, data: { checked: boolean }) => {
 		// Show the teaching popover the first time this is turned on in a session
@@ -161,6 +165,7 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					label="Aggregate query"
 					checked={options.aggregate === true}
 					onChange={handleAggregateChange}
+					validation={findingFor(findings, "aggregate")}
 					info={
 						<Info
 							text="Groups records and calculates values (count, sum, average, minimum, maximum). Every attribute then needs Group by or an aggregate function, and an alias."
@@ -172,6 +177,7 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					label="Distinct rows"
 					checked={options.distinct === true}
 					onChange={flag("distinct")}
+					validation={findingFor(findings, "distinct")}
 					info={<Info text="Leaves out duplicate rows from the results." href={DOCS.distinctResults} />}
 				/>
 				<InfoCheckbox
@@ -181,7 +187,12 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					disabled={hasTop && !options.returnTotalRecordCount}
 					hint={hasTop && !options.returnTotalRecordCount ? notWithTop : undefined}
 					validation={options.returnTotalRecordCount ? topConflict : undefined}
-					info={<Info text="Returns how many records match the query, up to 5,000." href={DOCS.countRows} />}
+					info={
+						<Info
+							text="Returns how many records match the query, up to 5,000 (500 for elastic entities), shown with the results. When more match, the count shows as 5,000+."
+							href={DOCS.countRows}
+						/>
+					}
 				/>
 				<InfoCheckbox
 					label="Sort option sets by value"
@@ -389,19 +400,28 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 				</AccordionItem>
 			</Accordion>
 
-			<div className={styles.section}>
-				<SectionHeading>Advanced</SectionHeading>
-				<NumberField
-					label="UTC offset (minutes)"
-					value={options.utcOffset}
-					min={-720}
-					max={720}
-					rangeSeverity="warning"
-					placeholder="0"
-					onChange={(value) => onUpdate({ utcOffset: value })}
-					info="Time zone offset for date and time filters, from −720 to 720 minutes."
-				/>
-			</div>
+			{/* utc-offset isn't in the fetch element reference: shown only when the query sets it (#98),
+			    and kept while it's being edited (cleared) so the field doesn't vanish mid-edit */}
+			{showUtcOffset && (
+				<div className={styles.section}>
+					<SectionHeading>Advanced</SectionHeading>
+					<NumberField
+						label="UTC offset (undocumented)"
+						value={options.utcOffset}
+						min={-720}
+						max={720}
+						rangeSeverity="warning"
+						placeholder="Not set"
+						onChange={(value) => onUpdate({ utcOffset: value })}
+						info={
+							<Info
+								text="Not in the fetch element reference; kept as written. Time zone offset in minutes for date and time filters, from −720 to 720. Clear it to remove it from the query."
+								href={DOCS.fetch}
+							/>
+						}
+					/>
+				</div>
+			)}
 
 			<AggregateOffDialog
 				plan={aggregateOffPlan}

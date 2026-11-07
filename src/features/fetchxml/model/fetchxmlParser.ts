@@ -52,7 +52,7 @@ export interface ParseError {
  * How serious a parser finding is (#89). Principle: what the FetchXML reference documents is
  * supported; undocumented behaviour verified to work is supported too; only what is known not to
  * work is blocked. Every classification was validated against a live Dataverse org.
- *  - "error":   known to be rejected by Dataverse — Execute is blocked. Parse to Tree can still
+ *  - "error":   known to be rejected by Dataverse — Execute is blocked. Parse to tree can still
  *               build the tree, correcting or dropping the item where possible.
  *  - "warning": can't be determined client-side (e.g. a link-entity without from/to is valid only
  *               for system many-to-many relationships) — the editor offers "Execute anyway".
@@ -64,9 +64,9 @@ export type ParseWarningSeverity = "error" | "warning" | "info";
 /**
  * What happens to the finding:
  *  - "invalid":   the query is invalid as written (Dataverse rejects it)
- *  - "ignored":   Dataverse ignores it; Parse to Tree drops it with no change in results
- *  - "dropped":   meaningful, but the tree can't represent it yet — Parse to Tree removes it
- *  - "corrected": Parse to Tree changes it to a valid form (e.g. sanitized alias)
+ *  - "ignored":   Dataverse ignores it; Parse to tree drops it with no change in results
+ *  - "dropped":   meaningful, but the tree can't represent it yet — Parse to tree removes it
+ *  - "corrected": Parse to tree changes it to a valid form (e.g. sanitized alias)
  *  - "advice":    valid as written and kept as-is; a recommendation only
  */
 export type ParseWarningKind = "invalid" | "ignored" | "dropped" | "corrected" | "advice";
@@ -95,7 +95,7 @@ export function getBlockingWarnings(result: Pick<ParseResult, "warnings">): Pars
 }
 
 /**
- * Changes Parse to Tree would make to the query: anything it drops, and anything it rewrites to fix
+ * Changes Parse to tree would make to the query: anything it drops, and anything it rewrites to fix
  * a problem Dataverse would reject. Ignored items (Dataverse ignores them too) and minor
  * informational corrections are not changes; invalid items are kept as written.
  */
@@ -205,7 +205,7 @@ function collectElementAttributes(
 
 		if (lower === "xmlns") {
 			issues.push({
-				message: `Default namespace (xmlns="${attr.value}") isn't supported by Dataverse; Parse to Tree removes it.`,
+				message: `Default namespace (xmlns="${attr.value}") isn't supported by Dataverse; Parse to tree removes it.`,
 				element: elementName,
 				attribute: name,
 				severity: "error",
@@ -238,7 +238,7 @@ function collectElementAttributes(
 /** Unknown child element (including namespaced ones): Dataverse rejects it (0x8004111c). */
 function reportUnknownChild(child: Element, parentName: string, issues: ParseIssue[]): void {
 	issues.push({
-		message: `Unknown element <${child.nodeName}> inside <${parentName}> isn't valid FetchXML (Dataverse rejects it); Parse to Tree drops it.`,
+		message: `Unknown element <${child.nodeName}> inside <${parentName}> isn't valid FetchXML (Dataverse rejects it); Parse to tree drops it.`,
 		element: child.nodeName,
 		severity: "error",
 		kind: "dropped",
@@ -246,7 +246,7 @@ function reportUnknownChild(child: Element, parentName: string, issues: ParseIss
 }
 
 /**
- * Aliases Parse to Tree corrected in this parse (old → new, or null when removed). References to
+ * Aliases Parse to tree corrected in this parse (old → new, or null when removed). References to
  * them elsewhere in the query are updated to match, so the query keeps its meaning (#94).
  */
 let linkAliasRenames = new Map<string, string | null>();
@@ -295,7 +295,7 @@ function updateAliasReferences(fetch: FetchNode, issues: ParseIssue[]): void {
 	visitContainer(fetch.entity);
 	if (updated.length > 0) {
 		issues.push({
-			message: `Parse to Tree also updates the references to the corrected aliases: ${updated.join("; ")}.`,
+			message: `Parse to tree also updates the references to the corrected aliases: ${updated.join("; ")}.`,
 			element: "fetch",
 			severity: "info",
 			kind: "corrected",
@@ -342,14 +342,14 @@ export function parseFetchXml(xmlString: string): ParseResult {
 			const errorText = parserError.textContent || "Invalid XML syntax";
 			return {
 				success: false,
-				errors: [{ message: `XML Parsing Error: ${errorText}` }],
+				errors: [{ message: `XML parsing error: ${errorText}` }],
 				warnings: [],
 			};
 		}
 	} catch (e) {
 		return {
 			success: false,
-			errors: [{ message: `XML Parsing Error: ${e instanceof Error ? e.message : String(e)}` }],
+			errors: [{ message: `XML parsing error: ${e instanceof Error ? e.message : String(e)}` }],
 			warnings: [],
 		};
 	}
@@ -371,7 +371,7 @@ export function parseFetchXml(xmlString: string): ParseResult {
 	const extraEntities = fetchElement.querySelectorAll(":scope > entity").length - 1;
 	if (extraEntities > 0) {
 		issues.push({
-			message: `Only one <entity> is allowed; Dataverse uses the first and Parse to Tree drops the other ${extraEntities}.`,
+			message: `Only one <entity> is allowed; Dataverse uses the first and Parse to tree drops the other ${extraEntities}.`,
 			element: "fetch",
 			severity: "info",
 			kind: "dropped",
@@ -425,7 +425,7 @@ export function parseFetchXml(xmlString: string): ParseResult {
 	} catch (e) {
 		return {
 			success: false,
-			errors: [{ message: `Parsing Error: ${e instanceof Error ? e.message : String(e)}` }],
+			errors: [{ message: `Parsing error: ${e instanceof Error ? e.message : String(e)}` }],
 			warnings: issues.filter((i): i is ParseWarning => i.severity !== "fatal"),
 		};
 	}
@@ -444,7 +444,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 		options.aggregate = true;
 	} else if (aggregateAttr !== null && parseBooleanAttr(aggregateAttr) !== false) {
 		issues.push({
-			message: `aggregate="${aggregateAttr}" doesn't make an aggregate query; Dataverse only recognises "true". Parse to Tree treats the query as non-aggregate.`,
+			message: `aggregate="${aggregateAttr}" doesn't make an aggregate query; Dataverse only recognises "true". Parse to tree treats the query as non-aggregate.`,
 			element: "fetch",
 			attribute: "aggregate",
 			severity: "info",
@@ -475,7 +475,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 		} else {
 			// Dataverse: "Expected value between 1 and 50000 inclusive."
 			issues.push({
-				message: `'aggregatelimit' must be a whole number from 1 to 50,000 (Dataverse rejects '${aggregateLimit}'); Parse to Tree drops it.`,
+				message: `'aggregatelimit' must be a whole number from 1 to 50,000 (Dataverse rejects '${aggregateLimit}'); Parse to tree drops it.`,
 				element: "fetch",
 				attribute: "aggregatelimit",
 				severity: "error",
@@ -529,7 +529,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 			options.top = topNum;
 		} else {
 			issues.push({
-				message: `Invalid 'top' value '${top}' (Dataverse rejects it); Parse to Tree drops it.`,
+				message: `Invalid 'top' value '${top}' (Dataverse rejects it); Parse to tree drops it.`,
 				element: "fetch",
 				attribute: "top",
 				severity: "error",
@@ -545,7 +545,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 			options.count = countNum;
 		} else {
 			issues.push({
-				message: `Invalid 'count' value '${count}' (Dataverse rejects it); Parse to Tree drops it.`,
+				message: `Invalid 'count' value '${count}' (Dataverse rejects it); Parse to tree drops it.`,
 				element: "fetch",
 				attribute: "count",
 				severity: "error",
@@ -561,7 +561,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 			options.page = pageNum;
 		} else {
 			issues.push({
-				message: `Invalid 'page' value '${page}' (Dataverse rejects it); Parse to Tree drops it.`,
+				message: `Invalid 'page' value '${page}' (Dataverse rejects it); Parse to tree drops it.`,
 				element: "fetch",
 				attribute: "page",
 				severity: "error",
@@ -577,7 +577,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 			options.utcOffset = utcNum;
 		} else {
 			issues.push({
-				message: `Invalid 'utc-offset' value '${utcOffset}' is ignored by Dataverse; Parse to Tree drops it.`,
+				message: `Invalid 'utc-offset' value '${utcOffset}' is ignored by Dataverse; Parse to tree drops it.`,
 				element: "fetch",
 				attribute: "utc-offset",
 				severity: "info",
@@ -701,8 +701,8 @@ function parseAttribute(attrElement: Element, issues: ParseIssue[]): AttributeNo
 			const sanitized = sanitizeAlias(alias);
 			issues.push({
 				message: sanitized
-					? `Alias '${alias}' has invalid characters; Parse to Tree changes it to '${sanitized}'.`
-					: `Alias '${alias}' has no valid characters; Parse to Tree removes it.`,
+					? `Alias '${alias}' has invalid characters; Parse to tree changes it to '${sanitized}'.`
+					: `Alias '${alias}' has no valid characters; Parse to tree removes it.`,
 				element: "attribute",
 				attribute: "alias",
 				severity: "error",
@@ -727,7 +727,7 @@ function parseAttribute(attrElement: Element, issues: ParseIssue[]): AttributeNo
 		} else if (aggregate === "rowaggregate") {
 			// Dataverse: 0x8004111a "The value 'rowaggregate' is not a valid aggregate operation"
 			issues.push({
-				message: `'rowaggregate' isn't an aggregate function; to count child records use rowaggregate="CountChildren" instead. Parse to Tree drops it.`,
+				message: `'rowaggregate' isn't an aggregate function; to count child records use rowaggregate="CountChildren" instead. Parse to tree drops it.`,
 				element: "attribute",
 				attribute: "aggregate",
 				severity: "error",
@@ -735,7 +735,7 @@ function parseAttribute(attrElement: Element, issues: ParseIssue[]): AttributeNo
 			});
 		} else {
 			issues.push({
-				message: `Invalid aggregate value '${aggregate}'; Parse to Tree drops it.`,
+				message: `Invalid aggregate value '${aggregate}'; Parse to tree drops it.`,
 				element: "attribute",
 				attribute: "aggregate",
 				severity: "error",
@@ -759,7 +759,7 @@ function parseAttribute(attrElement: Element, issues: ParseIssue[]): AttributeNo
 			attr.dategrouping = dategrouping as AttributeNode["dategrouping"];
 		} else {
 			issues.push({
-				message: `Invalid dategrouping value '${dategrouping}'; Parse to Tree drops it.`,
+				message: `Invalid dategrouping value '${dategrouping}'; Parse to tree drops it.`,
 				element: "attribute",
 				attribute: "dategrouping",
 				severity: "error",
@@ -804,7 +804,7 @@ function parseOrder(orderElement: Element, issues: ParseIssue[]): OrderNode | nu
 
 	if (!attribute && !alias) {
 		issues.push({
-			message: "Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to Tree drops it.",
+			message: "Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to tree drops it.",
 			element: "order",
 			severity: "error",
 			kind: "dropped",
@@ -827,7 +827,7 @@ function parseOrder(orderElement: Element, issues: ParseIssue[]): OrderNode | nu
 		order.descending = true;
 	} else if (descending !== null && descending !== "false" && descending !== "0") {
 		issues.push({
-			message: `Invalid descending value '${descending}'; Dataverse only accepts 'true', 'false', '1' or '0' (0x80041119). Parse to Tree sorts ascending.`,
+			message: `Invalid descending value '${descending}'; Dataverse only accepts 'true', 'false', '1' or '0' (0x80041119). Parse to tree sorts ascending.`,
 			element: "order",
 			attribute: "descending",
 			severity: "error",
@@ -850,7 +850,7 @@ function parseFilter(filterElement: Element, issues: ParseIssue[]): FilterNode {
 	const type = filterElement.getAttribute("type") || "and";
 	if (type !== "and" && type !== "or") {
 		issues.push({
-			message: `Invalid filter type '${type}' (Dataverse rejects it); Parse to Tree uses 'and'.`,
+			message: `Invalid filter type '${type}' (Dataverse rejects it); Parse to tree uses 'and'.`,
 			element: "filter",
 			attribute: "type",
 			severity: "error",
@@ -874,7 +874,7 @@ function parseFilter(filterElement: Element, issues: ParseIssue[]): FilterNode {
 		filter.hint = "union";
 	} else if (hint !== null) {
 		issues.push({
-			message: `Invalid filter hint '${hint}'; the only valid value is 'union' (Dataverse rejects it: 0x80041122). Parse to Tree drops it.`,
+			message: `Invalid filter hint '${hint}'; the only valid value is 'union' (Dataverse rejects it: 0x80041122). Parse to tree drops it.`,
 			element: "filter",
 			attribute: "hint",
 			severity: "error",
@@ -933,7 +933,7 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 	}
 	if (!operatorAttr) {
 		issues.push({
-			message: "Condition element missing 'operator' (Dataverse rejects it); Parse to Tree uses 'eq'.",
+			message: "Condition element missing 'operator' (Dataverse rejects it); Parse to tree uses 'eq'.",
 			element: "condition",
 			attribute: "operator",
 			severity: "error",
@@ -1082,7 +1082,7 @@ function parseLinkEntity(linkElement: Element, issues: ParseIssue[]): LinkEntity
 		linkType = linkTypeAttr as LinkType;
 	} else {
 		issues.push({
-			message: `Invalid link-type '${linkTypeAttr}' (Dataverse rejects it); Parse to Tree uses 'inner'.`,
+			message: `Invalid link-type '${linkTypeAttr}' (Dataverse rejects it); Parse to tree uses 'inner'.`,
 			element: "link-entity",
 			attribute: "link-type",
 			severity: "error",
@@ -1110,8 +1110,8 @@ function parseLinkEntity(linkElement: Element, issues: ParseIssue[]): LinkEntity
 			const sanitized = sanitizeAlias(alias);
 			issues.push({
 				message: sanitized
-					? `Alias '${alias}' has invalid characters; Parse to Tree changes it to '${sanitized}'.`
-					: `Alias '${alias}' has no valid characters; Parse to Tree removes it.`,
+					? `Alias '${alias}' has invalid characters; Parse to tree changes it to '${sanitized}'.`
+					: `Alias '${alias}' has no valid characters; Parse to tree removes it.`,
 				element: "link-entity",
 				attribute: "alias",
 				severity: "info",

@@ -3,24 +3,35 @@
  * Displays hierarchical structure: Entity -> Attributes, Orders, Filters, Link-Entities
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactElement, type ReactNode } from "react";
 import {
 	Badge,
 	Tree,
 	TreeItem,
 	TreeItemLayout,
 	Button,
+	Dialog,
+	DialogActions,
+	DialogBody,
+	DialogContent,
+	DialogSurface,
+	DialogTitle,
 	makeStyles,
 	Menu,
+	MenuDivider,
 	MenuTrigger,
 	MenuPopover,
 	MenuList,
 	MenuItem,
 	tokens,
+	type PositioningVirtualElement,
 	type TreeOpenChangeData,
 } from "@fluentui/react-components";
 import {
 	Table20Regular,
+	TableSimple20Regular,
+	CheckboxChecked20Regular,
+	TextAdd20Regular,
 	Column20Regular,
 	Filter20Regular,
 	ArrowSort20Regular,
@@ -41,6 +52,7 @@ import type {
 } from "../../model/nodes";
 import { operatorRequiresValue } from "../../model/operators";
 import { NON_RETURNING_LINK_TYPES, validateQueryRules } from "../../model/fetchxmlRules";
+import { countDescendants, deleteConfirmationText, linkEntityLabel, showsNoAttributesHint } from "../../model/treeLabels";
 import { debugLog, debugWarn } from "../../../../shared/utils/debug";
 import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
 import { metadataCache } from "../../state/cache";
@@ -103,12 +115,69 @@ const useStyles = makeStyles({
 		gap: tokens.spacingHorizontalXXS,
 		alignItems: "center",
 	},
+	// "(no attributes)" after a link-entity (#24)
+	hint: {
+		color: tokens.colorNeutralForeground4,
+		marginLeft: "6px",
+		fontStyle: "italic",
+	},
+	// Delete in the context menu (#24)
+	danger: {
+		color: tokens.colorPaletteRedForeground1,
+		"& svg": {
+			color: tokens.colorPaletteRedForeground1,
+		},
+	},
 });
 
 type NodeBadge = { text: string; color?: "danger" | "brand" | "informative"; title?: string };
 
 /** The badges whose condition holds */
 const badgeList = (...items: (NodeBadge | false | undefined)[]): NodeBadge[] => items.filter((b): b is NodeBadge => !!b);
+
+/** An item of a row's Add menu (#24) */
+interface AddItem {
+	key: string;
+	label: string;
+	icon: ReactElement;
+	disabled?: boolean;
+	onClick: () => void;
+}
+
+/** What a delete removes, for the confirmation (#24) */
+interface DeleteTarget {
+	id: NodeId;
+	/** "Delete link-entity contact?" */
+	title: string;
+	/** Items inside the node: 0 deletes without asking */
+	descendants: number;
+}
+
+/** One tree row */
+interface RowSpec {
+	id: NodeId;
+	icon: ReactElement;
+	label: ReactNode;
+	/** Grey italic text after the label */
+	hint?: string;
+	badges?: NodeBadge[];
+	addItems?: AddItem[];
+	/** Omitted for rows that can't be deleted (the root entity) */
+	deleteTarget?: DeleteTarget;
+	children?: (ReactElement | false | undefined)[];
+}
+
+interface ContextMenuState {
+	open: boolean;
+	target?: PositioningVirtualElement;
+	addItems?: AddItem[];
+	deleteTarget?: DeleteTarget;
+}
+
+/** The primary key of an entity, from the cached metadata */
+const primaryIdOf = (logicalName: string): string | undefined =>
+	metadataCache.getEntityMetadata(logicalName)?.PrimaryIdAttribute ??
+	metadataCache.getAllEntityMetadata()?.find((e) => e.LogicalName === logicalName)?.PrimaryIdAttribute;
 
 const FUNCTION_TEXT: Record<string, string> = {
 	count: "Count",
@@ -192,6 +261,12 @@ export function TreeView({
 	// menu click reached the row's onClick and re-selected the row, so the node the menu had just
 	// added (and selected) lost the selection (#24, #25)
 	const stopRowSelect = (e: React.MouseEvent) => e.stopPropagation();
+
+	// Right-click / Shift+F10 menu (#24): one menu for the tree, opened at the row
+	const [contextMenu, setContextMenu] = useState<ContextMenuState>({ open: false });
+	const contextReturnFocus = useRef<HTMLElement | null>(null);
+	// A node with items inside waits for the confirmation (#24)
+	const [pendingDelete, setPendingDelete] = useState<DeleteTarget | null>(null);
 
 	// Helper to find path from root to a node (all ancestor IDs)
 	const findPathToNode = (targetId: NodeId): NodeId[] => {
@@ -336,175 +411,196 @@ export function TreeView({
 		setOpenItems(data.openItems as Set<NodeId>);
 	};
 
-	const renderFetchNode = (fetch: FetchNode) => {
-		return (
-			<TreeItem
-				key={fetch.id}
-				itemType="branch"
-				value={fetch.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					iconBefore={<Table20Regular />}
-					aside={renderBadges(
-						fetch.id,
-						badgeList(
-							fetch.options.aggregate === true && { text: "Aggregate", color: "brand" },
-							fetch.options.distinct && { text: "Distinct" },
-							fetch.options.dataSource === "retained" && { text: "Retained" },
-							(fetch.options.queryHints?.length ?? 0) > 0 && { text: "Hints" },
-						),
-					)}
-					onClick={() => onNodeSelect(fetch.id)}
-				>
-					Fetch Query
-				</TreeItemLayout>
+	// ============ ADD / DELETE (#24) ============
 
-				<Tree>{renderEntityNode(fetch.entity, true)}</Tree>
-			</TreeItem>
-		);
+	/** Delete a node; one with items inside asks first (#24) */
+	const requestDelete = (target: DeleteTarget) => {
+		if (target.descendants > 0) setPendingDelete(target);
+		else onRemoveNode(target.id);
 	};
 
-	const renderEntityNode = (entity: EntityNode, isRootEntity: boolean = true) => {
-		// Only allow one top-level filter per entity
+	/** The Add items of an entity or link-entity, in the order of #24 */
+	const entityAddItems = (entity: EntityNode | LinkEntityNode): AddItem[] => {
+		// exists / in / any / not any / all / not all return nothing: attributes and orders fail (0x80041121)
+		const canHaveAttributes = entity.type === "entity" || !NON_RETURNING_LINK_TYPES.has(entity.linkType);
+		// Only one top-level filter per entity / link-entity
 		const hasFilter = entity.filters.length > 0;
+		return [
+			{ key: "all", label: "All attributes", icon: <TableSimple20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAllAttributes(entity.id) },
+			{
+				key: "select",
+				label: "Select attributes…",
+				icon: <CheckboxChecked20Regular />,
+				disabled: !canHaveAttributes,
+				onClick: () => void handleOpenSelectAttributes(entity),
+			},
+			{ key: "blank", label: "Blank attribute", icon: <TextAdd20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAttribute(entity.id) },
+			{ key: "order", label: "Order by", icon: <ArrowSort20Regular />, disabled: !canHaveAttributes, onClick: () => onAddOrder(entity.id) },
+			{ key: "filter", label: "Filter", icon: <Filter20Regular />, disabled: hasFilter, onClick: () => onAddFilter(entity.id) },
+			{ key: "link", label: "Link-entity", icon: <Link20Regular />, onClick: () => onAddLinkEntity(entity.id) },
+		];
+	};
 
+	const filterAddItems = (filter: FilterNode): AddItem[] => [
+		{ key: "condition", label: "Condition", icon: <Filter20Regular />, onClick: () => onAddCondition(filter.id) },
+		{ key: "subfilter", label: "Sub-filter", icon: <Filter20Regular />, onClick: () => onAddSubfilter(filter.id) },
+		{ key: "link", label: "Link-entity (any/not any/all)", icon: <Link20Regular />, onClick: () => onAddLinkEntity(filter.id) },
+	];
+
+	const renderMenuItems = (items: AddItem[]) =>
+		items.map((item) => (
+			<MenuItem key={item.key} icon={item.icon} disabled={item.disabled} onClick={item.onClick}>
+				{item.label}
+			</MenuItem>
+		));
+
+	/** Opens the row's context menu at a point (right-click, Shift+F10 or the context-menu key) */
+	const openContextMenu = (x: number, y: number, row: RowSpec, returnFocusTo: HTMLElement | null) => {
+		onNodeSelect(row.id);
+		contextReturnFocus.current = returnFocusTo;
+		setContextMenu({
+			open: true,
+			addItems: row.addItems,
+			deleteTarget: row.deleteTarget,
+			target: {
+				getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0, toJSON: () => ({}) }) as DOMRect,
+			},
+		});
+	};
+
+	/**
+	 * One tree row: its Add menu and Delete button, the context menu, and a chevron only when it has
+	 * items inside (#24)
+	 */
+	const renderRow = (row: RowSpec) => {
+		const children = row.children?.filter(Boolean) ?? [];
+		const hasChildren = children.length > 0;
+		const hasContextMenu = !!row.addItems?.length || !!row.deleteTarget;
 		return (
 			<TreeItem
-				key={entity.id}
-				itemType="branch"
-				value={entity.id}
+				key={row.id}
+				itemType={hasChildren ? "branch" : "leaf"}
+				value={row.id}
 				className={styles.treeItemWithActions}
+				onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+					// Only the focused row, not the rows it contains (keyboard events bubble up the tree)
+					if (!hasContextMenu || e.target !== e.currentTarget) return;
+					if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+						e.preventDefault();
+						const layout = e.currentTarget.querySelector<HTMLElement>(":scope > .fui-TreeItemLayout") ?? e.currentTarget;
+						const rect = layout.getBoundingClientRect();
+						openContextMenu(rect.left + 24, rect.bottom, row, e.currentTarget);
+					}
+				}}
 			>
 				<TreeItemLayout
-					iconBefore={<Table20Regular />}
+					iconBefore={row.icon}
 					actions={
-						<div className="actions">
-							<Menu>
-								<MenuTrigger disableButtonEnhancement>
-									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
-								</MenuTrigger>
-								<MenuPopover onClick={stopRowSelect}>
-									<MenuList>
-										<MenuItem onClick={() => onAddAllAttributes(entity.id)}>
-											All Attributes
-										</MenuItem>
-										<MenuItem onClick={() => onAddAttribute(entity.id)}>Attribute</MenuItem>
-										<MenuItem onClick={() => handleOpenSelectAttributes(entity)}>
-											Select Attributes
-										</MenuItem>
-										<MenuItem onClick={() => onAddOrder(entity.id)}>Order By</MenuItem>
-										<MenuItem onClick={() => onAddFilter(entity.id)} disabled={hasFilter}>
-											Filter
-										</MenuItem>
-										<MenuItem onClick={() => onAddLinkEntity(entity.id)}>Link-Entity</MenuItem>
-									</MenuList>
-								</MenuPopover>
-							</Menu>
-							{!isRootEntity && (
-								<Button
-									appearance="subtle"
-									size="small"
-									icon={<Delete20Regular />}
-									onClick={(e) => {
-										e.stopPropagation();
-										onRemoveNode(entity.id);
-									}}
-									title="Remove"
-								/>
-							)}
-						</div>
+						row.addItems || row.deleteTarget ? (
+							<div className="actions">
+								{row.addItems && (
+									<Menu>
+										<MenuTrigger disableButtonEnhancement>
+											<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add…" aria-label="Add…" />
+										</MenuTrigger>
+										<MenuPopover onClick={stopRowSelect}>
+											<MenuList>{renderMenuItems(row.addItems)}</MenuList>
+										</MenuPopover>
+									</Menu>
+								)}
+								{row.deleteTarget && (
+									<Button
+										appearance="subtle"
+										size="small"
+										icon={<Delete20Regular />}
+										onClick={(e) => {
+											e.stopPropagation();
+											requestDelete(row.deleteTarget!);
+										}}
+										title="Delete"
+										aria-label="Delete"
+									/>
+								)}
+							</div>
+						) : undefined
 					}
-					aside={renderBadges(entity.id)}
-					onClick={() => onNodeSelect(entity.id)}
+					aside={renderBadges(row.id, row.badges)}
+					onClick={() => onNodeSelect(row.id)}
+					onContextMenu={
+						hasContextMenu
+							? (e: React.MouseEvent<HTMLDivElement>) => {
+									e.preventDefault();
+									e.stopPropagation();
+									openContextMenu(e.clientX, e.clientY, row, e.currentTarget.closest<HTMLElement>('[role="treeitem"]'));
+								}
+							: undefined
+					}
 				>
-					{entity.name}
+					{row.label}
+					{row.hint && <span className={styles.hint}>{row.hint}</span>}
 				</TreeItemLayout>
 
-				<Tree>
-					{/* All Attributes */}
-					{entity.allAttributes?.enabled && renderAllAttributesNode(entity.allAttributes)}
-
-					{/* Attributes */}
-					{entity.attributes.map((attr) => renderAttributeNode(attr))}
-
-					{/* Orders */}
-					{entity.orders.map((order) => renderOrderNode(order))}
-
-					{/* Filters */}
-					{entity.filters.map((filter) => renderFilterNode(filter))}
-
-					{/* Link-Entities */}
-					{entity.links.map((link) => renderLinkEntityNode(link))}
-				</Tree>
+				{hasChildren && <Tree>{children}</Tree>}
 			</TreeItem>
 		);
 	};
 
-	const renderAllAttributesNode = (node: AllAttributesNode) => {
-		return (
-			<TreeItem key={node.id} itemType="leaf" value={node.id} className={styles.treeItem}>
-				<TreeItemLayout
-					iconBefore={<Column20Regular />}
-					actions={
-						<Button
-							appearance="subtle"
-							size="small"
-							icon={<Delete20Regular />}
-							onClick={(e) => {
-								e.stopPropagation();
-								onRemoveNode(node.id);
-							}}
-							title="Remove"
-						/>
-					}
-					aside={renderBadges(node.id)}
-					onClick={() => onNodeSelect(node.id)}
-				>
-					All Attributes
-				</TreeItemLayout>
-			</TreeItem>
-		);
-	};
+	// ============ NODES ============
+
+	const renderFetchNode = (fetch: FetchNode) =>
+		renderRow({
+			id: fetch.id,
+			icon: <Table20Regular />,
+			label: "Fetch query",
+			badges: badgeList(
+				fetch.options.aggregate === true && { text: "Aggregate", color: "brand" },
+				fetch.options.distinct && { text: "Distinct" },
+				fetch.options.dataSource === "retained" && { text: "Retained" },
+				(fetch.options.queryHints?.length ?? 0) > 0 && { text: "Hints" },
+			),
+			children: [renderEntityNode(fetch.entity)],
+		});
+
+	/** Children shared by <entity> and <link-entity> */
+	const containerChildren = (container: EntityNode | LinkEntityNode) => [
+		container.allAttributes?.enabled && renderAllAttributesNode(container.allAttributes),
+		...container.attributes.map((attr) => renderAttributeNode(attr)),
+		...container.orders.map((order) => renderOrderNode(order)),
+		...container.filters.map((filter) => renderFilterNode(filter, container.name)),
+		...container.links.map((link) => renderLinkEntityNode(link, container.name)),
+	];
+
+	// The root entity: no Delete (New query replaces it)
+	const renderEntityNode = (entity: EntityNode) =>
+		renderRow({
+			id: entity.id,
+			icon: <Table20Regular />,
+			label: entity.name,
+			addItems: entityAddItems(entity),
+			children: containerChildren(entity),
+		});
+
+	const renderAllAttributesNode = (node: AllAttributesNode) =>
+		renderRow({
+			id: node.id,
+			icon: <TableSimple20Regular />,
+			label: "All attributes",
+			deleteTarget: { id: node.id, title: "Delete all attributes?", descendants: 0 },
+		});
 
 	const renderAttributeNode = (attr: AttributeNode) => {
-		const label = attr.alias ? `${attr.name} (as ${attr.alias})` : attr.name;
 		const badges: NodeBadge[] = [];
 		if (attr.groupby) badges.push({ text: attr.dategrouping ? `Group by · ${attr.dategrouping}` : "Group by", color: "brand" });
 		if (attr.aggregate) badges.push({ text: FUNCTION_TEXT[attr.aggregate] ?? attr.aggregate, color: "brand" });
 		if (attr.aggregate === "countcolumn" && attr.distinct) badges.push({ text: "Unique" });
 		if (attr.rowAggregate) badges.push({ text: "Child count" });
-
-		return (
-			<TreeItem
-				key={attr.id}
-				itemType="leaf"
-				value={attr.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					iconBefore={<Column20Regular />}
-					actions={
-						<div className="actions">
-							<Button
-								appearance="subtle"
-								size="small"
-								icon={<Delete20Regular />}
-								onClick={(e) => {
-									e.stopPropagation();
-									onRemoveNode(attr.id);
-								}}
-								title="Remove Attribute"
-							/>
-						</div>
-					}
-					aside={renderBadges(attr.id, badges)}
-					onClick={() => onNodeSelect(attr.id)}
-				>
-					{label}
-				</TreeItemLayout>
-			</TreeItem>
-		);
+		return renderRow({
+			id: attr.id,
+			icon: <Column20Regular />,
+			label: attr.alias ? `${attr.name} (as ${attr.alias})` : attr.name,
+			badges,
+			deleteTarget: { id: attr.id, title: `Delete attribute ${attr.name}?`, descendants: 0 },
+		});
 	};
 
 	const renderOrderNode = (order: OrderNode) => {
@@ -512,96 +608,28 @@ export function TreeView({
 		// Aggregate queries sort by alias (#90); show entityname prefix for link-entity orders
 		const target = order.alias ? `${order.alias} (alias)` : (order.attribute ?? "");
 		const displayName = order.entityname ? `${order.entityname}.${target}` : target;
-		return (
-			<TreeItem
-				key={order.id}
-				itemType="leaf"
-				value={order.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					iconBefore={<ArrowSort20Regular />}
-					actions={
-						<div className="actions">
-							<Button
-								appearance="subtle"
-								size="small"
-								icon={<Delete20Regular />}
-								onClick={(e) => {
-									e.stopPropagation();
-									onRemoveNode(order.id);
-								}}
-								title="Remove Order"
-							/>
-						</div>
-					}
-					aside={renderBadges(order.id)}
-					onClick={() => onNodeSelect(order.id)}
-				>
-					{displayName} {direction}
-				</TreeItemLayout>
-			</TreeItem>
-		);
+		return renderRow({
+			id: order.id,
+			icon: <ArrowSort20Regular />,
+			label: `${displayName} ${direction}`,
+			deleteTarget: { id: order.id, title: `Delete order ${displayName}?`, descendants: 0 },
+		});
 	};
 
-	const renderFilterNode = (filter: FilterNode) => {
-		return (
-			<TreeItem
-				key={filter.id}
-				itemType="branch"
-				value={filter.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					iconBefore={<Filter20Regular />}
-					actions={
-						<div className="actions">
-							<Menu>
-								<MenuTrigger disableButtonEnhancement>
-									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
-								</MenuTrigger>
-								<MenuPopover onClick={stopRowSelect}>
-									<MenuList>
-										<MenuItem onClick={() => onAddCondition(filter.id)}>Condition</MenuItem>
-										<MenuItem onClick={() => onAddSubfilter(filter.id)}>Sub-Filter</MenuItem>
-										<MenuItem onClick={() => onAddLinkEntity(filter.id)}>
-											Link-Entity (any/not any/all)
-										</MenuItem>
-									</MenuList>
-								</MenuPopover>
-							</Menu>
-							<Button
-								appearance="subtle"
-								size="small"
-								icon={<Delete20Regular />}
-								onClick={(e) => {
-									e.stopPropagation();
-									onRemoveNode(filter.id);
-								}}
-								title="Remove Filter"
-							/>
-						</div>
-					}
-					aside={renderBadges(
-						filter.id,
-						badgeList(
-							filter.hint === "union" && { text: "Union" },
-							filter.isQuickFindFields && { text: "Quick find" },
-						),
-					)}
-					onClick={() => onNodeSelect(filter.id)}
-				>
-					Filter ({filter.conjunction})
-				</TreeItemLayout>
-
-				<Tree>
-					{filter.conditions.map((cond) => renderConditionNode(cond))}
-					{filter.subfilters.map((subfilter) => renderFilterNode(subfilter))}
-					{filter.links?.map((link) => renderLinkEntityNode(link))}
-				</Tree>
-			</TreeItem>
-		);
-	};
+	const renderFilterNode = (filter: FilterNode, containerName: string): ReactElement =>
+		renderRow({
+			id: filter.id,
+			icon: <Filter20Regular />,
+			label: `Filter (${filter.conjunction})`,
+			badges: badgeList(filter.hint === "union" && { text: "Union" }, filter.isQuickFindFields && { text: "Quick find" }),
+			addItems: filterAddItems(filter),
+			deleteTarget: { id: filter.id, title: `Delete filter (${filter.conjunction})?`, descendants: countDescendants(filter) },
+			children: [
+				...filter.conditions.map((cond) => renderConditionNode(cond)),
+				...filter.subfilters.map((subfilter) => renderFilterNode(subfilter, containerName)),
+				...(filter.links ?? []).map((link) => renderLinkEntityNode(link, containerName)),
+			],
+		});
 
 	const renderConditionNode = (condition: ConditionNode) => {
 		// Format the display text based on operator and value
@@ -613,122 +641,30 @@ export function TreeView({
 		if (requiresValue && condition.valueof) {
 			// Compared to another attribute
 			displayText += ` → ${condition.valueof}`;
-		} else if (
-			requiresValue &&
-			condition.value !== undefined &&
-			condition.value !== null &&
-			condition.value !== ""
-		) {
+		} else if (requiresValue && condition.value !== undefined && condition.value !== null && condition.value !== "") {
 			displayText += ` = ${formatDisplayValue(condition.value)}`;
 		}
 
-		return (
-			<TreeItem
-				key={condition.id}
-				itemType="leaf"
-				value={condition.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					actions={
-						<div className="actions">
-							<Button
-								appearance="subtle"
-								size="small"
-								icon={<Delete20Regular />}
-								onClick={(e) => {
-									e.stopPropagation();
-									onRemoveNode(condition.id);
-								}}
-								title="Remove Condition"
-							/>
-						</div>
-					}
-					aside={renderBadges(condition.id)}
-					onClick={() => onNodeSelect(condition.id)}
-				>
-					{displayText}
-				</TreeItemLayout>
-			</TreeItem>
-		);
+		return renderRow({
+			id: condition.id,
+			icon: <Filter20Regular />,
+			label: displayText,
+			deleteTarget: { id: condition.id, title: `Delete condition ${condition.attribute}?`, descendants: 0 },
+		});
 	};
 
-	const renderLinkEntityNode = (link: LinkEntityNode) => {
-		// exists / in / any / not any / all / not all return nothing: attributes and orders fail (0x80041121)
-		const canHaveAttributes = !NON_RETURNING_LINK_TYPES.has(link.linkType);
-		// Only allow one top-level filter per link-entity
-		const hasFilter = link.filters.length > 0;
-
-		return (
-			<TreeItem
-				key={link.id}
-				itemType="branch"
-				value={link.id}
-				className={styles.treeItemWithActions}
-			>
-				<TreeItemLayout
-					iconBefore={<Link20Regular />}
-					actions={
-						<div className="actions">
-							<Menu>
-								<MenuTrigger disableButtonEnhancement>
-									<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add..." />
-								</MenuTrigger>
-								<MenuPopover onClick={stopRowSelect}>
-									<MenuList>
-										<MenuItem
-											onClick={() => onAddAllAttributes(link.id)}
-											disabled={!canHaveAttributes}
-										>
-											All Attributes
-										</MenuItem>
-										<MenuItem onClick={() => onAddAttribute(link.id)} disabled={!canHaveAttributes}>
-											Attribute
-										</MenuItem>
-										<MenuItem
-											onClick={() => handleOpenSelectAttributes(link)}
-											disabled={!canHaveAttributes}
-										>
-											Select Attributes
-										</MenuItem>
-										<MenuItem onClick={() => onAddOrder(link.id)} disabled={!canHaveAttributes}>
-											Order By
-										</MenuItem>
-										<MenuItem onClick={() => onAddFilter(link.id)} disabled={hasFilter}>
-											Filter
-										</MenuItem>
-										<MenuItem onClick={() => onAddLinkEntity(link.id)}>Link-Entity</MenuItem>
-									</MenuList>
-								</MenuPopover>
-							</Menu>
-							<Button
-								appearance="subtle"
-								size="small"
-								icon={<Delete20Regular />}
-								onClick={(e) => {
-									e.stopPropagation();
-									onRemoveNode(link.id);
-								}}
-								title="Remove Link"
-							/>
-						</div>
-					}
-					aside={renderBadges(link.id)}
-					onClick={() => onNodeSelect(link.id)}
-				>
-					{link.alias || link.name} ({link.linkType})
-				</TreeItemLayout>
-
-				<Tree>
-					{link.allAttributes?.enabled && renderAllAttributesNode(link.allAttributes)}
-					{link.attributes.map((attr) => renderAttributeNode(attr))}
-					{link.orders.map((order) => renderOrderNode(order))}
-					{link.filters.map((filter) => renderFilterNode(filter))}
-					{link.links.map((nestedLink) => renderLinkEntityNode(nestedLink))}
-				</Tree>
-			</TreeItem>
-		);
-	};
+	/** @param parentName - The entity / link-entity this link-entity joins from */
+	const renderLinkEntityNode = (link: LinkEntityNode, parentName: string): ReactElement =>
+		renderRow({
+			id: link.id,
+			icon: <Link20Regular />,
+			// Names the lookup when there's no alias (#25)
+			label: linkEntityLabel(link, primaryIdOf(parentName)),
+			hint: showsNoAttributesHint(link) ? "(no attributes)" : undefined,
+			addItems: entityAddItems(link),
+			deleteTarget: { id: link.id, title: `Delete link-entity ${link.alias || link.name}?`, descendants: countDescendants(link) },
+			children: containerChildren(link),
+		});
 
 	return (
 		<div ref={treeRef} className={styles.container}>
@@ -739,6 +675,62 @@ export function TreeView({
 			>
 				{renderFetchNode(fetchQuery)}
 			</Tree>
+
+			{/* Context menu: the row's Add items, then Delete (#24) */}
+			<Menu
+				open={contextMenu.open}
+				onOpenChange={(_, data) => {
+					setContextMenu((current) => ({ ...current, open: data.open }));
+					if (!data.open) {
+						// Back to the row, unless the chosen item moved the focus (a dialog)
+						const row = contextReturnFocus.current;
+						requestAnimationFrame(() => {
+							if (row?.isConnected && (!document.activeElement || document.activeElement === document.body)) row.focus();
+						});
+					}
+				}}
+				positioning={{ target: contextMenu.target, position: "below", align: "start" }}
+			>
+				<MenuPopover onClick={stopRowSelect}>
+					<MenuList>
+						{contextMenu.addItems && renderMenuItems(contextMenu.addItems)}
+						{contextMenu.addItems && contextMenu.deleteTarget && <MenuDivider />}
+						{contextMenu.deleteTarget && (
+							<MenuItem
+								className={styles.danger}
+								icon={<Delete20Regular />}
+								onClick={() => contextMenu.deleteTarget && requestDelete(contextMenu.deleteTarget)}
+							>
+								Delete
+							</MenuItem>
+						)}
+					</MenuList>
+				</MenuPopover>
+			</Menu>
+
+			{/* Deleting a node with items inside asks first (#24) */}
+			<Dialog open={pendingDelete !== null} onOpenChange={(_, data) => !data.open && setPendingDelete(null)}>
+				<DialogSurface>
+					<DialogBody>
+						<DialogTitle>{pendingDelete?.title}</DialogTitle>
+						<DialogContent>{pendingDelete && deleteConfirmationText(pendingDelete.descendants)}</DialogContent>
+						<DialogActions>
+							<Button appearance="secondary" onClick={() => setPendingDelete(null)}>
+								Cancel
+							</Button>
+							<Button
+								appearance="primary"
+								onClick={() => {
+									if (pendingDelete) onRemoveNode(pendingDelete.id);
+									setPendingDelete(null);
+								}}
+							>
+								Delete
+							</Button>
+						</DialogActions>
+					</DialogBody>
+				</DialogSurface>
+			</Dialog>
 
 			<SelectAttributesDialog
 				open={selectAttrsDialogOpen}

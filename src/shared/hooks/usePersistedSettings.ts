@@ -12,6 +12,7 @@ import {
 	defaultDisplaySettings,
 	type DisplaySettings,
 } from "../../features/fetchxml/model/displaySettings";
+import { debugLog } from "../utils/debug";
 
 /**
  * Namespaced key to avoid collisions with other PPTB-hosted tools that may
@@ -51,10 +52,10 @@ export function usePersistedSettings(): [DisplaySettings, (settings: DisplaySett
 					if (mounted) {
 						const merged = mergeWithDefaults(persisted);
 						setSettingsState(merged);
-						console.log("⚙️ Settings loaded from toolboxAPI:", merged);
+						debugLog("settings", "⚙️ Settings loaded from toolboxAPI:", merged);
 					}
 				} else {
-					console.log("⚙️ toolboxAPI.settings not available — using in-memory defaults");
+					debugLog("settings", "⚙️ toolboxAPI.settings not available — using in-memory defaults");
 				}
 			} catch (err) {
 				console.warn("⚙️ Failed to load settings from toolboxAPI:", err);
@@ -82,7 +83,7 @@ export function usePersistedSettings(): [DisplaySettings, (settings: DisplaySett
 				window.toolboxAPI.settings
 					.set(SETTINGS_KEY, newSettings)
 					.then(() => {
-						console.log("⚙️ Settings saved to toolboxAPI:", newSettings);
+						debugLog("settings", "⚙️ Settings saved to toolboxAPI:", newSettings);
 					})
 					.catch((err: unknown) => {
 						console.warn("⚙️ Failed to save settings to toolboxAPI:", err);

@@ -4,7 +4,7 @@
  * Based on the official Fetch.xsd schema
  */
 
-import type * as Monaco from "monaco-editor";
+import type * as Monaco from "monaco-editor/editor";
 import { KNOWN_OPERATORS } from "./operators";
 
 /**

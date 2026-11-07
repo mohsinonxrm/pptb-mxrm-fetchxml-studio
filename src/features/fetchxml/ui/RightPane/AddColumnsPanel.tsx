@@ -499,7 +499,7 @@ export function AddColumnsPanel({
 						<Input
 							className={styles.searchInput}
 							contentBefore={<Search20Regular />}
-							placeholder="Search columns..."
+							placeholder="Search columns…"
 							value={searchText}
 							onChange={(_e, data) => setSearchText(data.value)}
 						/>
@@ -562,7 +562,7 @@ export function AddColumnsPanel({
 						<div className={styles.relationshipTree}>
 							{isLoadingRelationships ? (
 								<div className={styles.loadingContainer}>
-									<Spinner size="small" label="Loading relationships..." />
+									<Spinner size="small" label="Loading relationships…" />
 								</div>
 							) : filteredN1Relationships.length === 0 && filtered1NRelationships.length === 0 ? (
 								<div className={styles.emptyState}>
@@ -612,7 +612,7 @@ export function AddColumnsPanel({
 																		{isLoading ? (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Spinner size="tiny" label="Loading..." />
+																					<Spinner size="tiny" label="Loading…" />
 																				</TreeItemLayout>
 																			</TreeItem>
 																		) : relatedAttrs && relatedAttrs.length > 0 ? (
@@ -729,7 +729,7 @@ export function AddColumnsPanel({
 																		{isLoading ? (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Spinner size="tiny" label="Loading..." />
+																					<Spinner size="tiny" label="Loading…" />
 																				</TreeItemLayout>
 																			</TreeItem>
 																		) : relatedAttrs && relatedAttrs.length > 0 ? (

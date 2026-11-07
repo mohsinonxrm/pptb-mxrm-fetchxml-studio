@@ -1,37 +1,57 @@
 /**
  * Shared Relationship Picker component using Fluent UI v9 Combobox
- * Loads relationships from metadata and displays categorized by type (1:N, N:1, N:N)
+ * Loads relationships from metadata and displays categorized by type (N:1, 1:N, N:N)
+ *
+ * Two-line options (#25): the related entity, then the lookup and the schema name; the search
+ * matches any part.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
 	Combobox,
 	Option,
 	OptionGroup,
+	makeStyles,
 	useId,
 	Spinner,
+	tokens,
 	type ComboboxProps,
 } from "@fluentui/react-components";
 import { debugLog } from "../utils/debug";
-import { loadEntityRelationships } from "../../features/fetchxml/api/dataverseMetadata";
+import {
+	loadAllEntities,
+	loadAllEntityAttributes,
+	loadEntityRelationships,
+} from "../../features/fetchxml/api/dataverseMetadata";
+import { metadataCache } from "../../features/fetchxml/state/cache";
 import { useAdvancedFindOnly } from "../../features/fetchxml/state/metadataScope";
-import type { RelationshipMetadata } from "../../features/fetchxml/api/pptbClient";
-import { relationshipKey } from "../../features/fetchxml/model/manyToMany";
+import type { AttributeMetadata, EntityMetadata } from "../../features/fetchxml/api/pptbClient";
+import {
+	RELATIONSHIP_CATEGORIES,
+	buildRelationshipOptions,
+	filterRelationshipOptions,
+	type RelationshipOption,
+} from "../../features/fetchxml/model/relationshipOptions";
 
-export interface RelationshipOption {
-	/** Unique in the list: an intersect entity's two joins share the schema name (#57) */
-	id: string;
-	schemaName: string;
-	displayText: string;
-	referencedEntity: string;
-	referencingEntity: string;
-	referencedAttribute: string;
-	referencingAttribute: string;
-	type: "1N" | "N1" | "NN";
-	category: string;
-	/** N:N only: the intersect entity the join goes through (#85) */
-	intersectEntity?: string;
-}
+export type { RelationshipOption } from "../../features/fetchxml/model/relationshipOptions";
+
+const useStyles = makeStyles({
+	option: {
+		display: "flex",
+		flexDirection: "column",
+		minWidth: 0,
+	},
+	optionSecondary: {
+		color: tokens.colorNeutralForeground3,
+		fontSize: tokens.fontSizeBase200,
+	},
+});
+
+/** Wider than the field, so most options stay on two lines (#25) */
+const LISTBOX_PROPS = { style: { minWidth: 420 } };
+
+const label = (item: { DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } } | undefined) =>
+	item?.DisplayName?.UserLocalizedLabel?.Label || undefined;
 
 interface RelationshipPickerProps {
 	entityLogicalName: string;
@@ -45,14 +65,16 @@ export function RelationshipPicker({
 	entityLogicalName,
 	value,
 	onChange,
-	placeholder = "Select a relationship",
+	placeholder = "Select a relationship…",
 	disabled = false,
 }: RelationshipPickerProps) {
+	const styles = useStyles();
 	const comboId = useId("relationship-combobox");
 	const [relationships, setRelationships] = useState<RelationshipOption[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [query, setQuery] = useState<string>("");
+	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Reload when the "Advanced Find only" setting changes (#57)
 	const advancedFindOnly = useAdvancedFindOnly();
 
@@ -65,11 +87,19 @@ export function RelationshipPicker({
 		}
 
 		debugLog("relationshipPicker", "Loading relationships for entity:", entityLogicalName);
+		let current = true;
 		setLoading(true);
 		setError(null);
 
-		loadEntityRelationships(entityLogicalName, advancedFindOnly)
-			.then((data) => {
+		// Display names: every entity (cached for the entity picker), this entity's attributes (the
+		// many-to-one lookups) and any related entity's attributes already cached (one-to-many lookups)
+		Promise.all([
+			loadEntityRelationships(entityLogicalName, advancedFindOnly),
+			loadAllEntities().catch((): EntityMetadata[] => []),
+			loadAllEntityAttributes(entityLogicalName).catch((): AttributeMetadata[] => []),
+		])
+			.then(([data, entities, ownAttributes]) => {
+				if (!current) return;
 				debugLog("relationshipPicker", "Received relationship data:", {
 					entityLogicalName,
 					oneToManyCount: data.oneToMany.length,
@@ -77,70 +107,12 @@ export function RelationshipPicker({
 					manyToManyCount: data.manyToMany.length,
 				});
 
-				const options: RelationshipOption[] = [];
-
-				// Process 1:N relationships (current entity is Referenced/parent)
-				data.oneToMany.forEach((rel: RelationshipMetadata) => {
-					// Show: childEntity → parentEntity via lookupField (SchemaName)
-					const lookupField = rel.ReferencingAttribute || "";
-					const displayText = lookupField
-						? `${rel.ReferencingEntity} → ${rel.ReferencedEntity} via ${lookupField} (${rel.SchemaName})`
-						: `${rel.ReferencingEntity} → ${rel.ReferencedEntity} (${rel.SchemaName})`;
-
-					options.push({
-						id: relationshipKey(rel),
-						schemaName: rel.SchemaName,
-						displayText,
-						referencedEntity: rel.ReferencedEntity,
-						referencingEntity: rel.ReferencingEntity,
-						referencedAttribute: rel.ReferencedAttribute,
-						referencingAttribute: rel.ReferencingAttribute,
-						type: "1N",
-						category: "One-to-Many (1:N)",
-					});
-				});
-
-				// Process N:1 relationships (current entity is Referencing/child)
-				data.manyToOne.forEach((rel: RelationshipMetadata) => {
-					// Show: childEntity → parentEntity via lookupField (SchemaName)
-					const lookupField = rel.ReferencingAttribute || "";
-					const displayText = lookupField
-						? `${rel.ReferencingEntity} → ${rel.ReferencedEntity} via ${lookupField} (${rel.SchemaName})`
-						: `${rel.ReferencingEntity} → ${rel.ReferencedEntity} (${rel.SchemaName})`;
-
-					options.push({
-						id: relationshipKey(rel),
-						schemaName: rel.SchemaName,
-						displayText,
-						referencedEntity: rel.ReferencedEntity,
-						referencingEntity: rel.ReferencingEntity,
-						referencedAttribute: rel.ReferencedAttribute,
-						referencingAttribute: rel.ReferencingAttribute,
-						type: "N1",
-						category: "Many-to-One (N:1)",
-					});
-				});
-
-				// Process N:N relationships
-				data.manyToMany.forEach((rel: RelationshipMetadata) => {
-					// N:N relationships have Entity1/Entity2, not Referencing/Referenced
-					const entity1 = rel.Entity1LogicalName || "";
-					const entity2 = rel.Entity2LogicalName || "";
-					const attr1 = rel.Entity1IntersectAttribute || "";
-					const attr2 = rel.Entity2IntersectAttribute || "";
-
-					options.push({
-						id: relationshipKey(rel),
-						schemaName: rel.SchemaName,
-						displayText: `${entity1} ↔ ${entity2} (${rel.SchemaName})`,
-						referencedEntity: entity2, // Store entity2 as "referenced" for compatibility
-						referencingEntity: entity1, // Store entity1 as "referencing" for compatibility
-						referencedAttribute: attr2,
-						referencingAttribute: attr1,
-						type: "NN",
-						category: "Many-to-Many (N:N)",
-						intersectEntity: rel.IntersectEntityName,
-					});
+				const entityByName = new Map(entities.map((e) => [e.LogicalName, e]));
+				const attributesOf = (entity: string) =>
+					entity === entityLogicalName ? ownAttributes : (metadataCache.getEntityAttributes(`${entity}__all`) ?? []);
+				const options = buildRelationshipOptions(entityLogicalName, data, {
+					entity: (name) => label(entityByName.get(name) ?? metadataCache.getEntityMetadata(name)),
+					attribute: (entity, attribute) => label(attributesOf(entity).find((a) => a.LogicalName === attribute)),
 				});
 
 				setRelationships(options);
@@ -151,6 +123,7 @@ export function RelationshipPicker({
 				});
 			})
 			.catch((err: unknown) => {
+				if (!current) return;
 				console.error("[RelationshipPicker] Failed to load relationships:", {
 					entityLogicalName,
 					error: err,
@@ -158,61 +131,49 @@ export function RelationshipPicker({
 				setError("Failed to load relationships");
 				setLoading(false);
 			});
+		return () => {
+			current = false;
+		};
 	}, [entityLogicalName, advancedFindOnly]);
 
 	// Sync query with selected value
 	useEffect(() => {
 		if (value) {
 			const rel = relationships.find((r) => r.schemaName === value);
-			if (rel) {
-				setQuery(rel.displayText);
-			} else {
-				setQuery(value);
-			}
+			setSelectedId(rel?.id ?? null);
+			setQuery(rel ? rel.displayText : value);
 		} else {
+			setSelectedId(null);
 			setQuery("");
 		}
 	}, [value, relationships]);
 
-	// Manual filtering that preserves grouping
-	const filteredRelationships = query.trim()
-		? relationships.filter(
-				(rel) =>
-					rel.displayText.toLowerCase().includes(query.toLowerCase()) ||
-					rel.schemaName.toLowerCase().includes(query.toLowerCase()) ||
-					rel.referencingAttribute.toLowerCase().includes(query.toLowerCase())
-		  )
-		: relationships;
-
-	// Group by category
-	const categories = {
-		"One-to-Many (1:N)": filteredRelationships.filter((r) => r.category === "One-to-Many (1:N)"),
-		"Many-to-One (N:1)": filteredRelationships.filter((r) => r.category === "Many-to-One (N:1)"),
-		"Many-to-Many (N:N)": filteredRelationships.filter((r) => r.category === "Many-to-Many (N:N)"),
-	};
+	// Manual filtering that preserves grouping; the selected value's own text shows every option
+	const selected = relationships.find((r) => r.id === selectedId);
+	const searchQuery = selected && query === selected.displayText ? "" : query;
+	const filteredRelationships = useMemo(() => filterRelationshipOptions(relationships, searchQuery), [relationships, searchQuery]);
 
 	const onOptionSelect: ComboboxProps["onOptionSelect"] = (_e, data) => {
 		const id = data.optionValue;
-		debugLog("relationshipPicker", "Relationship selected:", {
-			id,
-			optionText: data.optionText,
-		});
+		debugLog("relationshipPicker", "Relationship selected:", { id });
 
 		if (id) {
 			const rel = relationships.find((r) => r.id === id);
 			if (rel) {
 				debugLog("relationshipPicker", "Found relationship details:", rel);
-				setQuery(data.optionText ?? "");
+				setSelectedId(rel.id);
+				setQuery(rel.displayText);
 				onChange(rel);
 			}
 		} else {
 			// Handle clear
+			setSelectedId(null);
 			setQuery("");
 		}
 	};
 
 	if (loading) {
-		return <Spinner size="tiny" label="Loading relationships..." />;
+		return <Spinner size="tiny" label="Loading relationships…" />;
 	}
 
 	if (error) {
@@ -232,51 +193,35 @@ export function RelationshipPicker({
 	return (
 		<Combobox
 			aria-labelledby={comboId}
+			listbox={LISTBOX_PROPS}
 			value={query}
+			selectedOptions={selectedId ? [selectedId] : []}
 			onOptionSelect={onOptionSelect}
 			onChange={(ev) => setQuery(ev.target.value)}
-			placeholder={
-				loading
-					? "Loading relationships..."
-					: relationships.length === 0
-					? "No relationships found"
-					: placeholder
-			}
-			disabled={disabled || loading || relationships.length === 0}
+			placeholder={relationships.length === 0 ? "No relationships found" : placeholder}
+			disabled={disabled || relationships.length === 0}
 			clearable
 		>
-			{filteredRelationships.length === 0 && query.trim() ? (
-				<Option disabled>No relationships match your search</Option>
+			{filteredRelationships.length === 0 && searchQuery.trim() ? (
+				<Option disabled>{`No relationships match "${searchQuery.trim()}"`}</Option>
 			) : (
-				<>
-					{categories["One-to-Many (1:N)"].length > 0 && (
-						<OptionGroup label="One-to-Many (1:N)">
-							{categories["One-to-Many (1:N)"].map((rel) => (
-								<Option key={rel.id} value={rel.id}>
-									{rel.displayText}
-								</Option>
-							))}
-						</OptionGroup>
-					)}
-					{categories["Many-to-One (N:1)"].length > 0 && (
-						<OptionGroup label="Many-to-One (N:1)">
-							{categories["Many-to-One (N:1)"].map((rel) => (
-								<Option key={rel.id} value={rel.id}>
-									{rel.displayText}
-								</Option>
-							))}
-						</OptionGroup>
-					)}
-					{categories["Many-to-Many (N:N)"].length > 0 && (
-						<OptionGroup label="Many-to-Many (N:N)">
-							{categories["Many-to-Many (N:N)"].map((rel) => (
-								<Option key={rel.id} value={rel.id}>
-									{rel.displayText}
-								</Option>
-							))}
-						</OptionGroup>
-					)}
-				</>
+				RELATIONSHIP_CATEGORIES.map((category) => {
+					const options = filteredRelationships.filter((r) => r.category === category);
+					return (
+						options.length > 0 && (
+							<OptionGroup key={category} label={category}>
+								{options.map((rel) => (
+									<Option key={rel.id} value={rel.id} text={rel.searchText}>
+										<span className={styles.option}>
+											<span>{rel.primaryText}</span>
+											<span className={styles.optionSecondary}>{rel.secondaryText}</span>
+										</span>
+									</Option>
+								))}
+							</OptionGroup>
+						)
+					);
+				})
 			)}
 		</Combobox>
 	);

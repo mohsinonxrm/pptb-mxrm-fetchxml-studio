@@ -28,8 +28,9 @@ export async function loadEntityMetadata(logicalName: string): Promise<EntityMet
 	}
 
 	// Make request
+	const isCurrent = metadataCache.generationGuard();
 	const metadata = await pptbClient.getEntityMetadata(logicalName);
-	metadataCache.setEntityMetadata(logicalName, metadata);
+	if (isCurrent()) metadataCache.setEntityMetadata(logicalName, metadata);
 	return metadata;
 }
 
@@ -49,16 +50,19 @@ export async function loadAllEntityAttributes(logicalName: string): Promise<Attr
 		return inFlight;
 	}
 
+	const isCurrent = metadataCache.generationGuard();
 	const promise = pptbClient.getEntityAttributes(logicalName, false);
 	metadataCache.setAttributesPromise(cacheKey, promise);
 
 	try {
 		const attributes = await promise;
-		metadataCache.setEntityAttributes(cacheKey, attributes);
-		metadataCache.clearAttributesPromise(cacheKey);
+		if (isCurrent()) {
+			metadataCache.setEntityAttributes(cacheKey, attributes);
+			metadataCache.clearAttributesPromise(cacheKey);
+		}
 		return attributes;
 	} catch (error) {
-		metadataCache.clearAttributesPromise(cacheKey);
+		if (isCurrent()) metadataCache.clearAttributesPromise(cacheKey);
 		throw error;
 	}
 }
@@ -94,13 +98,14 @@ export async function loadAttributeWithOptionSet(
 	}
 
 	// Make request with OptionSet expansion
+	const isCurrent = metadataCache.generationGuard();
 	const attribute = await pptbClient.getAttributeWithOptionSet(
 		entityLogicalName,
 		attributeLogicalName,
 	);
 
 	// Cache the result
-	metadataCache.setEntityAttributes(cacheKey, [attribute]);
+	if (isCurrent()) metadataCache.setEntityAttributes(cacheKey, [attribute]);
 	return attribute;
 }
 
@@ -124,6 +129,7 @@ export async function loadAttributeDetailedMetadata(
 	}
 
 	// Make request with type casting to get detailed properties
+	const isCurrent = metadataCache.generationGuard();
 	const attribute = await pptbClient.getAttributeDetailedMetadata(
 		entityLogicalName,
 		attributeLogicalName,
@@ -131,7 +137,7 @@ export async function loadAttributeDetailedMetadata(
 	);
 
 	// Cache the result
-	metadataCache.setEntityAttributes(cacheKey, [attribute]);
+	if (isCurrent()) metadataCache.setEntityAttributes(cacheKey, [attribute]);
 	return attribute;
 }
 
@@ -181,8 +187,9 @@ export async function loadEntityRelationships(
 	const cacheKey = `${logicalName}__all`;
 	let relationships = metadataCache.getEntityRelationships(cacheKey);
 	if (!relationships) {
+		const isCurrent = metadataCache.generationGuard();
 		relationships = await withIntersectEntityJoins(logicalName, await pptbClient.getEntityRelationships(logicalName, false));
-		metadataCache.setEntityRelationships(cacheKey, relationships);
+		if (isCurrent()) metadataCache.setEntityRelationships(cacheKey, relationships);
 	}
 	const inScope = (r: RelationshipMetadata) => isRelationshipInScope(r, advancedFindOnly);
 	return {
@@ -198,8 +205,9 @@ export async function loadEntityRelationships(
 export async function loadIsHierarchical(logicalName: string): Promise<boolean> {
 	const cached = metadataCache.getEntityHierarchical(logicalName);
 	if (cached !== undefined) return cached;
+	const isCurrent = metadataCache.generationGuard();
 	const isHierarchical = await pptbClient.getIsHierarchical(logicalName);
-	metadataCache.setEntityHierarchical(logicalName, isHierarchical);
+	if (isCurrent()) metadataCache.setEntityHierarchical(logicalName, isHierarchical);
 	return isHierarchical;
 }
 

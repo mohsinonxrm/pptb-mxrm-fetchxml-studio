@@ -5,9 +5,10 @@
 
 import { useRef, useCallback } from "react";
 import Editor from "@monaco-editor/react";
-import type * as MonacoEditor from "monaco-editor";
+import type * as MonacoEditor from "monaco-editor/editor";
 import { makeStyles, Spinner, tokens, Toolbar, ToolbarButton } from "@fluentui/react-components";
 import { Copy24Regular } from "@fluentui/react-icons";
+import { copyText } from "../../api/host";
 import { useTheme } from "../../../../shared/contexts/useTheme";
 
 const useStyles = makeStyles({
@@ -110,11 +111,7 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 	}, []);
 
 	const handleCopy = useCallback(async () => {
-		try {
-			await navigator.clipboard.writeText(formattedXml);
-		} catch (error) {
-			console.error("Failed to copy to clipboard:", error);
-		}
+		if (!(await copyText(formattedXml))) console.error("Failed to copy to clipboard");
 	}, [formattedXml]);
 
 	return (
@@ -161,7 +158,7 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 					onMount={handleEditorMount}
 					loading={
 						<div className={styles.loadingContainer}>
-							<Spinner size="medium" label="Loading editor..." />
+							<Spinner size="medium" label="Loading editor…" />
 						</div>
 					}
 				/>

@@ -62,7 +62,7 @@ describe("parseFetchXml", () => {
 	it("fails on malformed XML", () => {
 		const result = parseFetchXml("<fetch><entity name='account'></fetch>");
 		expect(result.success).toBe(false);
-		expect(result.errors[0].message).toMatch(/XML Parsing Error/);
+		expect(result.errors[0].message).toMatch(/XML parsing error/);
 	});
 
 	it("fails when the root element is not <fetch>", () => {

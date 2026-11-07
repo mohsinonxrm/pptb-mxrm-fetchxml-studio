@@ -30,6 +30,8 @@ export interface DisplaySettings {
 	 * When false, all entities/attributes are shown (power-user / developer mode).
 	 */
 	advancedFindOnly: boolean;
+	/** The query scope section (publishers, solutions, entity, view) is collapsed to one line (#25) */
+	scopeCollapsed: boolean;
 }
 
 /** Default display settings */
@@ -38,4 +40,5 @@ export const defaultDisplaySettings: DisplaySettings = {
 	valueDisplayMode: "formatted",
 	entityScopeMode: "publisher-solution",
 	advancedFindOnly: true,
+	scopeCollapsed: false,
 };

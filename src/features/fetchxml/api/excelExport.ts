@@ -7,6 +7,7 @@ import ExcelJS from "exceljs";
 import type { AttributeMetadata } from "./pptbClient";
 import { getFormattedValue } from "../ui/RightPane/FormattedValueUtils";
 import type { DisplaySettings } from "../model/displaySettings";
+import { debugLog } from "../../../shared/utils/debug";
 
 interface ExportToExcelLocalOptions {
 	/** Records to export */
@@ -305,7 +306,7 @@ export async function downloadExcelFile(buffer: ArrayBuffer, fileName: string): 
 	if (window.toolboxAPI?.fileSystem?.saveFile) {
 		const saved = await window.toolboxAPI.fileSystem.saveFile(fileName, new Uint8Array(buffer));
 		if (saved) {
-			console.log(`✅ File saved via fileSystem: ${saved}`);
+			debugLog("exportAPI", `✅ File saved via fileSystem: ${saved}`);
 		}
 		return;
 	}

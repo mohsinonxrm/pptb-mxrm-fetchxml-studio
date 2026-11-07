@@ -22,6 +22,7 @@ import {
 	SaveViewDialog,
 	type SaveViewDialogLoadedView,
 	type SaveViewDialogMode,
+	type SavedViewDetails,
 } from "../Dialogs/SaveViewDialog";
 import { useEditorSync } from "../RightPane/editorSync";
 
@@ -47,6 +48,8 @@ interface SaveViewButtonProps {
 	layoutXml: string;
 	/** Entity logical name for the view */
 	entityLogicalName: string;
+	/** Entity display name, for the default view hint (#142) */
+	entityDisplayName?: string;
 	/** Entity object type code for LayoutXML */
 	objectTypeCode: number;
 	/** Primary ID attribute for LayoutXML */
@@ -54,7 +57,12 @@ interface SaveViewButtonProps {
 	/** Loaded view info (for Save/overwrite) */
 	loadedView: SaveViewDialogLoadedView | null;
 	/** Callback after successful save */
-	onSaveComplete?: (viewId: string, viewType: "system" | "personal", viewName: string) => void;
+	onSaveComplete?: (
+		viewId: string,
+		viewType: "system" | "personal",
+		viewName: string,
+		details: SavedViewDetails,
+	) => void;
 	/** Disabled state */
 	disabled?: boolean;
 }
@@ -63,6 +71,7 @@ export function SaveViewButton({
 	fetchXml,
 	layoutXml,
 	entityLogicalName,
+	entityDisplayName,
 	objectTypeCode,
 	primaryIdAttribute,
 	loadedView,
@@ -120,15 +129,15 @@ export function SaveViewButton({
 	}, []);
 
 	const handleDialogSaveComplete = useCallback(
-		(viewId: string, viewType: "system" | "personal", viewName: string) => {
+		(viewId: string, viewType: "system" | "personal", viewName: string, details: SavedViewDetails) => {
 			setDialogOpen(false);
-			onSaveComplete?.(viewId, viewType, viewName);
+			onSaveComplete?.(viewId, viewType, viewName, details);
 		},
 		[onSaveComplete]
 	);
 
 	// Primary button text based on state
-	const primaryText = loadedView ? "Save" : "Save As";
+	const primaryText = loadedView ? "Save" : "Save as";
 	const primaryIcon = loadedView ? <SaveRegular /> : <SaveArrowRightRegular />;
 
 	return (
@@ -166,14 +175,14 @@ export function SaveViewButton({
 							icon={<SaveArrowRightRegular className={styles.menuIcon} />}
 							onClick={handleSaveAs}
 						>
-							<span className={styles.menuItem}>Save As...</span>
+							<span className={styles.menuItem}>Save as…</span>
 						</MenuItem>
 						{loadedView?.type === "system" && (
 							<MenuItem
 								icon={<SendRegular className={styles.menuIcon} />}
 								onClick={handleSaveAndPublish}
 							>
-								<span className={styles.menuItem}>Save and Publish</span>
+								<span className={styles.menuItem}>Save and publish</span>
 							</MenuItem>
 						)}
 					</MenuList>
@@ -189,6 +198,7 @@ export function SaveViewButton({
 				fetchXml={fetchXml}
 				layoutXml={layoutXml}
 				entityLogicalName={entityLogicalName}
+				entityDisplayName={entityDisplayName}
 				objectTypeCode={objectTypeCode}
 				primaryIdAttribute={primaryIdAttribute}
 				loadedView={loadedView}

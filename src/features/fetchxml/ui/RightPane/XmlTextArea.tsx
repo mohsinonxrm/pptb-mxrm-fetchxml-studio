@@ -4,6 +4,7 @@
 
 import { Button, makeStyles, Tooltip, Textarea } from "@fluentui/react-components";
 import { Copy24Regular } from "@fluentui/react-icons";
+import { copyText } from "../../api/host";
 
 const useStyles = makeStyles({
 	container: {
@@ -36,11 +37,7 @@ export function XmlTextArea({ xml }: XmlTextAreaProps) {
 	const styles = useStyles();
 
 	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(xml);
-		} catch (err) {
-			console.error("Failed to copy:", err);
-		}
+		if (!(await copyText(xml))) console.error("Failed to copy to clipboard");
 	};
 
 	return (

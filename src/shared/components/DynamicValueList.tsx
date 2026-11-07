@@ -121,7 +121,7 @@ export function DynamicValueList({
 				icon={<Add20Regular />}
 				onClick={handleAddField}
 			>
-				Add Value
+				Add value
 			</Button>
 		</div>
 	);

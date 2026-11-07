@@ -39,6 +39,8 @@ export const DOCS = {
 	quickFind: `${DATA_PLATFORM}/quick-find?tabs=fetchxml`,
 	quickFindLimits: `${DATA_PLATFORM}/quick-find?tabs=fetchxml#quick-find-record-limits`,
 	hierarchy: `${DATA_PLATFORM}/query-hierarchical-data`,
+	wildcards: `${DATA_PLATFORM}/wildcard-characters?tabs=fetchxml`,
+	wildcardLiterals: `${DATA_PLATFORM}/wildcard-characters?tabs=fetchxml#search-for-strings-that-contain-wildcard-characters`,
 	choices: `${DATA_PLATFORM}/multi-select-picklist#query-data-from-choices`,
 	dataRetention: "https://learn.microsoft.com/power-apps/maker/data-platform/data-retention-overview",
 	reportPrefiltering:

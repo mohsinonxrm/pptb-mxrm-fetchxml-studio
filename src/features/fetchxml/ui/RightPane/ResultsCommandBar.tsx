@@ -3,7 +3,7 @@
  * Similar to Power Apps Model Driven Apps view command bar
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ReactElement } from "react";
 import {
 	Toolbar,
 	ToolbarButton,
@@ -63,6 +63,10 @@ export interface CommandBarProps {
 	onCopyUrl?: () => void;
 	onActivate?: () => void;
 	onDeactivate?: () => void;
+	/** Why Activate is off for this entity (no statecode, close-message entity, no Write privilege, #143) */
+	activateDisabledReason?: string;
+	/** Why Deactivate is off for this entity (#143) */
+	deactivateDisabledReason?: string;
 	/** Delete selected records (or all if none selected) */
 	onDelete?: () => void;
 	/** Bulk delete (creates async job) */
@@ -145,12 +149,44 @@ export interface CommandBarProps {
 	searchText?: string;
 }
 
+/** A toolbar button with a tooltip giving the reason it's off, when there is one */
+function StateButton({
+	label,
+	ariaLabel,
+	icon,
+	onClick,
+	disabled,
+	reason,
+}: {
+	label: string;
+	ariaLabel: string;
+	icon: ReactElement;
+	onClick?: () => void;
+	disabled: boolean;
+	reason?: string;
+}) {
+	const button = (
+		<ToolbarButton appearance="subtle" icon={icon} disabled={disabled} disabledFocusable={!!reason} onClick={onClick} aria-label={ariaLabel}>
+			{label}
+		</ToolbarButton>
+	);
+	return reason ? (
+		<Tooltip content={reason} relationship="description" withArrow>
+			{button}
+		</Tooltip>
+	) : (
+		button
+	);
+}
+
 export function ResultsCommandBar({
 	selectedCount,
 	onOpen,
 	onCopyUrl,
 	onActivate,
 	onDeactivate,
+	activateDisabledReason,
+	deactivateDisabledReason,
 	onDelete,
 	onBulkDelete,
 	canDelete = false,
@@ -196,6 +232,8 @@ export function ResultsCommandBar({
 	const deleteAllBlocked = !hasSelection && !!deleteAllDisabledReason;
 	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || deleteAllBlocked;
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
+	// Activate / Deactivate (#143): need a selection, record IDs and the record-action rules delete has
+	const stateButtonsDisabled = !hasSelection || isDeleteDisabled;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
 	// Copy menu: values as shown in the grid, or raw (#50)
@@ -312,26 +350,24 @@ export function ResultsCommandBar({
 
 				<ToolbarDivider />
 
-				{/* Activate/Deactivate buttons - always shown, disabled for now */}
-				<ToolbarButton
-					appearance="subtle"
+				{/* Activate / Deactivate (#143); the tooltip says why one is off for this entity */}
+				<StateButton
+					label="Activate"
+					ariaLabel="Activate selected records"
 					icon={<CheckmarkCircle20Regular />}
-					disabled={true}
 					onClick={onActivate}
-					aria-label="Activate selected records"
-				>
-					Activate
-				</ToolbarButton>
+					disabled={stateButtonsDisabled || !onActivate || !!activateDisabledReason}
+					reason={activateDisabledReason}
+				/>
 
-				<ToolbarButton
-					appearance="subtle"
+				<StateButton
+					label="Deactivate"
+					ariaLabel="Deactivate selected records"
 					icon={<DismissCircle20Regular />}
-					disabled={true}
 					onClick={onDeactivate}
-					aria-label="Deactivate selected records"
-				>
-					Deactivate
-				</ToolbarButton>
+					disabled={stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason}
+					reason={deactivateDisabledReason}
+				/>
 
 				<ToolbarDivider />
 
@@ -360,7 +396,7 @@ export function ResultsCommandBar({
 										hasSelection ? "Delete selected records" : "Delete all records from view"
 									}
 								>
-									{hasSelection ? "Delete" : "Delete All"}
+									{hasSelection ? "Delete" : "Delete all"}
 								</SplitButton>
 							)}
 						</MenuTrigger>
@@ -375,7 +411,7 @@ export function ResultsCommandBar({
 										onClick={onBulkDelete}
 										disabled={isDeleteDisabled}
 									>
-										Bulk Delete (Job)
+										Bulk delete (job)
 									</MenuItem>
 								)}
 							</MenuList>
@@ -395,7 +431,7 @@ export function ResultsCommandBar({
 								disabled={!hasSelection || isWorkflowDisabled}
 								aria-label="Run workflow on selected records"
 							>
-								Run Workflow
+								Run workflow
 							</MenuButton>
 						</MenuTrigger>
 						<MenuPopover>

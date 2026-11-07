@@ -38,6 +38,7 @@ import { generateCSharpQueryExpression } from "../../engine/queryExpressionCodeg
 import type { QeQueryExpression } from "../../engine/queryExpressionTypes";
 import { fetchXmlToQueryExpression, fetchXmlToSQL } from "../../api/pptbClient";
 import { loadEntityMetadata } from "../../api/dataverseMetadata";
+import { copyText } from "../../api/host";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
@@ -258,7 +259,8 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const handleCopy = useCallback(() => {
 		const code = currentCode();
 		if (!code) return;
-		void navigator.clipboard.writeText(code).then(() => {
+		void copyText(code).then((ok) => {
+			if (!ok) return;
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
 		});
@@ -347,7 +349,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 				{/* Spinner for async tabs */}
 				{isAsyncLoading && (
 					<div className={styles.centerBox}>
-						<Spinner size="medium" label="Generating..." />
+						<Spinner size="medium" label="Generating…" />
 					</div>
 				)}
 

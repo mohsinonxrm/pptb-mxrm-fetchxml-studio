@@ -125,3 +125,47 @@ describe("usePptbContext theme (#67)", () => {
 		expect(latest?.theme).toBe("light");
 	});
 });
+
+describe("usePptbContext connection (#66)", () => {
+	type Conn = { id: string; url: string; name: string; environment: "Dev" };
+	let current: Conn | null;
+	const conn = (id: string, url: string): Conn => ({ id, url, name: id.toUpperCase(), environment: "Dev" });
+	const emit = async (event: string) => {
+		await act(async () => toolboxListeners.forEach((l) => l({}, { event, data: { id: "any" } })));
+		await flush();
+	};
+
+	beforeEach(() => {
+		current = conn("a", "https://a.crm.dynamics.com");
+		(window as unknown as { toolboxAPI: { connections: unknown } }).toolboxAPI.connections = {
+			getConnection: async (slot: number) => (slot === 0 ? current : null),
+		};
+	});
+
+	it("reads the tool's connection identity", async () => {
+		await mount();
+		expect(latest?.connected).toBe(true);
+		expect(latest?.connectionKey).toBe("a|https://a.crm.dynamics.com");
+		expect(latest?.connectionName).toBe("A");
+	});
+
+	it("keeps the same state on events that don't change the tool's connection", async () => {
+		await mount();
+		const before = latest;
+		await emit("connection:updated"); // token refresh, or another connection edited
+		await emit("connection:deleted"); // another connection deleted
+		expect(latest).toBe(before);
+	});
+
+	it("updates when the connection changes in place", async () => {
+		await mount();
+		current = conn("b", "https://b.crm.dynamics.com");
+		await emit("connection:updated");
+		expect(latest?.connectionKey).toBe("b|https://b.crm.dynamics.com");
+		expect(latest?.environmentUrl).toBe("https://b.crm.dynamics.com");
+		current = null;
+		await emit("connection:deleted");
+		expect(latest?.connected).toBe(false);
+		expect(latest?.connectionKey).toBe("");
+	});
+});

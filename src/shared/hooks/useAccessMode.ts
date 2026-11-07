@@ -10,6 +10,7 @@ import {
 	getAllEntitiesForScopes,
 	type AccessSummary,
 } from "../../features/fetchxml/api/pptbClient";
+import { debugLog } from "../utils/debug";
 
 export function useAccessMode() {
 	const [accessSummary, setAccessSummary] = useState<AccessSummary | null>(null);
@@ -35,10 +36,11 @@ export function useAccessMode() {
 					// The "All Entities" cache is loaded lazily by EntitySelector when that
 					// scope mode is actually selected — no need to fetch it unconditionally.
 					if (summary && !summary.noAccessMode) {
-						console.log("[useAccessMode] Preloading entity metadata...");
+						debugLog("metadataAPI", "[useAccessMode] Preloading entity metadata...");
 						getAllEntitiesForScopes()
 							.then((entities) => {
-								console.log(
+								debugLog(
+									"metadataAPI",
 									"[useAccessMode] Entity metadata preloaded:",
 									entities.length,
 									"entities",

@@ -134,7 +134,7 @@ export function AttributePicker({
 			selectedOptions={selectedOptions}
 			value={query}
 			onChange={(ev) => setQuery(ev.target.value)}
-			placeholder={loading ? "Loading attributes..." : placeholder}
+			placeholder={loading ? "Loading attributes…" : placeholder}
 			disabled={disabled || loading}
 			clearable
 		>

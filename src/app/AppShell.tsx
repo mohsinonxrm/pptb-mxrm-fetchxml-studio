@@ -51,7 +51,17 @@ import {
 	getOnDemandWorkflows,
 	executeWorkflowBatch,
 	checkDeletePrivilege,
+	checkWritePrivilege,
+	getEntityStateModel,
+	setRecordsState,
 } from "../features/fetchxml/api/pptbClient";
+import {
+	closeMessageReason,
+	stateActionUnavailableReason,
+	type StateAction,
+	type StateTarget,
+} from "../features/fetchxml/model/recordState";
+import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
 import { exportToExcelLocal, downloadExcelFile } from "../features/fetchxml/api/excelExport";
 import type {
 	AttributeMetadata,
@@ -72,6 +82,10 @@ import {
 	type PagingState,
 } from "../features/fetchxml/api/paging";
 import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
+import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
+import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
+import { withThrottleRetry } from "../features/fetchxml/api/throttleRetry";
+import { debugLog } from "../shared/utils/debug";
 import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
 import { planRemoveColumns, planSortByColumn, resolveColumn } from "../features/fetchxml/model/queryColumns";
@@ -81,12 +95,24 @@ import { columnFilterConditions, type NewCondition } from "../features/fetchxml/
 import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
 import type { FetchNode, LinkEntityNode } from "../features/fetchxml/model/nodes";
 import { buildViewLayoutXml } from "../features/fetchxml/model/layoutxml";
-import { getViewLoadNotice, isUnmodifiedView } from "../features/fetchxml/model/savedViews";
+import {
+	applyQuickFindValue,
+	countQuickFindPlaceholders,
+	getViewLoadNotice,
+	isUnmodifiedView,
+	toQuickFindSearchValue,
+} from "../features/fetchxml/model/savedViews";
+import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
+import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 import { deleteAllUnavailableReason } from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { useAccessMode } from "../shared/hooks/useAccessMode";
+import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
+import { metadataCache } from "../features/fetchxml/state/cache";
+import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
+import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
 
 const SIMPLE_PAGING_MESSAGE =
 	"Dataverse didn't return a paging cookie for this query (for example, it's sorted by a link-entity attribute or uses distinct), so pages are fetched with page numbers only. Microsoft recommends paging cookies; this works, but is slower for large result sets.";
@@ -214,8 +240,21 @@ const useStyles = makeStyles({
 	},
 });
 
+/**
+ * What outlives a connection change (#66): AppContent is remounted for the new connection, so
+ * this lives in AppShell.
+ */
+interface ConnectionCarryOver {
+	/** The launch prefill (T2T) was applied: never apply it again */
+	prefillConsumed: boolean;
+	/** Reads the current query's FetchXML (set by AppContent) */
+	readFetchXml?: () => string | undefined;
+	/** The query to load into the remounted AppContent */
+	fetchXml?: string;
+}
+
 export function AppShell() {
-	const { theme } = usePptbContext();
+	const { theme, connectionKey, connectionName } = usePptbContext();
 	// The PPTB host's theme (light / dark), resolved by the host (#67)
 	const isDark = theme === "dark";
 
@@ -224,19 +263,51 @@ export function AppShell() {
 		document.documentElement.style.colorScheme = isDark ? "dark" : "light";
 	}, [isDark]);
 
+	// Connection changed in place (PPTB ≥ 1.2.7, #66): everything loaded from the previous
+	// environment is stale (metadata cache, entity lists, publishers and solutions, privileges,
+	// results, the loaded view). Clear the cache and remount the builder and the app content as a
+	// new session; only the query itself is kept. Derived while rendering, so the cache is clear
+	// before the new tree's effects load metadata.
+	const carryOver = useRef<ConnectionCarryOver>({ prefillConsumed: false });
+	const [connectionScope, setConnectionScope] = useState<ConnectionScope>({ key: undefined, session: 0 });
+	const nextScope = nextConnectionScope(connectionScope, connectionKey);
+	if (nextScope.scope !== connectionScope) {
+		if (nextScope.changed) {
+			metadataCache.clear();
+			// WhoAmI and privilege answers belong to the previous user and environment (#71)
+			resetDataverseSessionCache();
+			carryOver.current.fetchXml = carryOver.current.readFetchXml?.();
+		}
+		setConnectionScope(nextScope.scope);
+	}
+
+	// Tell the user why the tool reset (a host notification; no new UI)
+	const session = connectionScope.session;
+	useEffect(() => {
+		if (session === 0) return;
+		void window.toolboxAPI?.utils?.showNotification?.({
+			title: "Connection changed",
+			body: connectionName
+				? `FetchXML Studio reloaded its metadata for ${connectionName}. Results and the loaded view were cleared.`
+				: "FetchXML Studio has no connection now. Results and the loaded view were cleared.",
+			type: "info",
+		});
+		// Only when the session changes; the name is read for that session
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [session]);
+
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				<BuilderProvider>
-					<AppContent />
+				<BuilderProvider key={session}>
+					<AppContent carryOver={carryOver.current} />
 				</BuilderProvider>
 			</ThemeProvider>
 		</FluentProvider>
 	);
 }
 
-
-function AppContent() {
+function AppContent({ carryOver }: { carryOver: ConnectionCarryOver }) {
 	const styles = useStyles();
 	const builder = useBuilder();
 	const { loadAttributes, loadEntityMetadata, loadRelationships } = useLazyMetadata();
@@ -247,14 +318,30 @@ function AppContent() {
 
 	// Tools we can send the current query to, discovered via the "fetchxml" capability.
 	const { tools: sendToTools } = useSendToTools();
-	const prefillConsumedRef = useRef(false);
 
-	// Consume the inbound prefill exactly once. When a FetchXML query is supplied,
-	// load it (the root entity is derived from the FetchXML). When only an entity is
-	// supplied, start a fresh query rooted at that entity (metadata-driven).
+	// After a connection change (#66): load the query the previous session had, once
 	useEffect(() => {
-		if (launch.loading || prefillConsumedRef.current) return;
-		prefillConsumedRef.current = true;
+		const fetchXml = carryOver.fetchXml;
+		if (!fetchXml) return;
+		carryOver.fetchXml = undefined;
+		const result = builder.loadFetchXml(fetchXml);
+		if (!result.success) console.error("Connection change: couldn't reload the query:", result.errors);
+		// builder is intentionally omitted — runs once per session (mount)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// Lets AppShell read the current query when the connection changes (#66)
+	const currentFetchQuery = builder.fetchQuery;
+	useEffect(() => {
+		carryOver.readFetchXml = () => (currentFetchQuery ? generateFetchXml(currentFetchQuery) : undefined);
+	}, [carryOver, currentFetchQuery]);
+
+	// Consume the inbound prefill exactly once (per tool instance, not per connection, #66). When a
+	// FetchXML query is supplied, load it (the root entity is derived from the FetchXML). When only
+	// an entity is supplied, start a fresh query rooted at that entity (metadata-driven).
+	useEffect(() => {
+		if (launch.loading || carryOver.prefillConsumed) return;
+		carryOver.prefillConsumed = true;
 
 		if (!launch.context) return;
 
@@ -315,6 +402,14 @@ function AppContent() {
 	// New); pageRun also changes on Stop, which keeps the loaded rows.
 	const resultRunRef = useRef(0);
 	const pageRunRef = useRef(0);
+	// Unmounting (e.g. the connection changed, #66) stops page loops still running for these results
+	useEffect(
+		() => () => {
+			resultRunRef.current++;
+			pageRunRef.current++;
+		},
+		[],
+	);
 
 	// Export to Excel state
 	const [exportStatus, setExportStatus] = useState<{
@@ -330,6 +425,10 @@ function AppContent() {
 
 	// Execution error (e.g. Dataverse API error surfaced to user)
 	const [executeError, setExecuteError] = useState<string | undefined>();
+
+	// Quick find test value (#142): replaces {0} in the executed FetchXML only
+	const [quickFindValue, setQuickFindValue] = useState("");
+	const [quickFindAddPercent, setQuickFindAddPercent] = useState(true);
 
 	// Entity node of the tree the current results were produced for (see the clearing effect below)
 	const resultEntityIdRef = useRef<string | undefined>(undefined);
@@ -370,6 +469,16 @@ function AppContent() {
 		recordIds: string[];
 		preSelectedWorkflow?: WorkflowInfo;
 	}>({ open: false, recordIds: [] });
+
+	// Activate / Deactivate confirmation (#143)
+	const [setStateDialogState, setSetStateDialogState] = useState<{
+		open: boolean;
+		action: StateAction;
+		recordIds: string[];
+	}>({ open: false, action: "activate", recordIds: [] });
+
+	// Why Activate / Deactivate are off for the root entity, per action (#143)
+	const [stateActionReasons, setStateActionReasons] = useState<{ activate?: string; deactivate?: string }>({});
 
 	// Currently selected record IDs (from ResultsGrid)
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
@@ -453,35 +562,21 @@ function AppContent() {
 		};
 	}, [isDraggingVertical]);
 
-	// Check Dataverse API on mount
+	// Check Dataverse API on mount. WhoAmI is memoized per connection, so this shares the startup
+	// request with the privilege checks (#71); the details are debug output only.
 	useEffect(() => {
-		console.log("=== PPTB FetchXML Studio - Dataverse API Check ===");
-		console.log("Dataverse API Available:", isDataverseAvailable());
-
-		if (isDataverseAvailable()) {
-			console.log("window.dataverseAPI methods:", Object.keys(window.dataverseAPI || {}));
-
-			// Call WhoAmI to verify connection
-			whoAmI()
-				.then((result) => {
-					if (result) {
-						console.log("✅ WhoAmI Success:", {
-							UserId: result.UserId,
-							BusinessUnitId: result.BusinessUnitId,
-							OrganizationId: result.OrganizationId,
-						});
-					} else {
-						console.warn("⚠️ WhoAmI returned null - API may not be fully initialized");
-					}
-				})
-				.catch((error) => {
-					console.error("❌ WhoAmI Error:", error);
-				});
-		} else {
+		if (!isDataverseAvailable()) {
 			console.error("❌ Dataverse API not available on window object");
+			return;
 		}
-
-		console.log("===================================================");
+		whoAmI()
+			.then((result) => {
+				if (result) debugLog("app", "WhoAmI succeeded", { UserId: result.UserId });
+				else debugLog("app", "WhoAmI returned null - API may not be fully initialized");
+			})
+			.catch((error) => {
+				console.error("❌ WhoAmI Error:", error);
+			});
 	}, []);
 
 	// Check export privilege on mount
@@ -496,7 +591,7 @@ function AppContent() {
 						hasPrivilege,
 						privilegeChecked: true,
 					}));
-					console.log(`📊 Export to Excel privilege: ${hasPrivilege ? "GRANTED" : "DENIED"}`);
+					debugLog("app", `📊 Export to Excel privilege: ${hasPrivilege ? "GRANTED" : "DENIED"}`);
 				} else {
 					setExportStatus((prev) => ({
 						...prev,
@@ -550,7 +645,7 @@ function AppContent() {
 					privilegesChecked: true,
 				});
 
-				console.log(`🔐 Record action privileges for ${entityLogicalName}:`, {
+				debugLog("app", `🔐 Record action privileges for ${entityLogicalName}:`, {
 					canDelete,
 					canBulkDelete,
 					canRunWorkflow,
@@ -567,6 +662,37 @@ function AppContent() {
 		};
 
 		checkRecordPrivileges();
+	}, [entityLogicalName]);
+
+	// Activate / Deactivate availability (#143): entities whose states need dedicated messages, no
+	// statecode, or no Write privilege. Undeterminable answers leave the buttons on; Dataverse decides.
+	useEffect(() => {
+		const closeReason = closeMessageReason(entityLogicalName);
+		if (!entityLogicalName || closeReason || !isDataverseAvailable()) {
+			setStateActionReasons(closeReason ? { activate: closeReason, deactivate: closeReason } : {});
+			return;
+		}
+		let current = true;
+		setStateActionReasons({});
+		(async () => {
+			const [model, canWrite] = await Promise.all([
+				getEntityStateModel(entityLogicalName).catch((error: unknown) => {
+					console.warn("Activate/Deactivate: couldn't read the state model:", error);
+					return undefined;
+				}),
+				checkWritePrivilege(entityLogicalName),
+			]);
+			if (!current) return;
+			const writeReason =
+				canWrite === false ? "You don't have the Write privilege on this entity, so you can't change its records' status." : undefined;
+			setStateActionReasons({
+				activate: (model !== undefined ? stateActionUnavailableReason(model, "activate") : undefined) ?? writeReason,
+				deactivate: (model !== undefined ? stateActionUnavailableReason(model, "deactivate") : undefined) ?? writeReason,
+			});
+		})();
+		return () => {
+			current = false;
+		};
 	}, [entityLogicalName]);
 
 	// Root entity + all link-entity names. The root always comes from the query's <entity>
@@ -707,6 +833,10 @@ function AppContent() {
 	// Generate FetchXML from builder state — exactly what the user built, nothing injected (#59).
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 
+	// Quick find views keep {0} in their conditions (#142): a test value is needed to execute them
+	const quickFindPlaceholderCount = useMemo(() => countQuickFindPlaceholders(fetchXml), [fetchXml]);
+	const quickFindSearchValue = toQuickFindSearchValue(quickFindValue, quickFindAddPercent);
+
 	// Check if current query is an aggregate query (disables delete/workflow buttons)
 	const isAggregateQuery = builder.fetchQuery?.options?.aggregate === true;
 
@@ -776,10 +906,12 @@ function AppContent() {
 		viewId: string,
 		viewType: "system" | "personal",
 		viewName: string,
+		details: SavedViewDetails,
 	) => {
 		// Update the builder's loaded view state so subsequent saves overwrite the same view.
 		if (entityMetadata && builder.fetchQuery) {
-			// Overwriting keeps the view's query type; Save As creates a public view (#93)
+			// Overwriting keeps the view's query type; Save As creates a public view (#93). The
+			// solution and owner stay; description and default are what was saved (#142).
 			const overwritten = builder.loadedView?.id === viewId ? builder.loadedView : null;
 			builder.setLoadedView({
 				id: viewId,
@@ -789,9 +921,15 @@ function AppContent() {
 				originalFetchXml: generateFetchXml(builder.fetchQuery),
 				queryType: overwritten ? overwritten.queryType : 0,
 				isCustomizable: overwritten?.isCustomizable,
+				description: details.description,
+				isDefault: details.isDefault,
+				isManaged: overwritten?.isManaged,
+				solutionId: overwritten?.solutionId,
+				ownerId: overwritten?.ownerId,
+				ownerName: overwritten?.ownerName,
 			});
 		}
-		console.log(`✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
+		debugLog("app", `✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
 	};
 
 	/**
@@ -801,8 +939,15 @@ function AppContent() {
 	 */
 	const handleExecute = async (synced?: { xml: string; fetchQuery: FetchNode }) => {
 		const query = synced?.fetchQuery ?? builder.fetchQuery;
-		const xmlToExecute = synced?.xml ?? fetchXml;
-		if (!xmlToExecute) return;
+		const builtXml = synced?.xml ?? fetchXml;
+		if (!builtXml) return;
+		// Quick find views (#142): the test value replaces {0} in the FetchXML that runs (and its later
+		// pages); the tree, the editor and saved views keep {0}. Without a value nothing runs: the
+		// test value field asks for one.
+		// https://learn.microsoft.com/power-apps/developer/data-platform/quick-find
+		const hasQuickFindPlaceholders = countQuickFindPlaceholders(builtXml) > 0;
+		if (hasQuickFindPlaceholders && !quickFindSearchValue) return;
+		const xmlToExecute = hasQuickFindPlaceholders ? applyQuickFindValue(builtXml, quickFindSearchValue) : builtXml;
 
 		// A new run: anything still loading for the previous one is dropped (#60)
 		const run = ++resultRunRef.current;
@@ -830,36 +975,69 @@ function AppContent() {
 			// Determine execution method based on loaded view state. A synced editor query
 			// replaced the tree (and cleared the loaded view), so it always runs as FetchXML.
 			let result: FetchXmlResult | undefined;
+			// Set when the first page needed a smaller count (#183); later pages keep it
+			let firstPageShrunkTo: PagingState | undefined;
 			const loadedView = synced ? null : builder.loadedView;
 			let useViewExecution = false;
 
-			if (loadedView) {
+			// A quick find view runs as FetchXML with the test value: by ID it would run with {0} as
+			// stored, which matches nothing (verified live, #142)
+			if (loadedView && !hasQuickFindPlaceholders) {
 				if (isUnmodifiedView(xmlToExecute, loadedView.originalFetchXml)) {
 					useViewExecution = true;
-					console.log(
+					debugLog(
+						"app",
 						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
 							loadedView.type === "system" ? "savedQuery" : "userQuery"
 						}=${loadedView.id}`,
 					);
 
+					// Retried after service protection errors like every page (#183, #96); a view's page
+					// size is Dataverse's, so it can't be made smaller
 					if (loadedView.type === "system") {
-						result = await executeSystemView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executeSystemView(loadedView.entitySetName, loadedView.id));
 					} else {
-						result = await executePersonalView(loadedView.entitySetName, loadedView.id);
+						result = await withThrottleRetry(() => executePersonalView(loadedView.entitySetName, loadedView.id));
 					}
 				}
 			}
 
 			// If not using view execution (either no view, view was modified, or editor override), use FetchXML
 			if (!result) {
-				console.log(
+				debugLog(
+					"app",
 					synced
 						? "✏️ Executing editor FetchXML (loaded into the tree)"
-						: loadedView
-							? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
-							: "📡 Executing FetchXML query",
+						: hasQuickFindPlaceholders
+							? "🔎 Executing quick find FetchXML with the test value"
+							: loadedView
+								? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
+								: "📡 Executing FetchXML query",
 				);
-				result = await executeFetchXml(xmlToExecute);
+				// The first page gets the same recovery as later pages (#183): retried after service
+				// protection errors (#96), and requested again with half the count when it's over the
+				// PPTB host's 16 MB response limit (#68). That is the common case: a 5,000-row first page
+				// of a wide Entity. Without a count, Dataverse's default page size (5,000) is the starting
+				// point; queries with top or aggregate can't take a count, so they only get the retry.
+				const canShrink = !hasTopLimit && query?.options?.aggregate !== true;
+				const firstPageState: PagingState = {
+					mode: "fetchxml",
+					xml: xmlToExecute,
+					pageSize: canShrink ? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE) : undefined,
+					currentPage: (options.page ?? 1) - 1,
+					nextPage: options.page ?? 1,
+					moreRecords: true,
+					isRetrieveAllInProgress: false,
+					retrieveAll: false,
+				};
+				const { result: firstPageResult, state: fetchedFirst } = await fetchPageWithRecovery(
+					firstPageState,
+					// Unchanged, the query runs as written; after a halving, with the smaller count
+					(s) => (s.pageSize === firstPageState.pageSize ? executeFetchXml(xmlToExecute) : executeFetchXml(addPagingToFetchXml(xmlToExecute, s.nextPage, undefined, s.pageSize))),
+					{ onShrink: (s) => debugLog("app", `First page too large: retrying with count ${s.pageSize}`) },
+				);
+				result = firstPageResult;
+				if (fetchedFirst.pageSize !== firstPageState.pageSize) firstPageShrunkTo = fetchedFirst;
 			}
 			if (run !== resultRunRef.current) return; // superseded while the first page was loading
 
@@ -871,6 +1049,7 @@ function AppContent() {
 				query,
 				rows: result.records.map((record) => ({ ...record })),
 				totalRecordCount: result.totalRecordCount,
+				totalRecordCountLimitExceeded: result.totalRecordCountLimitExceeded,
 				moreRecords,
 				pagingCookie: result.pagingCookie,
 				entityLogicalName,
@@ -879,9 +1058,12 @@ function AppContent() {
 			setPaging({
 				mode: useViewExecution ? "view" : "fetchxml",
 				xml: xmlToExecute,
-				pageSize: options.count,
-				currentPage: firstPage,
-				nextPage: firstPage + 1,
+				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
+				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
+				fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
+				// After a smaller first page (#183), paging continues from the page it was fetched as
+				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
+				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
 				pagingCookie: result.pagingCookie,
 				nextLink: result.nextLink,
 				moreRecords,
@@ -894,11 +1076,8 @@ function AppContent() {
 		} catch (error) {
 			if (run !== resultRunRef.current) return;
 			console.error("Failed to execute FetchXML:", error);
-			const message =
-				error instanceof Error
-					? error.message
-					: "An unexpected error occurred while executing the query.";
-			setExecuteError(message);
+			// Documented Dataverse errors get actionable text; Dataverse's own message follows (#96)
+			setExecuteError(formatDataverseError(error, "An unexpected error occurred while executing the query."));
 			setQueryResult({ query, rows: [] });
 			setIsExecuting(false);
 		}
@@ -944,11 +1123,17 @@ function AppContent() {
 	 * the decoded paging cookie (when Dataverse returned one) and the executed query's own count.
 	 */
 	const fetchNextPage = async (state: PagingState): Promise<{ result: FetchXmlResult; next: PagingState }> => {
-		const result =
-			state.mode === "view"
-				? await executeNextLink(state.nextLink ?? "")
-				: await executeFetchXml(addPagingToFetchXml(state.xml, state.nextPage, state.pagingCookie, state.pageSize));
-		return { result, next: advancePaging(state, result) };
+		// Retried after service protection errors (#96); a page over the host's 16 MB limit is
+		// requested again with half the count, which later pages keep (#68)
+		const { result, state: fetched } = await fetchPageWithRecovery(
+			state,
+			(s) =>
+				s.mode === "view"
+					? executeNextLink(s.nextLink ?? "")
+					: executeFetchXml(addPagingToFetchXml(s.xml, s.nextPage, s.pagingCookie, s.pageSize)),
+			{ onShrink: (s) => debugLog("app", `Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`) },
+		);
+		return { result, next: advancePaging(fetched, result) };
 	};
 
 	/** Add a fetched page to the results of run `run` (ignored if the results changed meanwhile). */
@@ -979,6 +1164,8 @@ function AppContent() {
 		state = { ...state, isRetrieveAllInProgress: true, retrieveAll: true };
 		setIsLoadingMore(true);
 		setPaging(state);
+		// The host warns before the tab closes while Retrieve All runs (#70)
+		const releaseClose = holdClose();
 		try {
 			while (state?.moreRecords) {
 				const { result, next } = await fetchNextPage(state);
@@ -987,16 +1174,17 @@ function AppContent() {
 				state = { ...next, isRetrieveAllInProgress: next.moreRecords };
 				setPaging(state);
 			}
-			console.log("✅ Retrieve All complete");
+			debugLog("app", "✅ Retrieve All complete");
 		} catch (error) {
 			if (!isCurrent()) return;
 			console.error("Failed during Retrieve All:", error);
 			setPagingNotice({
 				kind: "error",
 				page: state?.nextPage,
-				message: error instanceof Error ? error.message : String(error),
+				message: formatDataverseError(error), // (#96)
 			});
 		} finally {
+			releaseClose();
 			if (isCurrent()) {
 				setIsLoadingMore(false);
 				if (pagingRef.current) setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
@@ -1032,14 +1220,14 @@ function AppContent() {
 			if (!isCurrent()) return;
 			appendPage(run, state, result, next);
 			setPaging(next);
-			console.log(`✅ Page ${next.currentPage} loaded: ${result.records.length} records`);
+			debugLog("app", `✅ Page ${next.currentPage} loaded: ${result.records.length} records`);
 		} catch (error) {
 			if (!isCurrent()) return;
 			console.error("Failed to load more records:", error);
 			setPagingNotice({
 				kind: "error",
 				page: state.nextPage,
-				message: error instanceof Error ? error.message : String(error),
+				message: formatDataverseError(error), // (#96)
 			});
 		} finally {
 			if (isCurrent()) setIsLoadingMore(false);
@@ -1095,7 +1283,8 @@ function AppContent() {
 		}));
 
 		try {
-			console.log(
+			debugLog(
+				"app",
 				`📤 Exporting to Excel via ${builder.loadedView.type} view "${builder.loadedView.name}"...`,
 			);
 
@@ -1113,7 +1302,7 @@ function AppContent() {
 			// Trigger download
 			await downloadBase64File(result.excelFile, result.filename);
 
-			console.log(`✅ Export complete: ${result.filename}`);
+			debugLog("app", `✅ Export complete: ${result.filename}`);
 
 			// Clear exporting state on success
 			setExportStatus((prev) => ({
@@ -1125,7 +1314,7 @@ function AppContent() {
 			setExportStatus((prev) => ({
 				...prev,
 				isExporting: false,
-				error: error instanceof Error ? error.message : "Export to Excel failed. Please try again.",
+				error: formatDataverseError(error, "Export to Excel failed. Please try again."), // (#96)
 			}));
 		}
 	};
@@ -1151,7 +1340,7 @@ function AppContent() {
 		}));
 
 		try {
-			console.log(`📤 Exporting ${queryResult.rows.length} records locally...`);
+			debugLog("app", `📤 Exporting ${queryResult.rows.length} records locally...`);
 
 			// Build column display names map
 			const columnDisplayNames = new Map<string, string>();
@@ -1210,7 +1399,7 @@ function AppContent() {
 			// Trigger download
 			await downloadExcelFile(buffer, finalFileName);
 
-			console.log(`✅ Local export complete: ${finalFileName}`);
+			debugLog("app", `✅ Local export complete: ${finalFileName}`);
 
 			setExportStatus((prev) => ({
 				...prev,
@@ -1265,10 +1454,11 @@ function AppContent() {
 				return;
 			}
 
-			// Open each selected record in a new tab
+			// Open each selected record in the connection's browser profile, already signed in to
+			// the right tenant (#70)
 			for (const recordId of recordIds) {
 				const url = buildRecordUrl(entityLogicalName, recordId, envUrl);
-				window.open(url, "_blank");
+				await openUrl(url);
 			}
 		},
 		[entityLogicalName],
@@ -1290,11 +1480,10 @@ function AppContent() {
 			const urls = recordIds.map((id) => buildRecordUrl(entityLogicalName, id, envUrl));
 			const textToCopy = urls.join("\n");
 
-			try {
-				await navigator.clipboard.writeText(textToCopy);
-				console.log(`📋 Copied ${urls.length} record URL(s) to clipboard`);
-			} catch (error) {
-				console.error("Failed to copy to clipboard:", error);
+			if (await copyText(textToCopy)) {
+				debugLog("app", `📋 Copied ${urls.length} record URL(s) to clipboard`);
+			} else {
+				console.error("Failed to copy to clipboard");
 			}
 		},
 		[entityLogicalName],
@@ -1315,7 +1504,7 @@ function AppContent() {
 			if (recordIds.length === 0) {
 				if (deleteAllDisabledReason) return; // the button explains why (#174)
 				if (!recordActionPrivileges.canBulkDelete) {
-					console.warn("Bulk delete privilege required to delete all records from view");
+					debugLog("app", "Bulk delete privilege required to delete all records from view");
 					return;
 				}
 				const totalRecords = queryResult?.rows.length || 0;
@@ -1384,48 +1573,57 @@ function AppContent() {
 
 		const recordIds = deleteDialogState.recordIds;
 		setDeleteProgress(null);
+		// The host warns before the tab closes while records are being deleted (#70)
+		const releaseClose = holdClose();
+		try {
+			// For batch delete (4+ records): $batch requests with the metadata EntitySetName on
+			// PPTB ≥ 1.2.7 (#61)
+			if (deleteDialogState.isBatchDelete) {
+				const result = await deleteRecordsBatch(
+					entityLogicalName,
+					recordIds,
+					(progress) => setDeleteProgress(progress),
+				);
 
-		// For batch delete (4+ records), use $batch endpoint
-		if (deleteDialogState.isBatchDelete) {
-			const result = await deleteRecordsBatch(
-				entityLogicalName, // Use logical name, API will pluralize
-				recordIds,
-				(progress) => setDeleteProgress(progress),
-			);
+				if (result.succeeded > 0) {
+					debugLog("app", `✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`);
+					// Re-execute query to refresh results
+					void handleExecuteRef.current();
+				}
 
-			if (result.succeeded > 0) {
-				console.log(`✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`);
+				return result;
+			}
+
+			// Sequential delete for 1-3 records
+			let successCount = 0;
+			const errors: string[] = [];
+
+			// Stop if the tool's connection changes in place (#175, #66): the next delete would run in
+			// the new environment, where the same record IDs can exist
+			const stillOnConnection = await connectionGuard();
+			for (const recordId of recordIds) {
+				try {
+					await deleteRecord(entityLogicalName, recordId, stillOnConnection);
+					successCount++;
+				} catch (error) {
+					errors.push(
+						`Failed to delete ${recordId}: ${formatDataverseError(error)}`, // (#96)
+					);
+				}
+			}
+
+			if (successCount > 0) {
+				debugLog("app", `✅ Deleted ${successCount} of ${recordIds.length} records`);
 				// Re-execute query to refresh results
 				void handleExecuteRef.current();
 			}
 
-			return result;
-		}
-
-		// Sequential delete for 1-3 records
-		let successCount = 0;
-		const errors: string[] = [];
-
-		for (const recordId of recordIds) {
-			try {
-				await deleteRecord(entityLogicalName, recordId);
-				successCount++;
-			} catch (error) {
-				errors.push(
-					`Failed to delete ${recordId}: ${error instanceof Error ? error.message : String(error)}`,
-				);
+			if (errors.length > 0) {
+				console.error("Delete errors:", errors);
+				return { succeeded: successCount, failed: errors.length, errors };
 			}
-		}
-
-		if (successCount > 0) {
-			console.log(`✅ Deleted ${successCount} of ${recordIds.length} records`);
-			// Re-execute query to refresh results
-			void handleExecuteRef.current();
-		}
-
-		if (errors.length > 0) {
-			console.error("Delete errors:", errors);
-			return { succeeded: successCount, failed: errors.length, errors };
+		} finally {
+			releaseClose();
 		}
 	}, [
 		entityLogicalName,
@@ -1450,9 +1648,11 @@ function AppContent() {
 				if (!executed || deleteAllDisabledReason) {
 					throw new Error(deleteAllDisabledReason ?? "Run the query first: Delete all deletes the records the query on screen matches.");
 				}
-				const currentFetchXml = generateFetchXml(executed);
+				// The FetchXML that ran: a quick find view's test value replaced {0} only there (#142), so
+				// the tree's XML would still say {0}
+				const currentFetchXml = pagingRef.current?.xml ?? generateFetchXml(executed);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
-				console.log(`📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
+				debugLog("app", `📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
 				return result;
 			}
 
@@ -1471,7 +1671,7 @@ function AppContent() {
 				jobName,
 			);
 
-			console.log(`📤 Bulk delete job submitted: ${result.asyncOperationId}`);
+			debugLog("app", `📤 Bulk delete job submitted: ${result.asyncOperationId}`);
 			return result;
 		},
 		[
@@ -1514,10 +1714,43 @@ function AppContent() {
 			if (!entityLogicalName) {
 				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
 			}
-			return executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress);
+			// The host warns before the tab closes while workflows are being started (#70)
+			return whileHoldingClose(() => executeWorkflowBatch(workflowId, recordIds, entityLogicalName, onProgress));
 		},
 		[entityLogicalName],
 	);
+
+	/** Activate / Deactivate (#143): opens the confirmation, which plans the change from metadata */
+	const openSetStateDialog = useCallback(
+		(action: StateAction, recordIds: string[]) => {
+			if (!entityLogicalName || recordIds.length === 0) return;
+			setSetStateDialogState({ open: true, action, recordIds });
+		},
+		[entityLogicalName],
+	);
+	const handleActivateRecords = useCallback((ids: string[]) => openSetStateDialog("activate", ids), [openSetStateDialog]);
+	const handleDeactivateRecords = useCallback((ids: string[]) => openSetStateDialog("deactivate", ids), [openSetStateDialog]);
+
+	/** Runs the state change (#143): PATCH statecode / statuscode, holding the host's close warning */
+	const handleExecuteStateChange = useCallback(
+		async (target: StateTarget, onProgress: (progress: BatchDeleteProgress) => void): Promise<BatchDeleteResult> => {
+			if (!entityLogicalName) throw new Error("Entity not selected");
+			const result = await whileHoldingClose(() =>
+				setRecordsState(entityLogicalName, setStateDialogState.recordIds, target, onProgress),
+			);
+			if (result.succeeded > 0) {
+				debugLog("app", `✅ State changed on ${result.succeeded} of ${setStateDialogState.recordIds.length} records`);
+				void handleExecuteRef.current();
+			}
+			return result;
+		},
+		[entityLogicalName, setStateDialogState.recordIds],
+	);
+
+	// Rows repeat for 1:N / N:N link-entities; Activate / Deactivate say so like their other reasons (#143)
+	const oneToManyStateReason = hasOneToManyRelationship
+		? "The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to activate or deactivate records."
+		: undefined;
 
 	// ============ END RECORD ACTION HANDLERS ============
 
@@ -1533,6 +1766,8 @@ function AppContent() {
 						onNewQuery={builder.newQuery}
 						entityScopeMode={displaySettings.entityScopeMode}
 						advancedFindOnly={displaySettings.advancedFindOnly}
+						collapsed={displaySettings.scopeCollapsed}
+						onCollapsedChange={(scopeCollapsed) => setDisplaySettings({ ...displaySettings, scopeCollapsed })}
 						onViewLoad={(viewInfo: LoadedViewInfo) => {
 							// Load the view's FetchXML into the tree while preserving view info
 							// Pass layoutxml for column configuration if available
@@ -1545,9 +1780,17 @@ function AppContent() {
 									name: viewInfo.name,
 									queryType: viewInfo.queryType,
 									isCustomizable: viewInfo.isCustomizable,
+									description: viewInfo.description,
+									isDefault: viewInfo.isDefault,
+									isManaged: viewInfo.isManaged,
+									solutionId: viewInfo.solutionId,
+									ownerId: viewInfo.ownerId,
+									ownerName: viewInfo.ownerName,
 								},
 								viewInfo.layoutxml,
 							);
+							// A test value belongs to the quick find view it was entered for (#142)
+							setQuickFindValue("");
 							// Say when the view couldn't be loaded, or the tree changed its query (#93)
 							const notice = getViewLoadNotice(viewInfo.name, result);
 							if (notice) {
@@ -1657,11 +1900,29 @@ function AppContent() {
 					oneToManyRelationships={oneToManyRelationships}
 					isLoadingRelationships={isLoadingRelationships}
 					onLoadRelatedAttributes={loadAttributes}
+					quickFindTestValue={
+						quickFindPlaceholderCount > 0 ? (
+							<QuickFindTestValue
+								value={quickFindValue}
+								onValueChange={setQuickFindValue}
+								addPercent={quickFindAddPercent}
+								onAddPercentChange={setQuickFindAddPercent}
+								searchValue={quickFindSearchValue}
+								disabled={isExecuting}
+							/>
+						) : undefined
+					}
+					executeDisabledReason={
+						quickFindPlaceholderCount > 0 && !quickFindSearchValue
+							? "Enter a quick find value to execute this query."
+							: undefined
+					}
 					saveViewButton={
 						<SaveViewButton
 							fetchXml={fetchXml}
 							layoutXml={layoutXml}
 							entityLogicalName={builder.fetchQuery?.entity?.name || ""}
+							entityDisplayName={entityMetadata?.DisplayName?.UserLocalizedLabel?.Label}
 							objectTypeCode={entityMetadata?.ObjectTypeCode || 0}
 							primaryIdAttribute={entityMetadata?.PrimaryIdAttribute || ""}
 							loadedView={builder.loadedView}
@@ -1818,6 +2079,10 @@ function AppContent() {
 					onCopyRecordUrl={handleCopyRecordUrl}
 					onDeleteRecords={handleDeleteRecords}
 					onBulkDeleteRecords={handleBulkDeleteRecords}
+					onActivateRecords={handleActivateRecords}
+					onDeactivateRecords={handleDeactivateRecords}
+					activateDisabledReason={stateActionReasons.activate ?? oneToManyStateReason}
+					deactivateDisabledReason={stateActionReasons.deactivate ?? oneToManyStateReason}
 					onRunSpecificWorkflow={handleRunSpecificWorkflow}
 					canDelete={recordActionPrivileges.canDelete}
 					canBulkDelete={recordActionPrivileges.canBulkDelete}
@@ -1840,6 +2105,7 @@ function AppContent() {
 				entityDisplayName={
 					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "record"
 				}
+				entityLogicalName={entityLogicalName}
 				recordCount={deleteDialogState.recordIds.length}
 				onClose={() => {
 					setDeleteDialogState({ open: false, recordIds: [] });
@@ -1855,8 +2121,10 @@ function AppContent() {
 				entityDisplayName={
 					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
 				}
+				entityLogicalName={entityLogicalName}
 				isAllRecords={bulkDeleteDialogState.isAllRecords}
 				totalViewRecords={bulkDeleteDialogState.totalViewRecords}
+				moreRecords={queryResult?.moreRecords}
 				onClose={() => setBulkDeleteDialogState({ open: false, recordIds: [] })}
 				onConfirm={handleConfirmBulkDelete}
 			/>
@@ -1867,12 +2135,24 @@ function AppContent() {
 				entityDisplayName={
 					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
 				}
+				entityLogicalName={entityLogicalName}
 				preSelectedWorkflow={workflowDialogState.preSelectedWorkflow}
 				onClose={() => setWorkflowDialogState({ open: false, recordIds: [] })}
 				onFetchWorkflows={handleFetchWorkflows}
 				onExecute={(workflow, onProgress) =>
 					handleExecuteWorkflow(workflow.workflowid, workflowDialogState.recordIds, onProgress)
 				}
+			/>
+			{/* Activate / Deactivate Dialog (#143) */}
+			<SetStateDialog
+				open={setStateDialogState.open}
+				action={setStateDialogState.action}
+				recordIds={setStateDialogState.recordIds}
+				entityLogicalName={entityLogicalName}
+				entityDisplayName={entityMetadata?.DisplayName?.UserLocalizedLabel?.Label}
+				primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
+				onClose={() => setSetStateDialogState((prev) => ({ ...prev, open: false }))}
+				onExecute={handleExecuteStateChange}
 			/>
 			{/* Settings Drawer */}
 			<SettingsDrawer

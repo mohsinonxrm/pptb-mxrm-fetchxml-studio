@@ -28,14 +28,22 @@ import type { AttributeMetadata } from "../../../../api/pptbClient";
 import { collectLinkEntityReferences, isConditionInRootEntityFilter } from "../../../../model/treeUtils";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoField, LeftoverSetting, NumberField, SectionHeading } from "../fields";
+import { Info, InfoField, LeftoverSetting, NumberField, SectionHeading, type Validation } from "../fields";
 import { useEntityInfo } from "../useEditorMetadata";
-import { findingFor } from "../ruleFindings";
+import { findingFor, worst } from "../ruleFindings";
+import { convertWildcardValue, isWildcardOperator } from "../../../../model/wildcards";
+import { isGuid } from "../../../../api/recordSearch";
 import { ValueOfPicker } from "./ValueOfPicker";
+import { WildcardValueField } from "./WildcardValueField";
+import { HierarchyValueField } from "./HierarchyValueField";
 
 const THIS_ENTITY = "__this";
 const OPTION_SET_TYPES = new Set(["Picklist", "State", "Status"]);
 const NUMERIC_TYPES = new Set(["Integer", "BigInt", "Decimal", "Double"]);
+/** Attribute types whose value is a GUID: Dataverse rejects anything else (0x80040203 FormatException, #98) */
+const GUID_TYPES = new Set(["Uniqueidentifier", "Lookup", "Customer", "Owner"]);
+/** Operators that take a record ID of a hierarchical entity (query-hierarchical-data, #98) */
+const HIERARCHY_OPERATORS = new Set(["under", "not-under", "above", "eq-or-under", "eq-or-above"]);
 /** Whole number from a stored value (parsed FetchXML keeps numbers as numbers; strings are possible) */
 const toInteger = (v: unknown): number | undefined => {
 	const n = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : NaN;
@@ -72,7 +80,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	// What "alias.attribute" can reach from where this condition is
 	const valueofScope = useMemo(() => valueofScopes(fetchQuery).get(node.id), [fetchQuery, node.id]);
 	// Hierarchy operators need a hierarchical entity (#87)
-	const { isHierarchical } = useEntityInfo(effectiveEntityName);
+	const { isHierarchical, metadata: entityMetadata } = useEntityInfo(effectiveEntityName);
 	// Operators from the attribute's metadata: type, multi-select, primary key, date-only behaviour (#87)
 	const availableOperators = useMemo(
 		() => getOperatorsForAttribute(selectedAttribute ?? undefined, isHierarchical),
@@ -129,9 +137,26 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	// Only type pairs verified to work are offered (getValueOfCompatibleTypes)
 	const canCompareToAttribute = operatorComparesAttributes && compatibleTypes.length > 0;
 	const valueofFinding = findingFor(findings, "valueof");
+	// Query Advisor advice on the value (leading wildcards, #97); value-shape findings are shown inline
+	const valueAdvice = findingFor(findings.filter((f) => f.kind === "advice"), "value");
 	const attributeType = selectedAttribute?.AttributeType;
 	// Multi-select choices are AttributeType Virtual; the type name tells them apart (#87)
 	const isMultiSelect = selectedAttribute?.AttributeTypeName?.Value === "MultiSelectPicklistType";
+	// Value pickers by operator (#98): the wildcard helper where the value is typed as text, and a
+	// record picker for the hierarchy operators on the primary key
+	const typedAsText =
+		!(attributeType && (OPTION_SET_TYPES.has(attributeType) || NUMERIC_TYPES.has(attributeType))) &&
+		attributeType !== "Boolean" &&
+		attributeType !== "DateTime" &&
+		!isMultiSelect;
+	const usesWildcardField = typedAsText && isWildcardOperator(node.operator);
+	const usesHierarchyField = HIERARCHY_OPERATORS.has(node.operator) && !!selectedAttribute?.IsPrimaryId;
+	// A GUID value that isn't one (verified live: 0x80040203 System.FormatException)
+	const guidValue = typeof node.value === "string" ? node.value : "";
+	const guidValidation: Validation =
+		attributeType && GUID_TYPES.has(attributeType) && guidValue.trim() !== "" && !isGuid(guidValue)
+			? { state: "error", message: "Enter an ID like 00000000-0000-0000-0000-000000000000." }
+			: undefined;
 
 	const showEntity = !columnFilter && ((isInRootFilter && linkEntityReferences.length > 0) || !!node.entityname);
 	const entityLabel = node.entityname
@@ -273,6 +298,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 				<InfoField
 					label="Operator"
 					required
+					validation={findingFor(findings, "operator")}
 					info={
 						<Info
 							text={[
@@ -294,10 +320,12 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 						onOptionSelect={(_, data) => {
 							const operator = data.optionValue ?? "";
 							// Keep the value only when the new operator takes the same shape (#87); only eq / ne /
-							// gt / ge / lt / le compare to another attribute (0x80048415)
+							// gt / ge / lt / le compare to another attribute (0x80048415). Between wildcard
+							// operators the text is kept and the wildcards follow the operator (#98).
+							const kept = adaptValueForOperator(node.operator, operator, node.value);
 							onUpdate({
 								operator,
-								value: adaptValueForOperator(node.operator, operator, node.value),
+								value: convertWildcardValue(node.operator, operator, kept) as ConditionNode["value"],
 								...(comparesToAttribute && !VALUEOF_OPERATORS.has(operator) ? { valueof: undefined } : {}),
 							});
 						}}
@@ -447,9 +475,26 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							compatibleTypes={compatibleTypes}
 							onChange={(valueof) => onUpdate({ valueof: valueof ?? "" })}
 						/>
+					) : usesWildcardField ? (
+						<WildcardValueField
+							key={node.id}
+							operator={node.operator}
+							value={node.value}
+							advice={valueAdvice}
+							onChange={(value) => onUpdate({ value })}
+						/>
+					) : usesHierarchyField ? (
+						<HierarchyValueField
+							key={node.id}
+							entityName={effectiveEntityName}
+							metadata={entityMetadata}
+							value={node.value}
+							onChange={(value) => onUpdate({ value })}
+						/>
 					) : (
 						<InfoField
 							label="Value"
+							validation={worst(guidValidation, valueAdvice)}
 							info={<Info text="The value to compare the attribute with." href={DOCS.filterRows} />}
 						>
 							{renderLiteralValue()}
@@ -471,9 +516,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 						onRemove={() => onUpdate({ valueof: undefined })}
 					/>
 				)}
+				{/* condition/@aggregate isn't in the condition reference (#98: labelled undocumented) */}
 				{node.aggregate && (
 					<LeftoverSetting
-						text={`Aggregate: ${node.aggregate}`}
+						text={`Aggregate (undocumented): ${node.aggregate}`}
 						validation={{
 							state: "warning",
 							message:

@@ -9,6 +9,8 @@
  * runtime guard, since an older host may not expose it (or its newer methods) at runtime.
  */
 
+import { getPrimaryConnection } from "./host";
+
 /** The host invocation API as typed on the global window.toolboxAPI. */
 type ToolboxInvocationAPI = NonNullable<Window["toolboxAPI"]>["invocation"];
 
@@ -234,11 +236,12 @@ export async function sendFetchXmlToTool(
 	const invocation = getInvocationAPI();
 	if (!invocation) {
 		throw new Error(
-			"PPTB invocation API is not available. Upgrade to PPTB host ≥ 1.2.2 to use Tool-to-Tool invocation.",
+			"PPTB invocation API is not available. Upgrade to PPTB host ≥ 1.2.7 to use Tool-to-Tool invocation.",
 		);
 	}
 
-	const connection = await window.toolboxAPI.connections.getActiveConnection();
+	// The primary connection slot (getConnection(0) on PPTB ≥ 1.2.7, #70)
+	const connection = await getPrimaryConnection();
 	return invocation.launchTool(targetToolId, prefill as unknown as Record<string, unknown>, {
 		primaryConnectionId: connection?.id ?? null,
 		// "Send to Tool" is a one-way handoff — suppress the callee's "Return to FXS" banner.

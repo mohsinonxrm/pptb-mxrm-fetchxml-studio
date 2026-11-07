@@ -72,7 +72,7 @@ export function SolutionPicker({
 
 	return (
 		<div className={styles.container}>
-			<Field label="Add to Solution" hint="Select a solution to include the view in">
+			<Field label="Add to solution" hint="Select a solution to include the view in">
 				<Combobox
 					className={styles.combobox}
 					placeholder="Select solution (optional)"

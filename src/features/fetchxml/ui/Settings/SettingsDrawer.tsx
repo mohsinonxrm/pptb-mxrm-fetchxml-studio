@@ -166,14 +166,14 @@ export function SettingsDrawer({
 			<DrawerBody>
 				{/* ── Query Scope Section ──────────────────────────────── */}
 				<div className={styles.section}>
-					<Text className={styles.sectionTitle}>Query Scope</Text>
+					<Text className={styles.sectionTitle}>Query scope</Text>
 
 					{/* Entity Scope Mode */}
 					<div className={styles.settingItem}>
 						<Text className={styles.settingLabel}>
-							Entity Source
+							Entity source
 							<Tooltip
-								content="Controls how the entity list is populated in the toolbar. Scoped modes are faster; 'All Entities' loads every entity in the environment."
+								content="Controls how the entity list is populated in the toolbar. Scoped modes are faster; 'All entities' loads every entity in the environment."
 								relationship="description"
 							>
 								<Info16Regular style={{ color: tokens.colorNeutralForeground3 }} />
@@ -207,7 +207,7 @@ export function SettingsDrawer({
 							>
 								<Radio value="solution-only" label="Solution only" disabled={!canUseSolutionOnly} />
 							</Tooltip>
-							<Radio value="all" label="All Entities" />
+							<Radio value="all" label="All entities" />
 						</RadioGroup>
 					</div>
 
@@ -218,7 +218,7 @@ export function SettingsDrawer({
 						<div className={styles.settingRow}>
 							<div>
 								<Text className={styles.settingLabel}>
-									Advanced Find Only
+									Advanced Find only
 									<Tooltip
 										content="When on, entities, attributes and relationships are limited to the ones Advanced Find shows (IsValidForAdvancedFind). Turn off to build queries Advanced Find can't: system and customization entities, intersect entities, and hidden attributes and relationships. Attributes that can't be read (IsValidForRead = false) are never listed."
 										relationship="description"
@@ -253,7 +253,7 @@ export function SettingsDrawer({
 					<div className={styles.settingItem}>
 						<div className={styles.settingRow}>
 							<div>
-								<Text className={styles.settingLabel}>Use Logical Names</Text>
+								<Text className={styles.settingLabel}>Use logical names</Text>
 								<Text className={styles.settingDescription} block>
 									Show attribute logical names in column headers instead of display names
 								</Text>
@@ -267,7 +267,7 @@ export function SettingsDrawer({
 
 					{/* Value Display Mode */}
 					<div className={styles.settingItem}>
-						<Text className={styles.settingLabel}>Value Display Mode</Text>
+						<Text className={styles.settingLabel}>Value display mode</Text>
 						<Text className={styles.settingDescription} block>
 							How to display cell values in the results grid
 						</Text>

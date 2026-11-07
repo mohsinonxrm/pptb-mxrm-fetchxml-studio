@@ -2,30 +2,36 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://img.shields.io/badge/version-1.4.6-blue)
-[![npm](https://img.shields.io/npm/v/@mohsinonxrm/pptb-fetchxml-studio?label=npm)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
-![Fluent UI](https://img.shields.io/badge/Fluent%20UI-v9-0078D4?logo=microsoft)
-![PPTB Types](https://img.shields.io/badge/%40pptb%2Ftypes-1.2.3-blue)
+[![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
+![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb.svg)
+![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb-types.svg)
+![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/react.svg)
+![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/typescript.svg)
+![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/fluent-ui.svg)
+![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/license.svg)
 
 ## ✨ Features
 
 ### 🔧 Visual Query Builder
 - **Tree-based hierarchy** — Build FetchXML queries visually with entities, attributes, filters, orders, and link-entities
+  - **Add menus and right-click** — Each row's + menu offers All attributes, Select attributes…, Blank attribute, Order by, Filter and Link-entity, with the tree's icons. Right-click (or Shift+F10) a row for the same items plus **Delete**. Deleting a node with items inside asks first.
+  - **Readable rows** — Rows with nothing inside have no chevron. A link-entity that can return attributes but has none says "(no attributes)". A link-entity without an alias is labelled by its lookup, e.g. "contact via primarycontactid (outer)".
+- **Query scope** — Publishers, Solutions, Entity and Load view sit in a section that collapses to one line (entity · view · solutions), with **New** always visible. Your publisher and solution selection is remembered for each environment. Solutions show their unique name and version, grouped Unmanaged / Managed.
 - **Property panel for every node** — Fetch options, entity, attributes, all-attributes, sorts, filters, conditions and link-entities each have an editor covering the full FetchXML reference. Every field explains itself in an info popover with a link to Microsoft Learn.
+  - **Docs-driven helpers** — Like / begins-with / ends-with values have a wildcard helper: Contains, Begins with, Ends with or a custom pattern, plus "Match literally", which escapes `%`, `_` and `[`. Hierarchy operators (under, above…) pick a record by name, with a Record ID fallback. Undocumented settings (UTC offset, condition aggregate) are labelled as such.
   - **Metadata-driven** — Attribute pickers, operators, value pickers, aggregate functions, date grouping, sortable attributes and compare-to-attribute choices follow each attribute's metadata, so the panel only offers what Dataverse accepts.
   - **Shows problems where they are** — Rule errors appear on the field they're about and as an **Error** badge in the tree; settings Dataverse ignores are listed with a **Remove** button.
   - **Tree badges** — Aggregate, Distinct, Retained and Hints on the query; Group by, date grouping and aggregate functions on attributes; Union and Quick find on filters.
   - **Safe mode changes** — Turning off aggregate, or switching a link-entity to a type that returns no attributes, lists what has to change and asks first.
 - **Full FetchXML support** — Aggregate queries, grouping, distinct, top/count, paging, and advanced hints
 - **Nested filters** — Create complex AND/OR filter groups with unlimited nesting
-- **Link-entity relationships** — Browse and add 1:N, N:1, and N:N relationships with inner/outer joins; N:N relationships join through their intersect entity, as documented; intersect entities (such as `systemuserroles` or `teammembership`) can be joined to each side of their N:N relationship
+- **Link-entity relationships** — Browse and add 1:N, N:1, and N:N relationships with inner/outer joins. Each option shows the related entity, then "via {lookup} · {schema name}", and search matches any part; N:N relationships join through their intersect entity, as documented; intersect entities (such as `systemuserroles` or `teammembership`) can be joined to each side of their N:N relationship
 
 ### 📊 Results Grid
 - **Virtualized DataGrid** — Handle large result sets with smooth scrolling (powered by react-window)
 - **Copy results** — Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column. **Ctrl+C** copies the selected rows, or the focused cell. The command bar's **Copy** menu copies the selected or all loaded rows, as shown or as raw values. Rows copy as tab-separated values with a header row, so they paste into Excel as cells
-- **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, with **Stop** to keep what's loaded so far. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. A failed page shows how many rows loaded, with **Retry**
+- **Total record count** — With *Return total record count*, the info bar shows "Rows: 50 of 1,234 total", or "5,000+ total" when Dataverse caps the count. **Count all {entity} records** then gets the entity's unfiltered total (`RetrieveTotalRecordCount`, a snapshot that ignores the query's filters)
+- **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, with **Stop** to keep what's loaded so far. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. Every page, the first included, is retried after Dataverse's service protection limits and requested again with a smaller `count` when it's over the ToolBox's 16 MB response limit. A failed page shows how many rows loaded, with **Retry**
 - **Rich cell rendering** — Power Apps-style display for lookups, option sets, dates, currency, and more
 - **Column header menu** — Click a header for **Sort** (A to Z, smallest to largest or oldest to newest, by type), **Filter by…** and **Clear filter**. Shift+click a header still adds it to a multi-column sort.
 - **Column filters** — **Filter by…** adds a `<condition>` to the query and runs it again, so the filter covers every record, not just the loaded ones. Operators and value pickers follow the attribute's metadata, as in the property panel. Column filters are kept in their own `<filter type="and">` inside the root filter, apart from the conditions you built. An `or` root filter is wrapped so the column filters narrow the results; it's unwrapped again when the last column filter goes. Link-entity columns use `entityname`, which filters after the join. Active filters show as removable tags above the grid, and filtered columns show a filter icon
@@ -65,14 +71,18 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
   Settings Dataverse accepts but ignores (such as `aggregatelimit` on a non-aggregate query, `aggregate` on a condition, which FetchXML can't use to filter on aggregate values, or `visible` on a link-entity) are shown as notes only.
 - **Boolean spellings** — `"1"`/`"0"` and other spellings Dataverse accepts are read correctly (e.g. `usertimezone="1"`, `descending="1"`, `enableprefiltering="1"`), so Parse to Tree never flips or drops them.
-- **Lossless Parse to Tree** — Every attribute in the FetchXML reference is kept, including `datasource`, `aggregatelimit`, `useraworderby`, query hints (`options`), `latematerialize`, `<order alias>`, `distinct` counts, `rowaggregate` and quick find flags. So are unknown, namespaced and legacy attributes (e.g. `xmlns:generator` from SQL 4 CDS, `version`/`mapping` from Advanced Find, `uiname`/`uitype` from saved views, on conditions and on each `<value>`). Values are kept exactly as written: every decimal digit, spaces in `<value>` text, and line breaks or tabs in attribute values. Every FetchXML example in the Microsoft Learn FetchXML articles round-trips without loss.
+- **Lossless Parse to Tree** — Every attribute in the FetchXML reference is kept, including `datasource`, `aggregatelimit`, `useraworderby`, query hints (`options`), `latematerialize`, `<order alias>`, `distinct` counts, `rowaggregate` and quick find flags. So are unknown, namespaced and legacy attributes (e.g. `xmlns:generator` from SQL 4 CDS, `version`/`mapping` from Advanced Find, `uiname`/`uitype` from saved views). Every FetchXML example in the Microsoft Learn FetchXML articles round-trips without loss.
 - **No silent changes** — If Parse to Tree must correct something Dataverse would reject (for example an invalid alias), a confirmation dialog lists every change first
 - **LayoutXML preview** — See the column layout configuration
 
 ### 📥 Load & Save Views
-- **Load system/personal views** — Browse and load existing Dataverse views
-- **Optimized view execution** — Uses SavedQuery/UserQuery APIs for better performance
-- **Save to Dataverse** — Save your queries as new personal views or update existing ones
+- **Load system/personal views** — Browse and load existing Dataverse views of every query type. Personal views shared with you show "Shared by {owner}", and system views show their type or "Default view"
+- **Optimized view execution** — An unmodified loaded view runs by its ID (SavedQuery/UserQuery). Quick find views run as FetchXML with the test value you enter for `{0}`; the query keeps `{0}`
+- **Save to Dataverse** — Save your queries as new personal or system views, or update existing ones.
+  - Before overwriting a shared personal view, your write access is checked; without it you get **Save a copy…**.
+  - Overwriting a managed system view warns first.
+  - Public system views can be **set as the default view**. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise (saving a view that's already the default clears any other default too); if one can't be cleared, a notification names it.
+  - The description is pre-filled.
 - **Solution-aware** — Add views to solutions during save
 
 ### 📤 Export & Data Operations
@@ -82,7 +92,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Formatted value options** — Export formatted values, raw values, or both side-by-side columns
 - **Record deletion** — Delete selected records with confirmation dialog
 - **Bulk delete jobs** — Submit async `BulkDelete` jobs to Dataverse with job-tracking URL; any number of selected records (the query for selected records is built in the tool, with no URL length limit)
-- **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen; after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
+- **Delete all deletes what you see** — with no selection, Delete all and Bulk delete (job) submit the query that produced the results on screen (a quick find view's test value included); after editing the query in the left pane, run it again first ("Delete all unavailable" explains why). Adding, removing or sorting columns in the grid doesn't count as a change
 - **Batch delete** — Parallel per-record delete for small sets (up to 100 records) with progress and ETA
 - **Run workflows** — Execute on-demand workflows on selected records with batch execution and progress tracking
 
@@ -106,7 +116,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
 - **Intelligent caching** — In-memory cache prevents duplicate API calls per session
 - **Resizable panes** — Adjust split-pane layout to your preference
-- **Keyboard shortcuts** — `Ctrl+Enter` to execute query, copy XML to clipboard
+- **Copy FetchXML** — the FetchXML tab's **Copy** puts the query on the clipboard
 - **Display settings** — Toggle logical names vs display names in column headers; choose formatted, raw, or both value modes in the grid and exports
 - **Query scope settings** — Control which entities appear in the entity picker: *Publisher + Solution* (full filter), *Solution Only*, or *All Entities* (no filter). Persisted across sessions.
 - **Advanced Find Only toggle** — When on (default), entities, attributes and relationships are limited to the ones Advanced Find shows (`IsValidForAdvancedFind`), in every entity scope. Turn it off to build queries Advanced Find can't: system and customization entities (saved views, forms, plug-in steps, solution components), intersect entities (team membership, user roles), and hidden attributes and relationships. Attributes that can't be read (`IsValidForRead = false`) are never listed. Hidden label attributes (such as `statuscodename`) can be filtered and sorted. Toggling is instant: metadata is fetched once and filtered locally. Attributes already in a query keep their operators and value inputs either way.
@@ -123,6 +133,24 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Bulk delete privilege check** — Validates `prvBulkDelete` before surfacing bulk delete
 - **Workflow privilege check** — Validates `prvReadWorkflow` + `prvWorkflowExecution` before showing workflow picker
 - **View save privilege check** — Validates `prvWriteQuery` / `prvWriteCustomization` / `prvPublishCustomization` / `prvWriteUserQuery` before save operations
+
+## ✏️ What this tool changes
+
+FetchXML Studio only reads from Dataverse until you start one of the operations below. Each one asks for confirmation first, and the confirmation names the target: the environment (connection name, URL and type, with Production highlighted), the entity, and how many records (or which view). For the record operations, on a Production connection, for more than 100 records, or when the total isn't known (Bulk Delete with no rows selected), you type the entity logical name before the button enables. Each confirmation that changes or removes existing records or views also says how to undo it, or that it can't be undone: deleting, running a workflow and overwriting a view can't be undone from the tool (an overwritten managed view comes back when you remove its unmanaged layer); Activate and Deactivate undo each other, where the entity's status reason transitions allow it. They all run as the connected user, or as the user PPTB is impersonating, so Dataverse applies that user's security roles.
+
+| Operation | When | What it does in Dataverse |
+|---|---|---|
+| **Delete records** | Results → **Delete** with 1–100 rows selected | Deletes the selected records. 1–3 records are deleted one request each; 4–100 are deleted in a batch, with progress. Needs the entity's Delete privilege. |
+| **Bulk Delete** | Results → **Delete** with more than 100 rows selected, or with **no rows selected**, or **Bulk Delete** | Submits an asynchronous Bulk Delete job (`BulkDelete`). It runs on the server, and you can track it under Settings → Data Management → Bulk Record Deletion. With no rows selected, the job deletes **every record the query on screen matches**, not just the rows loaded in the grid; it's unavailable until the query has run, and again after you edit the query in the left pane until you run it again. Needs the Bulk Delete privilege (`prvBulkDelete`). |
+| **Activate / Deactivate** | Results → **Activate** or **Deactivate** with rows selected | Sets each selected record's Status and Status Reason with an update (`PATCH {EntitySetName}(id)` with `statecode` and `statuscode`), in batches with progress. The options come from the entity's metadata: entities with two states and one status reason each (such as account and contact) go to the state's default status reason; others let you pick the status reason, grouped by state, limited to the allowed transitions when the entity enforces status reason transitions. Off for entities whose states change through their own actions (opportunity, case, quote, order, invoice, contract) and for entities with no Status column. Needs the entity's Write privilege. |
+| **Run workflow** | Results → **Run Workflow** on selected rows | Starts the chosen on-demand workflow (`ExecuteWorkflow`) once per selected record. What the workflow does is up to the workflow. |
+| **Save view (personal)** | **Save As** / **Save**, Personal view | Creates or updates a `userquery` record (your personal view). |
+| **Save view (system)** | **Save As** / **Save**, System view | Checks the query with `ValidateSavedQuery`, then creates or updates a `savedquery` record and publishes it (`PublishXml`). Optionally adds it to the unmanaged solution you choose (`AddSolutionComponent`). Overwriting a view that isn't customizable is blocked. |
+
+Nothing else writes to Dataverse:
+- **Export (Server)** asks Dataverse to build an Excel file (`ExportToExcel`) and changes no data.
+- **Export (Local)** writes an `.xlsx` file to the location you choose.
+- **Display settings** (logical names, value format, entity source, Advanced Find only) and the **publisher and solution** you last picked for each environment are stored by Power Platform ToolBox on your machine, not in Dataverse.
 
 ## 🖼️ Interface Overview
 
@@ -153,7 +181,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application
+- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application, **version 1.2.7 or later**. FetchXML Studio 1.5 targets PPTB 1.2.7 (`minAPI` 1.2.7); 1.4.x works with 1.2.2 or later
 - Connection to a Dataverse environment
 
 ### Installation
@@ -173,6 +201,9 @@ npm ci
 
 # Start development server
 npm run dev
+
+# Run the real UI in a browser against a live Dataverse org (needs `az login`; see dev/README.md)
+npm run dev:harness
 ```
 
 ### Building
@@ -188,9 +219,11 @@ npm run preview
 npm run validate
 ```
 
-**Releases.** CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests, PPTB validation, the build and a package-contents check on every pull request. Pushing a `vX.Y.Z` tag on `main` publishes to npm with provenance and creates the GitHub Release; see [RELEASING.md](RELEASING.md).
+**Releases.** CI (`.github/workflows/ci.yml`) runs a runtime dependency audit, typecheck, lint, tests, PPTB validation, the build and a package-contents check on every pull request. CI and the release build also check that the version, `package-lock.json`, the CHANGELOG section, the README badge and the bundled icon agree. The release workflow runs the same checks in a job without publishing rights, then publishes the package it built from a separate job that installs no project dependencies; Node, npm and the actions are pinned. `main` holds the current stable release. A minor release stabilizes on a `release/X.Y` branch, so `dev` is never frozen. A `vX.Y.Z-beta.N` tag there publishes to npm `beta` as a GitHub pre-release, and after a smoke test and a 7-day soak, the `vX.Y.Z` tag on `main` publishes to npm `latest`, both with provenance. Fixes go to the oldest supported branch and merge forward. The previous minor gets critical fixes for 30 days ([SECURITY.md](SECURITY.md)); see [RELEASING.md](RELEASING.md).
 
-**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (gold stamp) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
+**README badges.** The badges above are SVG files in `assets/badges/`, generated from `package.json` by `npm run badges`. Power Platform ToolBox shows this README in its own window, which only loads images from GitHub, so they're linked from `raw.githubusercontent.com` rather than `img.shields.io` ([RELEASING.md](RELEASING.md#readme-images)).
+
+**Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (a two-tone gold corner) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
 
 **Dependencies.** `package-lock.json` is committed and pins every dependency with an integrity hash. Use `npm ci` for a clean install. After changing dependencies, run `npm install` and commit the updated lockfile.
 

@@ -109,7 +109,7 @@ export function ColumnConfigDialog({ open, columns, onClose, onReorder }: Column
 		<Dialog open={open} onOpenChange={(_e, data) => !data.open && onClose()}>
 			<DialogSurface>
 				<DialogBody>
-					<DialogTitle>Configure Columns</DialogTitle>
+					<DialogTitle>Configure columns</DialogTitle>
 					<DialogContent>
 						<p
 							style={{

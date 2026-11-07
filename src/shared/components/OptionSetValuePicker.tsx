@@ -108,7 +108,7 @@ export function OptionSetValuePicker({
 
 	// Apply Fluent UI's visual filtering only (we've already filtered the data)
 	const filteredChildren = useComboboxFilter(query, comboboxOptions, {
-		noOptionsMessage: loading ? "Loading options..." : error || "No options found",
+		noOptionsMessage: loading ? "Loading options…" : error || "No options found",
 		filter: () => true, // Always return true since we pre-filtered
 	});
 

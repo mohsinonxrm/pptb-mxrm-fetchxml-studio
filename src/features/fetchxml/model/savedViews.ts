@@ -40,7 +40,7 @@ const QUERY_TYPE_LABELS: ReadonlyArray<readonly [number, string]> = [
 	[256, "Outlook filter"],
 	[512, "Address book filter"],
 	[1024, "Without subject"],
-	[2048, "Template"],
+	[2048, "Other"], // SavedQueryTypeOther (#144)
 	[4096, "Dialog"],
 	[8192, "Offline template"],
 	[16384, "Custom"],
@@ -62,6 +62,145 @@ export function getQueryTypeLabel(queryType: number | undefined): string | undef
 	if (queryType === undefined || queryType === PUBLIC_VIEW_QUERY_TYPE) return undefined;
 	const known = QUERY_TYPE_LABELS.find(([type]) => type === queryType);
 	return known ? known[1] : `Query type ${queryType}`;
+}
+
+/** A view's owner (personal views): the ownerid lookup and its formatted value (#142) */
+interface OwnedView {
+	type: "system" | "personal";
+	ownerId?: string;
+	ownerName?: string;
+}
+
+/**
+ * Whether a personal view belongs to someone else: a user query "can be assigned and shared with
+ * other users" (https://learn.microsoft.com/power-apps/developer/data-platform/saved-queries), and
+ * Load view lists the ones shared with the user (#93). False when either ID is unknown (#142).
+ */
+export function isSharedView(view: OwnedView, currentUserId: string | undefined): boolean {
+	if (view.type !== "personal" || !view.ownerId || !currentUserId) return false;
+	return view.ownerId.toLowerCase() !== currentUserId.toLowerCase();
+}
+
+/**
+ * Second line of a Load view option (#142): "Shared by {owner}" for a personal view someone else
+ * owns, the query type for views that aren't public views ("Quick find view"), "Default view" for
+ * the default public view. Undefined for the user's own public views.
+ */
+export function getViewSecondaryText(
+	view: OwnedView & { queryType?: number; isDefault?: boolean },
+	currentUserId: string | undefined,
+): string | undefined {
+	const parts: string[] = [];
+	if (isSharedView(view, currentUserId)) parts.push(view.ownerName ? `Shared by ${view.ownerName}` : "Shared with you");
+	const typeLabel = getQueryTypeLabel(view.queryType);
+	if (typeLabel) {
+		const known = QUERY_TYPE_LABELS.some(([, label]) => label === typeLabel);
+		parts.push(known ? `${typeLabel} view` : typeLabel);
+	} else if (view.isDefault && view.type === "system") {
+		parts.push("Default view");
+	}
+	return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+/**
+ * Whether RetrievePrincipalAccess's AccessRights include WriteAccess (#142). The Web API returns the
+ * AccessRights flags as a comma-separated string ("ReadAccess, WriteAccess, ..."; verified live);
+ * a number is read as the flags value (WriteAccess = 2). Undefined when it can't be read.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveprincipalaccess
+ * https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/accessrights
+ */
+export function hasWriteAccess(accessRights: unknown): boolean | undefined {
+	if (typeof accessRights === "number") return (accessRights & 2) === 2;
+	if (typeof accessRights !== "string") return undefined;
+	return accessRights
+		.split(",")
+		.map((right) => right.trim())
+		.includes("WriteAccess");
+}
+
+/**
+ * Whether "Set as default view" applies (#142): public system views only. "You can set only one
+ * active public view as the default view. To make a view the default view, set the IsDefault
+ * property to true." Personal views (userquery) have no isdefault column.
+ * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
+ */
+export function canSetDefaultView(view: { type: "system" | "personal"; queryType?: number }): boolean {
+	return view.type === "system" && (view.queryType ?? PUBLIC_VIEW_QUERY_TYPE) === PUBLIC_VIEW_QUERY_TYPE;
+}
+
+/**
+ * The warning after a view was saved as the default public view while another view stayed a default
+ * too: Dataverse doesn't clear it, and clearing it failed (#307). An entry with no `id` means the
+ * other defaults couldn't be read.
+ */
+export function defaultViewsNotClearedMessage(viewName: string, notCleared: readonly { id: string; name: string; error: string }[]): string {
+	const known = notCleared.filter((view) => view.id);
+	const errors = notCleared.map((view) => view.error).join(" ");
+	if (known.length === 0) {
+		return `"${viewName}" is saved as the default view, but FetchXML Studio couldn't check whether another view is still marked as the default too. To be sure, set the default again in Power Apps (the entity's Views, then Set as default). Details: ${errors}`;
+	}
+	const views = known.map((view) => `"${view.name || view.id}"`).join(", ");
+	return `"${viewName}" is saved as the default view, but ${views} ${known.length === 1 ? "is" : "are"} still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: ${errors}`;
+}
+
+/**
+ * Quick find placeholder (#142). Quick find views store `value="{0}"` in the conditions of their
+ * quick find filter, and the caller puts the search string in its place ("string.Format" in the
+ * Learn samples): https://learn.microsoft.com/power-apps/developer/data-platform/quick-find
+ * Dataverse doesn't substitute it: a view with {0} run as stored matches nothing (verified live).
+ */
+export const QUICK_FIND_PLACEHOLDER = "{0}";
+
+/** Condition values: the value attribute of <condition> (either quote) and <value> elements. */
+const CONDITION_VALUE_PATTERNS: RegExp[] = [
+	/(<condition\b[^>]*?\svalue=")([^"]*)(")/g,
+	/(<condition\b[^>]*?\svalue=')([^']*)(')/g,
+	/(<value>)([^<]*)(<\/value>)/g,
+];
+
+/** The number of condition values holding the quick find placeholder {0} (#142). */
+export function countQuickFindPlaceholders(fetchXml: string): number {
+	let count = 0;
+	for (const pattern of CONDITION_VALUE_PATTERNS) {
+		for (const match of fetchXml.matchAll(pattern)) {
+			if (match[2].includes(QUICK_FIND_PLACEHOLDER)) count++;
+		}
+	}
+	return count;
+}
+
+/**
+ * The search value a quick find test value runs with (#142): quick find conditions use like, which
+ * "requires a search string that ends with %", and the Learn samples append it when it's missing.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/quick-find#what-is-a-quick-find-query
+ */
+export function toQuickFindSearchValue(value: string, addTrailingPercent: boolean): string {
+	const trimmed = value.trim();
+	if (!trimmed) return "";
+	return addTrailingPercent && !trimmed.endsWith("%") ? `${trimmed}%` : trimmed;
+}
+
+/**
+ * A copy of the FetchXML with {0} replaced by the search value in every condition value (#142),
+ * XML-escaped for the attribute or element it goes into. For execution only: the tree, the editor
+ * and saved views keep {0}.
+ */
+export function applyQuickFindValue(fetchXml: string, searchValue: string): string {
+	const escape = (quote: string) => (text: string) => {
+		let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+		if (quote === '"') escaped = escaped.replace(/"/g, "&quot;");
+		if (quote === "'") escaped = escaped.replace(/'/g, "&apos;");
+		return escaped;
+	};
+	return CONDITION_VALUE_PATTERNS.reduce(
+		(xml, pattern) =>
+			xml.replace(pattern, (whole, open: string, value: string, close: string) =>
+				value.includes(QUICK_FIND_PLACEHOLDER)
+					? `${open}${value.split(QUICK_FIND_PLACEHOLDER).join(escape(close === "</value>" ? "" : close)(searchValue))}${close}`
+					: whole,
+			),
+		fetchXml,
+	);
 }
 
 interface SortableView {

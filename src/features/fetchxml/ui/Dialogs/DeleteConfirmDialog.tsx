@@ -28,6 +28,8 @@ import {
 	DismissCircle20Regular,
 } from "@fluentui/react-icons";
 import type { BatchDeleteProgress, BatchDeleteResult } from "../../api/pptbClient";
+import { formatDataverseError } from "../../api/dataverseErrors";
+import { TargetScope } from "../../../../shared/components/TargetScope";
 
 const useStyles = makeStyles({
 	content: {
@@ -85,6 +87,8 @@ export interface DeleteConfirmDialogProps {
 	recordName?: string;
 	/** Entity display name */
 	entityDisplayName?: string;
+	/** Entity logical name (the confirmation names it with the environment, #69) */
+	entityLogicalName?: string;
 	/** Number of records to delete (for multi-select) */
 	recordCount: number;
 	/** Called when dialog is closed */
@@ -101,6 +105,7 @@ export function DeleteConfirmDialog({
 	open,
 	recordName,
 	entityDisplayName,
+	entityLogicalName,
 	recordCount,
 	onClose,
 	onConfirm,
@@ -111,6 +116,8 @@ export function DeleteConfirmDialog({
 	const [error, setError] = useState<string | null>(null);
 	const [result, setResult] = useState<BatchDeleteResult | null>(null);
 	const [progress, setProgress] = useState<BatchDeleteProgress | null>(null);
+	// Type-to-confirm for Production or many records (#69)
+	const [scopeConfirmed, setScopeConfirmed] = useState(false);
 
 	// Update progress from prop
 	useEffect(() => {
@@ -142,7 +149,7 @@ export function DeleteConfirmDialog({
 				setState("success");
 			}
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to delete record(s)");
+			setError(formatDataverseError(err, "Failed to delete record(s)")); // (#96)
 			setState("error");
 		}
 	}, [onConfirm]);
@@ -201,7 +208,7 @@ export function DeleteConfirmDialog({
 	};
 
 	const isSingle = recordCount === 1;
-	const title = isSingle ? "Delete Record" : `Delete ${recordCount} Records`;
+	const title = isSingle ? "Delete record" : `Delete ${recordCount} records`;
 	const message = isSingle
 		? `Are you sure you want to delete this ${entityDisplayName || "record"}?`
 		: `Are you sure you want to delete ${recordCount} ${entityDisplayName || "records"}?`;
@@ -211,6 +218,14 @@ export function DeleteConfirmDialog({
 			case "confirm":
 				return (
 					<>
+						{/* Environment and scope (#69) */}
+						<TargetScope
+							entityLogicalName={entityLogicalName}
+							entityDisplayName={entityDisplayName}
+							scope={{ kind: "records", count: recordCount }}
+							onConfirmationChange={setScopeConfirmed}
+						/>
+
 						<div className={styles.warningRow}>
 							<Warning20Regular />
 							<Text weight="semibold">This action cannot be undone.</Text>
@@ -288,7 +303,7 @@ export function DeleteConfirmDialog({
 					<>
 						<MessageBar intent="warning">
 							<MessageBarBody>
-								<MessageBarTitle>Partial Success</MessageBarTitle>
+								<MessageBarTitle>Partial success</MessageBarTitle>
 								{result && (
 									<>
 										{result.succeeded} of {result.succeeded + result.failed} records deleted.
@@ -323,7 +338,7 @@ export function DeleteConfirmDialog({
 					<>
 						<div className={styles.warningRow}>
 							<DismissCircle20Regular />
-							<Text weight="semibold">Delete Failed</Text>
+							<Text weight="semibold">Delete failed</Text>
 						</div>
 
 						<Text className={styles.errorMessage}>{error}</Text>
@@ -358,7 +373,7 @@ export function DeleteConfirmDialog({
 						<Button appearance="secondary" onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button appearance="primary" onClick={handleConfirm}>
+						<Button appearance="primary" onClick={handleConfirm} disabled={!scopeConfirmed}>
 							Delete
 						</Button>
 					</>

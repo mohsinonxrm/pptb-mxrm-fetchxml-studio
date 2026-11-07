@@ -74,6 +74,16 @@ export interface LoadedViewState {
 	queryType?: number;
 	/** System views: false when the iscustomizable managed property doesn't allow updates (#93) */
 	isCustomizable?: boolean;
+	/** The view's description, pre-filled when it's overwritten (#142) */
+	description?: string;
+	/** System views: the default view of its query type (isdefault, #142) */
+	isDefault?: boolean;
+	/** System views: managed (ismanaged) and its solution, for the overwrite warning (#142) */
+	isManaged?: boolean;
+	solutionId?: string;
+	/** Personal views: the owner, for views shared with the user (#142) */
+	ownerId?: string;
+	ownerName?: string;
 }
 
 export interface BuilderState {

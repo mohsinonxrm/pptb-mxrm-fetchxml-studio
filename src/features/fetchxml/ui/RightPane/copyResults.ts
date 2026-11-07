@@ -6,6 +6,7 @@
  */
 
 import { getFormattedValue } from "./FormattedValueUtils";
+import { copyText } from "../../api/host";
 
 /** A grid column as copied: its header and where its value comes from */
 export interface CopyColumn {
@@ -79,21 +80,7 @@ export function columnToText(records: Record<string, unknown>[], column: CopyCol
 export const rowCountLabel = (count: number): string => `${count} row${count === 1 ? "" : "s"}`;
 
 /**
- * Writes text to the clipboard: the browser clipboard, or the ToolBox's when the browser's isn't
- * available. Returns whether it worked.
+ * Writes text to the clipboard: the ToolBox's, or the browser's when the ToolBox's isn't available
+ * (host.copyText, #70). Returns whether it worked.
  */
-export async function writeClipboard(text: string): Promise<boolean> {
-	try {
-		await navigator.clipboard.writeText(text);
-		return true;
-	} catch {
-		try {
-			const copy = window.toolboxAPI?.utils?.copyToClipboard;
-			if (!copy) return false;
-			await copy(text);
-			return true;
-		} catch {
-			return false;
-		}
-	}
-}
+export const writeClipboard = (text: string): Promise<boolean> => copyText(text);

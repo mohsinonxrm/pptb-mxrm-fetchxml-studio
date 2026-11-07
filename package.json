@@ -1,6 +1,6 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.4.6",
+	"version": "1.5.0",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
@@ -34,8 +34,8 @@
 		"microsoft"
 	],
 	"features": {
-		"multiConnection": "none",
-		"minAPI": "1.2.2"
+		"connections": 1,
+		"minAPI": "1.2.7"
 	},
 	"bugs": {
 		"url": "https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/issues"
@@ -59,11 +59,13 @@
 	},
 	"scripts": {
 		"dev": "vite",
+		"dev:harness": "vite --mode harness --open",
 		"build": "tsc -b && vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc -b",
 		"lint": "eslint . --max-warnings=0",
 		"test": "vitest run",
+		"badges": "node .github/scripts/write-badges.mjs",
 		"test:watch": "vitest",
 		"validate": "pptb-validate",
 		"format": "prettier --write .",
@@ -84,26 +86,29 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.36.0",
-		"@pptb/types": "^1.2.3",
+		"@pptb/types": "1.2.7",
 		"@types/node": "^24.10.4",
 		"@types/react": "^18.3.27",
 		"@types/react-dom": "^18.3.7",
 		"@types/react-window": "^1.8.8",
-		"@vitejs/plugin-react": "^5.1.0",
-		"eslint": "^9.36.0",
+		"@vitejs/plugin-react": "^5.2.0",
+		"eslint": "^9.39.5",
 		"eslint-plugin-react-hooks": "^5.2.0",
 		"eslint-plugin-react-refresh": "^0.4.22",
 		"globals": "^16.4.0",
 		"jsdom": "^30.1.2",
-		"monaco-editor": "^0.54.0",
+		"monaco-editor": "^0.57.0",
 		"prettier": "^3.9.10",
 		"scheduler": "^0.27.0",
 		"typescript": "~5.9.3",
-		"typescript-eslint": "^8.45.0",
-		"vite": "^7.3.0",
+		"typescript-eslint": "^8.71.0",
+		"vite": "^7.3.6",
 		"vitest": "^5.0.4"
 	},
 	"overrides": {
+		"exceljs": {
+			"uuid": "11.1.1"
+		},
 		"monaco-editor": {
 			"dompurify": "3.4.17"
 		}

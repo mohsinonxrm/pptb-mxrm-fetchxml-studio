@@ -71,6 +71,16 @@ describe("resultColumns: matchfirstrowusingcrossapply (schema name keys)", () =>
 		expect(keys(parse(XML), [{ name: "A", FullName: "F" }])).toEqual(["name", "FullName", "n"]);
 	});
 
+	it("uses alias.attribute when an entityname condition makes Dataverse join it normally (live 2026-10-17)", () => {
+		const columns = resultColumns(parse(XML), [{ name: "A", "mc.fullname": "F" }], meta({ "contact.fullname": { SchemaName: "FullName" } }));
+		expect(columns.map((c) => c.key)).toEqual(["name", "mc.fullname", "n"]);
+	});
+
+	it("a filtered cross-apply <all-attributes /> takes its alias.attribute keys", () => {
+		const fetch = parse(`<fetch><entity name="account"><attribute name="name" /><link-entity name="contact" from="parentcustomerid" to="accountid" link-type="matchfirstrowusingcrossapply" alias="mc"><all-attributes /></link-entity></entity></fetch>`);
+		expect(keys(fetch, [{ name: "A", "mc.fullname": "F", "mc.emailaddress1": "e" }])).toEqual(["name", "mc.fullname", "mc.emailaddress1"]);
+	});
+
 	it("never takes a root attribute's key", () => {
 		const fetch = parse(`<fetch><entity name="contact"><attribute name="fullname" /><link-entity name="contact" from="contactid" to="parentcustomerid" link-type="matchfirstrowusingcrossapply"><attribute name="fullname" /></link-entity></entity></fetch>`);
 		expect(keys(fetch, [{ fullname: "Root", FullName: "Linked" }])).toEqual(["fullname", "FullName"]);

@@ -123,7 +123,7 @@ export function BooleanValuePicker({
 
 	// Apply Fluent UI's visual filtering only (we've already filtered the data)
 	const filteredChildren = useComboboxFilter(query, comboboxOptions, {
-		noOptionsMessage: loading ? "Loading..." : error || "No options",
+		noOptionsMessage: loading ? "Loading…" : error || "No options",
 		filter: () => true, // Always return true since we pre-filtered
 	});
 

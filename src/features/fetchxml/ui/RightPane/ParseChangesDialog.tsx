@@ -1,6 +1,6 @@
 /**
  * Confirmation shown before FetchXML is loaded into the tree when the tree would change the query
- * (#89): Parse to Tree, and the editor-mode actions that parse first (Execute, Save, Send, #102).
+ * (#89): Parse to tree, and the editor-mode actions that parse first (Execute, Save, Send, #102).
  */
 import {
 	Body1,
@@ -29,7 +29,7 @@ const useStyles = makeStyles({
 
 const COPY: Record<"parse" | EditorSyncAction, { title: string; intro: string; confirm: string }> = {
 	parse: {
-		title: "Parse to Tree will change this query",
+		title: "Parse to tree will change this query",
 		intro: "The tree can't represent everything in this FetchXML. Parsing will make these changes:",
 		confirm: "Parse anyway",
 	},

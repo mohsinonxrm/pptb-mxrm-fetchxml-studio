@@ -1,6 +1,10 @@
 /**
  * Debug utility for conditional logging
  * Set flags to true to enable logging for specific features
+ *
+ * All categories are off by default (#71): some log query payloads or record data, which shouldn't
+ * reach DevTools unless someone turns them on for support, e.g. window.enableDebug("fetchXmlAPI")
+ * or window.enableAllDebug() in the console.
  */
 
 // Feature flags for debugging
@@ -9,15 +13,20 @@ const DEBUG_FLAGS = {
 	relationshipPicker: false, // Relationship picker loading and selection
 	linkEntityEditor: false, // Link entity editor behavior
 	propertiesPanel: false, // Properties panel parent entity resolution
-	metadataAPI: true, // Metadata API calls and responses
-	fetchXmlAPI: true, // FetchXML query execution and results
-	publisherAPI: true, // Publisher API calls
-	solutionAPI: true, // Solution API calls
-	solutionComponentAPI: true, // Solution component API calls
-	viewAPI: true, // View (savedquery/userquery) API calls
-	exportAPI: true, // Export to Excel API calls
-	recordAPI: true, // Record CRUD operations
-	workflowAPI: true, // Workflow execution
+	metadataAPI: false, // Metadata API calls and responses
+	fetchXmlAPI: false, // FetchXML query execution and results
+	publisherAPI: false, // Publisher API calls
+	solutionAPI: false, // Solution API calls
+	solutionComponentAPI: false, // Solution component API calls
+	viewAPI: false, // View (savedquery/userquery) API calls
+	exportAPI: false, // Export to Excel API calls
+	recordAPI: false, // Record CRUD operations
+	workflowAPI: false, // Workflow execution
+	accessAPI: false, // WhoAmI and privilege checks (#71)
+	app: false, // Startup checks, executions, paging, record actions (#71)
+	settings: false, // Settings load/save through toolboxAPI (#71)
+	resultsGrid: false, // Results grid sizing and infinite scroll (#71)
+	entityFilters: false, // Entity picker publisher/solution filtering (#71)
 } as const;
 
 type DebugCategory = keyof typeof DEBUG_FLAGS;

@@ -233,6 +233,10 @@ interface PreviewTabsProps {
 	onRemoveColumnFilters?: (conditionIds: string[]) => void;
 	/** Optional SaveViewButton to render in the toolbar */
 	saveViewButton?: ReactNode;
+	/** Quick find test value field, shown under the toolbar while the query has {0} (#142) */
+	quickFindTestValue?: ReactNode;
+	/** Why Execute is off, e.g. a quick find view without a test value (#142) */
+	executeDisabledReason?: string;
 	/** Optional SendToToolButton to render in the toolbar */
 	sendToToolButton?: ReactNode;
 	/** True when this tool was launched by another tool via T2T — shows the Return button */
@@ -280,6 +284,10 @@ interface PreviewTabsProps {
 	onActivateRecords?: (recordIds: string[]) => void;
 	/** Callback when user clicks Deactivate */
 	onDeactivateRecords?: (recordIds: string[]) => void;
+	/** Why Activate is off for this entity (#143) */
+	activateDisabledReason?: string;
+	/** Why Deactivate is off for this entity (#143) */
+	deactivateDisabledReason?: string;
 	/** Callback when user wants to run a specific workflow directly */
 	onRunSpecificWorkflow?: (workflow: WorkflowInfo, recordIds: string[]) => void;
 	/** Whether user can delete records */
@@ -333,6 +341,8 @@ export function PreviewTabs({
 	onAddColumnFilter,
 	onRemoveColumnFilters,
 	saveViewButton,
+	quickFindTestValue,
+	executeDisabledReason,
 	sendToToolButton,
 	isCallee,
 	onLoadMore,
@@ -360,6 +370,8 @@ export function PreviewTabs({
 	onBulkDeleteRecords,
 	onActivateRecords,
 	onDeactivateRecords,
+	activateDisabledReason,
+	deactivateDisabledReason,
 	onRunSpecificWorkflow,
 	canDelete,
 	canBulkDelete,
@@ -576,14 +588,27 @@ export function PreviewTabs({
 						</Tab>
 					</TabList>
 					<Toolbar size="small">
-						<Button
-							appearance="primary"
-							icon={<Play24Regular />}
-							onClick={handleExecute}
-							disabled={isExecuting || isLoadingMore || (isEditorModeActive ? !editorHasContent : !xml)}
-						>
-							{isExecuting ? "Executing..." : "Execute"}
-						</Button>
+						{/* The reason follows the tree's query; in editor mode the editor's query runs after
+						    syncing, and Execute stops there if it still needs a test value (#142) */}
+						{executeDisabledReason && !isEditorModeActive ? (
+							// Disabled buttons don't get pointer events: the tooltip goes on a wrapper (#142)
+							<Tooltip content={executeDisabledReason} relationship="description">
+								<span>
+									<Button appearance="primary" icon={<Play24Regular />} disabled>
+										Execute
+									</Button>
+								</span>
+							</Tooltip>
+						) : (
+							<Button
+								appearance="primary"
+								icon={<Play24Regular />}
+								onClick={handleExecute}
+								disabled={isExecuting || isLoadingMore || (isEditorModeActive ? !editorHasContent : !xml)}
+							>
+								{isExecuting ? "Executing…" : "Execute"}
+							</Button>
+						)}
 						{isCallee && (
 							<>
 								<ToolbarDivider />
@@ -616,13 +641,14 @@ export function PreviewTabs({
 						<ProgressBar />
 					</div>
 				)}
+				{quickFindTestValue && <div className={styles.messageBarContainer}>{quickFindTestValue}</div>}
 				{/* Export status MessageBar */}
 				{isExporting && (
 					<div className={styles.messageBarContainer}>
 						<MessageBar intent="info">
 							<MessageBarBody>
 								<MessageBarTitle>Exporting</MessageBarTitle>
-								Exporting view to Excel...
+								Exporting view to Excel…
 							</MessageBarBody>
 						</MessageBar>
 					</div>
@@ -631,7 +657,7 @@ export function PreviewTabs({
 					<div className={styles.messageBarContainer}>
 						<MessageBar intent="error">
 							<MessageBarBody>
-								<MessageBarTitle>Export Failed</MessageBarTitle>
+								<MessageBarTitle>Export failed</MessageBarTitle>
 								{exportError}
 							</MessageBarBody>
 							<MessageBarActions
@@ -693,7 +719,7 @@ export function PreviewTabs({
 					<div className={styles.messageBarContainer}>
 						<MessageBar intent="error">
 							<MessageBarBody>
-								<MessageBarTitle>Execution Failed</MessageBarTitle>
+								<MessageBarTitle>Execution failed</MessageBarTitle>
 								{executeError}
 							</MessageBarBody>
 							<MessageBarActions
@@ -751,18 +777,20 @@ export function PreviewTabs({
 											onCopyRecordUrl(ids);
 										}
 									}}
-									onActivate={() => {
+									onActivate={onActivateRecords && (() => {
 										const ids = getSelectedIds();
 										if (ids?.length && onActivateRecords) {
 											onActivateRecords(ids);
 										}
-									}}
-									onDeactivate={() => {
+									})}
+									onDeactivate={onDeactivateRecords && (() => {
 										const ids = getSelectedIds();
 										if (ids?.length && onDeactivateRecords) {
 											onDeactivateRecords(ids);
 										}
-									}}
+									})}
+									activateDisabledReason={activateDisabledReason}
+									deactivateDisabledReason={deactivateDisabledReason}
 									onDelete={() => {
 										const ids = getSelectedIds();
 										// For delete, we allow empty selection to trigger "delete all" dialog
@@ -837,7 +865,7 @@ export function PreviewTabs({
 												{pagingNotice.kind === "error"
 													? "Couldn't load all records"
 													: pagingNotice.kind === "stopped"
-														? "Retrieve All stopped"
+														? "Retrieve all stopped"
 														: "Paging without a paging cookie"}
 											</MessageBarTitle>
 											{pagingNotice.kind === "error"

@@ -17,6 +17,7 @@ import {
 	makeStyles,
 } from "@fluentui/react-components";
 import { Copy20Regular, Checkmark20Filled, Flash20Filled } from "@fluentui/react-icons";
+import { copyText } from "../../api/host";
 import type {
 	PowerAutomateActionSpec,
 	PowerAutomateField,
@@ -88,7 +89,7 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 						size="small"
 						appearance="outline"
 						icon={<Copy20Regular />}
-						onClick={() => navigator.clipboard?.writeText(allAsText)}
+						onClick={() => void copyText(allAsText)}
 					>
 						Copy all
 					</Button>
@@ -142,15 +143,11 @@ function PARow({
 
 	const onCopy = () => {
 		if (!field.value) return;
-		navigator.clipboard
-			?.writeText(field.value)
-			.then(() => {
-				setCopied(true);
-				setTimeout(() => setCopied(false), 1400);
-			})
-			.catch(() => {
-				/* ignore */
-			});
+		void copyText(field.value).then((ok) => {
+			if (!ok) return;
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1400);
+		});
 	};
 
 	return (

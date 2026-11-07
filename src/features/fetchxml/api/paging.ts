@@ -96,8 +96,16 @@ export interface PagingState {
 	mode: "fetchxml" | "view";
 	/** The FetchXML that ran (pages repeat it with paging attributes) */
 	xml: string;
-	/** The executed query's own count, kept for every page */
+	/**
+	 * The executed query's own count, kept for every page; smaller when a page was too large for the
+	 * PPTB host's 16 MB response limit (#68, pageRecovery.ts)
+	 */
 	pageSize?: number;
+	/**
+	 * Rows in the first page when the query sets no count and has more pages: Dataverse's default
+	 * page size for the Entity (5,000 for standard tables, 500 for elastic tables) (#68)
+	 */
+	fullPageSize?: number;
 	currentPage: number;
 	nextPage: number;
 	pagingCookie?: string;

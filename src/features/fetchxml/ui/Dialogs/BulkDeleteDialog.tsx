@@ -31,8 +31,16 @@ import {
 	Copy20Regular,
 	ErrorCircle20Regular,
 } from "@fluentui/react-icons";
+import { formatDataverseError } from "../../api/dataverseErrors";
+import { copyText, openUrl } from "../../api/host";
+import { TargetScope } from "../../../../shared/components/TargetScope";
 
 const useStyles = makeStyles({
+	// A grid item's min-width is auto, so the long warning text pushed the MessageBar body 1px past the
+	// dialog and showed a horizontal scrollbar (#152)
+	messageBarBody: {
+		minWidth: 0,
+	},
 	content: {
 		display: "flex",
 		flexDirection: "column",
@@ -83,10 +91,14 @@ export interface BulkDeleteDialogProps {
 	recordCount: number;
 	/** Entity display name */
 	entityDisplayName?: string;
+	/** Entity logical name (the confirmation names it with the environment, #69) */
+	entityLogicalName?: string;
 	/** Whether this is deleting ALL records from view (no selection) */
 	isAllRecords?: boolean;
-	/** Total records in view (when isAllRecords=true) */
+	/** Rows loaded in the grid (when isAllRecords=true); not the total, which isn't known */
 	totalViewRecords?: number;
+	/** Whether Dataverse said more records match than were loaded (when isAllRecords=true) */
+	moreRecords?: boolean;
 	/** Called when dialog is closed */
 	onClose: () => void;
 	/** Called when bulk delete is confirmed */
@@ -99,8 +111,10 @@ export function BulkDeleteDialog({
 	open,
 	recordCount,
 	entityDisplayName,
+	entityLogicalName,
 	isAllRecords = false,
-	totalViewRecords: _totalViewRecords, // Intentionally unused - we don't show count for "all records"
+	totalViewRecords,
+	moreRecords,
 	onClose,
 	onConfirm,
 }: BulkDeleteDialogProps) {
@@ -113,6 +127,8 @@ export function BulkDeleteDialog({
 	const [result, setResult] = useState<{ asyncOperationId: string; jobUrl: string } | null>(null);
 	const [copied, setCopied] = useState(false);
 	const [confirmAllRecords, setConfirmAllRecords] = useState(false);
+	// Type-to-confirm for Production, more than 100 records or an unknown total (#69)
+	const [scopeConfirmed, setScopeConfirmed] = useState(false);
 
 	const handleConfirm = useCallback(async () => {
 		setState("submitting");
@@ -122,7 +138,7 @@ export function BulkDeleteDialog({
 			setResult(res);
 			setState("success");
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to submit bulk delete job");
+			setError(formatDataverseError(err, "Failed to submit bulk delete job")); // (#96)
 			setState("error");
 		}
 	}, [onConfirm, jobName]);
@@ -139,28 +155,17 @@ export function BulkDeleteDialog({
 	}, [state, onClose]);
 
 	const handleCopyUrl = useCallback(async () => {
-		if (result?.jobUrl) {
-			try {
-				await navigator.clipboard.writeText(result.jobUrl);
-				setCopied(true);
-				setTimeout(() => setCopied(false), 2000);
-			} catch {
-				// Fallback for older browsers
-				const textArea = document.createElement("textarea");
-				textArea.value = result.jobUrl;
-				document.body.appendChild(textArea);
-				textArea.select();
-				document.execCommand("copy");
-				document.body.removeChild(textArea);
-				setCopied(true);
-				setTimeout(() => setCopied(false), 2000);
-			}
+		// The ToolBox clipboard first, then the browser's (#70)
+		if (result?.jobUrl && (await copyText(result.jobUrl))) {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
 		}
 	}, [result]);
 
 	const handleOpenJob = useCallback(() => {
+		// In the connection's browser profile (#70)
 		if (result?.jobUrl) {
-			window.open(result.jobUrl, "_blank");
+			void openUrl(result.jobUrl);
 		}
 	}, [result]);
 
@@ -169,11 +174,23 @@ export function BulkDeleteDialog({
 			case "confirm":
 				return (
 					<>
+						{/* Environment and scope (#69): with no selection, only the loaded count is known */}
+						<TargetScope
+							entityLogicalName={entityLogicalName}
+							entityDisplayName={entityDisplayName}
+							scope={
+								isAllRecords
+									? { kind: "allMatching", loadedCount: totalViewRecords, moreRecords }
+									: { kind: "records", count: recordCount }
+							}
+							onConfirmationChange={setScopeConfirmed}
+						/>
+
 						{isAllRecords ? (
 							<>
 								<MessageBar intent="error">
-									<MessageBarBody>
-										<MessageBarTitle>Danger Zone</MessageBarTitle>
+									<MessageBarBody className={styles.messageBarBody}>
+										<MessageBarTitle>Danger zone</MessageBarTitle>
 										This will delete ALL records matching your current FetchXML query!
 									</MessageBarBody>
 								</MessageBar>
@@ -213,7 +230,7 @@ export function BulkDeleteDialog({
 							</>
 						)}
 
-						<Field label="Job Name" required>
+						<Field label="Job name" required>
 							<Input
 								value={jobName}
 								onChange={(_, data) => setJobName(data.value)}
@@ -253,7 +270,7 @@ export function BulkDeleteDialog({
 
 							{result?.jobUrl && (
 								<div className={styles.jobUrlRow}>
-									<Link onClick={handleOpenJob}>Open Job Status</Link>
+									<Link onClick={handleOpenJob}>Open job status</Link>
 									<Button
 										appearance="subtle"
 										size="small"
@@ -310,9 +327,9 @@ export function BulkDeleteDialog({
 						<Button
 							appearance="primary"
 							onClick={handleConfirm}
-							disabled={!jobName.trim() || (isAllRecords && !confirmAllRecords)}
+							disabled={!jobName.trim() || (isAllRecords && !confirmAllRecords) || !scopeConfirmed}
 						>
-							Submit Bulk Delete
+							Submit bulk delete
 						</Button>
 					</>
 				);
@@ -339,8 +356,8 @@ export function BulkDeleteDialog({
 			<DialogSurface>
 				<DialogTitle>
 					{isAllRecords
-						? `Bulk Delete ALL ${entityDisplayName || "Records"} from View`
-						: `Bulk Delete ${recordCount} Records`}
+						? `Bulk delete all matching ${entityDisplayName || "records"}`
+						: `Bulk delete ${recordCount} records`}
 				</DialogTitle>
 				<DialogBody>
 					<DialogContent className={styles.content}>{renderContent()}</DialogContent>

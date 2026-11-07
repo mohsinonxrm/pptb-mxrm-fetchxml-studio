@@ -5,7 +5,8 @@
  * Principle (#89): what the FetchXML reference documents is supported, plus what is verified to
  * work; only what Dataverse is known to reject is an error. Every rule below was executed against a
  * live Dataverse org through the PPTB request path; the error code Dataverse returns is quoted in
- * each message. Rules that need attribute metadata live in attributeCapabilities.ts.
+ * each message. Rules that need attribute metadata live in attributeCapabilities.ts; documented
+ * performance advice and query limits live in queryAdvisor.ts (#97).
  */
 
 import type {
@@ -18,6 +19,7 @@ import type {
 	OrderNode,
 } from "./nodes";
 import { operatorRequiresValue, operatorValueShape } from "./operators";
+import { adviseQuery } from "./queryAdvisor";
 
 export type RuleSeverity = "error" | "warning" | "info";
 export type RuleKind = "invalid" | "ignored" | "advice";
@@ -244,6 +246,14 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 		}
 		seenLinkAliases.add(link.alias);
 	}
+	// Link-entities referenced by a condition's entityname in the root entity's filters
+	const rootEntitynames = new Set<string>();
+	const collectEntitynames = (filters: FilterNode[]) =>
+		filters.forEach((f) => {
+			f.conditions.forEach((c) => c.entityname && rootEntitynames.add(c.entityname));
+			collectEntitynames(f.subfilters);
+		});
+	collectEntitynames(fetch.entity.filters);
 	// Link types by placement and what they return (verified live, 2026-10-14). Joined link-entities
 	// accept all nine types, including the four the docs describe for use inside a filter.
 	const filterLinkIds = new Set(scopes.flatMap((s) => s.filters.flatMap(({ filter }) => (filter.links ?? []).map((l) => l.id))));
@@ -262,6 +272,21 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			if (returns.length > 0) {
 				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
 					message: `A '${link.linkType}' link-entity returns no attributes, so it can't have ${returns.join(" or ")} (Dataverse rejects it: 0x80041121).` });
+			}
+		}
+		// matchfirstrowusingcrossapply (verified live 2026-10-17): Dataverse rejects an order inside it, and
+		// an aliased attribute in it fails with a SQL error (0x80044150, SQL 207) unless a condition with
+		// entityname targets the link-entity (then Dataverse joins it normally and the alias works)
+		if (link.linkType === "matchfirstrowusingcrossapply") {
+			if (link.orders.length > 0) {
+				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
+					message: `A matchfirstrowusingcrossapply link-entity can't have orders; order by its attributes from the entity with entityname instead (Dataverse rejects it: 0x80041121).` });
+			}
+			const identifier = link.alias || link.name;
+			const aliased = link.attributes.filter((a) => a.alias);
+			if (aliased.length > 0 && !rootEntitynames.has(identifier)) {
+				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
+					message: `Aliased attributes (${aliased.map((a) => a.alias).join(", ")}) in a matchfirstrowusingcrossapply link-entity fail with a SQL error (0x80044150). Remove the alias, or add a condition with entityname="${identifier}".` });
 			}
 		}
 		if (link.visible !== undefined) {
@@ -423,6 +448,9 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 				message: `${scope.container.name} has more than one filter; the FetchXML reference allows one. Dataverse combines them with 'and' — consider nesting them in one filter.` });
 		}
 	}
+
+	// ---- Query Advisor: documented anti-patterns and limits (#97)
+	findings.push(...adviseQuery(fetch));
 
 	return findings;
 }

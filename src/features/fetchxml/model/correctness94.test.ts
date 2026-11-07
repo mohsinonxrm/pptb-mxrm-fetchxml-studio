@@ -3,7 +3,7 @@
  * intellisense catalogue, and the code generators.
  */
 import { describe, expect, it } from "vitest";
-import type * as Monaco from "monaco-editor";
+import type * as Monaco from "monaco-editor/editor";
 import { parseFetchXml } from "./fetchxmlParser";
 import { generateFetchXml } from "./fetchxml";
 import { FETCHXML_SCHEMA, getElementContext } from "./fetchxmlIntellisense";

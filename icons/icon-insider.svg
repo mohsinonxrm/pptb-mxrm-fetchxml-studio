@@ -1,13 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="4 8 56 48" width="56" height="48">
   <!-- Variant L — "Insider build" / FXS
-       Same K chassis + gold-orange triangle in the top-right vertex.
-       Gold (#FFB900) = Microsoft Office Insiders convention. -->
+       Same K chassis + a two-tone gold triangle in the top-right vertex.
+       Gold = Microsoft Office Insiders convention, deepened so it reads at 20 px. -->
 
   <path d="M 18 8 L 46 8 L 60 32 L 46 56 L 18 56 L 4 32 Z" fill="#0E5A9C"/>
   <polygon points="46,8 60,32 46,56 18,56" fill="#2B8FD9"/>
 
-  <!-- Insider stamp -->
-  <polygon points="46,8 40,8 49,15" fill="#FFB900"/>
+  <!-- Insider stamp: flush with the top and right edges (the right point lies on the edge,
+       46 + 14t, 8 + 24t with t = 0.375), split on the blue's diagonal (46,8 to 18,56),
+       which crosses the stamp's long side at 43.58,12.15: dark left, light right like the blue -->
+  <polygon points="37,8 46,8 43.58,12.15" fill="#CC8A00"/>
+  <polygon points="46,8 51.25,17 43.58,12.15" fill="#F2A100"/>
 
   <!-- Tool glyph — < /> in white -->
   <polyline points="24,22 16,33 24,44" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>

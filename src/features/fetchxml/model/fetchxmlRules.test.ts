@@ -221,6 +221,26 @@ describe("link-type by placement (verified live 2026-10-14)", () => {
 		["matchfirstrowusingcrossapply + attribute", JOINED("matchfirstrowusingcrossapply", `<attribute name="name" />`)],
 		["exists + nested link-entity", JOINED("exists", `<link-entity name="account" from="accountid" to="parentcustomerid" alias="b" />`)],
 	])("%s is accepted", (_label, xml) => expect(linkErrors(xml)).toEqual([]));
+	// matchfirstrowusingcrossapply (verified live 2026-10-17)
+	const XA = (inner: string, filter = "") =>
+		`<fetch top="5"><entity name="account"><attribute name="name" />${filter}<link-entity name="contact" from="parentcustomerid" to="accountid" link-type="matchfirstrowusingcrossapply" alias="mc">${inner}</link-entity></entity></fetch>`;
+	const xaErrors = (xml: string) =>
+		validateQueryRules(parseFetchXml(xml).fetchNode!).filter((f) => f.element === "link-entity" && f.severity === "error");
+	it("matchfirstrowusingcrossapply + order is rejected (0x80041121)", () => {
+		expect(xaErrors(XA(`<attribute name="fullname" /><order attribute="fullname" />`))).toHaveLength(1);
+	});
+	it.each([
+		["no filter", XA(`<attribute name="emailaddress1" alias="em" />`)],
+		["a filter without entityname", XA(`<attribute name="emailaddress1" alias="em" />`, `<filter><condition attribute="statecode" operator="eq" value="0" /></filter>`)],
+	])("matchfirstrowusingcrossapply + aliased attribute with %s fails (SQL 207)", (_label, xml) =>
+		expect(xaErrors(xml)).toHaveLength(1),
+	);
+	it.each([
+		["an entityname condition", XA(`<attribute name="emailaddress1" alias="em" />`, `<filter><condition entityname="mc" attribute="fullname" operator="not-null" /></filter>`)],
+		["a nested entityname condition", XA(`<attribute name="emailaddress1" alias="em" />`, `<filter><filter><condition entityname="mc" attribute="fullname" operator="not-null" /></filter></filter>`)],
+		["no alias", XA(`<attribute name="fullname" /><attribute name="emailaddress1" />`)],
+	])("matchfirstrowusingcrossapply with %s is accepted", (_label, xml) => expect(xaErrors(xml)).toEqual([]));
+
 	it("visible is reported as ignored, never an error", () => {
 		const findings = validateQueryRules(parseFetchXml(JOINED("inner", `<attribute name="name" />`).replace(`alias="a"`, `alias="a" visible="false"`)).fetchNode!);
 		expect(findings.find((f) => f.attribute === "visible")).toMatchObject({ severity: "info", kind: "ignored" });

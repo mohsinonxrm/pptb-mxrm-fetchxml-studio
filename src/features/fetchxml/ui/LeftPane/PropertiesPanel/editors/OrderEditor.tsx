@@ -113,6 +113,7 @@ export function OrderEditor({ node, container, isRootEntity, fetchQuery, finding
 						validation={worst(
 							!node.attribute && !node.alias ? { state: "error", message: "Choose an attribute to sort by." } : undefined,
 							orderTypeIssue ? { state: "error", message: orderTypeIssue } : undefined,
+							findingFor(findings, "attribute"),
 						)}
 						info={<Info text="The logical name of the attribute to sort by. It doesn't need to be a selected attribute." href={DOCS.orderRows} />}
 					>

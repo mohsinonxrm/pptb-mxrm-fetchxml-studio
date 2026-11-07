@@ -101,7 +101,7 @@ export function SendToToolButton({
 		<Menu>
 			<MenuTrigger disableButtonEnhancement>
 				<Button appearance="subtle" icon={<PlugConnected20Regular />} disabled={isDisabled}>
-					Send to Tool
+					Send to tool
 				</Button>
 			</MenuTrigger>
 			<MenuPopover>

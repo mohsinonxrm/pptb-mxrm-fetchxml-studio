@@ -231,7 +231,7 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 						<RelationshipPicker
 							entityLogicalName={parentEntityName}
 							onChange={handleRelationshipSelect}
-							placeholder="Select a relationship"
+							placeholder="Select a relationship…"
 						/>
 					</InfoField>
 				</div>

@@ -8,7 +8,9 @@
  *   no loaded row has a value. An unaliased root lookup comes back as the Web API lookup property
  *   _name_value: decided from metadata, or else from the rows.
  *   https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query/select-columns#lookup-property-data
- * - matchfirstrowusingcrossapply returns its attributes by SchemaName, without the link-entity alias;
+ * - matchfirstrowusingcrossapply returns its attributes by SchemaName, without the link-entity alias,
+ *   except when a condition's entityname targets it: Dataverse then joins it normally and returns
+ *   "alias.attribute" (verified live 2026-10-17);
  *   exists and in link-entities return no columns (attributes in them fail, 0x80041121: fetchxmlRules.ts).
  *   https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/join-tables#use-advanced-link-types
  * - Keys no attribute accounts for are columns only where the query asks for all attributes: an
@@ -99,6 +101,8 @@ export function resultColumns(
 			return seenSet.has(lookupKey) ? lookupKey : attribute.name;
 		}
 		if ((container as LinkEntityNode).linkType === CROSS_APPLY) {
+			// Filtered by entityname: keyed like any link-entity attribute
+			if (seenSet.has(column.key)) return column.key;
 			if (info?.SchemaName) return info.SchemaName;
 			// The logical name is the schema name in lowercase:
 			// https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.metadata.attributemetadata.logicalname
@@ -121,7 +125,8 @@ export function resultColumns(
 	const rootAll = !!fetch.entity.allAttributes?.enabled || fetch.entity.attributes.length === 0;
 	const aliases = joinedLinkAliases(fetch);
 	const allLinks = links.filter((l) => l.returnsColumns && l.link.allAttributes?.enabled).map((l) => l.link);
-	const linkPrefixes = allLinks.filter((l) => l.linkType !== CROSS_APPLY).map((l) => `${aliases.get(l.id)}.`);
+	// Cross-apply links too: filtered by entityname, they return "alias.attribute" keys
+	const linkPrefixes = allLinks.map((l) => `${aliases.get(l.id)}.`);
 	// Cross-apply keys are schema names; root and link-entity keys are logical names (all lowercase)
 	const crossApplyAll = allLinks.some((l) => l.linkType === CROSS_APPLY);
 	for (const key of seen) {

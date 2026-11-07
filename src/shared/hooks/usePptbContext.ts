@@ -4,12 +4,23 @@
  */
 
 import { useState, useEffect } from "react";
+import { getPrimaryConnection } from "../../features/fetchxml/api/host";
+import { connectionKey } from "./connectionIdentity";
+import { debugLog } from "../utils/debug";
 
 export interface PptbContext {
 	theme: "light" | "dark";
 	connected: boolean;
 	environmentUrl?: string;
 	environment?: "Dev" | "Test" | "UAT" | "Production";
+	/** Display name of the tool's connection */
+	connectionName?: string;
+	/**
+	 * Identity of the tool's connection (connectionIdentity.connectionKey): undefined until the
+	 * host has answered, "" with no connection. Changes only when the connection itself changes
+	 * (#66), not on token refreshes or edits to other connections.
+	 */
+	connectionKey?: string;
 }
 
 // PPTB event payload type (compatible with @pptb/types ToolBoxEventPayload)
@@ -69,25 +80,35 @@ export function usePptbContext(): PptbContext {
 		colorScheme?.addEventListener("change", onSchemeChange);
 
 		// ============ CONNECTION ============
+		// The tool's primary connection (getConnection(0) on PPTB ≥ 1.2.7). Only the latest request
+		// applies; an unchanged answer (token refresh, another connection edited) keeps the same
+		// state object, so nothing re-renders (#66).
+		let connectionRequest = 0;
 		const updateConnection = async () => {
+			const request = ++connectionRequest;
 			try {
-				const connection = await toolboxAPI.connections?.getActiveConnection?.();
-				console.log("🔗 getActiveConnection() returned:", connection);
-				setContext((prev) => ({
-					...prev,
+				const connection = await getPrimaryConnection();
+				if (request !== connectionRequest) return;
+				const next = {
 					connected: !!connection,
 					environmentUrl: connection?.url,
 					environment: connection?.environment,
-				}));
+					connectionName: connection?.name,
+					connectionKey: connectionKey(connection),
+				};
+				setContext((prev) =>
+					(Object.keys(next) as (keyof typeof next)[]).every((key) => prev[key] === next[key]) ? prev : { ...prev, ...next },
+				);
 			} catch (err) {
-				console.warn("❌ Failed to get active connection:", err);
+				console.warn("❌ Failed to get the tool's connection:", err);
 			}
 		};
 
 		// ============ EVENT HANDLER ============
 		// PPTB calls this with (event, payload) where payload has { event, data, timestamp }
 		const handlePptbEvent = (_event: unknown, payload: ToolBoxEventPayload) => {
-			console.log("🔔 PPTB Event received:", payload.event, payload.data);
+			// The event name only: connection payloads carry environment details (#71)
+			debugLog("app", `🔔 PPTB event: ${payload.event}`);
 
 			switch (payload.event) {
 				case "settings:updated":
@@ -98,25 +119,14 @@ export function usePptbContext(): PptbContext {
 
 				case "connection:updated":
 				case "connection:created":
-					// Connection changed - refetch connection info
-					console.log("🔗 Connection changed, refreshing...");
-					updateConnection();
-					break;
-
 				case "connection:deleted":
-					// Connection was deleted
-					console.log("🔗 Connection deleted");
-					setContext((prev) => ({
-						...prev,
-						connected: false,
-						environmentUrl: undefined,
-						environment: undefined,
-					}));
+					// Broadcast for any connection, not only this tool's (#66): re-read the tool's own
+					// connection; the state changes only if it actually changed
+					void updateConnection();
 					break;
 
 				default:
-					// Log other events for debugging
-					console.log("📢 Unhandled PPTB event:", payload.event);
+					debugLog("app", `📢 Unhandled PPTB event: ${payload.event}`);
 			}
 		};
 
@@ -127,7 +137,7 @@ export function usePptbContext(): PptbContext {
 
 		// Subscribe to events
 		if (toolboxAPI.events?.on) {
-			console.log("✅ Subscribing to PPTB events...");
+			debugLog("app", "✅ Subscribing to PPTB events");
 			toolboxAPI.events.on(handlePptbEvent);
 		} else {
 			console.warn("⚠️ toolboxAPI.events.on not available");
@@ -137,7 +147,7 @@ export function usePptbContext(): PptbContext {
 		return () => {
 			colorScheme?.removeEventListener("change", onSchemeChange);
 			if (toolboxAPI.events?.off) {
-				console.log("🧹 Unsubscribing from PPTB events...");
+				debugLog("app", "🧹 Unsubscribing from PPTB events");
 				toolboxAPI.events.off(handlePptbEvent);
 			}
 		};

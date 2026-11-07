@@ -7,6 +7,413 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-07
+
+FetchXML Studio 1.5 moves to Power Platform ToolBox 1.2.7 and its host APIs, makes every change to Dataverse name its target and its way back (the marketplace policy for tools that change data), and adds the Query Advisor, Activate / Deactivate and saved-view follow-ups. It was tested through 19 betas; their sections below have the detail.
+
+### ⚠️ Requires Power Platform ToolBox 1.2.7
+
+- **PPTB 1.2.7 or later is required (#82):** `minAPI` 1.2.7 and the connections model. 1.4.x stays available for PPTB 1.2.2 to 1.2.6 and gets critical and security fixes for 30 days (`SECURITY.md`).
+
+### ✨ Added
+
+- **Query Advisor (#97):** checks the query as you build it against documented anti-patterns and limits, with links to the docs.
+- **Activate and Deactivate (#143):** planned from the entity's state model, with the status reason chosen from metadata.
+- **Saved views (#142, #93):**
+  - views of every query type load, labelled;
+  - personal views shared with you show who shared them;
+  - Save view can set a public view as the default (#307: the previous default is cleared);
+  - a view you can't overwrite offers **Save a copy…**.
+- **Dataverse errors explain what to do (#96),** with a throttling back-off, and pages over the ToolBox's 16 MB response limit are fetched again in smaller pieces (#68).
+- **Host integration (#70, #66):**
+  - the ToolBox warns before the tool closes while work is running;
+  - record links open in the connection's browser profile;
+  - changing the tool's connection in place resets everything that came from the old environment.
+- **Tree and scope (#24, #25):** right-click a tree row to add nodes; a collapsible query scope section; the publisher and solution selection is remembered per environment.
+- **Docs-driven helpers (#98):** a wildcard helper for `like` values (with **Match literally**), the total record count, and a record picker for the hierarchy operators.
+
+### 🔧 Changed
+
+- **Every confirmation names the environment, the entity and the scope (#69),** asks you to type the entity name on Production, for more than 100 records or when the total isn't known, and says how to undo the change or that it can't be undone. README: "What this tool changes".
+- **Sentence case and the single "…" across the UI;** fewer startup calls and a quiet console (#71).
+- **README badges** are SVG files in the repo, so they show in the ToolBox.
+
+### 🔧 Fixed
+
+- **From the 1.4.x hotfixes:**
+  - picking a condition attribute no longer crashes the tool (#217);
+  - "Delete all" deletes what the query on screen matches (#174);
+  - Bulk Delete jobs no longer fail with 0x80048d19 (#224);
+  - bulk deleting more than about 530 selected records works (#177);
+  - saved views keep lookup display names and exact values (#181);
+  - a failed relationship load no longer crashes the tool.
+- **pac CLI snippets** quote FetchXML safely for bash and PowerShell (#166, #196).
+- **Record actions** use the current selection after the results refresh (#158). Deletes use the entity's metadata entity set name (#61). No write resumes after the connection changes (#175).
+- **Paging:** the first page gets the same recovery as later pages (#183). Cross-apply columns stay filled when filtered, and two cross-apply queries Dataverse rejects are flagged before they run.
+
+### 🔒 Security
+
+- **DOMPurify 3.4.17 in the editor** (the advisories of 2026-10-22).
+- **monaco-editor 0.57**, and `uuid` pinned for exceljs (GHSA-w5hq-g745-h8pq).
+- **CI fails on high or critical runtime vulnerabilities.**
+
+### 🏗️ Technical
+
+- **Release branches, betas from `release/X.Y`, a stabilizing checklist (#161),** a hardened `release.yml` with npm provenance (#188), release checks for the version, CHANGELOG, badges and icon (#270), and the release build checked in PPTB before every tag.
+
+### Known issue
+
+- **In the PPTB VS Code extension the tool may open as a blank tab.** 1.5 loads its assets from the site root (`src="/assets/…"`), which works in PPTB Desktop. The fix, relative asset URLs (#173), ships in 1.6.0.
+
+## [1.5.0-beta.19] - 2026-11-06
+
+### 🔧 Fixed
+
+- **Set as default view replaces the previous default (#307).** Saving a public system view with **Set as default view** marked it as the default, but the entity's previous default view stayed the default too, so the entity had two default public views. The dialog said it "Replaces" the old one. Only one active public view can be the default ([Customize views](https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view)), but Dataverse doesn't clear the old one when another view is created or updated as the default (verified on a sandbox). The entity's other active default public views are now cleared right after the view saves, before it's added to a solution or the entity is published. Overwriting a view that's already the default clears them too, which repairs two defaults left by earlier 1.5 betas. If one can't be cleared, the view is still saved, and a notification names the view that's still a default, with Dataverse's error.
+
+### 🔧 Changed
+
+- **README badges show in the ToolBox.** Power Platform ToolBox shows a tool's README in a window that only loads images from GitHub, so the `img.shields.io` badges didn't appear there. They're now SVG files in `assets/badges/`, linked from `raw.githubusercontent.com` as in Command Bar Studio, and generated from `package.json` by `npm run badges`: version, Power Platform ToolBox ≥ 1.2.7, `@pptb/types`, React, TypeScript, Fluent UI and license. The `@pptb/types` badge said 1.2.3; it now says 1.2.7. The version badge links to npm, in place of the npm badge. The links point at `main`, so the badges appear there with the 1.5.0 release.
+
+### 🏗️ Technical
+
+- **Releases check what they must update.** A new `check-release.mjs` runs in CI (every PR, and pushes to the long-lived branches) and in the release build. It fails when any of these don't match `package.json`'s version:
+  - the version's shape (`X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`);
+  - `package-lock.json`;
+  - the CHANGELOG (a dated `[X.Y.Z]` section with entries, under `[Unreleased]`);
+  - the README badges (current `assets/badges/` files, shown in the README, no `img.shields.io`);
+  - after the build, the bundled icon (the Insider icon for pre-releases).
+
+  The GitHub Release notes are now built from the CHANGELOG section, after a line on the channel and the PPTB requirement. GitHub's PR list follows, instead of the PR list alone, and a rehearsal previews them in the run summary. RELEASING.md has a table of what every release changes and an *After every release* checklist: the npm tag, the published icon, the tracking issue, the forward merge and deprecating the replaced version.
+
+## [1.5.0-beta.18] - 2026-11-01
+
+### 🔧 Changed
+
+- **Confirmations say how to undo the change, or that it can't be undone (#69).** The PPTB [marketplace policy](https://docs.powerplatformtoolbox.com/policies/marketplace) asks a confirmation to offer a way back where feasible and, when there's none, to say so plainly. Delete and Bulk delete already said "This action cannot be undone." Now:
+  - **Run workflow:** "There's no undo: whatever the workflow changes stays changed."
+  - **Save view, overwriting a view:** "There's no undo: the view's current definition is replaced. To keep it, cancel and use Save as instead." For a managed system view, it says that removing the view's unmanaged layer in Power Apps brings the managed definition back.
+  - **Activate / Deactivate:** "To undo, run Deactivate (or Activate) on the records this changes." For an entity that enforces status reason transitions, it adds "if this entity's status reason transitions allow it". When going back offers more than one status reason, it adds that the previous one isn't restored.
+- **README:** "What this tool changes" says where each operation's way back is, and that the publisher and solution you pick are remembered per environment on your machine.
+
+### 🏗️ Technical
+
+- **Release workflow hardening (#188).**
+  - **Separate jobs:** `release.yml` is split into `build`, `publish` and `github-release`. The job that installs and runs the dependencies (`npm ci --ignore-scripts`, no cache, tests, build) only reads the repository. Only `publish` can get the npm OIDC token, only for a tag push, and it installs no project dependencies: it publishes the tarball `build` packed. Only `github-release` can write to the repository.
+  - **More checks before publishing:** the release build now also runs the runtime audit, lint and the package-contents check, so a tag on a commit that skipped CI can't publish.
+  - **Pinned versions:** npm is pinned to 11.21.1 instead of `npm@latest`, and Node to 24.22.0. Actions are pinned by commit SHA (checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2, download-artifact v8.0.2). Each is at least 14 days old, the project's dependency rule.
+  - **Rehearsal:** the workflow can run by hand as a rehearsal: every check and `npm publish --dry-run`, with no npm token and no GitHub Release. A manual run never publishes, even on a tag.
+  - **`latest` can't move back:** a stable tag gets `latest` only for main's own version line, and a `support/X.Y` commit is checked first. Support branches merge forward into `main`, so before this, re-running a support release after that merge would have published it to `latest`.
+  - **CI:** CI uses `npm ci --ignore-scripts` and the same pins, doesn't keep the checkout's token, and runs the runtime audit on this branch too.
+  - **Minimatch advisory:** the moderate minimatch advisory (GHSA-g3hv-75wg-m249, through exceljs → archiver) stays open for now, tracked in #262. The only fix is minimatch 11.0.1, published 2026-10-27, under the 14-day rule. The copies exceljs uses are minimatch 3 and 5, whose callers break on 11's API. The browser build uses exceljs's prebuilt bundle, which doesn't load archiver at all.
+
+## [1.5.0-beta.17] - 2026-10-31
+
+### 🔧 Fixed
+
+- **Saving a loaded view keeps its lookup display names and exact values (#181, from 1.4.6).** A saved view's `<value uiname="…" uitype="…">` attributes are kept for each value, so model-driven apps still show the names in the view's filter. Long decimals keep every digit, line breaks and tabs in attribute values are written as `&#10;`, `&#13;` and `&#9;`, and spaces in `<value>` text are kept, including in the pac CLI and Web API snippets.
+- **A failed relationship load no longer crashes the tool (from 1.4.6).** When the relationship list for a new link-entity couldn't load, the tool crashed instead of showing "Error loading relationships".
+
+### 🔧 Changed
+
+- **Insider icon: the gold corner is bigger, deeper gold and flush with the corner.** The old stamp's right point sat inside the hexagon's edge, leaving a thin blue gap, and the light gold faded at small sizes. The stamp now fills the corner, about 1.5 times larger, in two tones of gold (`#CC8A00` and `#F2A100`) split on the same diagonal as the blue. Prerelease builds only; the release icon is unchanged.
+
+## [1.5.0-beta.16] - 2026-10-30
+
+### 🔧 Fixed
+
+- **Bulk Delete jobs no longer fail with 0x80048d19 "Error identified in Payload provided by the user for Entity :''" (#224, from 1.4.5).** Dataverse rejected "Delete all", "Bulk delete (job)" and deleting more than 100 selected records whenever the query had a condition on a number, Yes/No, choice, status, money or decimal column, such as the "Active …" views. Condition values are now sent as strings, which is what the Web API's [`Object`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/object) type defines.
+- **Bulk deleting more than about 530 selected records works (#177 first part, from 1.4.5).** The query for selected records is built in the tool instead of being converted through a GET request with every ID in the URL.
+
+### 🔒 Security
+
+- **The editor ships DOMPurify 3.4.17 (from 1.4.5).** Monaco Editor bundles its own copy, which npm `overrides` can't reach, so 1.5.0-beta.15 shipped DOMPurify 3.4.15. The build now uses the npm `dompurify` package at the version `overrides` sets, and CI and release check the built bundle (`.github/scripts/check-dompurify.mjs`).
+
+## [1.5.0-beta.15] - 2026-10-20
+
+### 🔧 Fixed
+
+- **"Delete all" deletes what the query on screen matches (#174, from 1.4.4).** With nothing selected, Delete all and Bulk delete (job) submit the FetchXML that produced the visible results. A quick find view's test value is included. They're unavailable ("Delete all unavailable", with the reason in its tooltip) before a run, after a failed run, or when the tree has changed in a way that matches different records, until you run the query again. Adding, removing or sorting columns in the grid doesn't block it.
+- **pac CLI snippet: PowerShell's curly single quotes are doubled too (#196, from 1.4.4),** so a value like `O’Neil` can't end the string.
+- **The first page gets the same recovery as later pages (#183).**
+  - The first page of results was requested once, with no retry after service protection errors (#96) and no smaller page after the ToolBox's 16 MB response limit (#68). That was the common case #68 was meant for: a 5,000-row first page of a wide Entity, which failed.
+  - Now a too-large first page is requested again with half the count (from Dataverse's default 5,000 when the query sets none), and later pages keep that size.
+  - Saved views are retried after throttling. Their page size is Dataverse's, so it can't be made smaller.
+  - Queries with `top` or `aggregate` are retried but not shrunk.
+- **No write resumes after the tool's connection changed (#175).** The connection guard (#66) was checked before each batch, but not in three places:
+  - the 1–3 record delete loop;
+  - the waits before a throttled `$batch` or request is retried (5–30 s);
+  - the older-host delete path.
+  
+  A retry after an in-place connection change would have run in the new environment, where the same record IDs can exist. Those records now report "Not deleted: the tool's connection changed…" (or "Not changed…" for Activate/Deactivate) instead. Workflow retries stop the same way.
+
+## [1.5.0-beta.14] - 2026-10-19
+
+### 🔧 Fixed
+
+- **Picking a condition's attribute no longer crashes the tool (#217, the 1.4.3 hotfix).** The 1.5 betas had the same bug as 1.4.1 and 1.4.2: choosing a condition's attribute, changing its entity or clearing its attribute blanked the tool with "Cannot read properties of undefined (reading 'replace')".
+  - A missing value is now written as empty (`operator=""`). An unfinished condition says "Choose an attribute" / "Choose an operator", and the tree shows "name (no operator)".
+  - The results grid's column filter chips no longer throw when a condition's operator is cleared.
+  - A new test blanks every string field of every node and runs every pure consumer (91 cases).
+  - Verified in Power Platform ToolBox Desktop. Merged forward from `main` (1.4.3).
+
+## [1.5.0-beta.13] - 2026-10-18
+
+### 🔧 Fixed
+
+- **pac CLI snippet: the shell no longer expands FetchXML values (#166, found by CodeQL).** The XML was wrapped in double quotes with only `"` escaped, so bash and zsh expanded values such as `$100`, `$(…)` or backticks when the snippet was pasted, and PowerShell rejected `\"`. The snippet now single-quotes the XML on a **bash / zsh** line (`'` written as `'''`) and a **PowerShell 7.3+** line (`'` written as `''`), and points to `--xmlFile` for Windows PowerShell 5.1. It uses `pac env fetch`: `pac org` was renamed `pac env` in pac 1.32, and `org` still works.
+
+### 🏗️ Technical
+
+- **Release branches (`RELEASING.md`).** A minor release now stabilizes on its own `release/X.Y` branch, cut from `dev` at the feature freeze, so `dev` is never frozen. Betas (`-beta.N`, `-rc.N`) are tagged there and publish to npm `beta`. A stable release merges `release/X.Y` → `main` and is tagged there (npm `latest`). Fixes go to the oldest supported branch that has the bug and merge forward (`main` → `release/*` → `dev`).
+- **Supported versions (`SECURITY.md`):** the current stable release gets fixes. The previous minor gets critical and security fixes for 30 days after the next minor ships, from a `support/X.Y` branch that publishes to npm `support-X.Y`, never `latest`.
+- **`release.yml` chooses the channel from the tag:** `-beta.N` / `-rc.N` → `beta` (pre-release); a stable tag on `main` → `latest`; a stable tag on `support/X.Y` → `support-X.Y` (not marked as the latest GitHub Release). Any other tag fails before publishing. CI also runs on pushes to `release/**` and `support/**`.
+- **Release process: stabilizing before a stable release (`RELEASING.md`).** Each stable release has a milestone and a "Release X.Y.Z" tracking issue. Before a beta is promoted to npm `latest`, the milestone is clear, the latest beta is smoke-tested in PPTB, it soaks for 7 days without a new P0/P1 bug, and CI and the runtime audit are clean. Stabilizing happens on the release branch, so `dev` isn't frozen. The same process applies to Command Bar Studio and Dataverse Request Studio.
+
+## [1.5.0-beta.12] - 2026-10-18
+
+### ✨ Added
+
+- **Saved views follow-ups (#142):**
+  - **Shared personal views:** Load view shows "Shared by {owner}" (or "Shared with you"). System views show their query type or "Default view" as a second line.
+  - **Write access:** before overwriting a personal view you don't own, Save view checks your access (`RetrievePrincipalAccess`). Without write access, it offers **Save a copy…**; if access can't be determined, Dataverse decides.
+  - **Managed system views:** overwriting one shows a warning naming its solution. It's a warning only, not a block.
+  - **Quick find views:** enter a test value for `{0}`, with an optional trailing `%`, to execute them. The value is used only in the FetchXML that runs; the tree, the editor and saved views keep `{0}`. A loaded quick find view runs as FetchXML, not by ID, because by ID it matches nothing (verified live).
+  - **Set as default view** for public system views.
+  - **Description:** pre-filled when you overwrite a view, and clearing it clears the view's description.
+- **Docs-driven helpers (#98):**
+  - **Wildcard helper** for `like` / `not-like` values: Contains (`%x%`), Begins with (`x%`), Ends with (`%x`) or a custom pattern. **Match literally** escapes `%` → `[%]`, `_` → `[_]` and `[` → `[[]`, per "Wildcard characters".
+    - begins-with and ends-with warn when a typed character would act as a wildcard.
+    - Stored values read back into the helper, and switching operators keeps the text.
+    - The Query Advisor's leading-wildcard advice ignores escaped characters, and now also appears in the results-grid column filter.
+  - **Total record count:** with *Return total record count*, the info bar shows "Rows: 50 of 1,234 total", or "5,000+ total" (500+ on elastic entities) when the limit is exceeded. **Count all {entity} records (unfiltered snapshot)** calls `RetrieveTotalRecordCount` and says plainly that it ignores the query's filters.
+  - **Hierarchy picker:** under / not-under / above / eq-or-under / eq-or-above on the primary key pick a record by name (`startswith` search, so no leading wildcard). The record's name is resolved back from its ID, and **Enter an ID instead** gives a GUID field with validation. The hint names the hierarchical relationship and the 100-level limit.
+  - **GUID values:** Lookup, Customer, Owner and Uniqueidentifier condition values that aren't GUIDs are flagged. Verified live: Dataverse rejects them with 0x80040203.
+  - **Undocumented settings:** "UTC offset (undocumented)" shows only when the query sets it, and the condition aggregate leftover reads "Aggregate (undocumented)".
+
+### 🔧 Fixed
+
+- **Record actions use the current selection after the results refresh (#158).** Previously, after a refresh (re-running the query, or the automatic refresh after Delete, Activate or Run workflow), the grid showed nothing selected, but the command bar kept the previous selection. Its actions stayed enabled and ran on the previously selected records. The command bar now clears its selection with the grid's.
+
+### 🏗️ Technical
+
+- **Release process (`RELEASING.md`):** `main` holds the current stable release (npm `latest`); betas are tagged on `dev` (npm `beta`, GitHub pre-release); hotfixes branch from `main` and merge back into `dev`. PRs add CHANGELOG entries under `[Unreleased]` and don't change the version, which is set when a release is cut. The same process applies to Command Bar Studio and Dataverse Request Studio.
+- **`release.yml` refuses a stable tag whose commit isn't on `main`,** so a stray tag on `dev` can't replace npm `latest`. Beta tags (`-beta.N`) are allowed from `dev`.
+
+## [1.5.0-beta.11] - 2026-10-17
+
+### ✨ Added
+
+- **Activate and Deactivate work, driven by metadata (#143, verified live on temporary records).**
+  - **Simple entities** (Account, Contact…): the state's default status reason is applied.
+  - **Multi-state entities** (Lead, activities, custom state models): you pick the status reason, grouped by state. When the entity enforces status-reason transitions, only targets allowed from every selected record's current status are offered.
+  - **Lead:** Deactivate defaults to Disqualified. Choosing Qualified warns that this doesn't run QualifyLead; Dataverse accepts the plain update.
+  - **Opportunity, Case, Quote, Order, Invoice and Contract** close through their own messages (WinOpportunity / LoseOpportunity, CloseIncident, WinQuote, FulfillSalesOrder…). For these the buttons are disabled, with a tooltip naming the documented action. Proper dialogs are tracked in #149.
+  - **Also disabled, with a reason:** entities with no state, results with one-to-many joins, and missing Write privilege. The Write privilege name comes from metadata, e.g. `prvWriteActivity` for activities.
+  - **How it runs:** a PATCH of `statecode` + `statuscode`, sent through `$batch` in chunks of 25, with per-record errors, throttle retry, progress and the close warning. The query runs again afterwards.
+- **Confirmations name the environment and the scope (#69, Marketplace policy).** Delete, Bulk delete, Run workflow, Save view and Activate/Deactivate show:
+  - the environment name, type and URL, with a warning for **Production**;
+  - the entity's display and logical name;
+  - the exact scope. A Bulk delete with no selection says "Every record the query matches" and never claims a total it doesn't know.
+
+  **Type-to-confirm:** on Production, for more than 100 records, or when the total is unknown, you type the entity's logical name before the action enables.
+
+### 🔧 Fixed
+
+- **Bulk delete no longer shows a stray horizontal scrollbar (#152).** The "Danger zone" warning was 1px wider than the dialog, a grid item's default `min-width`. Its title now reads "Bulk delete all matching {entity}" or "Bulk delete N records".
+
+### 🔧 Changed
+
+- **Sentence case** in the delete, bulk delete, workflow and save view dialogs and the results command bar, completing the sweep from beta.10: Delete record, Run workflow, Save and publish, Personal view, Bulk delete (job), Delete all, Retrieve all stopped.
+
+### 🏗️ Technical
+
+- New `model/recordState.ts` (state planning from metadata, transition intersection, close-message entities) and `shared/components/TargetScope.tsx` with `targetScopeRules.ts`, all with tests.
+- The `$batch` runner in `batchDelete.ts` is shared by delete and the state update.
+
+## [1.5.0-beta.10] - 2026-10-17
+
+### ✨ Added
+
+- **Collapsible query scope section (#25).** It collapses to one line, "**Account** · View: Active accounts · Contoso Core", with **New** always visible. The collapsed state is remembered.
+- **The publisher and solution selection is remembered per environment (#25),** keyed by environment URL in the ToolBox settings. It's restored once the lists load; publishers or solutions that no longer exist are dropped.
+- **Right-click a tree row (#24).** Right-click, Shift+F10 or the context-menu key opens the row's Add items, a divider, then **Delete** in red. The root entity has no Delete.
+
+### 🔧 Changed
+
+- **Tree (#24, #25):**
+  - The Add menus are reordered, renamed and given the tree's icons: All attributes, **Select attributes…** (now second), **Blank attribute**, Order by, Filter, Link-entity.
+  - Deleting a node with items inside asks first: "Delete filter (and)? This also deletes the 2 items inside it."
+  - Rows with nothing inside have no chevron.
+  - A link-entity that can return attributes but has none shows "(no attributes)".
+  - A link-entity without an alias is labelled by its lookup, e.g. "contact via primarycontactid (outer)". The lookup is `to` for N:1 and `from` for 1:N.
+- **Relationship picker (#25):** each option has two lines, the related entity, then "via {lookup} ({logical}) · {schema name}". The groups are Many-to-one, One-to-many and Many-to-many, search matches any part, and the list is wide enough that options stay on two lines.
+- **Publishers and solutions (#25)** show two lines: name, then `uniquename · vX` for solutions and `uniquename · prefix` for publishers. The empty states are worded consistently.
+- **Sentence case and "…" across the UI,** matching Dataverse Request Studio and Command Bar Studio. For example: Load view, System views, Entity source, All entities, Advanced Find only, Use logical names, Editor mode, Parse to tree, Send to tool, Save as….
+
+### 🏗️ Technical
+
+- New `model/scopeSelection.ts`, `model/treeLabels.ts` and `model/relationshipOptions.ts`, and the `useRememberedScope` hook, with tests.
+
+## [1.5.0-beta.9] - 2026-10-17
+
+### 🏗️ Technical
+
+- **monaco-editor 0.54 → 0.57 (#145)** clears the moderate `dompurify` advisories.
+  - `@monaco-editor/react` stays at 4.7.0, because 4.8 is still a prerelease. An ambient type declaration maps its `editor.api` import to Monaco 0.57's `monaco-editor/editor` entry.
+  - **Smaller bundle:** Monaco loads only the editor core, its features and the languages FXS shows (XML, C#, JavaScript, shell and SQL), using the tree-shakeable entry points added in Monaco 0.56. With the full 0.57 entry, the package would have exceeded its size budget. Now it's 13 files instead of 98, and slightly smaller overall.
+  - **No worker console errors:** the editor worker runs on the main thread from the start, as before (PPTB's CSP blocks `blob:` workers), without the errors Monaco 0.57 would log first.
+  - **Remaining audit findings:** two low `dompurify` advisories (fixed in 3.4.16). Monaco bundles its own copy and doesn't use the affected `IN_PLACE` mode.
+- **`uuid` for exceljs pinned to 11.1.1 with an npm override (#145, GHSA-w5hq-g745-h8pq).** The browser build of exceljs bundles its own uuid and only calls `v4()`, so the advisory never applied to the tool.
+- **A round-trip test for local Excel export:** headers, typed values, formats, dates, labels, the "both" (Raw) columns, the frozen header and auto-filter.
+
+## [1.5.0-beta.8] - 2026-10-17
+
+### ✨ Added
+
+- **Query Advisor (#97).** Before you run a query, FetchXML Studio flags the performance anti-patterns Microsoft Learn documents, as notes in Validate, Parse to Tree and the property panel. **Advice never blocks Execute.** It covers:
+  - leading wildcards in `like` / `begins-with` values, and `ends-with`;
+  - `<all-attributes />` or no attributes selected;
+  - sorting by a link-entity's attributes, which is slower and can lose the paging cookie;
+  - `distinct` without an order;
+  - simple paging past 50,000 records;
+  - aggregate queries with no filter (the 50,000-record aggregate limit);
+  - the legacy `no-lock`.
+- **Query limits, verified live (#97):**
+  - **More than 15 joined link-entities** blocks Execute (0x8004430D). Link-entities inside filters don't count.
+  - **More than 500 conditions** blocks Execute (0x8004430C). Microsoft Learn says conditions and link-entities count together, but live, only conditions count: 500 conditions plus a link-entity run.
+  - **URL-encoded FetchXML over 32,768 characters** gets a warning with "Execute anyway". Live, about 44,500 characters failed with HTTP 414, but the exact limit depends on the URL.
+
+### 🏗️ Technical
+
+- New `model/queryAdvisor.ts`, called from `validateQueryRules`, with 91 table-driven tests. Every advice case is also checked to block nothing.
+- The condition Operator and Value fields, the aggregate and distinct options and the order Attribute field now show their advice notes, through the existing `findingFor`.
+
+## [1.5.0-beta.7] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Load View labels querytype 2048 as "Other"** (`SavedQueryTypeOther`). It used to read "Template", a label that belongs to the template types (#144).
+- **PPTB events no longer log their payloads to the console (#71).** Connection events carry environment details. Event names are logged only when debug logging is on.
+
+### 🏗️ Technical
+
+- **Safe OData literals (#81).** Every value placed inside a single-quoted OData string literal now has its quotes doubled (`odataString`). That covers entity and attribute names in metadata queries, solution unique names, and the workflow and view filters. A value can no longer end the literal early.
+- **The duplicate LayoutXML helpers are removed from `pptbClient.ts` (#81).** They were unused; `model/layoutxml.ts` is the only implementation.
+
+## [1.5.0-beta.6] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Column headers for one-to-many link-entities name the related entity (verified live).**
+  - A 1:N link-entity's column read "Full Name (Account)": the header used the parent's primary key, which is the link's `to` attribute.
+  - It now reads "Full Name (Contact)". The entity's display name comes from the cached entity lists, so it's there before the entity has been opened.
+  - N:1 columns are unchanged and still name the lookup ("Full Name (Primary Contact)").
+
+## [1.5.0-beta.5] - 2026-10-17
+
+### 🏗️ Technical
+
+- **Browser dev harness against a live org: `npm run dev:harness` (#78), modelled on Command Bar Studio #44.**
+  - **What it runs:** the real UI, in a browser, against the Dataverse org in `DATAVERSE_URL`.
+  - **How requests flow:**
+    - A stub of the PPTB host makes requests the same way PPTB 1.2.7 does: the same entity-set names, `execute()` encoding, Prefer headers and error text, plus optional `CallerObjectId` impersonation.
+    - A localhost-only Vite proxy attaches an Azure CLI token on the server side. The token is kept in memory only and is never logged or sent to the browser.
+    - The proxy only accepts requests from localhost with a harness header, and forwards only to the org's Web API over https.
+  - **Not shipped:** the harness is dev-only. The production build is byte-identical without it, and it isn't in the package. See `dev/README.md`.
+- **Dev tooling updated, clearing every high npm audit finding (#77):**
+  - versions: vite 7.3.6, @vitejs/plugin-react 5.2.0, typescript-eslint 8.71.0, eslint 9.39.5, plus transitive fixes (rollup, postcss and others);
+  - audit: 25 findings (17 high) → 4 moderate, 0 high;
+  - every changed package was published at least two weeks ago;
+  - no runtime dependencies changed.
+  - **Not bumped:** monaco-editor 0.57. Its `exports` map breaks `@monaco-editor/react` 4.7's types, so it needs its own change.
+
+## [1.5.0-beta.4] - 2026-10-17
+
+### ⚠️ Requires Power Platform ToolBox 1.2.7
+
+- **PPTB 1.2.7 is now required (#82).**
+  - `@pptb/types` is 1.2.7.
+  - `features.connections: 1`, and `minAPI` is 1.2.7 (it was 1.2.2).
+  - Older hosts and `1.2.7-dev` Insider builds show the tool as unsupported.
+
+### ✨ Added
+
+- **Changing the tool's connection in place resets everything that came from the old environment (#66).**
+  - The metadata cache, entity lists, publishers and solutions, privileges, WhoAmI, results and the loaded view are all cleared, and the UI reloads for the new connection. The query is kept.
+  - A notification says what happened.
+  - Token refreshes and edits to other connections reset nothing. Deleting another connection no longer marks the tool as disconnected.
+  - Workflow runs and multi-record deletes stop if the connection changes partway through.
+- **The ToolBox warns before closing while work is running (#70):** Retrieve All, deletes, workflow runs and Save view (`preventClose`).
+- **Record links open in the connection's browser profile (#70).** This covers Open record and the bulk delete job link (`openInConnectionBrowser`).
+
+### 🔧 Fixed
+
+- **Deleting records uses the entity's metadata entity set name (#61).** This fixes entities whose entity set name the host guesses wrongly.
+  - Multi-record deletes are sent as real OData `$batch` requests of 25 (`executeBatch`).
+  - Errors are reported per record: a batch Dataverse rejects is retried one record at a time, so one failure doesn't fail the rest.
+- **Clipboard writes try the ToolBox first (#70),** then the browser clipboard. That applies to copying results, record URLs, FetchXML and code.
+
+### 🏗️ Technical
+
+- New `api/host.ts` adapter. Every host API is feature-detected, with a fallback.
+- New `api/batchDelete.ts` and `shared/hooks/connectionIdentity.ts`.
+- `metadataCache.clear()` now clears every cache, with a generation guard so requests still running for the old connection can't refill it.
+
+## [1.5.0-beta.3] - 2026-10-17
+
+### ✨ Added
+
+- **Dataverse errors explain what to do (#96).** For documented error codes, the error bar, paging notices, export, delete, bulk delete, workflow and Save view messages start with what to do. Dataverse's own message follows after "Details:". Undocumented codes are shown unchanged. Covered:
+  - service protection limits (429, 0x80072322/21/26);
+  - the 50,000-record aggregate limit (0x8004E023);
+  - the quick find record limit;
+  - more than 500 conditions or 15 link-entities;
+  - query throttling and timeouts caused by leading wildcards, calculated attributes or other anti-patterns;
+  - aggregate mistakes;
+  - invalid condition values;
+  - missing attributes or entities;
+  - entity set names Web API doesn't recognise;
+  - records not found;
+  - missing privileges.
+- **Throttling back-off (#96).** When Dataverse service protection limits are hit, deletes, workflow runs and page loads wait and retry: per `Retry-After` when it's given, otherwise 2, 4 and 8 seconds. Each wait is capped at 60 seconds, with at most 3 retries.
+- **Pages over Power Platform ToolBox's 16 MB response limit (#68).**
+  - **Load more and Retrieve All:** the page is requested again at half the size, at most three times and never below 100 rows. The pages that follow keep the smaller size.
+  - **The first page and saved views:** the error explains how to make the response smaller (fewer attributes, or a smaller `count`), and nothing is retried.
+
+### 🔧 Changed
+
+- **Fewer startup calls and a quiet console (#71).**
+  - WhoAmI and each privilege check are sent once per connection, and concurrent callers share one request.
+  - Raw query results, privilege responses, payloads and routine status no longer go to the console. They're behind the debug flags (`src/shared/utils/debug.ts`), which are now all off by default.
+  - The Electron IPC prefix is removed from errors shown to users.
+
+### 🏗️ Technical
+
+- New modules, each with tests:
+  - `api/dataverseErrors.ts`: reads the PPTB 1.2.7 host's error formats and maps documented codes to Microsoft Learn;
+  - `api/throttleRetry.ts`;
+  - `api/sessionCache.ts`: `resetDataverseSessionCache()`, to be called on a connection change (#66);
+  - `api/pageRecovery.ts`.
+
+## [1.5.0-beta.2] - 2026-10-17
+
+### 📝 Documentation
+
+- **README: "What this tool changes" (#69, Marketplace policy).** Lists every operation that writes to Dataverse: Delete, Bulk Delete, Run workflow, and saving personal and system views. For each it says when it runs, what it does and which privilege it needs. It also lists what doesn't write: both exports and the locally stored settings.
+  - It states plainly that Delete with no rows selected submits a Bulk Delete job for every record the query matches, not just the loaded rows.
+
+## [1.5.0-beta.1] - 2026-10-17
+
+### 🔧 Fixed
+
+- **Cross-apply columns stay filled when they're filtered (#91 follow-up, verified live).**
+  - A `matchfirstrowusingcrossapply` link-entity normally returns its attributes by schema name (`FullName`).
+  - A condition with `entityname` targeting that link-entity, such as a column filter from the grid, makes Dataverse join it normally. It then returns `mc.fullname` instead.
+  - The grid now uses whichever key Dataverse returned, including for cross-apply `<all-attributes />`, so a filtered cross-apply column no longer shows as empty.
+- **Two cross-apply queries Dataverse rejects are now flagged before they run (verified live 2026-10-17).**
+  - An order inside a `matchfirstrowusingcrossapply` link-entity (0x80041121). Order from the entity with `entityname` instead; that works.
+  - An aliased attribute in one, which fails with a generic SQL error (0x80044150) unless a condition with `entityname` targets the link-entity. With such a condition the alias works, so that case isn't flagged.
 ## [1.4.6] - 2026-10-31
 
 Hotfix for 1.4.5: saved views keep their lookup display names and exact values, and a failed relationship load no longer crashes the tool.
