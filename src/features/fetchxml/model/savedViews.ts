@@ -129,26 +129,26 @@ export function canSetDefaultView(view: { type: "system" | "personal"; queryType
 }
 
 /**
+ * The warning after a view was saved as the default public view while another view stayed a default
+ * too: Dataverse doesn't clear it, and clearing it failed (#307). An entry with no `id` means the
+ * other defaults couldn't be read.
+ */
+export function defaultViewsNotClearedMessage(viewName: string, notCleared: readonly { id: string; name: string; error: string }[]): string {
+	const known = notCleared.filter((view) => view.id);
+	const errors = notCleared.map((view) => view.error).join(" ");
+	if (known.length === 0) {
+		return `"${viewName}" is saved as the default view, but FetchXML Studio couldn't check whether another view is still marked as the default too. To be sure, set the default again in Power Apps (the entity's Views, then Set as default). Details: ${errors}`;
+	}
+	const views = known.map((view) => `"${view.name || view.id}"`).join(", ");
+	return `"${viewName}" is saved as the default view, but ${views} ${known.length === 1 ? "is" : "are"} still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: ${errors}`;
+}
+
+/**
  * Quick find placeholder (#142). Quick find views store `value="{0}"` in the conditions of their
  * quick find filter, and the caller puts the search string in its place ("string.Format" in the
  * Learn samples): https://learn.microsoft.com/power-apps/developer/data-platform/quick-find
  * Dataverse doesn't substitute it: a view with {0} run as stored matches nothing (verified live).
  */
-/**
- * The warning after a view became the default public view while another view stayed a default too:
- * Dataverse doesn't clear it, and clearing it failed (#307). An entry without a name means the other
- * defaults couldn't be read.
- */
-export function defaultViewsNotClearedMessage(viewName: string, notCleared: readonly { name: string; error: string }[]): string {
-	const named = notCleared.filter((view) => view.name);
-	const errors = notCleared.map((view) => view.error).join(" ");
-	if (named.length === 0) {
-		return `"${viewName}" is the default view now, but FetchXML Studio couldn't check whether another view is still marked as the default too. To be sure, set the default again in Power Apps (the entity's Views, then Set as default). Details: ${errors}`;
-	}
-	const views = named.map((view) => `"${view.name}"`).join(", ");
-	return `"${viewName}" is the default view now, but ${views} ${named.length === 1 ? "is" : "are"} still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: ${errors}`;
-}
-
 export const QUICK_FIND_PLACEHOLDER = "{0}";
 
 /** Condition values: the value attribute of <condition> (either quote) and <value> elements. */

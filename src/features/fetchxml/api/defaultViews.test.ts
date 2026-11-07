@@ -33,6 +33,7 @@ describe("clearOtherDefaultPublicViews (#307)", () => {
 		const query = api.queryData.mock.calls[0][0] as string;
 		expect(query).toContain("returnedtypecode eq 'territory'");
 		expect(query).toContain("querytype eq 0");
+		expect(query).toContain("statecode eq 0");
 		expect(query).toContain("isdefault eq true");
 		expect(query).toContain(`savedqueryid ne ${NEW_VIEW}`);
 		expect(api.update).toHaveBeenCalledTimes(1);

@@ -287,24 +287,28 @@ describe("quick find test value (#142)", () => {
 
 describe("defaultViewsNotClearedMessage (#307)", () => {
 	it("names the view that stayed a default and adds Dataverse's error", () => {
-		const message = defaultViewsNotClearedMessage("FXS view", [{ name: "All Territories", error: "No privilege." }]);
+		const message = defaultViewsNotClearedMessage("FXS view", [{ id: "1", name: "All Territories", error: "No privilege." }]);
 		expect(message).toBe(
-			`"FXS view" is the default view now, but "All Territories" is still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: No privilege.`,
+			`"FXS view" is saved as the default view, but "All Territories" is still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: No privilege.`,
 		);
 	});
 
 	it("names every view when more than one stayed a default", () => {
 		const message = defaultViewsNotClearedMessage("FXS view", [
-			{ name: "A", error: "E1." },
-			{ name: "B", error: "E2." },
+			{ id: "1", name: "A", error: "E1." },
+			{ id: "2", name: "B", error: "E2." },
 		]);
 		expect(message).toContain('"A", "B" are still marked as the default too');
 		expect(message).toContain("Details: E1. E2.");
 	});
 
 	it("says it couldn't check when the other defaults couldn't be read", () => {
-		const message = defaultViewsNotClearedMessage("FXS view", [{ name: "", error: "Network error." }]);
+		const message = defaultViewsNotClearedMessage("FXS view", [{ id: "", name: "", error: "Network error." }]);
 		expect(message).toContain("couldn't check whether another view is still marked as the default too");
 		expect(message).toContain("Details: Network error.");
+	});
+
+	it("names a view without a name by its ID", () => {
+		expect(defaultViewsNotClearedMessage("FXS view", [{ id: "abc", name: "", error: "E." }])).toContain('"abc" is still marked as the default too');
 	});
 });

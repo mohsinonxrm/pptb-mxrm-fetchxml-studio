@@ -522,6 +522,18 @@ export function SaveViewDialog({
 				const queryType = isOverwriteMode && loadedView ? (loadedView.queryType ?? 0) : 0;
 				await validateSavedQuery(fetchXml, queryType);
 
+				// Right after the save, before any later step can fail: the entity's other default public
+				// views are cleared (#307). Also when the view already was the default, which repairs two
+				// defaults left by earlier versions. A view that stays a default is reported, not a failed save.
+				const clearOtherDefaults = async (savedViewId: string) => {
+					if (!setAsDefault && !(isAlreadyDefault && showDefaultOption)) return;
+					try {
+						defaultsNotCleared = await clearOtherDefaultPublicViews(entityLogicalName, savedViewId);
+					} catch (error) {
+						defaultsNotCleared = [{ id: "", name: "", error: formatDataverseError(error, "Couldn't check the other default views") }];
+					}
+				};
+
 				if (isOverwriteMode && loadedView) {
 					await updateSavedQuery(loadedView.id, {
 						name: name.trim(),
@@ -531,6 +543,7 @@ export function SaveViewDialog({
 						...(setAsDefault ? { isdefault: true } : {}),
 					});
 					viewId = loadedView.id;
+					await clearOtherDefaults(viewId);
 				} else {
 					viewId = await createSavedQuery({
 						name: name.trim(),
@@ -541,6 +554,7 @@ export function SaveViewDialog({
 						querytype: 0,
 						isdefault: setAsDefault,
 					});
+					await clearOtherDefaults(viewId);
 
 					// Add to solution if selected
 					if (selectedSolution) {
@@ -550,16 +564,6 @@ export function SaveViewDialog({
 							selectedSolution.uniquename,
 							false
 						);
-					}
-				}
-
-				// The view is saved and is the default: a view that stays a default too is reported, not
-				// treated as a failed save (#307)
-				if (setAsDefault) {
-					try {
-						defaultsNotCleared = await clearOtherDefaultPublicViews(entityLogicalName, viewId);
-					} catch (error) {
-						defaultsNotCleared = [{ id: "", name: "", error: formatDataverseError(error, "Couldn't check the other default views") }];
 					}
 				}
 
