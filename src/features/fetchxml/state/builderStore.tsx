@@ -94,6 +94,8 @@ export interface BuilderState {
 	fetchQuery: FetchNode | null;
 	selectedNodeId: NodeId | null;
 	selectedNode: SelectedNode;
+	/** Bumped by revealNode so the tree re-expands and scrolls to the node even if it is already selected */
+	revealSeq: number;
 	/** Loaded view info - null if query was not loaded from a view or has been modified */
 	loadedView: LoadedViewState | null;
 	/** Column layout configuration - generated from FetchXML or loaded from view */
@@ -111,6 +113,7 @@ export interface BuilderState {
 type BuilderAction =
 	| { type: "SET_ENTITY"; entityName: string }
 	| { type: "SELECT_NODE"; nodeId: NodeId }
+	| { type: "REVEAL_NODE"; nodeId: NodeId }
 	| { type: "ADD_ATTRIBUTE"; parentId: NodeId }
 	| { type: "ADD_ATTRIBUTE_BY_NAME"; parentId: NodeId; attributeName: string }
 	| { type: "UPDATE_ATTRIBUTES"; parentId: NodeId; attributeNames: string[] }
@@ -168,6 +171,7 @@ const initialState: BuilderState = {
 	fetchQuery: null,
 	selectedNodeId: null,
 	selectedNode: null,
+	revealSeq: 0,
 	loadedView: null,
 	columnConfig: null,
 	layoutNeedsSync: false,
@@ -365,6 +369,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
+				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - this was manual edit
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
@@ -401,6 +406,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
+				revealSeq: state.revealSeq,
 				loadedView: action.viewInfo, // Track the loaded view
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
@@ -452,6 +458,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: entityNode.id,
 				selectedNode: entityNode,
+				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - entity changed
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
@@ -468,6 +475,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				selectedNodeId: action.nodeId,
 				selectedNode: node,
+			};
+		}
+
+		case "REVEAL_NODE": {
+			if (!state.fetchQuery) return state;
+			const node = findNodeById(state.fetchQuery, action.nodeId);
+			return {
+				...state,
+				selectedNodeId: action.nodeId,
+				selectedNode: node,
+				revealSeq: state.revealSeq + 1,
 			};
 		}
 
@@ -1148,6 +1166,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		() => ({
 			setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
 			selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
+			/** Select a node and reveal it in the tree, even when it is already selected */
+			revealNode: (nodeId: NodeId) => dispatch({ type: "REVEAL_NODE", nodeId }),
 			addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
 			addAttributeByName: (parentId: NodeId, attributeName: string) =>
 				dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),

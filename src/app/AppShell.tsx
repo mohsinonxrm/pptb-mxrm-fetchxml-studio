@@ -2251,6 +2251,7 @@ function AppContent({
 								iconStyle={displaySettings.treeIconStyle}
 								attributeMetadata={attributeMetadata}
 								selectedNodeId={builder.selectedNodeId}
+								revealSeq={builder.revealSeq}
 								onNodeSelect={builder.selectNode}
 								onAddAttribute={builder.addAttribute}
 								onAddAllAttributes={builder.addAllAttributes}
@@ -2344,7 +2345,7 @@ function AppContent({
 					primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
 					connectionKey={connectionKey}
 					selectedNodeId={builder.selectedNodeId}
-					onSelectNode={builder.selectNode}
+					onSelectNode={builder.revealNode}
 					onAddOrder={builder.addOrder}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}

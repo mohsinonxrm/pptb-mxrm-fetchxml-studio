@@ -242,6 +242,8 @@ interface TreeViewProps {
 	/** Attribute metadata of the query's entities, for the attribute icons (#230) */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	selectedNodeId: NodeId | null;
+	/** Bump to re-reveal the selected node (expand + scroll) even when the selection is unchanged */
+	revealSeq?: number;
 	onNodeSelect: (nodeId: NodeId) => void;
 	onAddAttribute: (parentId: NodeId) => void;
 	onAddAllAttributes: (parentId: NodeId) => void;
@@ -260,6 +262,7 @@ export function TreeView({
 	iconStyle = "tinted",
 	attributeMetadata,
 	selectedNodeId,
+	revealSeq = 0,
 	onNodeSelect,
 	onAddAttribute,
 	onAddAllAttributes,
@@ -426,10 +429,10 @@ export function TreeView({
 			}, 250);
 			return () => clearTimeout(timer);
 		}
-		// Only a new selection expands and scrolls: findPathToNode reads the current tree, and re-running
+		// Only a new selection (or an explicit reveal request) expands and scrolls: findPathToNode reads the current tree, and re-running
 		// on every tree edit would keep re-expanding and scrolling while the user works (#65)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedNodeId]);
+	}, [selectedNodeId, revealSeq]);
 
 	// Handle opening the Select Attributes dialog
 	const handleOpenSelectAttributes = useCallback(
