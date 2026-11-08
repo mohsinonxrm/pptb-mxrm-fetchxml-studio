@@ -7,13 +7,24 @@ const make = (...levels: AdvisoryLevel[]): Advisory[] =>
 
 describe("resultsTabLabel", () => {
 	it("has no badge before the first run", () => {
-		expect(resultsTabLabel(undefined, "en-US")).toEqual({ ariaLabel: "Results", menuLabel: "Results" });
+		expect(resultsTabLabel(undefined, "en-US")).toEqual({
+			ariaLabel: "Results",
+			menuLabel: "Results",
+		});
 	});
 	it("shows 0 after a run", () => {
-		expect(resultsTabLabel(0, "en-US")).toEqual({ badge: "0", ariaLabel: "Results, 0 rows", menuLabel: "Results (0 rows)" });
+		expect(resultsTabLabel(0, "en-US")).toEqual({
+			badge: "0",
+			ariaLabel: "Results, 0 rows",
+			menuLabel: "Results (0 rows)",
+		});
 	});
 	it("uses the singular for one row", () => {
-		expect(resultsTabLabel(1, "en-US")).toEqual({ badge: "1", ariaLabel: "Results, 1 row", menuLabel: "Results (1 row)" });
+		expect(resultsTabLabel(1, "en-US")).toEqual({
+			badge: "1",
+			ariaLabel: "Results, 1 row",
+			menuLabel: "Results (1 row)",
+		});
 	});
 	it("shows the exact count, formatted, with no cap", () => {
 		expect(resultsTabLabel(48213, "en-US")).toEqual({
@@ -45,10 +56,13 @@ describe("advisoriesTabLabel", () => {
 		expect(advisoriesTabLabel(make("advice", "warning", "error", "warning"))).toEqual({
 			badge: "4",
 			badgeColor: "danger",
-			ariaLabel: "Advisories, 4: 1 will be rejected, 2 might be rejected, 1 performance advice",
+			ariaLabel:
+				"Advisories, 4: 1 will be rejected, 2 might be rejected, 1 performance advice",
 			menuLabel: "Advisories (4)",
 		});
-		expect(advisoriesTabLabel(make("error", "advice")).ariaLabel).toBe("Advisories, 2: 1 will be rejected, 1 performance advice");
+		expect(advisoriesTabLabel(make("error", "advice")).ariaLabel).toBe(
+			"Advisories, 2: 1 will be rejected, 1 performance advice",
+		);
 	});
 	it("colours by the worst level present", () => {
 		expect(advisoriesTabLabel(make("error", "warning", "advice")).badgeColor).toBe("danger");
@@ -57,6 +71,8 @@ describe("advisoriesTabLabel", () => {
 		expect(advisoriesTabLabel(make("advice", "advice")).badgeColor).toBe("informative");
 	});
 	it("keeps the level labels the same for many", () => {
-		expect(advisoriesTabLabel(make("error", "error", "error")).ariaLabel).toBe("Advisories, 3: 3 will be rejected");
+		expect(advisoriesTabLabel(make("error", "error", "error")).ariaLabel).toBe(
+			"Advisories, 3: 3 will be rejected",
+		);
 	});
 });

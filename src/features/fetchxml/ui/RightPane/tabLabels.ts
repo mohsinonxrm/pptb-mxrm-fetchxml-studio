@@ -1,4 +1,9 @@
-import { countByLevel, LEVEL_LABELS, type Advisory, type AdvisoryLevel } from "../../model/advisories";
+import {
+	countByLevel,
+	LEVEL_LABELS,
+	type Advisory,
+	type AdvisoryLevel,
+} from "../../model/advisories";
 
 export interface ResultsTabLabel {
 	/** Hidden before the first run */
@@ -30,7 +35,11 @@ export function resultsTabLabel(rowCount: number | undefined, locale?: string): 
 }
 
 const LEVELS: readonly AdvisoryLevel[] = ["error", "warning", "advice"];
-const LEVEL_COLOR: Record<AdvisoryLevel, AdvisoriesBadgeColor> = { error: "danger", warning: "warning", advice: "informative" };
+const LEVEL_COLOR: Record<AdvisoryLevel, AdvisoriesBadgeColor> = {
+	error: "danger",
+	warning: "warning",
+	advice: "informative",
+};
 
 /** Advisories tab: the total, coloured by the worst level present */
 export function advisoriesTabLabel(advisories: readonly Advisory[]): AdvisoriesTabLabel {
@@ -39,7 +48,9 @@ export function advisoriesTabLabel(advisories: readonly Advisory[]): AdvisoriesT
 	if (total === 0) return { ariaLabel: "Advisories", menuLabel: "Advisories" };
 	const worst = LEVELS.find((l) => counts[l] > 0)!;
 	// The level labels read the same in singular and plural, so only the counts change
-	const parts = LEVELS.filter((l) => counts[l] > 0).map((l) => `${counts[l]} ${LEVEL_LABELS[l].toLowerCase()}`);
+	const parts = LEVELS.filter((l) => counts[l] > 0).map(
+		(l) => `${counts[l]} ${LEVEL_LABELS[l].toLowerCase()}`,
+	);
 	return {
 		badge: String(total),
 		badgeColor: LEVEL_COLOR[worst],
