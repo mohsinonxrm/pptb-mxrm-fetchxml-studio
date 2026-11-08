@@ -139,17 +139,21 @@ const useStyles = makeStyles({
  * The accessible name override, only when set: an explicit `aria-label={undefined}` would also wipe
  * the one a label Tooltip gives (Tooltip spreads the child's own props over its aria props).
  */
-const nameOf = (command: BarCommand) => (command.ariaLabel ? { "aria-label": command.ariaLabel } : {});
+const nameOf = (command: BarCommand) =>
+	command.ariaLabel ? { "aria-label": command.ariaLabel } : {};
 
 /** On the bar an icon-only command is named "Label: reason"; an `ariaLabel` replaces the label part only */
 const barNameOf = (command: BarCommand) =>
-	command.ariaLabel && command.iconOnly && command.disabledReason ? { "aria-label": `${command.ariaLabel}: ${command.disabledReason}` } : nameOf(command);
+	command.ariaLabel && command.iconOnly && command.disabledReason
+		? { "aria-label": `${command.ariaLabel}: ${command.disabledReason}` }
+		: nameOf(command);
 
 /**
  * Checked-value names for the Toolbar and More's MenuList, namespaced so a toggle's id and a radio
  * group's name can't collide
  */
-const checkedNameOf = (command: BarCommand) => (command.radioName ? `radio:${command.radioName}` : `toggle:${command.id}`);
+const checkedNameOf = (command: BarCommand) =>
+	command.radioName ? `radio:${command.radioName}` : `toggle:${command.id}`;
 
 /** Can't be pressed: it has a reason, or it's running */
 const isOff = (command: BarCommand) => !!command.disabledReason || !!command.busy;
@@ -161,9 +165,16 @@ function iconOf(command: BarCommand): ReactElement | undefined {
 }
 
 /** The bar control's Tooltip: icon-only commands are labelled by it ("Label: reason"), others described */
-function barTooltip(command: BarCommand): { content: string; relationship: "label" | "description" } | undefined {
+function barTooltip(
+	command: BarCommand,
+): { content: string; relationship: "label" | "description" } | undefined {
 	if (command.iconOnly) {
-		return { content: command.disabledReason ? `${command.label}: ${command.disabledReason}` : command.label, relationship: "label" };
+		return {
+			content: command.disabledReason
+				? `${command.label}: ${command.disabledReason}`
+				: command.label,
+			relationship: "label",
+		};
 	}
 	const tip = command.disabledReason ?? command.hint;
 	return tip ? { content: tip, relationship: "description" } : undefined;
@@ -194,7 +205,8 @@ function onCheckedChange(commands: BarCommand[], name: string, checkedItems: str
 		return;
 	}
 	const toggle = named[0];
-	if (toggle && !isOff(toggle) && checkedItems.includes(toggle.id) !== !!toggle.checked) toggle.onClick?.();
+	if (toggle && !isOff(toggle) && checkedItems.includes(toggle.id) !== !!toggle.checked)
+		toggle.onClick?.();
 }
 
 const menuOpenChange =
@@ -203,7 +215,10 @@ const menuOpenChange =
 		command.onMenuOpenChange?.(data.open);
 
 /** One command on the bar. The ref reaches the element Overflow measures (OverflowItem passes it). */
-const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(function BarControl({ command: c }, ref) {
+const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(function BarControl(
+	{ command: c },
+	ref,
+) {
 	const styles = useStyles();
 	// Closing a dialog or drawer a command opened returns focus to that command (Fluent restores it
 	// to the most recently focused target). One that overflowed meanwhile hides, so More takes over.
@@ -249,7 +264,12 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 				className={className}
 				disabledFocusable={off}
 				menuButton={menuButton}
-				primaryActionButton={{ ...primary, ...restoreFocus, ...barNameOf(c), onClick: off ? undefined : c.onClick }}
+				primaryActionButton={{
+					...primary,
+					...restoreFocus,
+					...barNameOf(c),
+					onClick: off ? undefined : c.onClick,
+				}}
 			>
 				{children}
 			</SplitButton>
@@ -278,11 +298,25 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 		const toggleAppearance = appearance === "secondary" ? "subtle" : appearance;
 		return withTooltip(
 			c.radioName ? (
-				<ToolbarRadioButton ref={ref} name={checkedNameOf(c)} value={c.id} appearance={toggleAppearance} size="medium" {...common}>
+				<ToolbarRadioButton
+					ref={ref}
+					name={checkedNameOf(c)}
+					value={c.id}
+					appearance={toggleAppearance}
+					size="medium"
+					{...common}
+				>
 					{children}
 				</ToolbarRadioButton>
 			) : (
-				<ToolbarToggleButton ref={ref} name={checkedNameOf(c)} value={c.id} appearance={toggleAppearance} size="medium" {...common}>
+				<ToolbarToggleButton
+					ref={ref}
+					name={checkedNameOf(c)}
+					value={c.id}
+					appearance={toggleAppearance}
+					size="medium"
+					{...common}
+				>
 					{children}
 				</ToolbarToggleButton>
 			),
@@ -311,7 +345,12 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
  * detached element. Keying the OverflowItem by shape remounts it, and it registers the new one.
  */
 const shapeOf = (command: BarCommand) =>
-	[command.kind, barTooltip(command) ? "tip" : "", command.kind === "button" && command.appearance === "secondary" ? "secondary" : "", command.radioName ? "radio" : ""].join(".");
+	[
+		command.kind,
+		barTooltip(command) ? "tip" : "",
+		command.kind === "button" && command.appearance === "secondary" ? "secondary" : "",
+		command.radioName ? "radio" : "",
+	].join(".");
 
 /**
  * The divider after group `prev`. Overflow hides it with `prev`; it also hides when every group after
@@ -370,25 +409,45 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 						</MenuItem>,
 					)}
 				</MenuTrigger>
-				<MenuPopover>{c.kind === "split" ? splitMenu(c, c.busy ? undefined : icon) : c.menu}</MenuPopover>
+				<MenuPopover>
+					{c.kind === "split" ? splitMenu(c, c.busy ? undefined : icon) : c.menu}
+				</MenuPopover>
 			</Menu>
 		);
 	}
 	if (c.kind === "toggle") {
 		return withReason(
 			c.radioName ? (
-				<MenuItemRadio name={checkedNameOf(c)} value={c.id} icon={icon} disabled={off} {...nameOf(c)}>
+				<MenuItemRadio
+					name={checkedNameOf(c)}
+					value={c.id}
+					icon={icon}
+					disabled={off}
+					{...nameOf(c)}
+				>
 					{c.label}
 				</MenuItemRadio>
 			) : (
-				<MenuItemCheckbox name={checkedNameOf(c)} value={c.id} icon={icon} disabled={off} {...nameOf(c)}>
+				<MenuItemCheckbox
+					name={checkedNameOf(c)}
+					value={c.id}
+					icon={icon}
+					disabled={off}
+					{...nameOf(c)}
+				>
 					{c.label}
 				</MenuItemCheckbox>
 			),
 		);
 	}
 	return withReason(
-		<MenuItem icon={icon} className={className} disabled={off} {...nameOf(c)} onClick={off ? undefined : c.onClick}>
+		<MenuItem
+			icon={icon}
+			className={className}
+			disabled={off}
+			{...nameOf(c)}
+			onClick={off ? undefined : c.onClick}
+		>
 			{c.label}
 		</MenuItem>,
 	);
@@ -428,11 +487,21 @@ function More({
 		<Menu>
 			<MenuTrigger disableButtonEnhancement>
 				<Tooltip content={label} relationship="label">
-					<ToolbarButton ref={mergedRef} appearance="subtle" icon={<MoreIcon />} {...restoreFocus} />
+					<ToolbarButton
+						ref={mergedRef}
+						appearance="subtle"
+						icon={<MoreIcon />}
+						{...restoreFocus}
+					/>
 				</Tooltip>
 			</MenuTrigger>
 			<MenuPopover>
-				<MenuList checkedValues={checkedValuesOf(overflowed)} onCheckedValueChange={(_, data) => onCheckedChange(overflowed, data.name, data.checkedItems)}>
+				<MenuList
+					checkedValues={checkedValuesOf(overflowed)}
+					onCheckedValueChange={(_, data) =>
+						onCheckedChange(overflowed, data.name, data.checkedItems)
+					}
+				>
 					{overflowed.map((c, i) => (
 						<Fragment key={c.id}>
 							{i > 0 && groupOf(overflowed[i - 1]) !== groupOf(c) && <MenuDivider />}
@@ -483,7 +552,8 @@ export function OverflowToolbar({
 
 	const onOverflowChange = () => {
 		const focused = lastFocused.current?.element;
-		if (!focused || !focused.closest(`[${DATA_OVERFLOWING}]`) || !focusedIsGone(focused)) return;
+		if (!focused || !focused.closest(`[${DATA_OVERFLOWING}]`) || !focusedIsGone(focused))
+			return;
 		lastFocused.current = null;
 		if (moreRef.current) moreRef.current.focus();
 		else pendingFocus.current = true;
@@ -513,7 +583,9 @@ export function OverflowToolbar({
 			}}
 			id={c.id}
 			groupId={groupOf(c)}
-			{...(c.pinned || c.placement === "end" ? { pinned: true } : { priority: c.priority ?? 0 })}
+			{...(c.pinned || c.placement === "end"
+				? { pinned: true }
+				: { priority: c.priority ?? 0 })}
 		>
 			<BarControl command={c} />
 		</OverflowItem>
@@ -523,17 +595,25 @@ export function OverflowToolbar({
 		<div className={mergeClasses(styles.bar, className)}>
 			{start !== undefined && start !== null && <div className={styles.start}>{start}</div>}
 			{/* With moreExtra, More always shows, so Overflow must keep room for it (hasHiddenItems) */}
-			<Overflow padding={padding ?? (size === "small" ? 16 : 24)} hasHiddenItems={!!moreExtra} onOverflowChange={onOverflowChange}>
+			<Overflow
+				padding={padding ?? (size === "small" ? 16 : 24)}
+				hasHiddenItems={!!moreExtra}
+				onOverflowChange={onOverflowChange}
+			>
 				<Toolbar
 					ref={toolbarRef}
 					aria-label={ariaLabel}
 					size={size}
 					className={styles.toolbar}
 					checkedValues={checkedValuesOf(commands)}
-					onCheckedValueChange={(_, data) => onCheckedChange(commands, data.name, data.checkedItems)}
+					onCheckedValueChange={(_, data) =>
+						onCheckedChange(commands, data.name, data.checkedItems)
+					}
 					onFocus={(event) => {
 						const element = event.target as HTMLElement;
-						const id = [...elements.current].find(([, item]) => item.contains(element))?.[0];
+						const id = [...elements.current].find(([, item]) =>
+							item.contains(element),
+						)?.[0];
 						lastFocused.current = { element, id };
 					}}
 					onBlur={(event) => {
@@ -541,24 +621,39 @@ export function OverflowToolbar({
 						const next = event.relatedTarget as Node | null;
 						// Focus went elsewhere on the page, or to nowhere while the element is still showing (a
 						// click on empty space). Not when it hid (overflowed) or was replaced (shape change).
-						const left = next ? !toolbarRef.current?.contains(next) : element.isConnected && !element.closest(`[${DATA_OVERFLOWING}]`);
-						if (left && lastFocused.current?.element === element) lastFocused.current = null;
+						const left = next
+							? !toolbarRef.current?.contains(next)
+							: element.isConnected && !element.closest(`[${DATA_OVERFLOWING}]`);
+						if (left && lastFocused.current?.element === element)
+							lastFocused.current = null;
 					}}
 				>
 					{barCommands.map((c, i) => (
 						<Fragment key={c.id}>
 							{i > 0 && groupOf(barCommands[i - 1]) !== groupOf(c) && (
-								<BarDivider prev={groupOf(barCommands[i - 1])} after={groups.slice(groups.indexOf(groupOf(c)))} />
+								<BarDivider
+									prev={groupOf(barCommands[i - 1])}
+									after={groups.slice(groups.indexOf(groupOf(c)))}
+								/>
 							)}
 							{renderItem(c)}
 						</Fragment>
 					))}
-					<More commands={barCommands} extra={moreExtra} label={moreLabel} buttonRef={moreRef} pendingFocus={pendingFocus} />
-					{endCommands.length > 0 && barCommands.length > 0 && groupOf(endCommands[0]) !== groupOf(barCommands[barCommands.length - 1]) && (
-						<OverflowDivider groupId={groupOf(endCommands[0])}>
-							<ToolbarDivider />
-						</OverflowDivider>
-					)}
+					<More
+						commands={barCommands}
+						extra={moreExtra}
+						label={moreLabel}
+						buttonRef={moreRef}
+						pendingFocus={pendingFocus}
+					/>
+					{endCommands.length > 0 &&
+						barCommands.length > 0 &&
+						groupOf(endCommands[0]) !==
+							groupOf(barCommands[barCommands.length - 1]) && (
+							<OverflowDivider groupId={groupOf(endCommands[0])}>
+								<ToolbarDivider />
+							</OverflowDivider>
+						)}
 					{endCommands.map(renderItem)}
 				</Toolbar>
 			</Overflow>

@@ -59,7 +59,8 @@ interface BarCommandBase {
  * A command in an OverflowToolbar. `priority` (higher stays on the bar longer, default 0) and
  * `pinned` (never overflows) are mutually exclusive, as in Fluent's OverflowItemProps.
  */
-export type BarCommand = BarCommandBase & ({ priority?: number; pinned?: undefined } | { pinned: true; priority?: undefined });
+export type BarCommand = BarCommandBase &
+	({ priority?: number; pinned?: undefined } | { pinned: true; priority?: undefined });
 
 /** A tab in an OverflowTabList */
 export interface BarTab {

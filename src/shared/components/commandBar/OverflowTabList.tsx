@@ -50,14 +50,29 @@ const useStyles = makeStyles({
 	},
 });
 
-function MoreTabs({ tabs, onTabSelect, size }: { tabs: BarTab[]; onTabSelect: (value: string) => void; size: TabListProps["size"] }) {
+function MoreTabs({
+	tabs,
+	onTabSelect,
+	size,
+}: {
+	tabs: BarTab[];
+	onTabSelect: (value: string) => void;
+	size: TabListProps["size"];
+}) {
 	const { ref, isOverflowing, overflowCount } = useOverflowMenu<HTMLButtonElement>();
 	const { itemVisibility } = useOverflowVisibility();
 	if (!isOverflowing) return null;
 	return (
 		<Menu>
 			<MenuTrigger disableButtonEnhancement>
-				<Button ref={ref} appearance="transparent" size={size} icon={<MoreIcon />} role="tab" aria-label={`More tabs (${overflowCount})`}>
+				<Button
+					ref={ref}
+					appearance="transparent"
+					size={size}
+					icon={<MoreIcon />}
+					role="tab"
+					aria-label={`More tabs (${overflowCount})`}
+				>
 					More
 				</Button>
 			</MenuTrigger>
@@ -68,7 +83,11 @@ function MoreTabs({ tabs, onTabSelect, size }: { tabs: BarTab[]; onTabSelect: (v
 						.map((t) => {
 							const Icon = t.icon;
 							return (
-								<MenuItem key={t.value} icon={Icon ? <Icon /> : undefined} onClick={() => onTabSelect(t.value)}>
+								<MenuItem
+									key={t.value}
+									icon={Icon ? <Icon /> : undefined}
+									onClick={() => onTabSelect(t.value)}
+								>
 									{t.label}
 								</MenuItem>
 							);
@@ -79,7 +98,16 @@ function MoreTabs({ tabs, onTabSelect, size }: { tabs: BarTab[]; onTabSelect: (v
 	);
 }
 
-export function OverflowTabList({ ariaLabel, tabs, selectedValue, onTabSelect, size = "medium", appearance, padding, className }: OverflowTabListProps) {
+export function OverflowTabList({
+	ariaLabel,
+	tabs,
+	selectedValue,
+	onTabSelect,
+	size = "medium",
+	appearance,
+	padding,
+	className,
+}: OverflowTabListProps) {
 	const styles = useStyles();
 	return (
 		<Overflow minimumVisible={1} padding={padding}>
@@ -94,7 +122,11 @@ export function OverflowTabList({ ariaLabel, tabs, selectedValue, onTabSelect, s
 				{tabs.map((t) => {
 					const Icon = t.icon;
 					return (
-						<OverflowItem key={t.value} id={t.value} priority={t.value === selectedValue ? SELECTED_PRIORITY : TAB_PRIORITY}>
+						<OverflowItem
+							key={t.value}
+							id={t.value}
+							priority={t.value === selectedValue ? SELECTED_PRIORITY : TAB_PRIORITY}
+						>
 							<Tab value={t.value} icon={Icon ? <Icon /> : undefined}>
 								{t.label}
 								{t.content}

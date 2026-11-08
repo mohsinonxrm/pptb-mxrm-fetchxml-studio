@@ -12,19 +12,38 @@ import type { BarTab } from "./types";
 const PADDING = 10;
 const fits = (px: number) => PADDING + px;
 
-const tabs: BarTab[] = ["FetchXML", "LayoutXML", "Results", "Advisories", "Code"].map((label) => ({ value: label.toLowerCase(), label }));
+const tabs: BarTab[] = ["FetchXML", "LayoutXML", "Results", "Advisories", "Code"].map((label) => ({
+	value: label.toLowerCase(),
+	label,
+}));
 const labels = tabs.map((t) => t.label);
 
-const renderTabs = (selectedValue: string, onTabSelect: OverflowTabListProps["onTabSelect"] = () => {}) =>
-	render(createElement(OverflowTabList, { ariaLabel: "Query views", tabs, selectedValue, onTabSelect }));
+const renderTabs = (
+	selectedValue: string,
+	onTabSelect: OverflowTabListProps["onTabSelect"] = () => {},
+) =>
+	render(
+		createElement(OverflowTabList, {
+			ariaLabel: "Query views",
+			tabs,
+			selectedValue,
+			onTabSelect,
+		}),
+	);
 
 const tabList = () => document.querySelector<HTMLElement>('[role="tablist"]');
 // A Tab repeats its text in a hidden span that reserves the selected (bold) width, so read the content slot
-const tab = (label: string) => [...(tabList()?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])].find((t) => t.querySelector(".fui-Tab__content")?.textContent?.trim() === label);
-const overflowed = (element: Element | undefined | null) => !!element?.closest("[data-overflowing]");
+const tab = (label: string) =>
+	[...(tabList()?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])].find(
+		(t) => t.querySelector(".fui-Tab__content")?.textContent?.trim() === label,
+	);
+const overflowed = (element: Element | undefined | null) =>
+	!!element?.closest("[data-overflowing]");
 const visibleTabs = () => labels.filter((l) => !overflowed(tab(l)));
 const more = () => tabList()?.querySelector<HTMLButtonElement>('button[aria-label^="More tabs"]');
-const menuItems = () => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
+const menuItems = () => [
+	...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
+];
 
 beforeEach(() => {
 	vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -65,7 +84,11 @@ describe("OverflowTabList", () => {
 		expect(moreButton?.getAttribute("role")).toBe("tab");
 
 		await click(moreButton);
-		expect(menuItems().map((i) => i.textContent?.trim())).toEqual(["Results", "Advisories", "Code"]);
+		expect(menuItems().map((i) => i.textContent?.trim())).toEqual([
+			"Results",
+			"Advisories",
+			"Code",
+		]);
 	});
 
 	it("selects a tab chosen from More, which then shows on the row", async () => {

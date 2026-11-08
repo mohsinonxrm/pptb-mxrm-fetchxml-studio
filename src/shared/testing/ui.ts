@@ -47,7 +47,14 @@ class RecordingResizeObserver {
 	fire(): void {
 		if (!this.targets.size) return;
 		const entries = [...this.targets].map(
-			(target) => ({ target, contentRect: target.getBoundingClientRect(), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }) as unknown as ResizeObserverEntry,
+			(target) =>
+				({
+					target,
+					contentRect: target.getBoundingClientRect(),
+					borderBoxSize: [],
+					contentBoxSize: [],
+					devicePixelContentBoxSize: [],
+				}) as unknown as ResizeObserverEntry,
 		);
 		this.callback(entries, this as unknown as ResizeObserver);
 	}
@@ -60,7 +67,8 @@ class RecordingResizeObserver {
  */
 function installResizeObserver(): void {
 	const win = window as unknown as { ResizeObserver?: unknown };
-	if (win.ResizeObserver !== RecordingResizeObserver) win.ResizeObserver = RecordingResizeObserver;
+	if (win.ResizeObserver !== RecordingResizeObserver)
+		win.ResizeObserver = RecordingResizeObserver;
 }
 
 /** Renders the element inside a light FluentProvider; a second call re-renders the same root */
@@ -122,7 +130,10 @@ let restoreWidths: (() => void) | null = null;
  * Call it before render so the first layout uses the widths. `resize` changes widths and fires every
  * recorded ResizeObserver inside act, as a real resize would. cleanup restores the getters.
  */
-export function stubOverflowWidths(initial: OverflowWidths): { resize: (next: Partial<OverflowWidths>) => Promise<void>; restore: () => void } {
+export function stubOverflowWidths(initial: OverflowWidths): {
+	resize: (next: Partial<OverflowWidths>) => Promise<void>;
+	restore: () => void;
+} {
 	restoreWidths?.();
 	installResizeObserver();
 	const widths: OverflowWidths = { ...initial };
@@ -133,8 +144,10 @@ export function stubOverflowWidths(initial: OverflowWidths): { resize: (next: Pa
 	};
 	// jsdom's own getters (offsetWidth on HTMLElement, clientWidth on Element)
 	const fallback = {
-		offsetWidth: own.offsetWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "offsetWidth"),
-		clientWidth: own.clientWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth"),
+		offsetWidth:
+			own.offsetWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "offsetWidth"),
+		clientWidth:
+			own.clientWidth ?? Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth"),
 	};
 	const isContainer = (element: Element | null) => !!element?.classList.contains("fui-Overflow");
 	const measure = (element: HTMLElement, which: "offsetWidth" | "clientWidth"): number => {
