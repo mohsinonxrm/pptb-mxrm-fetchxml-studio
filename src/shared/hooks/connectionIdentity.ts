@@ -37,7 +37,10 @@ export interface ConnectionScope {
  * The scope after reading the connection key. The first read only records the key: the tool
  * started on that connection, so nothing is stale. Any later different key is a new session.
  */
-export function nextConnectionScope(scope: ConnectionScope, key: string | undefined): { scope: ConnectionScope; changed: boolean } {
+export function nextConnectionScope(
+	scope: ConnectionScope,
+	key: string | undefined,
+): { scope: ConnectionScope; changed: boolean } {
 	if (key === undefined || key === scope.key) return { scope, changed: false };
 	if (scope.key === undefined) return { scope: { ...scope, key }, changed: false };
 	return { scope: { key, session: scope.session + 1 }, changed: true };

@@ -46,22 +46,30 @@ describe("isUnmodifiedView (#93)", () => {
 	it("matches an unmodified loaded view, so it runs by its ID", () => {
 		const view = loadView(STORED_VIEW_FETCHXML);
 		// AppShell executes generateFetchXml(builder.fetchQuery)
-		expect(isUnmodifiedView(generateFetchXml(view.fetchNode), view.originalFetchXml)).toBe(true);
+		expect(isUnmodifiedView(generateFetchXml(view.fetchNode), view.originalFetchXml)).toBe(
+			true,
+		);
 	});
 
 	it("never matched the stored text (the bug): the generator drops its defaults", () => {
 		const view = loadView(STORED_VIEW_FETCHXML);
-		expect(isUnmodifiedView(generateFetchXml(view.fetchNode), STORED_VIEW_FETCHXML)).toBe(false);
+		expect(isUnmodifiedView(generateFetchXml(view.fetchNode), STORED_VIEW_FETCHXML)).toBe(
+			false,
+		);
 	});
 
 	it("doesn't match once the query changes", () => {
 		const view = loadView(STORED_VIEW_FETCHXML);
 		const modified = loadView(STORED_VIEW_FETCHXML.replace('value="0"', 'value="1"'));
-		expect(isUnmodifiedView(generateFetchXml(modified.fetchNode), view.originalFetchXml)).toBe(false);
+		expect(isUnmodifiedView(generateFetchXml(modified.fetchNode), view.originalFetchXml)).toBe(
+			false,
+		);
 	});
 
 	it("tells whitespace inside values apart", () => {
-		expect(isUnmodifiedView('<condition value="a b" />', '<condition value="ab" />')).toBe(false);
+		expect(isUnmodifiedView('<condition value="a b" />', '<condition value="ab" />')).toBe(
+			false,
+		);
 		expect(isUnmodifiedView("<fetch />\n", "<fetch />")).toBe(true);
 	});
 });
@@ -136,7 +144,9 @@ describe("saving (#93)", () => {
 
 describe("getViewLoadNotice (#93)", () => {
 	it("says nothing when the view loads as-is", () => {
-		expect(getViewLoadNotice("Active Accounts", parseFetchXml(STORED_VIEW_FETCHXML))).toBeNull();
+		expect(
+			getViewLoadNotice("Active Accounts", parseFetchXml(STORED_VIEW_FETCHXML)),
+		).toBeNull();
 	});
 
 	it("reports a view whose FetchXML can't be parsed", () => {
@@ -179,25 +189,40 @@ describe("isSharedView and getViewSecondaryText (#142)", () => {
 	});
 
 	it("falls back to 'Shared with you' without the owner's name", () => {
-		expect(getViewSecondaryText({ type: "personal", ownerId: NANCY }, ME)).toBe("Shared with you");
+		expect(getViewSecondaryText({ type: "personal", ownerId: NANCY }, ME)).toBe(
+			"Shared with you",
+		);
 	});
 
 	it("names the query type, or the default public view, for system views", () => {
-		expect(getViewSecondaryText({ type: "system", queryType: 4, isDefault: true }, ME)).toBe("Quick find view");
-		expect(getViewSecondaryText({ type: "system", queryType: 0, isDefault: true }, ME)).toBe("Default view");
+		expect(getViewSecondaryText({ type: "system", queryType: 4, isDefault: true }, ME)).toBe(
+			"Quick find view",
+		);
+		expect(getViewSecondaryText({ type: "system", queryType: 0, isDefault: true }, ME)).toBe(
+			"Default view",
+		);
 		expect(getViewSecondaryText({ type: "system", queryType: 0 }, ME)).toBeUndefined();
 		expect(getViewSecondaryText({ type: "system", queryType: 99 }, ME)).toBe("Query type 99");
 	});
 
 	it("combines the owner and the query type", () => {
-		const view = { type: "personal" as const, ownerId: NANCY, ownerName: "Nancy", queryType: 1 };
+		const view = {
+			type: "personal" as const,
+			ownerId: NANCY,
+			ownerName: "Nancy",
+			queryType: 1,
+		};
 		expect(getViewSecondaryText(view, ME)).toBe("Shared by Nancy · Advanced find view");
 	});
 });
 
 describe("hasWriteAccess (#142)", () => {
 	it("reads the AccessRights string RetrievePrincipalAccess returns (verified live)", () => {
-		expect(hasWriteAccess("ReadAccess, WriteAccess, CreateAccess, DeleteAccess, ShareAccess, AssignAccess")).toBe(true);
+		expect(
+			hasWriteAccess(
+				"ReadAccess, WriteAccess, CreateAccess, DeleteAccess, ShareAccess, AssignAccess",
+			),
+		).toBe(true);
 		expect(hasWriteAccess("ReadAccess")).toBe(false);
 		expect(hasWriteAccess("None")).toBe(false);
 	});
@@ -242,13 +267,17 @@ describe("quick find test value (#142)", () => {
 		expect(countQuickFindPlaceholders(QUICK_FIND_FETCHXML)).toBe(3);
 		expect(countQuickFindPlaceholders(STORED_VIEW_FETCHXML)).toBe(0);
 		expect(
-			countQuickFindPlaceholders(`<condition attribute="x" operator="in"><value>{0}</value><value>a</value></condition>`),
+			countQuickFindPlaceholders(
+				`<condition attribute="x" operator="in"><value>{0}</value><value>a</value></condition>`,
+			),
 		).toBe(1);
 	});
 
 	it("ignores {0} outside condition values", () => {
 		expect(
-			countQuickFindPlaceholders(`<fetch><entity name="account"><attribute name="name" alias="{0}" /></entity></fetch>`),
+			countQuickFindPlaceholders(
+				`<fetch><entity name="account"><attribute name="name" alias="{0}" /></entity></fetch>`,
+			),
 		).toBe(0);
 	});
 
@@ -273,21 +302,32 @@ describe("quick find test value (#142)", () => {
 		const run = applyQuickFindValue(QUICK_FIND_FETCHXML, `A&B "x" 'y' <z>%`);
 		expect(run).toContain(`value="A&amp;B &quot;x&quot; 'y' &lt;z&gt;%"`);
 		expect(run).toContain(`value='A&amp;B "x" &apos;y&apos; &lt;z&gt;%'`);
-		const values = applyQuickFindValue(`<condition attribute="x" operator="in"><value>{0}</value></condition>`, `a<b"`);
-		expect(values).toBe(`<condition attribute="x" operator="in"><value>a&lt;b"</value></condition>`);
-		expect(new DOMParser().parseFromString(run, "application/xml").querySelector("parsererror")).toBeNull();
+		const values = applyQuickFindValue(
+			`<condition attribute="x" operator="in"><value>{0}</value></condition>`,
+			`a<b"`,
+		);
+		expect(values).toBe(
+			`<condition attribute="x" operator="in"><value>a&lt;b"</value></condition>`,
+		);
+		expect(
+			new DOMParser().parseFromString(run, "application/xml").querySelector("parsererror"),
+		).toBeNull();
 	});
 
 	it("leaves the generated tree FetchXML of a loaded quick find view runnable", () => {
 		const view = loadView(QUICK_FIND_FETCHXML);
 		expect(countQuickFindPlaceholders(view.originalFetchXml)).toBe(3);
-		expect(countQuickFindPlaceholders(applyQuickFindValue(view.originalFetchXml, "contoso%"))).toBe(0);
+		expect(
+			countQuickFindPlaceholders(applyQuickFindValue(view.originalFetchXml, "contoso%")),
+		).toBe(0);
 	});
 });
 
 describe("defaultViewsNotClearedMessage (#307)", () => {
 	it("names the view that stayed a default and adds Dataverse's error", () => {
-		const message = defaultViewsNotClearedMessage("FXS view", [{ id: "1", name: "All Territories", error: "No privilege." }]);
+		const message = defaultViewsNotClearedMessage("FXS view", [
+			{ id: "1", name: "All Territories", error: "No privilege." },
+		]);
 		expect(message).toBe(
 			`"FXS view" is saved as the default view, but "All Territories" is still marked as the default too. Set the default again in Power Apps (the entity's Views, then Set as default) to fix it. Details: No privilege.`,
 		);
@@ -303,12 +343,18 @@ describe("defaultViewsNotClearedMessage (#307)", () => {
 	});
 
 	it("says it couldn't check when the other defaults couldn't be read", () => {
-		const message = defaultViewsNotClearedMessage("FXS view", [{ id: "", name: "", error: "Network error." }]);
-		expect(message).toContain("couldn't check whether another view is still marked as the default too");
+		const message = defaultViewsNotClearedMessage("FXS view", [
+			{ id: "", name: "", error: "Network error." },
+		]);
+		expect(message).toContain(
+			"couldn't check whether another view is still marked as the default too",
+		);
 		expect(message).toContain("Details: Network error.");
 	});
 
 	it("names a view without a name by its ID", () => {
-		expect(defaultViewsNotClearedMessage("FXS view", [{ id: "abc", name: "", error: "E." }])).toContain('"abc" is still marked as the default too');
+		expect(
+			defaultViewsNotClearedMessage("FXS view", [{ id: "abc", name: "", error: "E." }]),
+		).toContain('"abc" is still marked as the default too');
 	});
 });

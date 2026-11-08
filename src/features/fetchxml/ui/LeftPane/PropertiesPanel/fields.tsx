@@ -7,7 +7,17 @@
  * - SpinButton for bounded integers; empty means "not set".
  */
 import type { ReactElement, ReactNode } from "react";
-import { Button, Checkbox, Field, InfoLabel, Label, Link, SpinButton, Text, type LabelProps } from "@fluentui/react-components";
+import {
+	Button,
+	Checkbox,
+	Field,
+	InfoLabel,
+	Label,
+	Link,
+	SpinButton,
+	Text,
+	type LabelProps,
+} from "@fluentui/react-components";
 import { useEditorStyles } from "./editorStyles";
 
 export type Content = string | ReactElement;
@@ -140,7 +150,8 @@ export function NumberField({
 	validation?: Validation;
 }) {
 	const outOfRange =
-		value !== undefined && ((min !== undefined && value < min) || (max !== undefined && value > max));
+		value !== undefined &&
+		((min !== undefined && value < min) || (max !== undefined && value > max));
 	const range: Validation = outOfRange
 		? {
 				state: rangeSeverity,
@@ -159,7 +170,8 @@ export function NumberField({
 				placeholder={placeholder}
 				disabled={disabled}
 				onChange={(_, data) => {
-					if (data.value !== undefined && data.value !== null) return onChange(data.value);
+					if (data.value !== undefined && data.value !== null)
+						return onChange(data.value);
 					const raw = (data.displayValue ?? "").trim();
 					if (raw === "") return onChange(undefined);
 					const parsed = Number(raw);

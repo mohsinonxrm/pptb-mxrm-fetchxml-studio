@@ -15,7 +15,12 @@
 /** Operators whose value is a pattern the user writes in full */
 export const LIKE_OPERATORS: ReadonlySet<string> = new Set(["like", "not-like"]);
 /** Operators that add the wildcard themselves (begins-with adds a trailing %, ends-with a leading %) */
-export const AFFIX_OPERATORS: ReadonlySet<string> = new Set(["begins-with", "not-begin-with", "ends-with", "not-end-with"]);
+export const AFFIX_OPERATORS: ReadonlySet<string> = new Set([
+	"begins-with",
+	"not-begin-with",
+	"ends-with",
+	"not-end-with",
+]);
 
 /** How a like / not-like value matches: %text%, text%, %text, or the pattern as written */
 export type LikeMatch = "contains" | "begins" | "ends" | "custom";
@@ -49,7 +54,10 @@ export const hasWildcard = (text: string): boolean => WILDCARD.test(text);
 const hasActiveWildcard = (pattern: string): boolean => WILDCARD.test(pattern.replace(ESCAPED, ""));
 
 /** The value to store for the operator. */
-export function buildWildcardValue(operator: string, { match, text, literal }: WildcardValue): string {
+export function buildWildcardValue(
+	operator: string,
+	{ match, text, literal }: WildcardValue,
+): string {
 	if (LIKE_OPERATORS.has(operator) && match === "custom") return text;
 	const t = literal ? escapeWildcards(text) : text;
 	if (!LIKE_OPERATORS.has(operator)) return t;
@@ -64,7 +72,12 @@ export function buildWildcardValue(operator: string, { match, text, literal }: W
  * anything else opens as Custom pattern. Bracket escapes in the text turn Match literally on.
  */
 export function parseWildcardValue(operator: string, value: unknown): WildcardValue {
-	const raw = typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
+	const raw =
+		typeof value === "string"
+			? value
+			: value === undefined || value === null
+				? ""
+				: String(value);
 	const plain = (text: string) => !hasActiveWildcard(text);
 	const read = (text: string, match: LikeMatch): WildcardValue => {
 		const literal = text !== unescapeWildcards(text);
@@ -78,26 +91,44 @@ export function parseWildcardValue(operator: string, value: unknown): WildcardVa
 	const leading = raw.startsWith("%");
 	// A trailing % that isn't the end of a [%] escape
 	const trailing = raw.endsWith("%") && !raw.endsWith("[%]");
-	if (leading && trailing && raw.length > 2 && plain(raw.slice(1, -1))) return read(raw.slice(1, -1), "contains");
-	if (trailing && !leading && raw.length > 1 && plain(raw.slice(0, -1))) return read(raw.slice(0, -1), "begins");
-	if (leading && !trailing && raw.length > 1 && plain(raw.slice(1))) return read(raw.slice(1), "ends");
+	if (leading && trailing && raw.length > 2 && plain(raw.slice(1, -1)))
+		return read(raw.slice(1, -1), "contains");
+	if (trailing && !leading && raw.length > 1 && plain(raw.slice(0, -1)))
+		return read(raw.slice(0, -1), "begins");
+	if (leading && !trailing && raw.length > 1 && plain(raw.slice(1)))
+		return read(raw.slice(1), "ends");
 	return { match: "custom", text: raw, literal: false };
 }
 
 /** Whether the helper applies to the operator */
-export const isWildcardOperator = (operator: string): boolean => LIKE_OPERATORS.has(operator) || AFFIX_OPERATORS.has(operator);
+export const isWildcardOperator = (operator: string): boolean =>
+	LIKE_OPERATORS.has(operator) || AFFIX_OPERATORS.has(operator);
 
 /**
  * The value after an operator change between wildcard operators: the text and Match literally are
  * kept, and the wildcards follow the operator (like "%abc%" → begins-with "abc", begins-with "abc"
  * → like "abc%"). A custom pattern is kept as written. Other operator changes keep the value.
  */
-export function convertWildcardValue(fromOperator: string, toOperator: string, value: unknown): unknown {
-	if (!isWildcardOperator(fromOperator) || !isWildcardOperator(toOperator) || typeof value !== "string" || value === "") return value;
+export function convertWildcardValue(
+	fromOperator: string,
+	toOperator: string,
+	value: unknown,
+): unknown {
+	if (
+		!isWildcardOperator(fromOperator) ||
+		!isWildcardOperator(toOperator) ||
+		typeof value !== "string" ||
+		value === ""
+	)
+		return value;
 	const parsed = parseWildcardValue(fromOperator, value);
 	if (LIKE_OPERATORS.has(fromOperator) && parsed.match === "custom") return value;
 	// begins-with / ends-with → like: the wildcard the operator added becomes part of the pattern
 	const fromEnds = fromOperator === "ends-with" || fromOperator === "not-end-with";
-	const match: LikeMatch = LIKE_OPERATORS.has(fromOperator) ? parsed.match : fromEnds ? "ends" : "begins";
+	const match: LikeMatch = LIKE_OPERATORS.has(fromOperator)
+		? parsed.match
+		: fromEnds
+			? "ends"
+			: "begins";
 	return buildWildcardValue(toOperator, { ...parsed, match });
 }
