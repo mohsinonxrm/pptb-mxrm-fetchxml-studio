@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Changed
 
+- **README: the requirements say 1.5 and later need PPTB 1.2.7** (they said 1.5 only), found by the Verified readiness check (#84).
+
 - **README: screenshots, a Quick start and an AI assistance note (#84).** Three screenshots replace the out-of-date ASCII interface overview. A Quick start and a short **AI assistance** section follow the [AI-assisted development policy](https://docs.powerplatformtoolbox.com/policies/ai-assisted-development). The images aren't in the npm package.
 
 - **Close dialogs say how to undo too (#69).** Win / Lose opportunity, Resolve case, Fulfill / Cancel order, Cancel case and the invoice actions say "To undo, run Activate…". Win / Close quote says there's no undo. Activate on an Entity with a Close menu says to undo with Close.
@@ -90,6 +92,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repo hygiene, part of #205.** Removed unused files (`ColumnConfigDialog.tsx`, `XmlTextArea.tsx`, `editors/optionalValue.ts`, `src/assets/react.svg`) and exports (`LoadingCellRenderer`, `ValueNode`). `engines` is now `^22.22.2 || ^24.15.0 || >=26`, the Node versions jsdom 30 supports. The Prettier reformat and CI format check follow after 1.5.0 ships.
 - **CI and repo:** CI fails on high or critical runtime vulnerabilities (#72); grouped weekly Dependabot updates into `dev` with a 14-day cooldown (#76); `CONTRIBUTING.md` and the PR template (#80); README CI and license badges.
 - **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
+- **App flow tests wait longer under load.** A wait still returns as soon as its condition holds, but the limits are now 15 s per wait and 2 minutes per test (were 4 s and 1 minute), after 8 flow tests failed once in a busy full run.
+
+## [1.5.0] - 2026-11-07
+
+FetchXML Studio 1.5 moves to Power Platform ToolBox 1.2.7 and its host APIs, makes every change to Dataverse name its target and its way back (the marketplace policy for tools that change data), and adds the Query Advisor, Activate / Deactivate and saved-view follow-ups. It was tested through 19 betas; their sections below have the detail.
+
+### ⚠️ Requires Power Platform ToolBox 1.2.7
+
+- **PPTB 1.2.7 or later is required (#82):** `minAPI` 1.2.7 and the connections model. 1.4.x stays available for PPTB 1.2.2 to 1.2.6 and gets critical and security fixes for 30 days (`SECURITY.md`).
+
+### ✨ Added
+
+- **Query Advisor (#97):** checks the query as you build it against documented anti-patterns and limits, with links to the docs.
+- **Activate and Deactivate (#143):** planned from the entity's state model, with the status reason chosen from metadata.
+- **Saved views (#142, #93):**
+  - views of every query type load, labelled;
+  - personal views shared with you show who shared them;
+  - Save view can set a public view as the default (#307: the previous default is cleared);
+  - a view you can't overwrite offers **Save a copy…**.
+- **Dataverse errors explain what to do (#96),** with a throttling back-off, and pages over the ToolBox's 16 MB response limit are fetched again in smaller pieces (#68).
+- **Host integration (#70, #66):**
+  - the ToolBox warns before the tool closes while work is running;
+  - record links open in the connection's browser profile;
+  - changing the tool's connection in place resets everything that came from the old environment.
+- **Tree and scope (#24, #25):** right-click a tree row to add nodes; a collapsible query scope section; the publisher and solution selection is remembered per environment.
+- **Docs-driven helpers (#98):** a wildcard helper for `like` values (with **Match literally**), the total record count, and a record picker for the hierarchy operators.
+
+### 🔧 Changed
+
+- **Every confirmation names the environment, the entity and the scope (#69),** asks you to type the entity name on Production, for more than 100 records or when the total isn't known, and says how to undo the change or that it can't be undone. README: "What this tool changes".
+- **Sentence case and the single "…" across the UI;** fewer startup calls and a quiet console (#71).
+- **README badges** are SVG files in the repo, so they show in the ToolBox.
+
+### 🔧 Fixed
+
+- **From the 1.4.x hotfixes:**
+  - picking a condition attribute no longer crashes the tool (#217);
+  - "Delete all" deletes what the query on screen matches (#174);
+  - Bulk Delete jobs no longer fail with 0x80048d19 (#224);
+  - bulk deleting more than about 530 selected records works (#177);
+  - saved views keep lookup display names and exact values (#181);
+  - a failed relationship load no longer crashes the tool.
+- **pac CLI snippets** quote FetchXML safely for bash and PowerShell (#166, #196).
+- **Record actions** use the current selection after the results refresh (#158). Deletes use the entity's metadata entity set name (#61). No write resumes after the connection changes (#175).
+- **Paging:** the first page gets the same recovery as later pages (#183). Cross-apply columns stay filled when filtered, and two cross-apply queries Dataverse rejects are flagged before they run.
+
+### 🔒 Security
+
+- **DOMPurify 3.4.17 in the editor** (the advisories of 2026-10-22).
+- **monaco-editor 0.57**, and `uuid` pinned for exceljs (GHSA-w5hq-g745-h8pq).
+- **CI fails on high or critical runtime vulnerabilities.**
+
+### 🏗️ Technical
+
+- **Release branches, betas from `release/X.Y`, a stabilizing checklist (#161),** a hardened `release.yml` with npm provenance (#188), release checks for the version, CHANGELOG, badges and icon (#270), and the release build checked in PPTB before every tag.
+
+### Known issue
+
+- **In the PPTB VS Code extension the tool may open as a blank tab.** 1.5 loads its assets from the site root (`src="/assets/…"`), which works in PPTB Desktop. The fix, relative asset URLs (#173), ships in 1.6.0.
 - **App notification provider, not used yet (#277).** `NotifyProvider`, `useNotify` and `useCopy` (`src/shared/feedback/`) are added with tests: one Toaster at the bottom end, timeouts by intent, an optional action and de-duplication. Nothing calls them yet; the callers move over in the next change.
 
 ## [1.5.0-beta.19] - 2026-11-06
