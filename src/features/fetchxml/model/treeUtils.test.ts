@@ -25,10 +25,14 @@ describe("getQueryEntities", () => {
 
 	it("changes the key when root and link are swapped", () => {
 		const a = getQueryEntities(
-			parseFetchXml(`<fetch><entity name="contact"><link-entity name="account" from="accountid" to="parentcustomerid" /></entity></fetch>`).fetchNode!,
+			parseFetchXml(
+				`<fetch><entity name="contact"><link-entity name="account" from="accountid" to="parentcustomerid" /></entity></fetch>`,
+			).fetchNode!,
 		);
 		const b = getQueryEntities(
-			parseFetchXml(`<fetch><entity name="account"><link-entity name="contact" from="parentcustomerid" to="accountid" /></entity></fetch>`).fetchNode!,
+			parseFetchXml(
+				`<fetch><entity name="account"><link-entity name="contact" from="parentcustomerid" to="accountid" /></entity></fetch>`,
+			).fetchNode!,
 		);
 		expect(a.key).not.toBe(b.key);
 		expect(a.rootEntityName).toBe("contact");

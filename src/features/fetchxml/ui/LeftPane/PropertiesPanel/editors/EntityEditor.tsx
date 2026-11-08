@@ -40,7 +40,12 @@ export function EntityEditor({ node, onUpdate }: EntityEditorProps) {
 				<InfoField
 					label="Entity"
 					hint="Change it with the Entity picker above the tree."
-					info={<Info text="The logical name of the entity the query is based on." href={DOCS.entity} />}
+					info={
+						<Info
+							text="The logical name of the entity the query is based on."
+							href={DOCS.entity}
+						/>
+					}
 				>
 					<Text className={styles.readOnly}>
 						{node.name}
@@ -66,7 +71,9 @@ export function EntityEditor({ node, onUpdate }: EntityEditorProps) {
 							<InfoCheckbox
 								label="Enable prefiltering"
 								checked={!!node.enablePrefiltering}
-								onChange={(checked) => onUpdate({ enablePrefiltering: checked ? true : undefined })}
+								onChange={(checked) =>
+									onUpdate({ enablePrefiltering: checked ? true : undefined })
+								}
 								info={
 									<Info
 										text="For SQL Server Reporting Services (Fetch-based) reports: lets people filter the report's records with Advanced Find before it runs. Dataverse ignores these attributes when the query runs here."
@@ -79,16 +86,29 @@ export function EntityEditor({ node, onUpdate }: EntityEditorProps) {
 									label="Parameter name"
 									validation={
 										parameterName && !parameterName.startsWith("CRM_")
-											? { state: "warning", message: "Start the name with CRM_ so the report hides the parameter." }
+											? {
+													state: "warning",
+													message:
+														"Start the name with CRM_ so the report hides the parameter.",
+												}
 											: undefined
 									}
-									info={<Info text="The report parameter that receives the prefilter." href={DOCS.reportPrefiltering} />}
+									info={
+										<Info
+											text="The report parameter that receives the prefilter."
+											href={DOCS.reportPrefiltering}
+										/>
+									}
 								>
 									<Input
 										className={styles.mono}
 										value={parameterName}
 										placeholder="CRM_FilteredAccount"
-										onChange={(_, data) => onUpdate({ prefilterParameterName: data.value || undefined })}
+										onChange={(_, data) =>
+											onUpdate({
+												prefilterParameterName: data.value || undefined,
+											})
+										}
 									/>
 								</InfoField>
 							)}

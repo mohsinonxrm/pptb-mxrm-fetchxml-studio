@@ -87,7 +87,9 @@ export function DateTimeInputPicker({
 	// Sync the wall clock with the value; nothing is written back here, so loaded values stay as written
 	const { behavior, dateOnly, dateOperator } = ctx;
 	useEffect(() => {
-		const parsed = value ? parseConditionDate(value, { behavior, dateOnly, dateOperator, timeZone }) : undefined;
+		const parsed = value
+			? parseConditionDate(value, { behavior, dateOnly, dateOperator, timeZone })
+			: undefined;
 		setWall(parsed);
 		setTimePickerValue(parsed && !dateOnly ? formatDateToTimeString(pickerTime(parsed)) : "");
 	}, [value, behavior, dateOnly, dateOperator, timeZone]);
@@ -120,7 +122,7 @@ export function DateTimeInputPicker({
 	// Handle time selection (only when the time counts)
 	const handleTimeChange = (
 		_ev: unknown,
-		data: { selectedTime: Date | null; selectedTimeText?: string }
+		data: { selectedTime: Date | null; selectedTimeText?: string },
 	) => {
 		setTimePickerValue(data.selectedTimeText ?? "");
 		if (wall && data.selectedTime) write(withPickedTime(wall, data.selectedTime));

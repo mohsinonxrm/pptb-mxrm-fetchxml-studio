@@ -5,7 +5,21 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toEntityStateModel } from "../../model/recordState";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	deferred,
+	dialogInput,
+	dialogText,
+	flush,
+	installHost,
+	isDisabled,
+	removeHost,
+	render,
+	scopeField,
+	typeInto,
+} from "../../../../shared/testing/ui";
 import type { BatchDeleteResult } from "../../api/pptbClient";
 
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
@@ -31,7 +45,8 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 // Imported after the mock is declared (vi.mock is hoisted, so this order is for readers)
 const { SetStateDialog } = await import("./SetStateDialog");
 
-const ids = (n: number) => Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
+const ids = (n: number) =>
+	Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
 
 beforeEach(() => {
 	vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -43,7 +58,8 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const done = (n: number): BatchDeleteResult => ({ succeeded: n, failed: 0, errors: [] }) as unknown as BatchDeleteResult;
+const done = (n: number): BatchDeleteResult =>
+	({ succeeded: n, failed: 0, errors: [] }) as unknown as BatchDeleteResult;
 
 describe("Activate / Deactivate dialog", () => {
 	it("Deactivate names the environment and scope, says Activate undoes it, and runs once with Inactive", async () => {

@@ -21,12 +21,20 @@ beforeEach(() => {
 			LogicalName: logicalName,
 			EntitySetName: "new_admin_settings_entities",
 		})),
-		executeBatch: vi.fn(async (requests: unknown[]) => requests.map(() => ({ status: 204, headers: {} }))),
+		executeBatch: vi.fn(async (requests: unknown[]) =>
+			requests.map(() => ({ status: 204, headers: {} })),
+		),
 		delete: vi.fn().mockResolvedValue(undefined),
 	};
 	(window as unknown as { dataverseAPI: Api }).dataverseAPI = api;
 	(window as unknown as { toolboxAPI: unknown }).toolboxAPI = {
-		connections: { getConnection: async () => ({ id: "c1", url: "https://org.crm.dynamics.com", name: "Org" }) },
+		connections: {
+			getConnection: async () => ({
+				id: "c1",
+				url: "https://org.crm.dynamics.com",
+				name: "Org",
+			}),
+		},
 	};
 });
 
@@ -40,12 +48,20 @@ afterEach(() => {
 describe("record delete (#61)", () => {
 	it("deletes a record by its metadata entity set through executeBatch", async () => {
 		await deleteRecord("adminsettingsentity", ID1);
-		expect(api.executeBatch).toHaveBeenCalledWith([{ method: "DELETE", url: `new_admin_settings_entities(${ID1})` }]);
+		expect(api.executeBatch).toHaveBeenCalledWith([
+			{ method: "DELETE", url: `new_admin_settings_entities(${ID1})` },
+		]);
 		expect(api.delete).not.toHaveBeenCalled();
 	});
 
 	it("throws the Dataverse error of a failed single delete", async () => {
-		api.executeBatch.mockResolvedValue([{ status: 403, headers: {}, body: { error: { code: "0x80040220", message: "No privilege" } } }]);
+		api.executeBatch.mockResolvedValue([
+			{
+				status: 403,
+				headers: {},
+				body: { error: { code: "0x80040220", message: "No privilege" } },
+			},
+		]);
 		await expect(deleteRecord("adminsettingsentity", ID1)).rejects.toThrow("No privilege");
 	});
 

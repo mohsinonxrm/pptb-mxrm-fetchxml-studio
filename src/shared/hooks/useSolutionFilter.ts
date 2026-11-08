@@ -97,7 +97,11 @@ export function useSolutionFilter() {
 				setEntitiesLoading(true);
 				setEntitiesError(null);
 
-				debugLog("entityFilters", "[useSolutionFilter] Loading entities for solutions:", selectedSolutionIds);
+				debugLog(
+					"entityFilters",
+					"[useSolutionFilter] Loading entities for solutions:",
+					selectedSolutionIds,
+				);
 
 				// Get solution components (entities only) - cached per solution
 				const components = await getSolutionComponents(selectedSolutionIds);
@@ -109,13 +113,17 @@ export function useSolutionFilter() {
 
 				// Extract unique entity logical names
 				const logicalNames = Array.from(
-					new Set(components.map((c) => c.msdyn_name).filter(Boolean))
+					new Set(components.map((c) => c.msdyn_name).filter(Boolean)),
 				);
 
-				debugLog("entityFilters", "[useSolutionFilter] Unique entity logical names extracted:", {
-					count: logicalNames.length,
-					names: logicalNames,
-				});
+				debugLog(
+					"entityFilters",
+					"[useSolutionFilter] Unique entity logical names extracted:",
+					{
+						count: logicalNames.length,
+						names: logicalNames,
+					},
+				);
 
 				// Filter from global cached metadata (instant, no API call)
 				const data = filterCachedEntitiesByNames(logicalNames);

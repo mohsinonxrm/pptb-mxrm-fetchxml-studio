@@ -143,7 +143,8 @@ export async function exportToExcelLocal(
 			(raw || !timeZone)
 		);
 	};
-	const withUtc = (header: string, col: string, raw: boolean) => (isUtcDateTime(col, raw) ? `${header} (UTC)` : header);
+	const withUtc = (header: string, col: string, raw: boolean) =>
+		isUtcDateTime(col, raw) ? `${header} (UTC)` : header;
 
 	const exportColumns: ExportColumn[] = [];
 	for (const col of columns) {
@@ -153,11 +154,23 @@ export async function exportToExcelLocal(
 
 		if (valueDisplayMode === "both" && hasFormattedValues(col)) {
 			// Add formatted column first, then raw column
-			exportColumns.push({ sourceCol: col, headerName: withUtc(headerName, col, false), isRawColumn: false });
-			exportColumns.push({ sourceCol: col, headerName: withUtc(`${headerName} (Raw)`, col, true), isRawColumn: true });
+			exportColumns.push({
+				sourceCol: col,
+				headerName: withUtc(headerName, col, false),
+				isRawColumn: false,
+			});
+			exportColumns.push({
+				sourceCol: col,
+				headerName: withUtc(`${headerName} (Raw)`, col, true),
+				isRawColumn: true,
+			});
 		} else {
 			// Just one column; in raw mode it holds raw values
-			exportColumns.push({ sourceCol: col, headerName: withUtc(headerName, col, valueDisplayMode === "raw"), isRawColumn: false });
+			exportColumns.push({
+				sourceCol: col,
+				headerName: withUtc(headerName, col, valueDisplayMode === "raw"),
+				isRawColumn: false,
+			});
 		}
 	}
 	/** Whether a column holds raw values: a (Raw) twin, or every column in raw mode */
@@ -215,10 +228,15 @@ export async function exportToExcelLocal(
 		if (typeof rawValue !== "string") return rawValue;
 		// Without the column's behaviour (its metadata didn't load), a converted value could be wrong
 		// for Time Zone Independent columns: the formatted text is what the grid shows
-		if (!raw && !attr?.DateTimeBehavior?.Value && formattedValue !== undefined) return String(formattedValue);
+		if (!raw && !attr?.DateTimeBehavior?.Value && formattedValue !== undefined)
+			return String(formattedValue);
 		const behavior = dateTimeBehavior(attr);
 		const dateFormat = attr?.Format === "DateOnly";
-		const wall = resultWallClock(rawValue, behavior, raw && behavior === "UserLocal" && !dateFormat ? UTC_TIME_ZONE : zone);
+		const wall = resultWallClock(
+			rawValue,
+			behavior,
+			raw && behavior === "UserLocal" && !dateFormat ? UTC_TIME_ZONE : zone,
+		);
 		if (!wall) return rawValue;
 		return wallClockToExcelDate(dateFormat ? { ...wall, hour: 0, minute: 0, second: 0 } : wall);
 	};
@@ -311,7 +329,8 @@ export async function exportToExcelLocal(
 
 			// Dates always need a format, or Excel shows a serial number
 			if (attr?.AttributeType === "DateTime" && cell.value instanceof Date) {
-				const dateOnly = dateTimeBehavior(attr) === "DateOnly" || attr.Format === "DateOnly";
+				const dateOnly =
+					dateTimeBehavior(attr) === "DateOnly" || attr.Format === "DateOnly";
 				cell.numFmt = dateOnly ? "yyyy-mm-dd" : "yyyy-mm-dd hh:mm:ss";
 				return;
 			}
@@ -325,7 +344,11 @@ export async function exportToExcelLocal(
 					const raw = record[ec.sourceCol];
 					if (typeof raw !== "number") break;
 					const precision = attr.PrecisionSource === 0 ? attr.Precision : undefined;
-					cell.numFmt = moneyNumberFormat(getFormattedValue(record, ec.sourceCol), raw, precision);
+					cell.numFmt = moneyNumberFormat(
+						getFormattedValue(record, ec.sourceCol),
+						raw,
+						precision,
+					);
 					break;
 				}
 				case "Decimal":

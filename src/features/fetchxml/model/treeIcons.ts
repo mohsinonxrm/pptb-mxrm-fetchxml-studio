@@ -87,7 +87,9 @@ export function attributeIcon(meta: AttributeMetadata | undefined): TreeIconName
 	if (!meta) return UNKNOWN_ATTRIBUTE_ICON;
 	if (meta.IsPrimaryId) return "Key";
 	// AttributeTypeName is the current property; AttributeType + "Type" covers metadata without it
-	const typeName = meta.AttributeTypeName?.Value ?? (meta.AttributeType ? `${meta.AttributeType}Type` : undefined);
+	const typeName =
+		meta.AttributeTypeName?.Value ??
+		(meta.AttributeType ? `${meta.AttributeType}Type` : undefined);
 	return (typeName && ATTRIBUTE_TYPE_ICONS[typeName]) || UNKNOWN_ATTRIBUTE_ICON;
 }
 

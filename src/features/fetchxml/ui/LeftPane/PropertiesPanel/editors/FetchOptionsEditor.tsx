@@ -32,7 +32,11 @@ import {
 import type { FetchNode } from "../../../../model/nodes";
 import type { RuleFinding } from "../../../../model/fetchxmlRules";
 import { getDataSourceIssue } from "../../../../model/attributeCapabilities";
-import { planAggregateOff, hasAggregateOffChanges, type AggregateOffPlan } from "../../../../model/aggregateToggle";
+import {
+	planAggregateOff,
+	hasAggregateOffChanges,
+	type AggregateOffPlan,
+} from "../../../../model/aggregateToggle";
 import { useBuilder } from "../../../../state/builderContext";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
@@ -54,7 +58,10 @@ const DOCUMENTED_HINTS: readonly { name: string; sql: string }[] = [
 	{ name: "MergeJoin", sql: "MERGE JOIN" },
 	{ name: "HashJoin", sql: "HASH JOIN" },
 	{ name: "NO_PERFORMANCE_SPOOL", sql: "NO_PERFORMANCE_SPOOL" },
-	{ name: "ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS", sql: "USE HINT ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS" },
+	{
+		name: "ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS",
+		sql: "USE HINT ENABLE_HIST_AMENDMENT_FOR_ASC_KEYS",
+	},
 ];
 
 interface FetchOptionsEditorProps {
@@ -73,7 +80,8 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 	const [aggregateOffPlan, setAggregateOffPlan] = useState<AggregateOffPlan | null>(null);
 	// The fetch node whose UTC offset has been shown: clearing the field keeps it until another query (#98)
 	const [utcOffsetShownFor, setUtcOffsetShownFor] = useState<string | null>(null);
-	if (options.utcOffset !== undefined && utcOffsetShownFor !== node.id) setUtcOffsetShownFor(node.id);
+	if (options.utcOffset !== undefined && utcOffsetShownFor !== node.id)
+		setUtcOffsetShownFor(node.id);
 	const showUtcOffset = options.utcOffset !== undefined || utcOffsetShownFor === node.id;
 
 	const handleRetrieveAllChange = (_: unknown, data: { checked: boolean }) => {
@@ -105,20 +113,27 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 	// top can't be combined with count, page or returntotalrecordcount (0x80040203)
 	const hasTop = options.top !== undefined;
 	const hasPaging =
-		options.count !== undefined || options.page !== undefined || options.returnTotalRecordCount === true;
+		options.count !== undefined ||
+		options.page !== undefined ||
+		options.returnTotalRecordCount === true;
 	const topConflict = findingFor(findings, "top");
 	const notWithTop = "Not available with Maximum rows (top).";
-	const notWithPaging = "Not available with paging (page size, page number or total record count).";
+	const notWithPaging =
+		"Not available with paging (page size, page number or total record count).";
 
 	const hints = options.queryHints ?? [];
 	const documentedNames = new Set(DOCUMENTED_HINTS.map((h) => h.name.toLowerCase()));
 	const otherHints = hints.filter((h) => !documentedNames.has(h.toLowerCase()));
 	const hasHint = (name: string) => hints.some((h) => h.toLowerCase() === name.toLowerCase());
 	const toggleHint = (name: string, on: boolean) => {
-		const next = on ? [...hints, name] : hints.filter((h) => h.toLowerCase() !== name.toLowerCase());
+		const next = on
+			? [...hints, name]
+			: hints.filter((h) => h.toLowerCase() !== name.toLowerCase());
 		onUpdate({ queryHints: next.length > 0 ? next : undefined });
 	};
-	const performanceSet = [options.latematerialize, hints.length > 0, options.noLock].filter(Boolean).length;
+	const performanceSet = [options.latematerialize, hints.length > 0, options.noLock].filter(
+		Boolean,
+	).length;
 
 	const retentionEnabled = entityInfo.metadata?.IsRetentionEnabled;
 	const dataSourceIssue = getDataSourceIssue(options.dataSource, {
@@ -138,14 +153,20 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 			<MetadataLoadWarning entityName={node.entity.name} />
 			<div className={styles.section}>
 				<SectionHeading>Execution</SectionHeading>
-				<TeachingPopover open={showTeachingPopover} onOpenChange={(_, data) => setShowTeachingPopover(data.open)}>
+				<TeachingPopover
+					open={showTeachingPopover}
+					onOpenChange={(_, data) => setShowTeachingPopover(data.open)}
+				>
 					<TeachingPopoverTrigger>
 						<Switch
 							checked={retrieveAllRecords}
 							onChange={handleRetrieveAllChange}
 							label={{
 								children: (_: unknown, props: LabelProps) => (
-									<InfoLabel {...props} info="Fetches every page, one after another. Use with care on large entities.">
+									<InfoLabel
+										{...props}
+										info="Fetches every page, one after another. Use with care on large entities."
+									>
 										Retrieve all records
 									</InfoLabel>
 								),
@@ -155,9 +176,16 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					<TeachingPopoverSurface>
 						<TeachingPopoverBody>
 							<TeachingPopoverTitle>Retrieve all records</TeachingPopoverTitle>
-							<div>Fetches all pages progressively. Use with caution on large datasets.</div>
+							<div>
+								Fetches all pages progressively. Use with caution on large datasets.
+							</div>
 						</TeachingPopoverBody>
-						<TeachingPopoverFooter primary={{ children: "Got it", onClick: () => setShowTeachingPopover(false) }} />
+						<TeachingPopoverFooter
+							primary={{
+								children: "Got it",
+								onClick: () => setShowTeachingPopover(false),
+							}}
+						/>
 					</TeachingPopoverSurface>
 				</TeachingPopover>
 			</div>
@@ -181,7 +209,12 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					checked={options.distinct === true}
 					onChange={flag("distinct")}
 					validation={findingFor(findings, "distinct")}
-					info={<Info text="Leaves out duplicate rows from the results." href={DOCS.distinctResults} />}
+					info={
+						<Info
+							text="Leaves out duplicate rows from the results."
+							href={DOCS.distinctResults}
+						/>
+					}
 				/>
 				<InfoCheckbox
 					label="Return total record count"
@@ -223,7 +256,12 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					hint={hasPaging && !hasTop ? notWithPaging : undefined}
 					validation={worst(topConflict, findingFor(findings, "top"))}
 					onChange={(value) => onUpdate({ top: value })}
-					info={<Info text="Returns at most this many records (up to 5,000). Can't be combined with paging." href={DOCS.limitRows} />}
+					info={
+						<Info
+							text="Returns at most this many records (up to 5,000). Can't be combined with paging."
+							href={DOCS.limitRows}
+						/>
+					}
 				/>
 				<NumberField
 					label="Page size (count)"
@@ -234,9 +272,18 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					placeholder="5,000"
 					disabled={hasTop && options.count === undefined}
 					hint={hasTop && options.count === undefined ? notWithTop : undefined}
-					validation={options.count !== undefined ? worst(topConflict, findingFor(findings, "count")) : undefined}
+					validation={
+						options.count !== undefined
+							? worst(topConflict, findingFor(findings, "count"))
+							: undefined
+					}
 					onChange={(value) => onUpdate({ count: value })}
-					info={<Info text="Number of records per page (up to 5,000)." href={DOCS.pageResults} />}
+					info={
+						<Info
+							text="Number of records per page (up to 5,000)."
+							href={DOCS.pageResults}
+						/>
+					}
 				/>
 				<NumberField
 					label="Page number"
@@ -245,14 +292,25 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 					placeholder="1"
 					disabled={hasTop && options.page === undefined}
 					hint={hasTop && options.page === undefined ? notWithTop : undefined}
-					validation={options.page !== undefined ? worst(topConflict, findingFor(findings, "page")) : undefined}
+					validation={
+						options.page !== undefined
+							? worst(topConflict, findingFor(findings, "page"))
+							: undefined
+					}
 					onChange={(value) => onUpdate({ page: value })}
-					info={<Info text="Which page to return, starting at 1." href={DOCS.pageResults} />}
+					info={
+						<Info text="Which page to return, starting at 1." href={DOCS.pageResults} />
+					}
 				/>
 				<InfoField
 					label="Paging cookie"
 					hint="Copy it from the previous page's results."
-					info={<Info text="Makes retrieving the next page more efficient. It must come from the page before the one requested." href={DOCS.pageResults} />}
+					info={
+						<Info
+							text="Makes retrieving the next page more efficient. It must come from the page before the one requested."
+							href={DOCS.pageResults}
+						/>
+					}
 				>
 					<Input
 						className={styles.mono}
@@ -288,7 +346,11 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 			<div className={styles.section}>
 				<InfoField
 					label="Data source"
-					validation={dataSourceIssue ? { state: "error", message: dataSourceIssue } : findingFor(findings, "datasource")}
+					validation={
+						dataSourceIssue
+							? { state: "error", message: dataSourceIssue }
+							: findingFor(findings, "datasource")
+					}
 					info={
 						<Info
 							text="Retained data queries records moved to Dataverse long-term retention. The entity must have long-term retention enabled."
@@ -300,23 +362,32 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 						value={dataSourceLabel}
 						selectedOptions={[options.dataSource ?? "active"]}
 						onOptionSelect={(_, data) =>
-							onUpdate({ dataSource: data.optionValue === "active" ? undefined : data.optionValue })
+							onUpdate({
+								dataSource:
+									data.optionValue === "active" ? undefined : data.optionValue,
+							})
 						}
 					>
 						<Option value="active">Active data (default)</Option>
 						<Option
 							value="retained"
 							text="Retained data (long-term retention)"
-							disabled={retentionEnabled === false && options.dataSource !== "retained"}
+							disabled={
+								retentionEnabled === false && options.dataSource !== "retained"
+							}
 						>
 							<span className={styles.optionText}>
 								Retained data (long-term retention)
 								{retentionEnabled === false && (
-									<span className={styles.optionSecondary}>Not enabled for {node.entity.name}</span>
+									<span className={styles.optionSecondary}>
+										Not enabled for {node.entity.name}
+									</span>
 								)}
 							</span>
 						</Option>
-						{options.dataSource === "bin" && <Option value="bin">bin (undocumented)</Option>}
+						{options.dataSource === "bin" && (
+							<Option value="bin">bin (undocumented)</Option>
+						)}
 					</Dropdown>
 				</InfoField>
 			</div>
@@ -348,23 +419,33 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 							/>
 							<InfoField
 								label="Query hints (options)"
-								info={<Info text="SQL Server query hints, passed through the options attribute." href={DOCS.fetchOptions} />}
+								info={
+									<Info
+										text="SQL Server query hints, passed through the options attribute."
+										href={DOCS.fetchOptions}
+									/>
+								}
 							>
 								<div className={styles.checkboxGroup}>
 									<MessageBar intent="warning" layout="multiline">
 										<MessageBarBody>
-											Use query hints only when Microsoft support recommends them. Incorrect use can damage query performance.
+											Use query hints only when Microsoft support recommends
+											them. Incorrect use can damage query performance.
 										</MessageBarBody>
 									</MessageBar>
 									{DOCUMENTED_HINTS.map((hint) => (
 										<Checkbox
 											key={hint.name}
 											checked={hasHint(hint.name)}
-											onChange={(_, data) => toggleHint(hint.name, data.checked === true)}
+											onChange={(_, data) =>
+												toggleHint(hint.name, data.checked === true)
+											}
 											label={
 												<span className={styles.optionText}>
 													<span className={styles.mono}>{hint.name}</span>
-													<Caption1 className={styles.secondary}>{hint.sql}</Caption1>
+													<Caption1 className={styles.secondary}>
+														{hint.sql}
+													</Caption1>
 												</span>
 											}
 										/>
@@ -376,9 +457,20 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 									label="Other hints (kept as written)"
 									info="Not documented option names. Dataverse accepts them, but Microsoft doesn't document what they do."
 								>
-									<TagGroup onDismiss={(_, data) => toggleHint(String(data.value), false)} aria-label="Other query hints">
+									<TagGroup
+										onDismiss={(_, data) =>
+											toggleHint(String(data.value), false)
+										}
+										aria-label="Other query hints"
+									>
 										{otherHints.map((hint) => (
-											<Tag key={hint} value={hint} dismissible dismissIcon={{ "aria-label": `Remove ${hint}` }} appearance="outline">
+											<Tag
+												key={hint}
+												value={hint}
+												dismissible
+												dismissIcon={{ "aria-label": `Remove ${hint}` }}
+												appearance="outline"
+											>
 												{hint}
 											</Tag>
 										))}

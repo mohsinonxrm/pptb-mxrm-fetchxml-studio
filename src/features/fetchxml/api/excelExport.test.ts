@@ -81,7 +81,15 @@ describe("exportToExcelLocal", () => {
 			fileName: "accounts",
 			timeZone: UTC_TIME_ZONE,
 			formattingMetadata: new Map([
-				["account", new Map<string, FormattingMetadata>([["createdon", { Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } }]])],
+				[
+					"account",
+					new Map<string, FormattingMetadata>([
+						[
+							"createdon",
+							{ Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } },
+						],
+					]),
+				],
 			]),
 		});
 
@@ -207,14 +215,28 @@ describe("exportToExcelLocal: currencies, precision, dates and time zones (#184)
 			new Map<string, FormattingMetadata>([
 				["creditlimit", { PrecisionSource: 2 }],
 				["score", { Precision: 0 }],
-				["lastonholdtime", { Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } }],
+				[
+					"lastonholdtime",
+					{ Format: "DateAndTime", DateTimeBehavior: { Value: "UserLocal" } },
+				],
 				["birthdate", { Format: "DateOnly", DateTimeBehavior: { Value: "DateOnly" } }],
-				["checkin", { Format: "DateAndTime", DateTimeBehavior: { Value: "TimeZoneIndependent" } }],
+				[
+					"checkin",
+					{ Format: "DateAndTime", DateTimeBehavior: { Value: "TimeZoneIndependent" } },
+				],
 				["followup", { Format: "DateOnly", DateTimeBehavior: { Value: "UserLocal" } }],
 			]),
 		],
 	]);
-	const cols = ["fullname", "creditlimit", "score", "lastonholdtime", "birthdate", "checkin", "followup"];
+	const cols = [
+		"fullname",
+		"creditlimit",
+		"score",
+		"lastonholdtime",
+		"birthdate",
+		"checkin",
+		"followup",
+	];
 	const rows: Record<string, unknown>[] = [
 		{
 			fullname: "Euro",
@@ -300,7 +322,13 @@ describe("exportToExcelLocal: currencies, precision, dates and time zones (#184)
 		const sheet = await run({
 			timeZone: TOKYO,
 			formattingMetadata: new Map(),
-			records: [{ fullname: "x", checkin: "2024-03-14T23:30:00Z", [`checkin${FV}`]: "3/14/2024 11:30 PM" }],
+			records: [
+				{
+					fullname: "x",
+					checkin: "2024-03-14T23:30:00Z",
+					[`checkin${FV}`]: "3/14/2024 11:30 PM",
+				},
+			],
 		});
 		expect(sheet.getRow(1).getCell(6).value).toBe("checkin");
 		expect(sheet.getRow(2).getCell(6).value).toBe("3/14/2024 11:30 PM");

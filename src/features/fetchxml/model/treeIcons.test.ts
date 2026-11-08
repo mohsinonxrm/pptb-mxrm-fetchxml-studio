@@ -9,7 +9,10 @@ import {
 	sourceTypeBadge,
 } from "./treeIcons";
 
-const attr = (typeName: string | undefined, extra: Partial<AttributeMetadata> = {}): AttributeMetadata =>
+const attr = (
+	typeName: string | undefined,
+	extra: Partial<AttributeMetadata> = {},
+): AttributeMetadata =>
 	({
 		LogicalName: "x",
 		SchemaName: "X",
@@ -21,10 +24,30 @@ const attr = (typeName: string | undefined, extra: Partial<AttributeMetadata> = 
 
 // Every AttributeTypeDisplayName on Microsoft Learn's "Column definitions" page
 const LEARN_TYPES = [
-	"BooleanType", "EntityNameType", "MultiSelectPicklistType", "PicklistType", "StateType", "StatusType",
-	"CalendarRulesType", "PartyListType", "DateTimeType", "FileType", "ImageType", "ManagedPropertyType",
-	"BigIntType", "DecimalType", "DoubleType", "IntegerType", "MoneyType", "CustomerType", "LookupType",
-	"OwnerType", "MemoType", "StringType", "UniqueidentifierType", "VirtualType",
+	"BooleanType",
+	"EntityNameType",
+	"MultiSelectPicklistType",
+	"PicklistType",
+	"StateType",
+	"StatusType",
+	"CalendarRulesType",
+	"PartyListType",
+	"DateTimeType",
+	"FileType",
+	"ImageType",
+	"ManagedPropertyType",
+	"BigIntType",
+	"DecimalType",
+	"DoubleType",
+	"IntegerType",
+	"MoneyType",
+	"CustomerType",
+	"LookupType",
+	"OwnerType",
+	"MemoType",
+	"StringType",
+	"UniqueidentifierType",
+	"VirtualType",
 ];
 
 describe("tree icons (#230)", () => {
@@ -53,7 +76,9 @@ describe("tree icons (#230)", () => {
 
 	it("falls back while metadata loads or for an unknown type", () => {
 		expect(attributeIcon(undefined)).toBe(UNKNOWN_ATTRIBUTE_ICON);
-		expect(attributeIcon(attr("SomeFutureType", { AttributeType: "SomeFuture" }))).toBe(UNKNOWN_ATTRIBUTE_ICON);
+		expect(attributeIcon(attr("SomeFutureType", { AttributeType: "SomeFuture" }))).toBe(
+			UNKNOWN_ATTRIBUTE_ICON,
+		);
 	});
 
 	it("uses AttributeType when AttributeTypeName is missing", () => {
@@ -82,6 +107,7 @@ describe("tree icons (#230)", () => {
 
 	it("defaults the icon style to tinted", () => {
 		expect(normalizeTreeIconStyle("color")).toBe("color");
-		for (const v of ["tinted", "tiles", undefined, null, 1]) expect(normalizeTreeIconStyle(v)).toBe("tinted");
+		for (const v of ["tinted", "tiles", undefined, null, 1])
+			expect(normalizeTreeIconStyle(v)).toBe("tinted");
 	});
 });
