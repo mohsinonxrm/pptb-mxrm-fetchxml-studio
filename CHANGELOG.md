@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0-beta.2] - 2026-11-07
+
 ### 🔧 Changed
 
 - **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
