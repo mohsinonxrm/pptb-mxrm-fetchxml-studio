@@ -66,6 +66,7 @@
 		"lint": "eslint . --max-warnings=0",
 		"test": "vitest run",
 		"badges": "node .github/scripts/write-badges.mjs",
+		"check:wording": "node .github/scripts/check-wording.mjs",
 		"test:watch": "vitest",
 		"validate": "pptb-validate",
 		"format": "prettier --write .",
