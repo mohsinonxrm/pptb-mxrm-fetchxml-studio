@@ -19,6 +19,7 @@ export interface LoadFetchXmlOptions {
 export interface BuilderContextValue extends BuilderState {
 	setEntity: (entityName: string) => void;
 	selectNode: (nodeId: NodeId) => void;
+	revealNode: (nodeId: NodeId) => void;
 	addAttribute: (parentId: NodeId) => void;
 	/** Add a specific attribute by name to an entity or link-entity */
 	addAttributeByName: (parentId: NodeId, attributeName: string) => void;
