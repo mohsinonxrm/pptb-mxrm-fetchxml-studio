@@ -6,7 +6,10 @@
 export type ViewSaveStep = "solution" | "publish";
 
 /** The follow-up steps for a save, in the order they run */
-export function viewSaveSteps(options: { addToSolution: boolean; publish: boolean }): ViewSaveStep[] {
+export function viewSaveSteps(options: {
+	addToSolution: boolean;
+	publish: boolean;
+}): ViewSaveStep[] {
 	const steps: ViewSaveStep[] = [];
 	if (options.addToSolution) steps.push("solution");
 	if (options.publish) steps.push("publish");

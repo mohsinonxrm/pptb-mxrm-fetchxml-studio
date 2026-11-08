@@ -19,7 +19,12 @@ import {
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
-import { Add20Regular, ArrowClockwise20Regular, ArrowCounterclockwise20Regular, Copy20Regular } from "@fluentui/react-icons";
+import {
+	Add20Regular,
+	ArrowClockwise20Regular,
+	ArrowCounterclockwise20Regular,
+	Copy20Regular,
+} from "@fluentui/react-icons";
 import { copyText } from "../../features/fetchxml/api/host";
 
 const useStyles = makeStyles({
@@ -63,7 +68,15 @@ const useStyles = makeStyles({
 });
 
 /** Copies the text and says "Copied" for a moment */
-export function CopyButton({ text, label, appearance }: { text: string; label: string; appearance?: "secondary" | "subtle" }) {
+export function CopyButton({
+	text,
+	label,
+	appearance,
+}: {
+	text: string;
+	label: string;
+	appearance?: "secondary" | "subtle";
+}) {
 	const [copied, setCopied] = useState(false);
 	return (
 		<Button
@@ -82,15 +95,25 @@ export function CopyButton({ text, label, appearance }: { text: string; label: s
 	);
 }
 
-export function PaneErrorFallback({ title, message, details, onTryAgain }: { title: string; message: string; details: string; onTryAgain: () => void }) {
+export function PaneErrorFallback({
+	title,
+	message,
+	details,
+	onTryAgain,
+}: {
+	title: string;
+	message: string;
+	details: string;
+	onTryAgain: () => void;
+}) {
 	const styles = useStyles();
 	return (
 		<div className={styles.pane}>
 			<MessageBar intent="error" layout="multiline">
 				<MessageBarBody>
 					<MessageBarTitle>{title}</MessageBarTitle>
-					Something went wrong while showing this panel. The rest of FetchXML Studio still works.{" "}
-					<Caption1 className={styles.muted}>({message})</Caption1>
+					Something went wrong while showing this panel. The rest of FetchXML Studio still
+					works. <Caption1 className={styles.muted}>({message})</Caption1>
 				</MessageBarBody>
 				<MessageBarActions>
 					<Button icon={<ArrowClockwise20Regular />} onClick={onTryAgain}>
@@ -103,7 +126,15 @@ export function PaneErrorFallback({ title, message, details, onTryAgain }: { tit
 	);
 }
 
-export function ToolErrorFallback({ fetchXml, details, onRestart }: { fetchXml?: string; details: string; onRestart: (withQuery: boolean) => void }) {
+export function ToolErrorFallback({
+	fetchXml,
+	details,
+	onRestart,
+}: {
+	fetchXml?: string;
+	details: string;
+	onRestart: (withQuery: boolean) => void;
+}) {
 	const styles = useStyles();
 	return (
 		<div className={styles.pageWrap}>
@@ -133,11 +164,19 @@ export function ToolErrorFallback({ fetchXml, details, onRestart }: { fetchXml?:
 				)}
 				<div className={styles.actions}>
 					{fetchXml && (
-						<Button appearance="primary" icon={<ArrowCounterclockwise20Regular />} onClick={() => onRestart(true)}>
+						<Button
+							appearance="primary"
+							icon={<ArrowCounterclockwise20Regular />}
+							onClick={() => onRestart(true)}
+						>
 							Restart with this query
 						</Button>
 					)}
-					<Button appearance={fetchXml ? "secondary" : "primary"} icon={<Add20Regular />} onClick={() => onRestart(false)}>
+					<Button
+						appearance={fetchXml ? "secondary" : "primary"}
+						icon={<Add20Regular />}
+						onClick={() => onRestart(false)}
+					>
 						Start a new query
 					</Button>
 					{fetchXml && <CopyButton text={fetchXml} label="Copy FetchXML" />}

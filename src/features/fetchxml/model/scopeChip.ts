@@ -25,7 +25,9 @@ export function solutionTagLabel(solution: ChipSolution): string {
 
 /** "cso_salescore · v1.2.0.0": the solution option's second line, and its tag's tooltip */
 export function solutionDetail(solution: ChipSolution): string {
-	return [solution.uniquename, solution.version && `v${solution.version}`].filter(Boolean).join(" · ");
+	return [solution.uniquename, solution.version && `v${solution.version}`]
+		.filter(Boolean)
+		.join(" · ");
 }
 
 /** "Contoso", or "Contoso +1" when there's more than one */
@@ -56,7 +58,12 @@ export function scopeChipText(
 	solutions: readonly ChipSolution[],
 ): ScopeChipText {
 	if (mode === "all") {
-		return { configured: true, label: "All entities", ariaLabel: "Entity scope: All entities", detail: "All entities" };
+		return {
+			configured: true,
+			label: "All entities",
+			ariaLabel: "Entity scope: All entities",
+			detail: "All entities",
+		};
 	}
 	if (solutions.length === 0) {
 		return { configured: false, label: "Choose scope", ariaLabel: "Choose scope", detail: "" };
@@ -67,7 +74,9 @@ export function scopeChipText(
 			? `${firstAndMore(publishers.map((p) => p.friendlyname))} › ${solutionText}`
 			: solutionText;
 	const detail = [
-		mode === "publisher-solution" && publishers.length > 0 && `Publishers: ${publishers.map((p) => p.friendlyname).join(", ")}`,
+		mode === "publisher-solution" &&
+			publishers.length > 0 &&
+			`Publishers: ${publishers.map((p) => p.friendlyname).join(", ")}`,
 		`Solutions: ${solutions.map((s) => [s.friendlyname, solutionDetail(s)].filter(Boolean).join(" — ")).join("; ")}`,
 	]
 		.filter(Boolean)
@@ -79,5 +88,7 @@ export function scopeChipText(
 export function solutionMatchesSearch(solution: ChipSolution, query: string): boolean {
 	const q = query.trim().toLowerCase();
 	if (!q) return true;
-	return [solution.friendlyname, solution.uniquename, solution.version].some((v) => (v ?? "").toLowerCase().includes(q));
+	return [solution.friendlyname, solution.uniquename, solution.version].some((v) =>
+		(v ?? "").toLowerCase().includes(q),
+	);
 }

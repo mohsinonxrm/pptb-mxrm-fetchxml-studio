@@ -23,12 +23,25 @@ import {
 	operatorRequiresValue,
 	operatorValueShape,
 } from "../../../../model/operators";
-import { loadAllEntityAttributes, loadAttributeDetailedMetadata } from "../../../../api/dataverseMetadata";
+import {
+	loadAllEntityAttributes,
+	loadAttributeDetailedMetadata,
+} from "../../../../api/dataverseMetadata";
 import type { AttributeMetadata } from "../../../../api/pptbClient";
-import { collectLinkEntityReferences, isConditionInRootEntityFilter } from "../../../../model/treeUtils";
+import {
+	collectLinkEntityReferences,
+	isConditionInRootEntityFilter,
+} from "../../../../model/treeUtils";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoField, LeftoverSetting, NumberField, SectionHeading, type Validation } from "../fields";
+import {
+	Info,
+	InfoField,
+	LeftoverSetting,
+	NumberField,
+	SectionHeading,
+	type Validation,
+} from "../fields";
 import { useEntityInfo } from "../useEditorMetadata";
 import { MetadataLoadWarning } from "../MetadataLoadWarning";
 import { findingFor, worst } from "../ruleFindings";
@@ -47,7 +60,12 @@ const GUID_TYPES = new Set(["Uniqueidentifier", "Lookup", "Customer", "Owner"]);
 const HIERARCHY_OPERATORS = new Set(["under", "not-under", "above", "eq-or-under", "eq-or-above"]);
 /** Whole number from a stored value (parsed FetchXML keeps numbers as numbers; strings are possible) */
 const toInteger = (v: unknown): number | undefined => {
-	const n = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : NaN;
+	const n =
+		typeof v === "number"
+			? v
+			: typeof v === "string" && /^-?\d+$/.test(v.trim())
+				? Number(v)
+				: NaN;
 	return Number.isInteger(n) ? n : undefined;
 };
 
@@ -66,20 +84,37 @@ interface ConditionEditorProps {
 	columnFilter?: boolean;
 }
 
-export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpdate, columnFilter = false }: ConditionEditorProps) {
+export function ConditionEditor({
+	node,
+	entityName,
+	fetchQuery,
+	findings,
+	onUpdate,
+	columnFilter = false,
+}: ConditionEditorProps) {
 	const styles = useEditorStyles();
 	const [selectedAttribute, setSelectedAttribute] = useState<AttributeMetadata | null>(null);
 
-	const linkEntityReferences = useMemo(() => collectLinkEntityReferences(fetchQuery), [fetchQuery]);
+	const linkEntityReferences = useMemo(
+		() => collectLinkEntityReferences(fetchQuery),
+		[fetchQuery],
+	);
 	// entityname applies to conditions in the root entity's filters (filters on link-entity, after the join)
-	const isInRootFilter = useMemo(() => isConditionInRootEntityFilter(fetchQuery, node.id), [fetchQuery, node.id]);
+	const isInRootFilter = useMemo(
+		() => isConditionInRootEntityFilter(fetchQuery, node.id),
+		[fetchQuery, node.id],
+	);
 	const entityTarget = node.entityname
 		? linkEntityReferences.find((r) => r.identifier === node.entityname)
 		: undefined;
-	const effectiveEntityName = isInRootFilter && entityTarget ? entityTarget.entityName : entityName;
+	const effectiveEntityName =
+		isInRootFilter && entityTarget ? entityTarget.entityName : entityName;
 
 	// What "alias.attribute" can reach from where this condition is
-	const valueofScope = useMemo(() => valueofScopes(fetchQuery).get(node.id), [fetchQuery, node.id]);
+	const valueofScope = useMemo(
+		() => valueofScopes(fetchQuery).get(node.id),
+		[fetchQuery, node.id],
+	);
 	// Hierarchy operators need a hierarchical entity (#87)
 	const { isHierarchical, metadata: entityMetadata } = useEntityInfo(effectiveEntityName);
 	// Operators from the attribute's metadata: type, multi-select, primary key, date-only behaviour (#87)
@@ -108,9 +143,16 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 				// Ranges, precision and date formats come from the type-cast metadata
 				if (attr && type && (NUMERIC_TYPES.has(type) || type === "DateTime")) {
 					try {
-						detailed = await loadAttributeDetailedMetadata(effectiveEntityName, node.attribute, type);
+						detailed = await loadAttributeDetailedMetadata(
+							effectiveEntityName,
+							node.attribute,
+							type,
+						);
 					} catch (error) {
-						console.error(`Failed to load detailed metadata for ${node.attribute}:`, error);
+						console.error(
+							`Failed to load detailed metadata for ${node.attribute}:`,
+							error,
+						);
 					}
 				}
 				if (cancelled) return;
@@ -132,34 +174,48 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	const shape = operatorValueShape(node.operator);
 	const requiresTwoValues = shape === "two";
 	const requiresMultipleValues = shape === "multiple";
-	const isSingleValue = shape === "single" || (shape === "two" && !selectedAttribute) || (shape === "multiple" && !selectedAttribute);
+	const isSingleValue =
+		shape === "single" ||
+		(shape === "two" && !selectedAttribute) ||
+		(shape === "multiple" && !selectedAttribute);
 	const comparesToAttribute = node.valueof !== undefined;
 	const operatorComparesAttributes = VALUEOF_OPERATORS.has(node.operator);
 	// Only type pairs verified to work are offered (getValueOfCompatibleTypes)
 	const canCompareToAttribute = operatorComparesAttributes && compatibleTypes.length > 0;
 	const valueofFinding = findingFor(findings, "valueof");
 	// Query Advisor advice on the value (leading wildcards, #97); value-shape findings are shown inline
-	const valueAdvice = findingFor(findings.filter((f) => f.kind === "advice"), "value");
+	const valueAdvice = findingFor(
+		findings.filter((f) => f.kind === "advice"),
+		"value",
+	);
 	const attributeType = selectedAttribute?.AttributeType;
 	// Multi-select choices are AttributeType Virtual; the type name tells them apart (#87)
 	const isMultiSelect = selectedAttribute?.AttributeTypeName?.Value === "MultiSelectPicklistType";
 	// Value pickers by operator (#98): the wildcard helper where the value is typed as text, and a
 	// record picker for the hierarchy operators on the primary key
 	const typedAsText =
-		!(attributeType && (OPTION_SET_TYPES.has(attributeType) || NUMERIC_TYPES.has(attributeType))) &&
+		!(
+			attributeType &&
+			(OPTION_SET_TYPES.has(attributeType) || NUMERIC_TYPES.has(attributeType))
+		) &&
 		attributeType !== "Boolean" &&
 		attributeType !== "DateTime" &&
 		!isMultiSelect;
 	const usesWildcardField = typedAsText && isWildcardOperator(node.operator);
-	const usesHierarchyField = HIERARCHY_OPERATORS.has(node.operator) && !!selectedAttribute?.IsPrimaryId;
+	const usesHierarchyField =
+		HIERARCHY_OPERATORS.has(node.operator) && !!selectedAttribute?.IsPrimaryId;
 	// A GUID value that isn't one (verified live: 0x80040203 System.FormatException)
 	const guidValue = typeof node.value === "string" ? node.value : "";
 	const guidValidation: Validation =
-		attributeType && GUID_TYPES.has(attributeType) && guidValue.trim() !== "" && !isGuid(guidValue)
+		attributeType &&
+		GUID_TYPES.has(attributeType) &&
+		guidValue.trim() !== "" &&
+		!isGuid(guidValue)
 			? { state: "error", message: "Enter an ID like 00000000-0000-0000-0000-000000000000." }
 			: undefined;
 
-	const showEntity = !columnFilter && ((isInRootFilter && linkEntityReferences.length > 0) || !!node.entityname);
+	const showEntity =
+		!columnFilter && ((isInRootFilter && linkEntityReferences.length > 0) || !!node.entityname);
 	const entityLabel = node.entityname
 		? (entityTarget?.displayLabel ?? node.entityname)
 		: `This entity (${entityName})`;
@@ -217,7 +273,11 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 		}
 		return (
 			<Input
-				value={typeof node.value === "string" || typeof node.value === "number" ? String(node.value) : ""}
+				value={
+					typeof node.value === "string" || typeof node.value === "number"
+						? String(node.value)
+						: ""
+				}
 				onChange={(_, data) => onUpdate({ value: data.value || undefined })}
 				placeholder="Value"
 			/>
@@ -248,7 +308,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							onOptionSelect={(_, data) =>
 								// The attribute belongs to the chosen entity, so start over
 								onUpdate({
-									entityname: data.optionValue === THIS_ENTITY ? undefined : data.optionValue,
+									entityname:
+										data.optionValue === THIS_ENTITY
+											? undefined
+											: data.optionValue,
 									attribute: undefined,
 									operator: undefined,
 									value: undefined,
@@ -261,7 +324,9 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 								<Option value={node.entityname} text={node.entityname}>
 									<span className={styles.optionText}>
 										{node.entityname}
-										<span className={styles.optionSecondary}>Not a link-entity in this query</span>
+										<span className={styles.optionSecondary}>
+											Not a link-entity in this query
+										</span>
 									</span>
 								</Option>
 							)}
@@ -279,8 +344,17 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 					<InfoField
 						label="Attribute"
 						required
-						validation={!node.attribute ? { state: "error", message: "Choose an attribute to filter on." } : undefined}
-						info={<Info text={`The logical name of the ${effectiveEntityName} attribute to filter on.`} href={DOCS.condition} />}
+						validation={
+							!node.attribute
+								? { state: "error", message: "Choose an attribute to filter on." }
+								: undefined
+						}
+						info={
+							<Info
+								text={`The logical name of the ${effectiveEntityName} attribute to filter on.`}
+								href={DOCS.condition}
+							/>
+						}
 					>
 						<AttributePicker
 							entityLogicalName={effectiveEntityName}
@@ -314,7 +388,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							]
 								.filter(Boolean)
 								.join(" ")}
-							href={operatorDef?.docsUrl ?? (isMultiSelect ? DOCS.choices : DOCS.operators)}
+							href={
+								operatorDef?.docsUrl ??
+								(isMultiSelect ? DOCS.choices : DOCS.operators)
+							}
 						/>
 					}
 				>
@@ -329,8 +406,14 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							const kept = adaptValueForOperator(node.operator, operator, node.value);
 							onUpdate({
 								operator,
-								value: convertWildcardValue(node.operator, operator, kept) as ConditionNode["value"],
-								...(comparesToAttribute && !VALUEOF_OPERATORS.has(operator) ? { valueof: undefined } : {}),
+								value: convertWildcardValue(
+									node.operator,
+									operator,
+									kept,
+								) as ConditionNode["value"],
+								...(comparesToAttribute && !VALUEOF_OPERATORS.has(operator)
+									? { valueof: undefined }
+									: {}),
 							});
 						}}
 						placeholder="Select an operator"
@@ -339,7 +422,9 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							<Option value={node.operator} text={node.operator}>
 								<span className={styles.optionText}>
 									{node.operator}
-									<span className={styles.optionSecondary}>Not listed for this attribute type</span>
+									<span className={styles.optionSecondary}>
+										Not listed for this attribute type
+									</span>
 								</span>
 							</Option>
 						)}
@@ -358,7 +443,17 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 						min={shape === "year" ? 1000 : 1}
 						max={shape === "year" ? 9999 : undefined}
 						onChange={(value) => onUpdate({ value })}
-						validation={toInteger(node.value) === undefined ? { state: "error", message: shape === "year" ? "Enter a four-digit fiscal year." : "Enter a whole number above 0." } : undefined}
+						validation={
+							toInteger(node.value) === undefined
+								? {
+										state: "error",
+										message:
+											shape === "year"
+												? "Enter a four-digit fiscal year."
+												: "Enter a whole number above 0.",
+									}
+								: undefined
+						}
 						info={
 							<Info
 								text={
@@ -379,9 +474,21 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							value={Array.isArray(node.value) ? toInteger(node.value[0]) : undefined}
 							min={1}
 							onChange={(period) =>
-								onUpdate({ value: [period ?? "", Array.isArray(node.value) ? (node.value[1] ?? "") : ""] })
+								onUpdate({
+									value: [
+										period ?? "",
+										Array.isArray(node.value) ? (node.value[1] ?? "") : "",
+									],
+								})
 							}
-							validation={!Array.isArray(node.value) || toInteger(node.value[0]) === undefined ? { state: "error", message: "Enter the fiscal period (1 or more)." } : undefined}
+							validation={
+								!Array.isArray(node.value) || toInteger(node.value[0]) === undefined
+									? {
+											state: "error",
+											message: "Enter the fiscal period (1 or more).",
+										}
+									: undefined
+							}
 							info={
 								<Info
 									text="The period number within the fiscal year: a month, quarter or semester, depending on the environment's fiscal year settings. A period that doesn't exist returns no records."
@@ -395,9 +502,18 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							min={1000}
 							max={9999}
 							onChange={(year) =>
-								onUpdate({ value: [Array.isArray(node.value) ? (node.value[0] ?? "") : "", year ?? ""] })
+								onUpdate({
+									value: [
+										Array.isArray(node.value) ? (node.value[0] ?? "") : "",
+										year ?? "",
+									],
+								})
 							}
-							validation={!Array.isArray(node.value) || toInteger(node.value[1]) === undefined ? { state: "error", message: "Enter a four-digit fiscal year." } : undefined}
+							validation={
+								!Array.isArray(node.value) || toInteger(node.value[1]) === undefined
+									? { state: "error", message: "Enter a four-digit fiscal year." }
+									: undefined
+							}
 							info={<Info text="A four-digit fiscal year." href={DOCS.operators} />}
 						/>
 					</>
@@ -406,7 +522,12 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 				{requiresValue && requiresMultipleValues && selectedAttribute && (
 					<InfoField
 						label="Values"
-						info={<Info text="Each value is written as a <value> element." href={DOCS.condition} />}
+						info={
+							<Info
+								text="Each value is written as a <value> element."
+								href={DOCS.condition}
+							/>
+						}
 					>
 						<MultiValuePicker
 							entityLogicalName={effectiveEntityName}
@@ -419,53 +540,73 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 					</InfoField>
 				)}
 
-				{requiresValue && requiresTwoValues && !requiresMultipleValues && selectedAttribute && (
-					<InfoField
-						label="Values"
-						info={<Info text="The two values the operator needs, written as <value> elements." href={DOCS.operators} />}
-					>
-						<BetweenInputPicker
-							attribute={selectedAttribute}
-							value={
-								Array.isArray(node.value) && node.value.length === 2
-									? [node.value[0], node.value[1]]
-									: [undefined, undefined]
-							}
-							onChange={(val) => onUpdate({ value: val })}
-							placeholder1="From"
-							placeholder2="To"
-						/>
-					</InfoField>
-				)}
-
-				{isSingleValue && !columnFilter && (operatorComparesAttributes || comparesToAttribute) && (
-					<InfoField
-						label="Compare to"
-						validation={valueofFinding?.state === "error" ? valueofFinding : undefined}
-						hint={
-							!canCompareToAttribute && !comparesToAttribute && selectedAttribute
-								? `Comparing a ${selectedAttribute.AttributeTypeName?.Value?.replace(/Type$/, "") ?? selectedAttribute.AttributeType} attribute to another attribute isn't verified to work, so it isn't offered.`
-								: undefined
-						}
-						info={
-							<Info
-								text="A fixed value, or another attribute of the same record or of a link-entity. Comparing attributes works only with eq, ne, gt, ge, lt and le. The docs require the same type; FetchXML Studio also offers the type pairs verified to work (for example Money with Decimal)."
-								href={DOCS.filterOnColumnValues}
-							/>
-						}
-					>
-						<RadioGroup
-							layout="horizontal"
-							value={comparesToAttribute ? "attribute" : "value"}
-							onChange={(_, data) =>
-								onUpdate(data.value === "attribute" ? { value: undefined, valueof: "" } : { valueof: undefined, value: undefined })
+				{requiresValue &&
+					requiresTwoValues &&
+					!requiresMultipleValues &&
+					selectedAttribute && (
+						<InfoField
+							label="Values"
+							info={
+								<Info
+									text="The two values the operator needs, written as <value> elements."
+									href={DOCS.operators}
+								/>
 							}
 						>
-							<Radio value="value" label="A value" />
-							<Radio value="attribute" label="Another attribute" disabled={!canCompareToAttribute && !comparesToAttribute} />
-						</RadioGroup>
-					</InfoField>
-				)}
+							<BetweenInputPicker
+								attribute={selectedAttribute}
+								value={
+									Array.isArray(node.value) && node.value.length === 2
+										? [node.value[0], node.value[1]]
+										: [undefined, undefined]
+								}
+								onChange={(val) => onUpdate({ value: val })}
+								placeholder1="From"
+								placeholder2="To"
+							/>
+						</InfoField>
+					)}
+
+				{isSingleValue &&
+					!columnFilter &&
+					(operatorComparesAttributes || comparesToAttribute) && (
+						<InfoField
+							label="Compare to"
+							validation={
+								valueofFinding?.state === "error" ? valueofFinding : undefined
+							}
+							hint={
+								!canCompareToAttribute && !comparesToAttribute && selectedAttribute
+									? `Comparing a ${selectedAttribute.AttributeTypeName?.Value?.replace(/Type$/, "") ?? selectedAttribute.AttributeType} attribute to another attribute isn't verified to work, so it isn't offered.`
+									: undefined
+							}
+							info={
+								<Info
+									text="A fixed value, or another attribute of the same record or of a link-entity. Comparing attributes works only with eq, ne, gt, ge, lt and le. The docs require the same type; FetchXML Studio also offers the type pairs verified to work (for example Money with Decimal)."
+									href={DOCS.filterOnColumnValues}
+								/>
+							}
+						>
+							<RadioGroup
+								layout="horizontal"
+								value={comparesToAttribute ? "attribute" : "value"}
+								onChange={(_, data) =>
+									onUpdate(
+										data.value === "attribute"
+											? { value: undefined, valueof: "" }
+											: { valueof: undefined, value: undefined },
+									)
+								}
+							>
+								<Radio value="value" label="A value" />
+								<Radio
+									value="attribute"
+									label="Another attribute"
+									disabled={!canCompareToAttribute && !comparesToAttribute}
+								/>
+							</RadioGroup>
+						</InfoField>
+					)}
 
 				{isSingleValue &&
 					(comparesToAttribute ? (
@@ -499,7 +640,12 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 						<InfoField
 							label="Value"
 							validation={worst(guidValidation, valueAdvice)}
-							info={<Info text="The value to compare the attribute with." href={DOCS.filterRows} />}
+							info={
+								<Info
+									text="The value to compare the attribute with."
+									href={DOCS.filterRows}
+								/>
+							}
 						>
 							{renderLiteralValue()}
 						</InfoField>

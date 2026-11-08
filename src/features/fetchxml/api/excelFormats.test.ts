@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { decimalNumberFormat, decimalsShown, groupedNumberFormat, moneyNumberFormat } from "./excelFormats";
+import {
+	decimalNumberFormat,
+	decimalsShown,
+	groupedNumberFormat,
+	moneyNumberFormat,
+} from "./excelFormats";
 
 describe("Excel number formats (#184)", () => {
-	it("decimal precision: 0 is \"0\", never \"0.\"", () => {
+	it('decimal precision: 0 is "0", never "0."', () => {
 		expect(decimalNumberFormat(0)).toBe("0");
 		expect(decimalNumberFormat(3)).toBe("0.000");
 		expect(decimalNumberFormat(undefined)).toBe("0.00");
@@ -25,7 +30,7 @@ describe("Excel number formats (#184)", () => {
 		expect(moneyNumberFormat("€1.234,50", 1234.5)).toBe('"€"#,##0.00');
 		expect(moneyNumberFormat("€ 1.234,50", 1234.5)).toBe('"€ "#,##0.00');
 		expect(moneyNumberFormat("1 234,50 kr", 1234.5)).toBe('#,##0.00" kr"');
-		expect(moneyNumberFormat("CHF 1'234.50", 1234.5)).toBe("\"CHF \"#,##0.00");
+		expect(moneyNumberFormat("CHF 1'234.50", 1234.5)).toBe('"CHF "#,##0.00');
 		expect(moneyNumberFormat("¥1,235", 1235)).toBe('"¥"#,##0');
 	});
 

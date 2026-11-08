@@ -11,7 +11,10 @@ import { NON_RETURNING_LINK_TYPES } from "./fetchxmlRules";
  * entity's `from` attribute for one-to-many. Without a relationship type, a `to` that is the
  * parent's primary key means one-to-many. Empty when neither attribute is set.
  */
-export function linkEntityLookup(link: Pick<LinkEntityNode, "from" | "to" | "relationshipType">, parentPrimaryId?: string): string {
+export function linkEntityLookup(
+	link: Pick<LinkEntityNode, "from" | "to" | "relationshipType">,
+	parentPrimaryId?: string,
+): string {
 	const from = link.from ?? "";
 	const to = link.to ?? "";
 	if (link.relationshipType === "N1") return to || from;
@@ -30,7 +33,9 @@ export function linkEntityLabel(
 ): string {
 	if (link.alias) return `${link.alias} (${link.linkType})`;
 	const lookup = linkEntityLookup(link, parentPrimaryId);
-	return lookup ? `${link.name} via ${lookup} (${link.linkType})` : `${link.name} (${link.linkType})`;
+	return lookup
+		? `${link.name} via ${lookup} (${link.linkType})`
+		: `${link.name} (${link.linkType})`;
 }
 
 /**
@@ -38,7 +43,9 @@ export function linkEntityLabel(
  * could. Not for exists / in / any / not any / all / not all (they can't return any), nor for an
  * intersect link-entity (it returns none on purpose).
  */
-export function showsNoAttributesHint(link: Pick<LinkEntityNode, "linkType" | "attributes" | "allAttributes" | "intersect">): boolean {
+export function showsNoAttributesHint(
+	link: Pick<LinkEntityNode, "linkType" | "attributes" | "allAttributes" | "intersect">,
+): boolean {
 	if (NON_RETURNING_LINK_TYPES.has(link.linkType) || link.intersect) return false;
 	return link.attributes.length === 0 && !link.allAttributes?.enabled;
 }
@@ -63,5 +70,7 @@ export function countDescendants(node: EntityNode | LinkEntityNode | FilterNode)
 
 /** "This also deletes the item inside it." / "…the N items inside it." (#24) */
 export function deleteConfirmationText(descendants: number): string {
-	return descendants === 1 ? "This also deletes the item inside it." : `This also deletes the ${descendants} items inside it.`;
+	return descendants === 1
+		? "This also deletes the item inside it."
+		: `This also deletes the ${descendants} items inside it.`;
 }

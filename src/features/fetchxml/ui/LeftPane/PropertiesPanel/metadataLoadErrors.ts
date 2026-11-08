@@ -58,7 +58,9 @@ export function useMetadataRetryGeneration(): number {
 }
 
 /** The first failed load for an entity, columns before details; undefined when nothing failed */
-export function metadataLoadError(entityName: string | undefined): { kind: MetadataKind; message: string } | undefined {
+export function metadataLoadError(
+	entityName: string | undefined,
+): { kind: MetadataKind; message: string } | undefined {
 	if (!entityName) return undefined;
 	for (const kind of KINDS) {
 		const message = failures.get(`${kind}:${entityName}`);
@@ -68,7 +70,9 @@ export function metadataLoadError(entityName: string | undefined): { kind: Metad
 }
 
 /** metadataLoadError as a hook: re-renders when a failure is recorded, cleared or retried */
-export function useMetadataLoadError(entityName: string | undefined): { kind: MetadataKind; message: string } | undefined {
+export function useMetadataLoadError(
+	entityName: string | undefined,
+): { kind: MetadataKind; message: string } | undefined {
 	// A string snapshot, so React sees no change until the failure itself changes
 	const snapshot = useSyncExternalStore(subscribe, () => {
 		const failure = metadataLoadError(entityName);

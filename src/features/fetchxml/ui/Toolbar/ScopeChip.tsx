@@ -36,7 +36,12 @@ import {
 } from "@fluentui/react-components";
 import { ChevronDown16Regular, Filter20Regular, LockClosed16Regular } from "@fluentui/react-icons";
 import type { EntityScopeMode } from "../../model/displaySettings";
-import { scopeChipText, solutionDetail, solutionMatchesSearch, solutionTagLabel } from "../../model/scopeChip";
+import {
+	scopeChipText,
+	solutionDetail,
+	solutionMatchesSearch,
+	solutionTagLabel,
+} from "../../model/scopeChip";
 import type { Publisher, Solution } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
@@ -174,7 +179,13 @@ export function ScopeChip(props: ScopeChipProps) {
 
 	return (
 		<>
-			<Popover open={open} onOpenChange={(_, d) => setOpen(d.open)} positioning="below-start" trapFocus withArrow>
+			<Popover
+				open={open}
+				onOpenChange={(_, d) => setOpen(d.open)}
+				positioning="below-start"
+				trapFocus
+				withArrow
+			>
 				<PopoverTrigger disableButtonEnhancement>
 					<Tooltip
 						content={<span className={styles.tooltipDetail}>{text.detail}</span>}
@@ -263,20 +274,37 @@ function ScopeEditor({
 		return publishers.filter(
 			(p) =>
 				!selectedPublisherIds.includes(p.publisherid) &&
-				(!q || [p.friendlyname, p.uniquename, p.customizationprefix].some((v) => (v ?? "").toLowerCase().includes(q))),
+				(!q ||
+					[p.friendlyname, p.uniquename, p.customizationprefix].some((v) =>
+						(v ?? "").toLowerCase().includes(q),
+					)),
 		);
 	}, [publishers, selectedPublisherIds, publisherQuery]);
 
 	const { unmanaged, managed } = useMemo(() => {
-		const open = solutions.filter((s) => !selectedSolutionIds.includes(s.solutionid) && solutionMatchesSearch(s, solutionQuery));
-		return { unmanaged: open.filter((s) => !s.ismanaged), managed: open.filter((s) => s.ismanaged) };
+		const open = solutions.filter(
+			(s) =>
+				!selectedSolutionIds.includes(s.solutionid) &&
+				solutionMatchesSearch(s, solutionQuery),
+		);
+		return {
+			unmanaged: open.filter((s) => !s.ismanaged),
+			managed: open.filter((s) => s.ismanaged),
+		};
 	}, [solutions, selectedSolutionIds, solutionQuery]);
 
-	const selectedPublishers = publishers.filter((p) => selectedPublisherIds.includes(p.publisherid));
+	const selectedPublishers = publishers.filter((p) =>
+		selectedPublisherIds.includes(p.publisherid),
+	);
 	const selectedSolutions = solutions.filter((s) => selectedSolutionIds.includes(s.solutionid));
 	const needsPublisher = mode === "publisher-solution" && selectedPublisherIds.length === 0;
 	const solutionOption = (s: Solution) => (
-		<TagPickerOption key={s.solutionid} value={s.solutionid} text={s.friendlyname} secondaryContent={solutionDetail(s)}>
+		<TagPickerOption
+			key={s.solutionid}
+			value={s.solutionid}
+			text={s.friendlyname}
+			secondaryContent={solutionDetail(s)}
+		>
 			{s.friendlyname}
 		</TagPickerOption>
 	);
@@ -284,16 +312,35 @@ function ScopeEditor({
 	return (
 		<>
 			<Field label="Show entities from">
-				<RadioGroup value={mode} onChange={(_, d) => onModeChange(d.value as EntityScopeMode)}>
+				<RadioGroup
+					value={mode}
+					onChange={(_, d) => onModeChange(d.value as EntityScopeMode)}
+				>
 					<Tooltip
-						content={canUsePublisherSolution ? "" : "Requires prvReadPublisher and prvReadSolution"}
+						content={
+							canUsePublisherSolution
+								? ""
+								: "Requires prvReadPublisher and prvReadSolution"
+						}
 						relationship="description"
 						positioning="before"
 					>
-						<Radio value="publisher-solution" label="Publisher → solution (default)" disabled={!canUsePublisherSolution} />
+						<Radio
+							value="publisher-solution"
+							label="Publisher → solution (default)"
+							disabled={!canUsePublisherSolution}
+						/>
 					</Tooltip>
-					<Tooltip content={canUseSolutionOnly ? "" : "Requires prvReadSolution"} relationship="description" positioning="before">
-						<Radio value="solution-only" label="Solution only" disabled={!canUseSolutionOnly} />
+					<Tooltip
+						content={canUseSolutionOnly ? "" : "Requires prvReadSolution"}
+						relationship="description"
+						positioning="before"
+					>
+						<Radio
+							value="solution-only"
+							label="Solution only"
+							disabled={!canUseSolutionOnly}
+						/>
 					</Tooltip>
 					<Radio value="all" label="All entities" />
 				</RadioGroup>
@@ -302,7 +349,9 @@ function ScopeEditor({
 			{mode !== "all" && (
 				<Field
 					label="Publishers"
-					validationState={publishersError && mode === "publisher-solution" ? "error" : "none"}
+					validationState={
+						publishersError && mode === "publisher-solution" ? "error" : "none"
+					}
 					validationMessage={mode === "publisher-solution" ? publishersError : undefined}
 				>
 					<TagPicker
@@ -317,7 +366,13 @@ function ScopeEditor({
 							<TagPickerGroup aria-label="Selected publishers">
 								{mode === "publisher-solution" &&
 									selectedPublishers.map((p) => (
-										<Tag key={p.publisherid} value={p.publisherid} shape="rounded" size="small" dismissible>
+										<Tag
+											key={p.publisherid}
+											value={p.publisherid}
+											shape="rounded"
+											size="small"
+											dismissible
+										>
 											{p.friendlyname}
 										</Tag>
 									))}
@@ -340,7 +395,9 @@ function ScopeEditor({
 						<TagPickerList>
 							{publisherOptions.length === 0 ? (
 								<div className={styles.empty}>
-									{publisherQuery.trim() ? `No publishers match "${publisherQuery.trim()}"` : "No publishers found"}
+									{publisherQuery.trim()
+										? `No publishers match "${publisherQuery.trim()}"`
+										: "No publishers found"}
 								</div>
 							) : (
 								publisherOptions.map((p) => (
@@ -348,7 +405,11 @@ function ScopeEditor({
 										key={p.publisherid}
 										value={p.publisherid}
 										text={p.friendlyname}
-										secondaryContent={p.customizationprefix ? `Prefix ${p.customizationprefix}_` : p.uniquename}
+										secondaryContent={
+											p.customizationprefix
+												? `Prefix ${p.customizationprefix}_`
+												: p.uniquename
+										}
 									>
 										{p.friendlyname}
 									</TagPickerOption>
@@ -365,7 +426,11 @@ function ScopeEditor({
 			)}
 
 			{mode !== "all" && (
-				<Field label="Solutions" validationState={solutionsError ? "error" : "none"} validationMessage={solutionsError}>
+				<Field
+					label="Solutions"
+					validationState={solutionsError ? "error" : "none"}
+					validationMessage={solutionsError}
+				>
 					<TagPicker
 						selectedOptions={[...selectedSolutionIds]}
 						onOptionSelect={(_, d) => {
@@ -377,7 +442,14 @@ function ScopeEditor({
 						<TagPickerControl>
 							<TagPickerGroup aria-label="Selected solutions">
 								{selectedSolutions.map((s) => (
-									<Tag key={s.solutionid} value={s.solutionid} shape="rounded" size="small" dismissible title={solutionDetail(s)}>
+									<Tag
+										key={s.solutionid}
+										value={s.solutionid}
+										shape="rounded"
+										size="small"
+										dismissible
+										title={solutionDetail(s)}
+									>
 										{solutionTagLabel(s)}
 									</Tag>
 								))}
@@ -400,12 +472,22 @@ function ScopeEditor({
 						<TagPickerList>
 							{unmanaged.length === 0 && managed.length === 0 ? (
 								<div className={styles.empty}>
-									{solutionQuery.trim() ? `No solutions match "${solutionQuery.trim()}"` : "No solutions found"}
+									{solutionQuery.trim()
+										? `No solutions match "${solutionQuery.trim()}"`
+										: "No solutions found"}
 								</div>
 							) : (
 								<>
-									{unmanaged.length > 0 && <TagPickerOptionGroup label="Unmanaged">{unmanaged.map(solutionOption)}</TagPickerOptionGroup>}
-									{managed.length > 0 && <TagPickerOptionGroup label="Managed">{managed.map(solutionOption)}</TagPickerOptionGroup>}
+									{unmanaged.length > 0 && (
+										<TagPickerOptionGroup label="Unmanaged">
+											{unmanaged.map(solutionOption)}
+										</TagPickerOptionGroup>
+									)}
+									{managed.length > 0 && (
+										<TagPickerOptionGroup label="Managed">
+											{managed.map(solutionOption)}
+										</TagPickerOptionGroup>
+									)}
 								</>
 							)}
 						</TagPickerList>
