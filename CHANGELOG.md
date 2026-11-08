@@ -161,6 +161,7 @@ FetchXML Studio 1.5 moves to Power Platform ToolBox 1.2.7 and its host APIs, mak
 
 - **In the PPTB VS Code extension the tool may open as a blank tab.** 1.5 loads its assets from the site root (`src="/assets/…"`), which works in PPTB Desktop. The fix, relative asset URLs (#173), ships in 1.6.0.
 - **Save and unsaved-changes rules for the app bar (#278).** `saveOptions` decides what Save offers for the loaded view: Save changes to a personal view with Write, Save as new view… otherwise, and Save changes to system view… in the menu for customizers. `isViewDirty` reports query, column and width changes against the loaded view. Pure models with tests, not used yet (#278).
+- **Undo history core (#192).** `state/history.ts` keeps up to 100 labelled undo steps as snapshots, merges edits to the same field made within 1 s, groups multi-step edits into one step, and lets a change skip the history (Retrieve all records, column widths) or clear it (New, Open view). It's tested but not used yet (#192).
 
 ## [1.5.0-beta.19] - 2026-11-06
 
