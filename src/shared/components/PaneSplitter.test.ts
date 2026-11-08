@@ -9,7 +9,12 @@ interface Spies {
 }
 
 /** Holds the size like a real parent, so successive keys build on each other */
-function harness(orientation: "vertical" | "horizontal", spies: Spies, initial = 380, limits = { min: 240, max: 600 }) {
+function harness(
+	orientation: "vertical" | "horizontal",
+	spies: Spies,
+	initial = 380,
+	limits = { min: 240, max: 600 },
+) {
 	return function Harness() {
 		const [value, setValue] = useState(initial);
 		return createElement(PaneSplitter, {
@@ -33,14 +38,30 @@ const splitter = () => document.querySelector<HTMLElement>('[role="separator"]')
 
 async function press(key: string, shiftKey = false) {
 	await act(async () => {
-		splitter().dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true }));
+		splitter().dispatchEvent(
+			new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true }),
+		);
 	});
 }
 
-async function pointer(type: string, init: { clientX?: number; clientY?: number; button?: number; pointerId?: number; isPrimary?: boolean } = {}) {
+async function pointer(
+	type: string,
+	init: {
+		clientX?: number;
+		clientY?: number;
+		button?: number;
+		pointerId?: number;
+		isPrimary?: boolean;
+	} = {},
+) {
 	const { pointerId = 1, isPrimary = true, ...mouse } = init;
 	await act(async () => {
-		const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...mouse });
+		const event = new MouseEvent(type, {
+			bubbles: true,
+			cancelable: true,
+			button: 0,
+			...mouse,
+		});
 		Object.defineProperty(event, "pointerId", { value: pointerId });
 		Object.defineProperty(event, "isPrimary", { value: isPrimary });
 		splitter().dispatchEvent(event);
@@ -50,7 +71,10 @@ async function pointer(type: string, init: { clientX?: number; clientY?: number;
 let spies: Spies;
 
 beforeEach(() => {
-	spies = { onChange: vi.fn<(value: number) => void>(), onCommit: vi.fn<(value: number) => void>() };
+	spies = {
+		onChange: vi.fn<(value: number) => void>(),
+		onCommit: vi.fn<(value: number) => void>(),
+	};
 	Element.prototype.setPointerCapture = vi.fn();
 	Element.prototype.releasePointerCapture = vi.fn();
 });
@@ -310,7 +334,9 @@ describe("PaneSplitter", () => {
 		await render(createElement(harness("vertical", spies)));
 		const id = splitter().getAttribute("aria-describedby");
 		expect(id).toBeTruthy();
-		expect(document.getElementById(id!)?.textContent).toBe("Drag or use arrow keys; double-click resets.");
+		expect(document.getElementById(id!)?.textContent).toBe(
+			"Drag or use arrow keys; double-click resets.",
+		);
 		expect(getComputedStyle(splitter()).touchAction).toBe("none");
 	});
 });

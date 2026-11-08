@@ -10,7 +10,13 @@
  * the layout it drives.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { createFocusOutlineStyle, makeStyles, mergeClasses, Tooltip, tokens } from "@fluentui/react-components";
+import {
+	createFocusOutlineStyle,
+	makeStyles,
+	mergeClasses,
+	Tooltip,
+	tokens,
+} from "@fluentui/react-components";
 
 /** Arrow key step in pixels; Shift uses the large step */
 export const SPLITTER_STEP = 16;
@@ -78,11 +84,19 @@ const useStyles = makeStyles({
 	},
 	// Drag looks like hover (focus-visible has its own rules above)
 	verticalActive: {
-		"::after": { left: "calc(50% - 1px)", width: "2px", backgroundColor: tokens.colorBrandStroke1 },
+		"::after": {
+			left: "calc(50% - 1px)",
+			width: "2px",
+			backgroundColor: tokens.colorBrandStroke1,
+		},
 		"@media (forced-colors: active)": { "::after": { backgroundColor: "Highlight" } },
 	},
 	horizontalActive: {
-		"::after": { top: "calc(50% - 1px)", height: "2px", backgroundColor: tokens.colorBrandStroke1 },
+		"::after": {
+			top: "calc(50% - 1px)",
+			height: "2px",
+			backgroundColor: tokens.colorBrandStroke1,
+		},
 		"@media (forced-colors: active)": { "::after": { backgroundColor: "Highlight" } },
 	},
 });
@@ -95,7 +109,18 @@ interface DragState {
 	startValue: number;
 }
 
-export function PaneSplitter({ orientation, value, min, max, defaultValue, onChange, onCommit, label, description, controls }: PaneSplitterProps) {
+export function PaneSplitter({
+	orientation,
+	value,
+	min,
+	max,
+	defaultValue,
+	onChange,
+	onCommit,
+	label,
+	description,
+	controls,
+}: PaneSplitterProps) {
 	const styles = useStyles();
 	const vertical = orientation === "vertical";
 	// Tolerate swapped or crossed limits (a window too small for the pane)
@@ -188,7 +213,11 @@ export function PaneSplitter({ orientation, value, min, max, defaultValue, onCha
 		event.preventDefault();
 		event.currentTarget.setPointerCapture?.(event.pointerId);
 		clearTimer();
-		drag.current = { pointerId: event.pointerId, start: vertical ? event.clientX : event.clientY, startValue: latest.current };
+		drag.current = {
+			pointerId: event.pointerId,
+			start: vertical ? event.clientX : event.clientY,
+			startValue: latest.current,
+		};
 		previousUserSelect.current = document.body.style.userSelect;
 		document.body.style.userSelect = "none";
 		setDragging(true);
@@ -230,7 +259,11 @@ export function PaneSplitter({ orientation, value, min, max, defaultValue, onCha
 			aria-valuetext={`${shown} pixels`}
 			aria-controls={controls}
 			tabIndex={0}
-			className={mergeClasses(styles.root, vertical ? styles.vertical : styles.horizontal, dragging && (vertical ? styles.verticalActive : styles.horizontalActive))}
+			className={mergeClasses(
+				styles.root,
+				vertical ? styles.vertical : styles.horizontal,
+				dragging && (vertical ? styles.verticalActive : styles.horizontalActive),
+			)}
 			onKeyDown={onKeyDown}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
@@ -241,7 +274,12 @@ export function PaneSplitter({ orientation, value, min, max, defaultValue, onCha
 	);
 
 	return description ? (
-		<Tooltip relationship="description" content={description} visible={tipVisible && !dragging} onVisibleChange={(_, data) => setTipVisible(data.visible)}>
+		<Tooltip
+			relationship="description"
+			content={description}
+			visible={tipVisible && !dragging}
+			onVisibleChange={(_, data) => setTipVisible(data.visible)}
+		>
 			{splitter}
 		</Tooltip>
 	) : (
