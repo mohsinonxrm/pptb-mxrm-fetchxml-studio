@@ -79,11 +79,16 @@ const attributeNames = (entity: string) => [
 let dataverse: ReturnType<typeof createFakeDataverse>;
 let host: HostStub;
 
+/** An in-memory Dataverse with these tables, behind a stubbed host */
+function connect(tables = sampleTables()) {
+	dataverse = createFakeDataverse(tables);
+	host = installHost({ dataverseAPI: dataverse.api as unknown as HostStub["dataverseAPI"] });
+}
+
 beforeEach(() => {
 	metadataCache.clear();
 	clearMetadataLoadErrors();
-	dataverse = createFakeDataverse(sampleTables());
-	host = installHost({ dataverseAPI: dataverse.api });
+	connect();
 	// The real loaders (through metadataCache), counted
 	loaders = {
 		loadEntityMetadata:
@@ -279,12 +284,11 @@ describe("useRootEntityMetadata: failures", () => {
 
 describe("useRootEntityMetadata: connection change", () => {
 	/** What AppShell does when the connection changes (#66, #201): clear the caches, mount again */
-	async function changeConnection(tables: ReturnType<typeof sampleTables>) {
+	function changeConnection(tables: ReturnType<typeof sampleTables>) {
 		metadataCache.clear();
 		clearMetadataLoadErrors();
 		cleanup();
-		dataverse = createFakeDataverse(tables);
-		host = installHost({ dataverseAPI: dataverse.api });
+		connect(tables);
 	}
 
 	it("starts empty and loads the new environment's metadata, not the cached one", async () => {
@@ -295,7 +299,7 @@ describe("useRootEntityMetadata: connection change", () => {
 		const tables = sampleTables();
 		tables[0].objectTypeCode = 10001;
 		tables[0].attributes = [{ name: "accountid", type: "Uniqueidentifier" }];
-		await changeConnection(tables);
+		changeConnection(tables);
 
 		const metadata = deferred<EntityMetadata>();
 		loaders.loadEntityMetadata.mockReturnValueOnce(metadata.promise);
