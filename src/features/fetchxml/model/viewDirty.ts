@@ -35,7 +35,8 @@ export interface ViewDirtyResult {
 }
 
 /** XML with the whitespace between tags removed and other runs collapsed, when it can't be parsed */
-const collapseWhitespace = (xml: string): string => xml.trim().replace(/>\s+</g, "><").replace(/\s+/g, " ");
+const collapseWhitespace = (xml: string): string =>
+	xml.trim().replace(/>\s+</g, "><").replace(/\s+/g, " ");
 
 const escapeXml = (text: string): string =>
 	text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -49,7 +50,10 @@ const PAGING_ATTRIBUTES = new Set(["page", "paging-cookie"]);
 
 function canonicalElement(element: Element, isRoot: boolean): string {
 	const attributes = Array.from(element.attributes)
-		.filter((attribute) => !(isRoot && element.tagName === "fetch" && PAGING_ATTRIBUTES.has(attribute.name)))
+		.filter(
+			(attribute) =>
+				!(isRoot && element.tagName === "fetch" && PAGING_ATTRIBUTES.has(attribute.name)),
+		)
 		.map((attribute) => `${attribute.name}="${escapeXml(attribute.value)}"`)
 		.sort()
 		.join(" ");
@@ -59,8 +63,10 @@ function canonicalElement(element: Element, isRoot: boolean): string {
 	const hasElementChildren = nodes.some((node) => node.nodeType === node.ELEMENT_NODE);
 	const children = nodes
 		.map((node) => {
-			if (node.nodeType === node.ELEMENT_NODE) return canonicalElement(node as Element, false);
-			if (node.nodeType !== node.TEXT_NODE && node.nodeType !== node.CDATA_SECTION_NODE) return "";
+			if (node.nodeType === node.ELEMENT_NODE)
+				return canonicalElement(node as Element, false);
+			if (node.nodeType !== node.TEXT_NODE && node.nodeType !== node.CDATA_SECTION_NODE)
+				return "";
 			const text = node.textContent ?? "";
 			return hasElementChildren && !text.trim() ? "" : escapeXml(text);
 		})
@@ -76,7 +82,8 @@ function canonicalElement(element: Element, isRoot: boolean): string {
  */
 function canonicalXml(xml: string): string {
 	const doc = new DOMParser().parseFromString(xml, "text/xml");
-	if (doc.getElementsByTagName("parsererror").length > 0 || !doc.documentElement) return collapseWhitespace(xml);
+	if (doc.getElementsByTagName("parsererror").length > 0 || !doc.documentElement)
+		return collapseWhitespace(xml);
 	return canonicalElement(doc.documentElement, true);
 }
 
@@ -94,7 +101,9 @@ function canonicalXml(xml: string): string {
 export function normalizeFetchXml(fetchXml: string): string {
 	if (!fetchXml.trim()) return "";
 	const result = parseFetchXml(fetchXml);
-	return canonicalXml(result.success && result.fetchNode ? generateFetchXml(result.fetchNode) : fetchXml);
+	return canonicalXml(
+		result.success && result.fetchNode ? generateFetchXml(result.fetchNode) : fetchXml,
+	);
 }
 
 interface LayoutCell {
@@ -110,17 +119,24 @@ interface LayoutCell {
  */
 function readCells(layoutXml: string): LayoutCell[] | null {
 	const doc = new DOMParser().parseFromString(layoutXml, "text/xml");
-	if (doc.getElementsByTagName("parsererror").length > 0 || doc.getElementsByTagName("grid").length === 0) return null;
+	if (
+		doc.getElementsByTagName("parsererror").length > 0 ||
+		doc.getElementsByTagName("grid").length === 0
+	)
+		return null;
 	return Array.from(doc.getElementsByTagName("cell")).flatMap((cell) => {
 		const name = cell.getAttribute("name");
-		return name ? [{ name, width: cell.getAttribute("width") ?? String(getDefaultWidthForType()) }] : [];
+		return name
+			? [{ name, width: cell.getAttribute("width") ?? String(getDefaultWidthForType()) }]
+			: [];
 	});
 }
 
 const NUMERIC = /^\s*\d+(\.\d+)?\s*$/;
 
 /** Two widths are the same: equal numbers when both are numeric, else the same text */
-const sameWidth = (a: string, b: string): boolean => (NUMERIC.test(a) && NUMERIC.test(b) ? Number(a) === Number(b) : a.trim() === b.trim());
+const sameWidth = (a: string, b: string): boolean =>
+	NUMERIC.test(a) && NUMERIC.test(b) ? Number(a) === Number(b) : a.trim() === b.trim();
 
 /**
  * Column changes between two LayoutXMLs: "columns" when the cell names differ in set or order,
@@ -130,14 +146,16 @@ const sameWidth = (a: string, b: string): boolean => (NUMERIC.test(a) && NUMERIC
 function layoutReasons(baseline: string, current: string): ViewDirtyReason[] {
 	const before = readCells(baseline);
 	const after = readCells(current);
-	if (!before || !after) return collapseWhitespace(baseline) === collapseWhitespace(current) ? [] : ["columns"];
+	if (!before || !after)
+		return collapseWhitespace(baseline) === collapseWhitespace(current) ? [] : ["columns"];
 
 	const reasons: ViewDirtyReason[] = [];
 	const names = (cells: LayoutCell[]) => cells.map((cell) => cell.name).join("\n");
 	if (names(before) !== names(after)) reasons.push("columns");
 
 	const beforeWidths = new Map<string, string>();
-	for (const cell of before) if (!beforeWidths.has(cell.name)) beforeWidths.set(cell.name, cell.width);
+	for (const cell of before)
+		if (!beforeWidths.has(cell.name)) beforeWidths.set(cell.name, cell.width);
 	const widthChanged = after.some((cell) => {
 		const width = beforeWidths.get(cell.name);
 		return width !== undefined && !sameWidth(width, cell.width);
@@ -151,10 +169,15 @@ function layoutReasons(baseline: string, current: string): ViewDirtyReason[] {
  * generateLayoutFromFetchXml for it), so a view saved without one still has a baseline. Null when
  * the FetchXML can't be parsed into a tree.
  */
-function generatedLayoutXml(fetchXml: string, attributeTypeMap: Map<string, string> | undefined): string | null {
+function generatedLayoutXml(
+	fetchXml: string,
+	attributeTypeMap: Map<string, string> | undefined,
+): string | null {
 	const result = parseFetchXml(fetchXml);
 	if (!result.success || !result.fetchNode) return null;
-	return generateLayoutXml(generateLayoutFromFetchXml(result.fetchNode, undefined, attributeTypeMap));
+	return generateLayoutXml(
+		generateLayoutFromFetchXml(result.fetchNode, undefined, attributeTypeMap),
+	);
 }
 
 /**
@@ -174,9 +197,14 @@ export function isViewDirty({
 }: ViewDirtyInput): ViewDirtyResult {
 	const reasons: ViewDirtyReason[] = [];
 	const current = normalizeFetchXml(currentFetchXml);
-	if (baselineFetchXml === null ? current !== "" : normalizeFetchXml(baselineFetchXml) !== current) reasons.push("query");
+	if (
+		baselineFetchXml === null ? current !== "" : normalizeFetchXml(baselineFetchXml) !== current
+	)
+		reasons.push("query");
 	if (currentLayoutXml?.trim() && baselineFetchXml !== null) {
-		const baselineLayout = baselineLayoutXml?.trim() ? baselineLayoutXml : generatedLayoutXml(baselineFetchXml, attributeTypeMap);
+		const baselineLayout = baselineLayoutXml?.trim()
+			? baselineLayoutXml
+			: generatedLayoutXml(baselineFetchXml, attributeTypeMap);
 		if (baselineLayout) reasons.push(...layoutReasons(baselineLayout, currentLayoutXml));
 	}
 	return { dirty: reasons.length > 0, reasons };

@@ -78,17 +78,27 @@ export interface SaveOptionsInput {
 const quoted = (name: string): string => `"${name}"`;
 
 export const SAVE_AS_LABEL = "Save as new view…";
-export const PRIVILEGES_UNKNOWN_WARNING = "FetchXML Studio couldn't check your privileges. Dataverse decides when you save.";
-export const VIEW_ACCESS_UNKNOWN_WARNING = "FetchXML Studio couldn't check your access to this view. Dataverse decides when you save.";
+export const PRIVILEGES_UNKNOWN_WARNING =
+	"FetchXML Studio couldn't check your privileges. Dataverse decides when you save.";
+export const VIEW_ACCESS_UNKNOWN_WARNING =
+	"FetchXML Studio couldn't check your access to this view. Dataverse decides when you save.";
 
-const SAVE_AS: SaveAction = { kind: "save-as", label: SAVE_AS_LABEL, needsConfirm: false, publishes: false };
+const SAVE_AS: SaveAction = {
+	kind: "save-as",
+	label: SAVE_AS_LABEL,
+	needsConfirm: false,
+	publishes: false,
+};
 const SAVE_AS_ONLY: SaveOptions = { primary: SAVE_AS, menu: [] };
 
 /** Whether a check blocks the command: a known "no", or no answer yet (so the command doesn't flash in and out) */
 const blocks = (check: CheckResult): boolean => check === false || check === undefined;
 
 /** Ownership of a personal view: the user's own, someone else's (#142), or unknown (an ID missing) */
-function ownership(view: SaveTargetView, currentUserId: string | undefined): "own" | "shared" | "unknown" {
+function ownership(
+	view: SaveTargetView,
+	currentUserId: string | undefined,
+): "own" | "shared" | "unknown" {
 	if (!view.ownerId || !currentUserId) return "unknown";
 	return isSharedView(view, currentUserId) ? "shared" : "own";
 }
@@ -144,7 +154,9 @@ function systemOptions(input: SaveOptionsInput, view: SaveTargetView): SaveOptio
 				label: `Save changes to system view ${quoted(view.name)}…`,
 				needsConfirm: true,
 				publishes: true,
-				...(canWriteSystemViews === "unknown" ? { warning: PRIVILEGES_UNKNOWN_WARNING } : {}),
+				...(canWriteSystemViews === "unknown"
+					? { warning: PRIVILEGES_UNKNOWN_WARNING }
+					: {}),
 			},
 		],
 	};
