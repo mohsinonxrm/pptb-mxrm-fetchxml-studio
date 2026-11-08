@@ -12,6 +12,7 @@ import {
 } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
+import { useSplitters } from "./hooks/useSplitters";
 import { loadAllEntityAttributes } from "../features/fetchxml/api/dataverseMetadata";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
@@ -19,7 +20,11 @@ import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddC
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
-import { isT2TSupported, resolveLaunchPrefill, viewPrefillNotice } from "../features/fetchxml/api/invocation";
+import {
+	isT2TSupported,
+	resolveLaunchPrefill,
+	viewPrefillNotice,
+} from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
@@ -102,15 +107,29 @@ import {
 } from "../features/fetchxml/api/paging";
 import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
 import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
-import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery } from "../features/fetchxml/api/pageRecovery";
-import { LONG_RUNNING_RETRY, withThrottleRetry, type ThrottleRetryOptions } from "../features/fetchxml/api/throttleRetry";
+import {
+	DATAVERSE_DEFAULT_PAGE_SIZE,
+	fetchPageWithRecovery,
+} from "../features/fetchxml/api/pageRecovery";
+import {
+	LONG_RUNNING_RETRY,
+	withThrottleRetry,
+	type ThrottleRetryOptions,
+} from "../features/fetchxml/api/throttleRetry";
 import { debugLog } from "../shared/utils/debug";
 import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
-import { planRemoveColumns, planSortByColumn, resolveColumn } from "../features/fetchxml/model/queryColumns";
+import {
+	planRemoveColumns,
+	planSortByColumn,
+	resolveColumn,
+} from "../features/fetchxml/model/queryColumns";
 import { orderByLayout, resultColumns } from "../features/fetchxml/model/resultColumns";
 import { relationshipKey } from "../features/fetchxml/model/manyToMany";
-import { columnFilterConditions, type NewCondition } from "../features/fetchxml/model/columnFilters";
+import {
+	columnFilterConditions,
+	type NewCondition,
+} from "../features/fetchxml/model/columnFilters";
 import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
 import type { FetchNode, LinkEntityNode } from "../features/fetchxml/model/nodes";
 import { buildViewLayoutXml } from "../features/fetchxml/model/layoutxml";
@@ -124,11 +143,21 @@ import {
 import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
 import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
 import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
-import { deleteAllUnavailableReason, deleteSelectionUnavailableReason, MAX_DIRECT_DELETE } from "../features/fetchxml/model/deleteScope";
+import {
+	deleteAllUnavailableReason,
+	deleteSelectionUnavailableReason,
+	MAX_DIRECT_DELETE,
+} from "../features/fetchxml/model/deleteScope";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
-import { connectionGuard, copyText, holdClose, openUrl, whileHoldingClose } from "../features/fetchxml/api/host";
+import {
+	connectionGuard,
+	copyText,
+	holdClose,
+	openUrl,
+	whileHoldingClose,
+} from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
@@ -288,7 +317,10 @@ export function AppShell() {
 	// new session; only the query itself is kept. Derived while rendering, so the cache is clear
 	// before the new tree's effects load metadata.
 	const carryOver = useRef<ConnectionCarryOver>({ prefillConsumed: false });
-	const [connectionScope, setConnectionScope] = useState<ConnectionScope>({ key: undefined, session: 0 });
+	const [connectionScope, setConnectionScope] = useState<ConnectionScope>({
+		key: undefined,
+		session: 0,
+	});
 	const nextScope = nextConnectionScope(connectionScope, connectionKey);
 	if (nextScope.scope !== connectionScope) {
 		if (nextScope.changed) {
@@ -328,7 +360,10 @@ export function AppShell() {
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				<ToolErrorBoundary readFetchXml={() => carryOver.current.readFetchXml?.()} onRestart={restart}>
+				<ToolErrorBoundary
+					readFetchXml={() => carryOver.current.readFetchXml?.()}
+					onRestart={restart}
+				>
 					<BuilderProvider key={`${session}-${restarts}`}>
 						<AppContent carryOver={carryOver.current} connectionKey={connectionKey} />
 					</BuilderProvider>
@@ -339,7 +374,13 @@ export function AppShell() {
 }
 
 /** connectionKey: "" with no connection, undefined until the host answers (usePptbContext) */
-function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOver; connectionKey?: string }) {
+function AppContent({
+	carryOver,
+	connectionKey,
+}: {
+	carryOver: ConnectionCarryOver;
+	connectionKey?: string;
+}) {
 	const styles = useStyles();
 	const builder = useBuilder();
 	const { loadAttributes, loadEntityMetadata, loadRelationships } = useLazyMetadata();
@@ -357,7 +398,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		if (!fetchXml) return;
 		carryOver.fetchXml = undefined;
 		const result = builder.loadFetchXml(fetchXml);
-		if (!result.success) console.error("Connection change: couldn't reload the query:", result.errors);
+		if (!result.success)
+			console.error("Connection change: couldn't reload the query:", result.errors);
 		// builder is intentionally omitted — runs once per session (mount)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -365,7 +407,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	// Lets AppShell read the current query when the connection changes (#66)
 	const currentFetchQuery = builder.fetchQuery;
 	useEffect(() => {
-		carryOver.readFetchXml = () => (currentFetchQuery ? generateFetchXml(currentFetchQuery) : undefined);
+		carryOver.readFetchXml = () =>
+			currentFetchQuery ? generateFetchXml(currentFetchQuery) : undefined;
 	}, [carryOver, currentFetchQuery]);
 
 	// Consume the inbound prefill exactly once (per tool instance, not per connection, #66). When a
@@ -397,11 +440,20 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				if (action.kind === "view") {
 					let entitySetName: string | undefined;
 					try {
-						entitySetName = (await resolveEntitySet(action.entityLogicalName))?.entitySetName;
-						if (!entitySetName) throw new Error(`${action.entityLogicalName} has no entity set name in metadata.`);
+						entitySetName = (await resolveEntitySet(action.entityLogicalName))
+							?.entitySetName;
+						if (!entitySetName)
+							throw new Error(
+								`${action.entityLogicalName} has no entity set name in metadata.`,
+							);
 					} catch (error) {
 						await window.toolboxAPI?.utils?.showNotification?.(
-							viewPrefillNotice({ kind: "viewUnavailable", viewType: action.view.type, id: action.view.id, error }),
+							viewPrefillNotice({
+								kind: "viewUnavailable",
+								viewType: action.view.type,
+								id: action.view.id,
+								error,
+							}),
 						);
 						return;
 					}
@@ -438,7 +490,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	const [loadedEntityMetadata, setLoadedEntityMetadata] = useState<EntityMetadata | null>(null);
 	// State for lookup relationships (many-to-one) and one-to-many relationships
 	const [lookupRelationships, setLookupRelationships] = useState<RelationshipMetadata[]>([]);
-	const [oneToManyRelationships, setOneToManyRelationships] = useState<RelationshipMetadata[]>([]);
+	const [oneToManyRelationships, setOneToManyRelationships] = useState<RelationshipMetadata[]>(
+		[],
+	);
 	const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
 
 	// Paging for infinite scroll / Retrieve All (#58, #60). The ref is what the async page loops read
@@ -537,7 +591,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	}>({ open: false, action: "activate", recordIds: [] });
 
 	// Why Activate / Deactivate are off for the root entity, per action (#143)
-	const [stateActionReasons, setStateActionReasons] = useState<{ activate?: string; deactivate?: string }>({});
+	const [stateActionReasons, setStateActionReasons] = useState<{
+		activate?: string;
+		deactivate?: string;
+	}>({});
 
 	// Close menu for close-message entities (#149): its items, and the close message dialog
 	const [closeMenuItems, setCloseMenuItems] = useState<CloseMenuItem[] | undefined>();
@@ -560,71 +617,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	}, [displaySettings.advancedFindOnly]);
 	const advancedFindOnly = useAdvancedFindOnly();
 
-	// State for resizable split
-	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
-	const [leftPaneWidth, setLeftPaneWidth] = useState(480); // Width of left pane in pixels
-	const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false); // Tree/Properties resize
-	const [isDraggingVertical, setIsDraggingVertical] = useState(false); // Left/Right pane resize
-
-	// Handle horizontal resize (tree/properties split)
-	useEffect(() => {
-		if (!isDraggingHorizontal) return;
-
-		const handleMouseMove = (e: MouseEvent) => {
-			const leftPane = document.querySelector("[data-left-pane]") as HTMLElement;
-			if (!leftPane) return;
-
-			const rect = leftPane.getBoundingClientRect();
-			const newTopHeight = ((e.clientY - rect.top) / rect.height) * 100;
-
-			// Constrain between 30% and 80%
-			if (newTopHeight >= 30 && newTopHeight <= 80) {
-				setTopHeight(newTopHeight);
-			}
-		};
-
-		const handleMouseUp = () => {
-			setIsDraggingHorizontal(false);
-		};
-
-		document.addEventListener("mousemove", handleMouseMove);
-		document.addEventListener("mouseup", handleMouseUp);
-
-		return () => {
-			document.removeEventListener("mousemove", handleMouseMove);
-			document.removeEventListener("mouseup", handleMouseUp);
-		};
-	}, [isDraggingHorizontal]);
-
-	// Handle vertical resize (left/right pane split)
-	useEffect(() => {
-		if (!isDraggingVertical) return;
-
-		const handleMouseMove = (e: MouseEvent) => {
-			const appRoot = document.querySelector("[data-app-root]") as HTMLElement;
-			if (!appRoot) return;
-
-			const rect = appRoot.getBoundingClientRect();
-			const newLeftPaneWidth = e.clientX - rect.left;
-
-			// Constrain between 300px and 800px
-			if (newLeftPaneWidth >= 300 && newLeftPaneWidth <= 800) {
-				setLeftPaneWidth(newLeftPaneWidth);
-			}
-		};
-
-		const handleMouseUp = () => {
-			setIsDraggingVertical(false);
-		};
-
-		document.addEventListener("mousemove", handleMouseMove);
-		document.addEventListener("mouseup", handleMouseUp);
-
-		return () => {
-			document.removeEventListener("mousemove", handleMouseMove);
-			document.removeEventListener("mouseup", handleMouseUp);
-		};
-	}, [isDraggingVertical]);
+	const { topHeight, leftPaneWidth, startHorizontalDrag, startVerticalDrag } = useSplitters();
 
 	// Check Dataverse API on mount. WhoAmI is memoized per connection, so this shares the startup
 	// request with the privilege checks (#71); the details are debug output only.
@@ -649,13 +642,19 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			try {
 				const user = await whoAmI();
 				if (user) {
-					const hasPrivilege = await checkPrivilegeByName(user.UserId, "prvExportToExcel");
+					const hasPrivilege = await checkPrivilegeByName(
+						user.UserId,
+						"prvExportToExcel",
+					);
 					setExportStatus((prev) => ({
 						...prev,
 						hasPrivilege,
 						privilegeChecked: true,
 					}));
-					debugLog("app", `📊 Export to Excel privilege: ${hasPrivilege ? "GRANTED" : "DENIED"}`);
+					debugLog(
+						"app",
+						`📊 Export to Excel privilege: ${hasPrivilege ? "GRANTED" : "DENIED"}`,
+					);
 				} else {
 					setExportStatus((prev) => ({
 						...prev,
@@ -742,31 +741,62 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		const activateClose = closeMessageReason(entityLogicalName, "activate");
 		const deactivateClose = closeMessageReason(entityLogicalName, "deactivate");
 		const actions = closeActionsFor(entityLogicalName);
-		const toItems = (reasonFor: (action: CloseAction) => string | undefined): CloseMenuItem[] | undefined =>
-			actions?.map((a) => ({ key: a.key, label: a.label, destructive: a.destructive, disabledReason: reasonFor(a) }));
+		const toItems = (
+			reasonFor: (action: CloseAction) => string | undefined,
+		): CloseMenuItem[] | undefined =>
+			actions?.map((a) => ({
+				key: a.key,
+				label: a.label,
+				destructive: a.destructive,
+				disabledReason: reasonFor(a),
+			}));
 		setCloseMenuItems(toItems(() => undefined));
-		if (!entityLogicalName || !isDataverseAvailable() || (activateClose && deactivateClose && !actions)) {
+		if (
+			!entityLogicalName ||
+			!isDataverseAvailable() ||
+			(activateClose && deactivateClose && !actions)
+		) {
 			setStateActionReasons({ activate: activateClose, deactivate: deactivateClose });
 			return;
 		}
 		let current = true;
 		setStateActionReasons({ activate: activateClose, deactivate: deactivateClose });
 		(async () => {
-			const closeEntities = [...new Set((actions ?? []).flatMap((a) => (a.kind === "message" ? [a.closeEntity] : [])))];
+			const closeEntities = [
+				...new Set(
+					(actions ?? []).flatMap((a) => (a.kind === "message" ? [a.closeEntity] : [])),
+				),
+			];
 			const [model, canWrite, canCreate] = await Promise.all([
 				getEntityStateModel(entityLogicalName).catch((error: unknown) => {
 					console.warn("Activate/Deactivate: couldn't read the state model:", error);
 					return undefined;
 				}),
 				checkWritePrivilege(entityLogicalName),
-				Promise.all(closeEntities.map(async (e) => [e, await checkEntityPrivilege(e, "Create")] as const)).then((pairs) => new Map(pairs)),
+				Promise.all(
+					closeEntities.map(
+						async (e) => [e, await checkEntityPrivilege(e, "Create")] as const,
+					),
+				).then((pairs) => new Map(pairs)),
 			]);
 			if (!current) return;
 			const writeReason =
-				canWrite === false ? "You don't have the Write privilege on this entity, so you can't change its records' status." : undefined;
+				canWrite === false
+					? "You don't have the Write privilege on this entity, so you can't change its records' status."
+					: undefined;
 			setStateActionReasons({
-				activate: activateClose ?? (model !== undefined ? stateActionUnavailableReason(model, "activate") : undefined) ?? writeReason,
-				deactivate: deactivateClose ?? (model !== undefined ? stateActionUnavailableReason(model, "deactivate") : undefined) ?? writeReason,
+				activate:
+					activateClose ??
+					(model !== undefined
+						? stateActionUnavailableReason(model, "activate")
+						: undefined) ??
+					writeReason,
+				deactivate:
+					deactivateClose ??
+					(model !== undefined
+						? stateActionUnavailableReason(model, "deactivate")
+						: undefined) ??
+					writeReason,
 			});
 			setCloseMenuItems(
 				toItems(
@@ -923,7 +953,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
 
 	// Quick find views keep {0} in their conditions (#142): a test value is needed to execute them
-	const quickFindPlaceholderCount = useMemo(() => countQuickFindPlaceholders(fetchXml), [fetchXml]);
+	const quickFindPlaceholderCount = useMemo(
+		() => countQuickFindPlaceholders(fetchXml),
+		[fetchXml],
+	);
 	const quickFindSearchValue = toQuickFindSearchValue(quickFindValue, quickFindAddPercent);
 
 	// Check if current query is an aggregate query (disables delete/workflow buttons)
@@ -973,7 +1006,11 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 	// come from a successful run of a query that matches the same records as the tree. Editing a
 	// filter in the left pane doesn't re-run the query, so the old rows would still be on screen.
 	const deleteAllDisabledReason = useMemo(
-		() => deleteAllUnavailableReason(executeError ? null : queryResult?.query, builder.fetchQuery),
+		() =>
+			deleteAllUnavailableReason(
+				executeError ? null : queryResult?.query,
+				builder.fetchQuery,
+			),
 		[executeError, queryResult?.query, builder.fetchQuery],
 	);
 
@@ -1036,7 +1073,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		// https://learn.microsoft.com/power-apps/developer/data-platform/quick-find
 		const hasQuickFindPlaceholders = countQuickFindPlaceholders(builtXml) > 0;
 		if (hasQuickFindPlaceholders && !quickFindSearchValue) return;
-		const xmlToExecute = hasQuickFindPlaceholders ? applyQuickFindValue(builtXml, quickFindSearchValue) : builtXml;
+		const xmlToExecute = hasQuickFindPlaceholders
+			? applyQuickFindValue(builtXml, quickFindSearchValue)
+			: builtXml;
 
 		// A new run: anything still loading for the previous one is dropped (#60)
 		const run = ++resultRunRef.current;
@@ -1085,9 +1124,13 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					// Retried after service protection errors like every page (#183, #96); a view's page
 					// size is Dataverse's, so it can't be made smaller
 					if (loadedView.type === "system") {
-						result = await withThrottleRetry(() => executeSystemView(loadedView.entitySetName, loadedView.id));
+						result = await withThrottleRetry(() =>
+							executeSystemView(loadedView.entitySetName, loadedView.id),
+						);
 					} else {
-						result = await withThrottleRetry(() => executePersonalView(loadedView.entitySetName, loadedView.id));
+						result = await withThrottleRetry(() =>
+							executePersonalView(loadedView.entitySetName, loadedView.id),
+						);
 					}
 				}
 			}
@@ -1113,26 +1156,47 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				const firstPageState: PagingState = {
 					mode: "fetchxml",
 					xml: xmlToExecute,
-					pageSize: canShrink ? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE) : undefined,
+					pageSize: canShrink
+						? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE)
+						: undefined,
 					currentPage: (options.page ?? 1) - 1,
 					nextPage: options.page ?? 1,
 					moreRecords: true,
 					isRetrieveAllInProgress: false,
 					retrieveAll: false,
 				};
-				const { result: firstPageResult, state: fetchedFirst } = await fetchPageWithRecovery(
-					firstPageState,
-					// Unchanged, the query runs as written; after a halving, with the smaller count
-					(s) => (s.pageSize === firstPageState.pageSize ? executeFetchXml(xmlToExecute) : executeFetchXml(addPagingToFetchXml(xmlToExecute, s.nextPage, undefined, s.pageSize))),
-					{ onShrink: (s) => debugLog("app", `First page too large: retrying with count ${s.pageSize}`) },
-				);
+				const { result: firstPageResult, state: fetchedFirst } =
+					await fetchPageWithRecovery(
+						firstPageState,
+						// Unchanged, the query runs as written; after a halving, with the smaller count
+						(s) =>
+							s.pageSize === firstPageState.pageSize
+								? executeFetchXml(xmlToExecute)
+								: executeFetchXml(
+										addPagingToFetchXml(
+											xmlToExecute,
+											s.nextPage,
+											undefined,
+											s.pageSize,
+										),
+									),
+						{
+							onShrink: (s) =>
+								debugLog(
+									"app",
+									`First page too large: retrying with count ${s.pageSize}`,
+								),
+						},
+					);
 				result = firstPageResult;
-				if (fetchedFirst.pageSize !== firstPageState.pageSize) firstPageShrunkTo = fetchedFirst;
+				if (fetchedFirst.pageSize !== firstPageState.pageSize)
+					firstPageShrunkTo = fetchedFirst;
 			}
 			if (run !== resultRunRef.current) return; // superseded while the first page was loading
 
 			const executionTimeMs = Math.round(performance.now() - startTime);
-			const moreRecords = !hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
+			const moreRecords =
+				!hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
 			const firstPage = options.page ?? 1;
 
 			loadedRowsRef.current = result.records.length;
@@ -1151,7 +1215,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				xml: xmlToExecute,
 				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
 				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
-				fullPageSize: options.count === undefined && moreRecords ? result.records.length : undefined,
+				fullPageSize:
+					options.count === undefined && moreRecords ? result.records.length : undefined,
 				// After a smaller first page (#183), paging continues from the page it was fetched as
 				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
 				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
@@ -1168,7 +1233,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			if (run !== resultRunRef.current) return;
 			console.error("Failed to execute FetchXML:", error);
 			// Documented Dataverse errors get actionable text; Dataverse's own message follows (#96)
-			setExecuteError(formatDataverseError(error, "An unexpected error occurred while executing the query."));
+			setExecuteError(
+				formatDataverseError(
+					error,
+					"An unexpected error occurred while executing the query.",
+				),
+			);
 			setQueryResult({ query, rows: [] });
 			setIsExecuting(false);
 		}
@@ -1224,26 +1294,51 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			(s) =>
 				s.mode === "view"
 					? executeNextLink(s.nextLink ?? "")
-					: executeFetchXml(addPagingToFetchXml(s.xml, s.nextPage, s.pagingCookie, s.pageSize)),
-			{ retry, onShrink: (s) => debugLog("app", `Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`) },
+					: executeFetchXml(
+							addPagingToFetchXml(s.xml, s.nextPage, s.pagingCookie, s.pageSize),
+						),
+			{
+				retry,
+				onShrink: (s) =>
+					debugLog(
+						"app",
+						`Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`,
+					),
+			},
 		);
 		return { result, next: advancePaging(fetched, result) };
 	};
 
 	/** Add a fetched page to the results of run `run` (ignored if the results changed meanwhile). */
-	const appendPage = (run: number, state: PagingState, result: FetchXmlResult, next: PagingState) => {
+	const appendPage = (
+		run: number,
+		state: PagingState,
+		result: FetchXmlResult,
+		next: PagingState,
+	) => {
 		if (run !== resultRunRef.current) return false;
 		loadedRowsRef.current += result.records.length;
 		setQueryResult((prev) =>
 			prev
-				? { ...prev, rows: prev.rows.concat(result.records), moreRecords: next.moreRecords, pagingCookie: next.pagingCookie }
+				? {
+						...prev,
+						rows: prev.rows.concat(result.records),
+						moreRecords: next.moreRecords,
+						pagingCookie: next.pagingCookie,
+					}
 				: prev,
 		);
 		// A page loaded, so an earlier failure or Stop notice no longer applies. A FetchXML page
 		// requested without a cookie means Dataverse returned none for this query: say so once.
 		const simple: PagingNotice | null =
-			state.mode === "fetchxml" && !state.pagingCookie ? { kind: "simple", message: SIMPLE_PAGING_MESSAGE } : null;
-		setPagingNotice((prev) => (prev && prev.kind !== "error" && prev.kind !== "stopped" && prev.kind !== "limit" ? prev : simple));
+			state.mode === "fetchxml" && !state.pagingCookie
+				? { kind: "simple", message: SIMPLE_PAGING_MESSAGE }
+				: null;
+		setPagingNotice((prev) =>
+			prev && prev.kind !== "error" && prev.kind !== "stopped" && prev.kind !== "limit"
+				? prev
+				: simple,
+		);
 		return true;
 	};
 
@@ -1278,7 +1373,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					state = { ...state, isRetrieveAllInProgress: false, retrieveAll: false };
 					setPaging(state);
 					setPagingNotice({ kind: "limit", message: RETRIEVE_ALL_LIMIT_MESSAGE });
-					debugLog("app", `Retrieve All stopped at ${loadedRowsRef.current} rows (limit)`);
+					debugLog(
+						"app",
+						`Retrieve All stopped at ${loadedRowsRef.current} rows (limit)`,
+					);
 					return;
 				}
 				const { result, next } = await fetchNextPage(state, retry);
@@ -1302,7 +1400,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			if (isCurrent()) {
 				setPagingWaitSeconds(undefined);
 				setIsLoadingMore(false);
-				if (pagingRef.current) setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
+				if (pagingRef.current)
+					setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
 			}
 		}
 	};
@@ -1368,8 +1467,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		if (!exportStatus.hasPrivilege) {
 			setExportStatus((prev) => ({
 				...prev,
-				error:
-					"You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
+				error: "You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
 			}));
 			return;
 		}
@@ -1465,7 +1563,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const getAttribute = (entityName: string, attributeName: string) =>
 				attributeMetadata?.get(entityName)?.get(attributeName);
 			const columns = orderByLayout(
-				resultColumns(builder.fetchQuery, queryResult.rows, getAttribute, queryResult.query),
+				resultColumns(
+					builder.fetchQuery,
+					queryResult.rows,
+					getAttribute,
+					queryResult.query,
+				),
 				builder.columnConfig,
 			).map((c) => c.key);
 
@@ -1506,23 +1609,29 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			// still works without them (UTC, labelled; currency and decimals from formatted values)
 			const entityNames = [...(attributeMetadata?.keys() ?? [])];
 			// exceljs (~1 MB) loads on the first local export, not at startup (#187)
-			const [formattingEntries, timeZone, { exportToExcelLocal, downloadExcelFile }] = await Promise.all([
-				Promise.all(
-					entityNames.map((name) =>
-						loadFormattingMetadata(name)
-							.then((formatting) => [name, formatting] as const)
-							.catch((error: unknown) => {
-								console.error(`Failed to load formatting metadata for ${name}:`, error);
-								return [name, new Map()] as const;
-							}),
+			const [formattingEntries, timeZone, { exportToExcelLocal, downloadExcelFile }] =
+				await Promise.all([
+					Promise.all(
+						entityNames.map((name) =>
+							loadFormattingMetadata(name)
+								.then((formatting) => [name, formatting] as const)
+								.catch((error: unknown) => {
+									console.error(
+										`Failed to load formatting metadata for ${name}:`,
+										error,
+									);
+									return [name, new Map()] as const;
+								}),
+						),
 					),
-				),
-				loadUserTimeZone(),
-				// The chunk is gone if the tool was updated while open; the browser caches the failure
-				import("../features/fetchxml/api/excelExport").catch(() => {
-					throw new Error("Couldn't load the Excel exporter. Reload the tool and try again.");
-				}),
-			]);
+					loadUserTimeZone(),
+					// The chunk is gone if the tool was updated while open; the browser caches the failure
+					import("../features/fetchxml/api/excelExport").catch(() => {
+						throw new Error(
+							"Couldn't load the Excel exporter. Reload the tool and try again.",
+						);
+					}),
+				]);
 
 			const { buffer, fileName: finalFileName } = await exportToExcelLocal({
 				records: queryResult.rows,
@@ -1550,7 +1659,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			setExportStatus((prev) => ({
 				...prev,
 				isExporting: false,
-				error: error instanceof Error ? error.message : "Local export failed. Please try again.",
+				error:
+					error instanceof Error
+						? error.message
+						: "Local export failed. Please try again.",
 			}));
 		}
 	};
@@ -1644,7 +1756,10 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			if (recordIds.length === 0) {
 				if (deleteAllDisabledReason) return; // the button explains why (#174)
 				if (!recordActionPrivileges.canBulkDelete) {
-					debugLog("app", "Bulk delete privilege required to delete all records from view");
+					debugLog(
+						"app",
+						"Bulk delete privilege required to delete all records from view",
+					);
 					return;
 				}
 				const totalRecords = queryResult?.rows.length || 0;
@@ -1660,7 +1775,13 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			// Scenario 3: More than 100 records - use bulk delete with IN operator. Without prvBulkDelete
 			// it's blocked, not deleted record by record (#177); the command bar says why.
 			if (recordIds.length > MAX_DIRECT_DELETE) {
-				if (deleteSelectionUnavailableReason(recordIds.length, recordActionPrivileges.canBulkDelete)) return;
+				if (
+					deleteSelectionUnavailableReason(
+						recordIds.length,
+						recordActionPrivileges.canBulkDelete,
+					)
+				)
+					return;
 				setBulkDeleteDialogState({
 					open: true,
 					recordIds,
@@ -1681,7 +1802,13 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const isBatchDelete = recordIds.length >= 4;
 			setDeleteDialogState({ open: true, recordIds, recordName, isBatchDelete });
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, entityMetadata, deleteAllDisabledReason],
+		[
+			entityLogicalName,
+			recordActionPrivileges.canBulkDelete,
+			queryResult,
+			entityMetadata,
+			deleteAllDisabledReason,
+		],
 	);
 
 	/**
@@ -1703,7 +1830,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				totalViewRecords: isAllRecords ? totalRecords : undefined,
 			});
 		},
-		[entityLogicalName, recordActionPrivileges.canBulkDelete, queryResult, deleteAllDisabledReason],
+		[
+			entityLogicalName,
+			recordActionPrivileges.canBulkDelete,
+			queryResult,
+			deleteAllDisabledReason,
+		],
 	);
 
 	/**
@@ -1721,14 +1853,15 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			// For batch delete (4+ records): $batch requests with the metadata EntitySetName on
 			// PPTB ≥ 1.2.7 (#61)
 			if (deleteDialogState.isBatchDelete) {
-				const result = await deleteRecordsBatch(
-					entityLogicalName,
-					recordIds,
-					(progress) => setDeleteProgress(progress),
+				const result = await deleteRecordsBatch(entityLogicalName, recordIds, (progress) =>
+					setDeleteProgress(progress),
 				);
 
 				if (result.succeeded > 0) {
-					debugLog("app", `✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`);
+					debugLog(
+						"app",
+						`✅ Batch deleted ${result.succeeded} of ${recordIds.length} records`,
+					);
 					// Re-execute query to refresh results
 					void handleExecuteRef.current();
 				}
@@ -1767,11 +1900,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		} finally {
 			releaseClose();
 		}
-	}, [
-		entityLogicalName,
-		deleteDialogState.recordIds,
-		deleteDialogState.isBatchDelete,
-	]);
+	}, [entityLogicalName, deleteDialogState.recordIds, deleteDialogState.isBatchDelete]);
 
 	/**
 	 * Submit bulk delete job (called from BulkDeleteDialog)
@@ -1788,13 +1917,19 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				// The query that produced the results on screen, never the tree after later edits (#174)
 				const executed = queryResult?.query;
 				if (!executed || deleteAllDisabledReason) {
-					throw new Error(deleteAllDisabledReason ?? "Run the query first: Delete all deletes the records the query on screen matches.");
+					throw new Error(
+						deleteAllDisabledReason ??
+							"Run the query first: Delete all deletes the records the query on screen matches.",
+					);
 				}
 				// The FetchXML that ran: a quick find view's test value replaced {0} only there (#142), so
 				// the tree's XML would still say {0}
 				const currentFetchXml = pagingRef.current?.xml ?? generateFetchXml(executed);
 				const result = await submitBulkDeleteFromFetchXml(currentFetchXml, jobName);
-				debugLog("app", `📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`);
+				debugLog(
+					"app",
+					`📤 Bulk delete job (all records) submitted: ${result.asyncOperationId}`,
+				);
 				return result;
 			}
 
@@ -1862,7 +1997,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				return { succeeded: 0, failed: recordIds.length, errors: ["Entity not selected"] };
 			}
 			// The host warns before the tab closes while workflows are being started (#70)
-			return whileHoldingClose(() => executeWorkflowBatch(workflow, recordIds, entityLogicalName, onProgress));
+			return whileHoldingClose(() =>
+				executeWorkflowBatch(workflow, recordIds, entityLogicalName, onProgress),
+			);
 		},
 		[entityLogicalName],
 	);
@@ -1875,18 +2012,35 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 		},
 		[entityLogicalName],
 	);
-	const handleActivateRecords = useCallback((ids: string[]) => openSetStateDialog("activate", ids), [openSetStateDialog]);
-	const handleDeactivateRecords = useCallback((ids: string[]) => openSetStateDialog("deactivate", ids), [openSetStateDialog]);
+	const handleActivateRecords = useCallback(
+		(ids: string[]) => openSetStateDialog("activate", ids),
+		[openSetStateDialog],
+	);
+	const handleDeactivateRecords = useCallback(
+		(ids: string[]) => openSetStateDialog("deactivate", ids),
+		[openSetStateDialog],
+	);
 
 	/** Runs the state change (#143): PATCH statecode / statuscode, holding the host's close warning */
 	const handleExecuteStateChange = useCallback(
-		async (target: StateTarget, onProgress: (progress: BatchDeleteProgress) => void): Promise<BatchDeleteResult> => {
+		async (
+			target: StateTarget,
+			onProgress: (progress: BatchDeleteProgress) => void,
+		): Promise<BatchDeleteResult> => {
 			if (!entityLogicalName) throw new Error("Entity not selected");
 			const result = await whileHoldingClose(() =>
-				setRecordsState(entityLogicalName, setStateDialogState.recordIds, target, onProgress),
+				setRecordsState(
+					entityLogicalName,
+					setStateDialogState.recordIds,
+					target,
+					onProgress,
+				),
 			);
 			if (result.succeeded > 0) {
-				debugLog("app", `✅ State changed on ${result.succeeded} of ${setStateDialogState.recordIds.length} records`);
+				debugLog(
+					"app",
+					`✅ State changed on ${result.succeeded} of ${setStateDialogState.recordIds.length} records`,
+				);
 				void handleExecuteRef.current();
 			}
 			return result;
@@ -1903,7 +2057,12 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			const action = findCloseAction(entityLogicalName, actionKey);
 			if (!action || recordIds.length === 0) return;
 			if (action.kind === "state") {
-				setSetStateDialogState({ open: true, action: "deactivate", recordIds, closeAction: action });
+				setSetStateDialogState({
+					open: true,
+					action: "deactivate",
+					recordIds,
+					closeAction: action,
+				});
 			} else {
 				setCloseDialogState({ open: true, action, recordIds });
 			}
@@ -1913,19 +2072,37 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 
 	/** Runs the close message on each record (#149), holding the host's close warning */
 	const handleExecuteClose = useCallback(
-		async (values: CloseValues, onProgress: (progress: BatchDeleteProgress) => void): Promise<BatchDeleteResult> => {
+		async (
+			values: CloseValues,
+			onProgress: (progress: BatchDeleteProgress) => void,
+		): Promise<BatchDeleteResult> => {
 			const action = closeDialogState.action;
 			if (!entityLogicalName || !action) throw new Error("Entity not selected");
 			const result = await whileHoldingClose(() =>
-				closeRecords(entityLogicalName, entityMetadata?.PrimaryIdAttribute, closeDialogState.recordIds, action, values, onProgress),
+				closeRecords(
+					entityLogicalName,
+					entityMetadata?.PrimaryIdAttribute,
+					closeDialogState.recordIds,
+					action,
+					values,
+					onProgress,
+				),
 			);
 			if (result.succeeded > 0) {
-				debugLog("app", `✅ ${action.message} on ${result.succeeded} of ${closeDialogState.recordIds.length} records`);
+				debugLog(
+					"app",
+					`✅ ${action.message} on ${result.succeeded} of ${closeDialogState.recordIds.length} records`,
+				);
 				void handleExecuteRef.current();
 			}
 			return result;
 		},
-		[entityLogicalName, entityMetadata?.PrimaryIdAttribute, closeDialogState.action, closeDialogState.recordIds],
+		[
+			entityLogicalName,
+			entityMetadata?.PrimaryIdAttribute,
+			closeDialogState.action,
+			closeDialogState.recordIds,
+		],
 	);
 
 	// Rows repeat for 1:N / N:N link-entities; Activate / Deactivate say so like their other reasons (#143)
@@ -1979,37 +2156,49 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			<div className={styles.leftPane} data-left-pane style={{ width: `${leftPaneWidth}px` }}>
 				{/* Top: Tree View */}
 				<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
-					<PaneErrorBoundary where="Query scope" title="The query scope couldn't be shown" resetKey={connectionKey}>
-					<EntitySelector
-						selectedEntity={builder.fetchQuery?.entity.name || null}
-						onEntityChange={builder.setEntity}
-						onNewQuery={builder.newQuery}
-						entityScopeMode={displaySettings.entityScopeMode}
-						onEntityScopeModeChange={(entityScopeMode) => setDisplaySettings({ ...displaySettings, entityScopeMode })}
-						advancedFindOnly={displaySettings.advancedFindOnly}
-						onAdvancedFindOnlyChange={(advancedFindOnly) => setDisplaySettings({ ...displaySettings, advancedFindOnly })}
-						onViewLoad={applyLoadedView}
-					/>
+					<PaneErrorBoundary
+						where="Query scope"
+						title="The query scope couldn't be shown"
+						resetKey={connectionKey}
+					>
+						<EntitySelector
+							selectedEntity={builder.fetchQuery?.entity.name || null}
+							onEntityChange={builder.setEntity}
+							onNewQuery={builder.newQuery}
+							entityScopeMode={displaySettings.entityScopeMode}
+							onEntityScopeModeChange={(entityScopeMode) =>
+								setDisplaySettings({ ...displaySettings, entityScopeMode })
+							}
+							advancedFindOnly={displaySettings.advancedFindOnly}
+							onAdvancedFindOnlyChange={(advancedFindOnly) =>
+								setDisplaySettings({ ...displaySettings, advancedFindOnly })
+							}
+							onViewLoad={applyLoadedView}
+						/>
 					</PaneErrorBoundary>
 					{builder.fetchQuery ? (
-						<PaneErrorBoundary where="Query tree" title="The query tree couldn't be shown" resetKey={builder.fetchQuery}>
-						<TreeView
-							fetchQuery={builder.fetchQuery}
-							size={treeSizeFor(displaySettings.gridDensity)}
-							iconStyle={displaySettings.treeIconStyle}
-							attributeMetadata={attributeMetadata}
-							selectedNodeId={builder.selectedNodeId}
-							onNodeSelect={builder.selectNode}
-							onAddAttribute={builder.addAttribute}
-							onAddAllAttributes={builder.addAllAttributes}
-							onAddOrder={builder.addOrder}
-							onAddFilter={builder.addFilter}
-							onAddSubfilter={builder.addSubfilter}
-							onAddCondition={builder.addCondition}
-							onAddLinkEntity={builder.addLinkEntity}
-							onRemoveNode={builder.removeNode}
-							onUpdateAttributes={builder.updateAttributes}
-						/>
+						<PaneErrorBoundary
+							where="Query tree"
+							title="The query tree couldn't be shown"
+							resetKey={builder.fetchQuery}
+						>
+							<TreeView
+								fetchQuery={builder.fetchQuery}
+								size={treeSizeFor(displaySettings.gridDensity)}
+								iconStyle={displaySettings.treeIconStyle}
+								attributeMetadata={attributeMetadata}
+								selectedNodeId={builder.selectedNodeId}
+								onNodeSelect={builder.selectNode}
+								onAddAttribute={builder.addAttribute}
+								onAddAllAttributes={builder.addAllAttributes}
+								onAddOrder={builder.addOrder}
+								onAddFilter={builder.addFilter}
+								onAddSubfilter={builder.addSubfilter}
+								onAddCondition={builder.addCondition}
+								onAddLinkEntity={builder.addLinkEntity}
+								onRemoveNode={builder.removeNode}
+								onUpdateAttributes={builder.updateAttributes}
+							/>
 						</PaneErrorBoundary>
 					) : (
 						<div className={styles.placeholder}>Select an entity to begin</div>
@@ -2018,7 +2207,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				{/* Resize Handle */}
 				<div
 					className={styles.horizontalResizeHandle}
-					onMouseDown={() => setIsDraggingHorizontal(true)}
+					onMouseDown={startHorizontalDrag}
 					title="Drag to resize"
 				>
 					<span className={styles.horizontalGrip}>
@@ -2033,12 +2222,16 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						<span style={{ fontWeight: 600 }}>Properties</span>
 					</div>
 					<div className={styles.propertiesContent}>
-						<PaneErrorBoundary where="Properties panel" title="The properties couldn't be shown" resetKey={builder.selectedNodeId}>
-						<PropertiesPanel
-							selectedNode={builder.selectedNode}
-							fetchQuery={builder.fetchQuery}
-							onNodeUpdate={builder.updateNode}
-						/>
+						<PaneErrorBoundary
+							where="Properties panel"
+							title="The properties couldn't be shown"
+							resetKey={builder.selectedNodeId}
+						>
+							<PropertiesPanel
+								selectedNode={builder.selectedNode}
+								fetchQuery={builder.fetchQuery}
+								onNodeUpdate={builder.updateNode}
+							/>
 						</PaneErrorBoundary>
 					</div>
 				</div>
@@ -2046,7 +2239,7 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 			{/* Vertical Resize Handle */}
 			<div
 				className={styles.verticalResizeHandle}
-				onMouseDown={() => setIsDraggingVertical(true)}
+				onMouseDown={startVerticalDrag}
 				title="Drag to resize"
 			>
 				<span className={styles.verticalGrip}>
@@ -2069,7 +2262,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					canExport={!!builder.loadedView && exportStatus.hasPrivilege}
 					isExporting={exportStatus.isExporting}
 					exportError={exportStatus.error}
-					onDismissExportError={() => setExportStatus((prev) => ({ ...prev, error: undefined }))}
+					onDismissExportError={() =>
+						setExportStatus((prev) => ({ ...prev, error: undefined }))
+					}
 					executeError={executeError}
 					onDismissExecuteError={() => setExecuteError(undefined)}
 					exportDisabledReason={
@@ -2098,7 +2293,8 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					onRetryPaging={handleRetryPaging}
 					onDismissPagingNotice={() => setPagingNotice(null)}
 					entityDisplayName={
-						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityMetadata?.LogicalName
+						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+						entityMetadata?.LogicalName
 					}
 					lookupRelationships={lookupRelationships}
 					oneToManyRelationships={oneToManyRelationships}
@@ -2126,7 +2322,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 							fetchXml={fetchXml}
 							layoutXml={layoutXml}
 							entityLogicalName={builder.fetchQuery?.entity?.name || ""}
-							entityDisplayName={entityMetadata?.DisplayName?.UserLocalizedLabel?.Label}
+							entityDisplayName={
+								entityMetadata?.DisplayName?.UserLocalizedLabel?.Label
+							}
 							objectTypeCode={entityMetadata?.ObjectTypeCode || 0}
 							primaryIdAttribute={entityMetadata?.PrimaryIdAttribute || ""}
 							loadedView={builder.loadedView}
@@ -2261,7 +2459,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 						if (!builder.fetchQuery) return;
 						const column = resolveColumn(builder.fetchQuery, data.columnId);
 						const metadata = column
-							? attributeMetadata?.get(column.container.name)?.get(column.attribute.name)
+							? attributeMetadata
+									?.get(column.container.name)
+									?.get(column.attribute.name)
 							: undefined;
 						const plan = planSortByColumn(
 							builder.fetchQuery,
@@ -2303,7 +2503,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 					getSelectedRecordIds={getSelectedRecordIds}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
 					displaySettings={displaySettings}
-					onGridDensityChange={(gridDensity) => setDisplaySettings({ ...displaySettings, gridDensity })}
+					onGridDensityChange={(gridDensity) =>
+						setDisplaySettings({ ...displaySettings, gridDensity })
+					}
 				/>
 			</div>
 			{/* Delete Confirmation Dialog */}
@@ -2311,7 +2513,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				open={deleteDialogState.open}
 				recordName={deleteDialogState.recordName}
 				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "record"
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+					entityLogicalName ||
+					"record"
 				}
 				entityLogicalName={entityLogicalName}
 				recordCount={deleteDialogState.recordIds.length}
@@ -2327,7 +2531,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				open={bulkDeleteDialogState.open}
 				recordCount={bulkDeleteDialogState.recordIds.length}
 				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+					entityLogicalName ||
+					"records"
 				}
 				entityLogicalName={entityLogicalName}
 				isAllRecords={bulkDeleteDialogState.isAllRecords}
@@ -2341,7 +2547,9 @@ function AppContent({ carryOver, connectionKey }: { carryOver: ConnectionCarryOv
 				open={workflowDialogState.open}
 				recordCount={workflowDialogState.recordIds.length}
 				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label || entityLogicalName || "records"
+					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+					entityLogicalName ||
+					"records"
 				}
 				entityLogicalName={entityLogicalName}
 				preSelectedWorkflow={workflowDialogState.preSelectedWorkflow}

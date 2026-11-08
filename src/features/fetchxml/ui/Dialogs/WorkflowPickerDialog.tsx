@@ -119,7 +119,7 @@ export interface WorkflowPickerDialogProps {
 	/** Called when workflow execution is confirmed */
 	onExecute: (
 		workflow: WorkflowInfo,
-		onProgress: (progress: WorkflowBatchProgress) => void
+		onProgress: (progress: WorkflowBatchProgress) => void,
 	) => Promise<{ succeeded: number; failed: number; errors: string[] }>;
 }
 
@@ -165,7 +165,9 @@ export function WorkflowPickerDialog({
 					// Auto-select: preSelectedWorkflow takes priority, then single workflow
 					if (preSelectedWorkflow) {
 						// Verify the pre-selected workflow exists in the fetched list
-						const found = wfs.find((w) => w.workflowid === preSelectedWorkflow.workflowid);
+						const found = wfs.find(
+							(w) => w.workflowid === preSelectedWorkflow.workflowid,
+						);
 						if (found) {
 							setSelectedWorkflowId(found.workflowid);
 						}
@@ -240,14 +242,20 @@ export function WorkflowPickerDialog({
 		const isTomorrow =
 			completionDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
 
-		const timeStr = completionDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+		const timeStr = completionDate.toLocaleTimeString([], {
+			hour: "2-digit",
+			minute: "2-digit",
+		});
 
 		if (isToday) {
 			return `Est. completion: today at ${timeStr}`;
 		} else if (isTomorrow) {
 			return `Est. completion: tomorrow at ${timeStr}`;
 		} else {
-			const dateStr = completionDate.toLocaleDateString([], { month: "short", day: "numeric" });
+			const dateStr = completionDate.toLocaleDateString([], {
+				month: "short",
+				day: "numeric",
+			});
 			return `Est. completion: ${dateStr} at ${timeStr}`;
 		}
 	};
@@ -268,8 +276,8 @@ export function WorkflowPickerDialog({
 						<div className={styles.emptyState}>
 							<Text weight="semibold">No workflows available</Text>
 							<Text size={200}>
-								There are no on-demand workflows configured for {entityDisplayName || "this entity"}
-								.
+								There are no on-demand workflows configured for{" "}
+								{entityDisplayName || "this entity"}.
 							</Text>
 						</div>
 					);
@@ -284,10 +292,13 @@ export function WorkflowPickerDialog({
 							scope={{ kind: "records", count: recordCount }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
-						<UndoNote undo="none">There's no undo: whatever the workflow changes stays changed.</UndoNote>
+						<UndoNote undo="none">
+							There's no undo: whatever the workflow changes stays changed.
+						</UndoNote>
 
 						<Text>
-							Select a workflow to run on {recordCount} {recordCount === 1 ? "record" : "records"}:
+							Select a workflow to run on {recordCount}{" "}
+							{recordCount === 1 ? "record" : "records"}:
 						</Text>
 
 						<div className={styles.workflowList}>
@@ -299,7 +310,9 @@ export function WorkflowPickerDialog({
 									<div key={wf.workflowid} className={styles.workflowOption}>
 										<Radio value={wf.workflowid} label={wf.name} />
 										{wf.description && (
-											<Text className={styles.workflowDescription}>{wf.description}</Text>
+											<Text className={styles.workflowDescription}>
+												{wf.description}
+											</Text>
 										)}
 									</div>
 								))}
@@ -314,23 +327,32 @@ export function WorkflowPickerDialog({
 						<MessageBar intent="info">
 							<MessageBarBody>
 								<MessageBarTitle>Running workflow...</MessageBarTitle>
-								Executing <strong>{selectedWorkflow?.name}</strong> on {recordCount} records
-								{progress && ` (batch ${progress.batchesCompleted} of ${progress.totalBatches})`}
+								Executing <strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
+								records
+								{progress &&
+									` (batch ${progress.batchesCompleted} of ${progress.totalBatches})`}
 							</MessageBarBody>
 						</MessageBar>
 						{progress ? (
 							<>
-								<ProgressBar value={progress.completed} max={progress.total} thickness="large" />
+								<ProgressBar
+									value={progress.completed}
+									max={progress.total}
+									thickness="large"
+								/>
 								<div className={styles.progressStats}>
 									<Text size={200}>
-										{progress.completed} of {progress.total} completed ({progress.succeeded}{" "}
-										succeeded, {progress.failed} failed)
+										{progress.completed} of {progress.total} completed (
+										{progress.succeeded} succeeded, {progress.failed} failed)
 									</Text>
 									{/* While Dataverse throttles, the wait instead of the estimate (#183) */}
 									{progress.throttleWaitSeconds ? (
-										<Text className={styles.eta}>{throttleWaitMessage(progress.throttleWaitSeconds)}</Text>
+										<Text className={styles.eta}>
+											{throttleWaitMessage(progress.throttleWaitSeconds)}
+										</Text>
 									) : null}
-									{!progress.throttleWaitSeconds && progress.estimatedSecondsRemaining !== undefined &&
+									{!progress.throttleWaitSeconds &&
+										progress.estimatedSecondsRemaining !== undefined &&
 										progress.estimatedSecondsRemaining > 0 && (
 											<Text className={styles.eta}>
 												{formatEta(progress.estimatedSecondsRemaining)}
@@ -340,7 +362,11 @@ export function WorkflowPickerDialog({
 							</>
 						) : (
 							<div
-								style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: tokens.spacingHorizontalS,
+								}}
 							>
 								<Spinner size="small" />
 								<Text>Starting workflow execution...</Text>
@@ -356,8 +382,8 @@ export function WorkflowPickerDialog({
 							<div className={styles.successRow}>
 								<CheckmarkCircle20Regular />
 								<Text weight="semibold">
-									{result.succeeded} record{result.succeeded !== 1 ? "s" : ""} processed
-									successfully
+									{result.succeeded} record{result.succeeded !== 1 ? "s" : ""}{" "}
+									processed successfully
 								</Text>
 							</div>
 						)}
@@ -367,7 +393,8 @@ export function WorkflowPickerDialog({
 								<div className={styles.errorRow}>
 									<Warning20Regular />
 									<Text weight="semibold">
-										{result.failed} record{result.failed !== 1 ? "s" : ""} failed
+										{result.failed} record{result.failed !== 1 ? "s" : ""}{" "}
+										failed
 									</Text>
 								</div>
 								{result.errors.length > 0 && (
@@ -380,7 +407,9 @@ export function WorkflowPickerDialog({
 												</Text>
 											))}
 											{result.errors.length > 5 && (
-												<Text size={200}>...and {result.errors.length - 5} more</Text>
+												<Text size={200}>
+													...and {result.errors.length - 5} more
+												</Text>
 											)}
 										</MessageBarBody>
 									</MessageBar>
@@ -421,7 +450,9 @@ export function WorkflowPickerDialog({
 							appearance="primary"
 							icon={<Play20Regular />}
 							onClick={handleExecute}
-							disabled={!selectedWorkflowId || workflows.length === 0 || !scopeConfirmed}
+							disabled={
+								!selectedWorkflowId || workflows.length === 0 || !scopeConfirmed
+							}
 						>
 							Run workflow
 						</Button>

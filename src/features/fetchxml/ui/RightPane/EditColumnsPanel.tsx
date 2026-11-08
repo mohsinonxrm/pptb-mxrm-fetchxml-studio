@@ -189,7 +189,7 @@ export function EditColumnsPanel({
 				setDragOverIndex(index);
 			}
 		},
-		[draggedIndex]
+		[draggedIndex],
 	);
 
 	const handleDragLeave = useCallback(() => {
@@ -218,7 +218,7 @@ export function EditColumnsPanel({
 			setDraggedIndex(null);
 			setDragOverIndex(null);
 		},
-		[draggedIndex]
+		[draggedIndex],
 	);
 
 	const moveColumn = useCallback((index: number, direction: "up" | "down") => {
@@ -231,12 +231,15 @@ export function EditColumnsPanel({
 			}
 
 			// Swap columns
-			[newColumns[index], newColumns[targetIndex]] = [newColumns[targetIndex], newColumns[index]];
+			[newColumns[index], newColumns[targetIndex]] = [
+				newColumns[targetIndex],
+				newColumns[index],
+			];
 			return newColumns;
 		});
 		// Update selection to follow the moved item
 		setSelectedIndex((prev) =>
-			prev === index ? (direction === "up" ? index - 1 : index + 1) : prev
+			prev === index ? (direction === "up" ? index - 1 : index + 1) : prev,
 		);
 	}, []);
 
@@ -338,7 +341,9 @@ export function EditColumnsPanel({
 									<span className={styles.dragHandle}>
 										<ReOrder16Regular />
 									</span>
-									<span className={styles.columnName}>{column.displayName || column.name}</span>
+									<span className={styles.columnName}>
+										{column.displayName || column.name}
+									</span>
 									<div className={styles.columnActions}>
 										<Button
 											appearance="subtle"
@@ -386,7 +391,8 @@ export function EditColumnsPanel({
 					{columns.length > 0 && localColumns.length === 0 && (
 						// A query with no attributes at all returns every attribute (#114)
 						<Text size={200} className={styles.footerHint}>
-							Keep at least one column: a query without columns returns every attribute.
+							Keep at least one column: a query without columns returns every
+							attribute.
 						</Text>
 					)}
 					<Button appearance="secondary" onClick={onClose}>

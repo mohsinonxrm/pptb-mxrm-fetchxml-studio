@@ -21,7 +21,8 @@ export function AllAttributesEditor({ isAggregateQuery, onRemove }: AllAttribute
 			<div className={styles.section}>
 				<SectionHeading>All attributes</SectionHeading>
 				<Body1>
-					Returns every attribute that has a value, the same as listing no attributes at all.
+					Returns every attribute that has a value, the same as listing no attributes at
+					all.
 				</Body1>
 				<MessageBar intent="info" layout="multiline">
 					<MessageBarBody>
@@ -33,7 +34,10 @@ export function AllAttributesEditor({ isAggregateQuery, onRemove }: AllAttribute
 				</MessageBar>
 				{isAggregateQuery && (
 					<MessageBar intent="info" layout="multiline">
-						<MessageBarBody>Ignored in an aggregate query: only the Group by and Aggregate attributes are returned.</MessageBarBody>
+						<MessageBarBody>
+							Ignored in an aggregate query: only the Group by and Aggregate
+							attributes are returned.
+						</MessageBarBody>
 					</MessageBar>
 				)}
 				<div>

@@ -27,12 +27,22 @@ const render = (entityName: string | undefined) =>
 			entityName,
 			onFetchWorkflows: fetchWorkflows,
 		};
-		root.render(createElement(FluentProvider, { theme: webLightTheme }, createElement(ResultsCommandBar, props)));
+		root.render(
+			createElement(
+				FluentProvider,
+				{ theme: webLightTheme },
+				createElement(ResultsCommandBar, props),
+			),
+		);
 		await Promise.resolve();
 	});
 
-const menuButton = () => document.querySelector<HTMLButtonElement>('button[aria-label="Run workflow on selected records"]');
-const menuItems = () => [...document.querySelectorAll('[role="menuitem"]')].map((el) => el.textContent?.trim());
+const menuButton = () =>
+	document.querySelector<HTMLButtonElement>(
+		'button[aria-label="Run workflow on selected records"]',
+	);
+const menuItems = () =>
+	[...document.querySelectorAll('[role="menuitem"]')].map((el) => el.textContent?.trim());
 
 /** Click the menu button and wait for the list to load; returns the items shown */
 async function openMenu() {
