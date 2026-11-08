@@ -313,7 +313,8 @@ disableAllDebug();
 ```
 src/
 ├── app/
-│   └── AppShell.tsx              # Main layout with resizable split panes
+│   ├── AppShell.tsx              # Main layout with resizable split panes
+│   └── hooks/                    # AppShell's state and effects, one hook each (#301)
 ├── features/fetchxml/
 │   ├── api/
 │   │   ├── pptbClient.ts         # window.dataverseAPI wrapper (all Dataverse ops)
