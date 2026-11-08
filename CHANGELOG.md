@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔧 Changed
+
+- **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
+
 ### 🏗️ Technical
 
 - AppShell: splitter state moved into `useSplitters` (#301)
@@ -21,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wording check and style table, not enforced yet (#231).** `npm run check:wording` (`.github/scripts/check-wording.mjs`, TypeScript AST, no new dependency) reports "..." and Title Case in short UI labels, with an allowlist (`wording-allowlist.json`). The UI wording style table in `CONTRIBUTING.md` links each rule to its Fluent 2 or Microsoft Style Guide source. No UI strings change and CI doesn't run the check yet; the #231 sweep does both.
 - **App notification provider, not used yet (#277).** `NotifyProvider`, `useNotify` and `useCopy` (`src/shared/feedback/`) are added with tests: one Toaster at the bottom end, timeouts by intent, an optional action and de-duplication. Nothing calls them yet; the callers move over in the next change.
 - **A shared overflow command bar and tab row, not used yet (#232).** `OverflowToolbar` and `OverflowTabList` (`src/shared/components/commandBar/`) put a Fluent Toolbar or TabList inside Overflow: commands and tabs that don't fit move into a More menu instead of wrapping, keeping their icon, disabled reason and submenu there; pinned commands and the selected tab stay visible. No bar uses them yet; the bars move onto them in the rest of #232. `stubOverflowWidths` in `ui.ts` lets component tests lay Overflow out in jsdom.
+- AppShell: results export moved into `useResultsExport` (#301)
 
 ## [1.6.0-beta.1] - 2026-11-07
 
