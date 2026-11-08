@@ -49,7 +49,9 @@ export function AttributePicker({
 				// Apply type filtering if specified
 				let filteredAttrs = attrs;
 				if (filterByTypes && filterByTypes.length > 0) {
-					filteredAttrs = attrs.filter((a) => filterByTypes.includes(a.AttributeType || ""));
+					filteredAttrs = attrs.filter((a) =>
+						filterByTypes.includes(a.AttributeType || ""),
+					);
 				}
 				setAttributes(filteredAttrs);
 				setLoading(false);

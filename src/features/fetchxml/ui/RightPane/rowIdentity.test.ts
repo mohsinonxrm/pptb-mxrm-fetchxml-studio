@@ -6,7 +6,10 @@ const B = "22222222-2222-2222-2222-222222222222";
 
 describe("buildRowIdentity", () => {
 	it("uses the primary key as the row ID for normal results", () => {
-		const rows = [{ accountid: A, name: "a" }, { accountid: B, name: "b" }];
+		const rows = [
+			{ accountid: A, name: "a" },
+			{ accountid: B, name: "b" },
+		];
 		const id = buildRowIdentity(rows, "accountid");
 		expect(rows.map(id.getRowId)).toEqual([A, B]);
 		expect(id.toRecordIds([A, B])).toEqual([A, B]);
@@ -28,7 +31,10 @@ describe("buildRowIdentity", () => {
 	});
 
 	it("uses position-based IDs when results have no primary key (aggregate/distinct)", () => {
-		const rows = [{ n: 3, p: 1 }, { n: 5, p: 2 }];
+		const rows = [
+			{ n: 3, p: 1 },
+			{ n: 5, p: 2 },
+		];
 		const id = buildRowIdentity(rows, "activityid");
 		expect(rows.map(id.getRowId)).toEqual(["__row_0", "__row_1"]);
 		expect(id.toRecordIds(["__row_0", "__row_1"])).toEqual([]);

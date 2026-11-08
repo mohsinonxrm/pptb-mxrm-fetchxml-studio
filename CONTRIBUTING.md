@@ -22,6 +22,7 @@ Before opening a PR, run what CI runs:
 ```bash
 npm run typecheck
 npm run lint           # zero warnings
+npm run format:check   # Prettier; npm run format fixes it
 npm test
 npm run validate       # PPTB manifest rules
 npm run build

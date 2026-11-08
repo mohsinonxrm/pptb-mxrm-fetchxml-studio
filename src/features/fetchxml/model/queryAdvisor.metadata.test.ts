@@ -5,7 +5,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseFetchXml } from "./fetchxmlParser";
-import { adviseQueryMetadata, largeTextReason, type AdvisorAttributeInfo, type AdvisorMetadata } from "./queryAdvisor";
+import {
+	adviseQueryMetadata,
+	largeTextReason,
+	type AdvisorAttributeInfo,
+	type AdvisorMetadata,
+} from "./queryAdvisor";
 import type { FetchNode } from "./nodes";
 
 const attrs = (entries: Record<string, AdvisorAttributeInfo>) => new Map(Object.entries(entries));
@@ -44,8 +49,10 @@ const parse = (xml: string): FetchNode => {
 	expect(r.success, r.errors.map((e) => e.message).join("; ")).toBe(true);
 	return r.fetchNode!;
 };
-const advise = (xml: string, metadata: AdvisorMetadata = METADATA) => adviseQueryMetadata(parse(xml), metadata);
-const rule = (xml: string, id: string, metadata?: AdvisorMetadata) => advise(xml, metadata).filter((f) => f.rule === id);
+const advise = (xml: string, metadata: AdvisorMetadata = METADATA) =>
+	adviseQueryMetadata(parse(xml), metadata);
+const rule = (xml: string, id: string, metadata?: AdvisorMetadata) =>
+	advise(xml, metadata).filter((f) => f.rule === id);
 
 const C = (inner: string, fetchAttrs = "") =>
 	`<fetch${fetchAttrs}><entity name="contact"><attribute name="fullname" />${inner}</entity></fetch>`;
@@ -63,7 +70,12 @@ describe("order on a choice attribute", () => {
 	])("%s → advice", (_label, attribute, kind) => {
 		const found = rule(C(`<order attribute="${attribute}" />`), "order-choice");
 		expect(found).toHaveLength(1);
-		expect(found[0]).toMatchObject({ element: "order", severity: "info", kind: "advice", target: attribute });
+		expect(found[0]).toMatchObject({
+			element: "order",
+			severity: "info",
+			kind: "advice",
+			target: attribute,
+		});
 		expect(found[0].message).toContain(`${kind} attribute '${attribute}'`);
 		expect(found[0].message).toContain("useraworderby");
 	});
@@ -71,8 +83,14 @@ describe("order on a choice attribute", () => {
 	it.each([
 		["a String attribute", C(`<order attribute="fullname" />`)],
 		["a lookup", C(`<order attribute="parentcustomerid" />`)],
-		["useraworderby (sorts by the number; verified live: no TypeCode 4)", C(`<order attribute="statuscode" />`, ` useraworderby="true"`)],
-		["an aggregate query (orders by alias)", `<fetch aggregate="true"><entity name="contact"><attribute name="statuscode" alias="s" groupby="true" /><order alias="s" /></entity></fetch>`],
+		[
+			"useraworderby (sorts by the number; verified live: no TypeCode 4)",
+			C(`<order attribute="statuscode" />`, ` useraworderby="true"`),
+		],
+		[
+			"an aggregate query (orders by alias)",
+			`<fetch aggregate="true"><entity name="contact"><attribute name="statuscode" alias="s" groupby="true" /><order alias="s" /></entity></fetch>`,
+		],
 		["an attribute missing from the metadata", C(`<order attribute="unknown" />`)],
 	])("no advice: %s", (_label, xml) => {
 		expect(rule(xml, "order-choice")).toEqual([]);
@@ -80,14 +98,27 @@ describe("order on a choice attribute", () => {
 
 	it("uses the link-entity's metadata for an order inside it, and for entityname orders", () => {
 		expect(rule(C(LINK(`<order attribute="industrycode" />`)), "order-choice")).toHaveLength(1);
-		expect(rule(C(`${LINK()}<order entityname="a" attribute="industrycode" />`), "order-choice")).toHaveLength(1);
-		expect(rule(C(`${LINK("", "")}<order entityname="account" attribute="industrycode" />`), "order-choice")).toHaveLength(1);
+		expect(
+			rule(C(`${LINK()}<order entityname="a" attribute="industrycode" />`), "order-choice"),
+		).toHaveLength(1);
+		expect(
+			rule(
+				C(`${LINK("", "")}<order entityname="account" attribute="industrycode" />`),
+				"order-choice",
+			),
+		).toHaveLength(1);
 		expect(rule(C(LINK(`<order attribute="name" />`)), "order-choice")).toEqual([]);
 	});
 
 	it("is skipped when the entity's metadata isn't loaded", () => {
 		expect(rule(C(`<order attribute="statuscode" />`), "order-choice", new Map())).toEqual([]);
-		expect(rule(C(`<order attribute="statuscode" />`), "order-choice", new Map([["contact", { primaryIdAttribute: "contactid" }]]))).toEqual([]);
+		expect(
+			rule(
+				C(`<order attribute="statuscode" />`),
+				"order-choice",
+				new Map([["contact", { primaryIdAttribute: "contactid" }]]),
+			),
+		).toEqual([]);
 	});
 });
 
@@ -97,7 +128,11 @@ describe("condition on a large text attribute", () => {
 		["Memo, eq (any operator, verified live)", COND("description", "eq", "x"), "Memo"],
 		["Memo, not-null", COND("description", "not-null", undefined), "Memo"],
 		["Memo, begins-with", COND("description", "begins-with", "x"), "Memo"],
-		["String with MaxLength 1,250", COND("traversedpath", "like", "x%"), "maximum length of 1,250"],
+		[
+			"String with MaxLength 1,250",
+			COND("traversedpath", "like", "x%"),
+			"maximum length of 1,250",
+		],
 	])("%s → advice", (_label, filter, needle) => {
 		const found = rule(C(filter), "large-text");
 		expect(found).toHaveLength(1);
@@ -117,8 +152,22 @@ describe("condition on a large text attribute", () => {
 
 	it("uses the link-entity's metadata, for its own filters and for entityname conditions", () => {
 		expect(rule(C(LINK(COND("description", "like", "x%"))), "large-text")).toHaveLength(1);
-		expect(rule(C(`${LINK()}<filter><condition entityname="a" attribute="description" operator="eq" value="x" /></filter>`), "large-text")).toHaveLength(1);
-		expect(rule(C(`<filter><link-entity name="account" from="accountid" to="parentcustomerid" link-type="any">${COND("description")}</link-entity></filter>`), "large-text")).toHaveLength(1);
+		expect(
+			rule(
+				C(
+					`${LINK()}<filter><condition entityname="a" attribute="description" operator="eq" value="x" /></filter>`,
+				),
+				"large-text",
+			),
+		).toHaveLength(1);
+		expect(
+			rule(
+				C(
+					`<filter><link-entity name="account" from="accountid" to="parentcustomerid" link-type="any">${COND("description")}</link-entity></filter>`,
+				),
+				"large-text",
+			),
+		).toHaveLength(1);
 	});
 
 	it("largeTextReason", () => {
@@ -152,53 +201,104 @@ describe("condition on a calculated or formula attribute", () => {
 
 describe("paging without a unique order", () => {
 	it("count + page with orders but none on the primary key → advice with the quick fix", () => {
-		const found = rule(C(`<order attribute="fullname" />`, ` count="50" page="1"`), "paging-order");
+		const found = rule(
+			C(`<order attribute="fullname" />`, ` count="50" page="1"`),
+			"paging-order",
+		);
 		expect(found).toHaveLength(1);
-		expect(found[0]).toMatchObject({ element: "entity", severity: "info", kind: "advice", target: "contactid", fix: { kind: "add-root-order", attribute: "contactid" } });
+		expect(found[0]).toMatchObject({
+			element: "entity",
+			severity: "info",
+			kind: "advice",
+			target: "contactid",
+			fix: { kind: "add-root-order", attribute: "contactid" },
+		});
 		expect(found[0].message).toContain("Add contactid as the last order");
 	});
 
 	it("count alone is paging too", () => {
-		expect(rule(C(`<order attribute="fullname" />`, ` count="50"`), "paging-order")).toHaveLength(1);
+		expect(
+			rule(C(`<order attribute="fullname" />`, ` count="50"`), "paging-order"),
+		).toHaveLength(1);
 	});
 
 	it("orders inside a link-entity: advice without the quick fix (link-entity orders are applied last)", () => {
-		const found = rule(C(`<order attribute="statuscode" />${LINK(`<order attribute="name" />`)}`, ` count="50" page="1"`), "paging-order");
+		const found = rule(
+			C(
+				`<order attribute="statuscode" />${LINK(`<order attribute="name" />`)}`,
+				` count="50" page="1"`,
+			),
+			"paging-order",
+		);
 		expect(found).toHaveLength(1);
 		expect(found[0].fix).toBeUndefined();
 		expect(found[0].message).toContain("entityname");
 	});
 
 	it.each([
-		["the primary key is ordered", C(`<order attribute="fullname" /><order attribute="contactid" />`, ` count="50" page="1"`)],
-		["the primary key is ordered with entityname = the root", C(`<order attribute="fullname" /><order entityname="contact" attribute="contactid" />`, ` count="50"`)],
+		[
+			"the primary key is ordered",
+			C(
+				`<order attribute="fullname" /><order attribute="contactid" />`,
+				` count="50" page="1"`,
+			),
+		],
+		[
+			"the primary key is ordered with entityname = the root",
+			C(
+				`<order attribute="fullname" /><order entityname="contact" attribute="contactid" />`,
+				` count="50"`,
+			),
+		],
 		["no order (Dataverse adds the primary key, verified live)", C("", ` count="50" page="1"`)],
 		["not paged", C(`<order attribute="fullname" />`)],
 		["top", C(`<order attribute="fullname" />`, ` top="50"`)],
-		["distinct (its own rule)", C(`<order attribute="fullname" />`, ` distinct="true" count="50"`)],
-		["aggregate", `<fetch aggregate="true" count="50"><entity name="contact"><attribute name="statuscode" alias="s" groupby="true" /><order alias="s" /></entity></fetch>`],
+		[
+			"distinct (its own rule)",
+			C(`<order attribute="fullname" />`, ` distinct="true" count="50"`),
+		],
+		[
+			"aggregate",
+			`<fetch aggregate="true" count="50"><entity name="contact"><attribute name="statuscode" alias="s" groupby="true" /><order alias="s" /></entity></fetch>`,
+		],
 	])("no advice: %s", (_label, xml) => {
 		expect(rule(xml, "paging-order")).toEqual([]);
 	});
 
 	it("is skipped when the primary key isn't known", () => {
-		const metadata: AdvisorMetadata = new Map([["contact", { attributes: CONTACT_ATTRIBUTES }]]);
-		expect(rule(C(`<order attribute="fullname" />`, ` count="50"`), "paging-order", metadata)).toEqual([]);
+		const metadata: AdvisorMetadata = new Map([
+			["contact", { attributes: CONTACT_ATTRIBUTES }],
+		]);
+		expect(
+			rule(C(`<order attribute="fullname" />`, ` count="50"`), "paging-order", metadata),
+		).toEqual([]);
 	});
 
 	it("an order on the primary key inside a link-entity doesn't count", () => {
-		expect(rule(C(LINK(`<order attribute="accountid" />`), ` count="50"`), "paging-order")).toHaveLength(1);
+		expect(
+			rule(C(LINK(`<order attribute="accountid" />`), ` count="50"`), "paging-order"),
+		).toHaveLength(1);
 	});
 
 	it("paged results count as paging (Load more, Retrieve all, #170)", () => {
 		const xml = C(`<order attribute="fullname" />`);
-		expect(adviseQueryMetadata(parse(xml), METADATA).filter((f) => f.rule === "paging-order")).toEqual([]);
-		const found = adviseQueryMetadata(parse(xml), METADATA, { resultsPaged: true }).filter((f) => f.rule === "paging-order");
+		expect(
+			adviseQueryMetadata(parse(xml), METADATA).filter((f) => f.rule === "paging-order"),
+		).toEqual([]);
+		const found = adviseQueryMetadata(parse(xml), METADATA, { resultsPaged: true }).filter(
+			(f) => f.rule === "paging-order",
+		);
 		expect(found).toHaveLength(1);
-		expect(found[0].message).toMatch(/^The results are paged, but no order is on a unique attribute such as contactid/);
+		expect(found[0].message).toMatch(
+			/^The results are paged, but no order is on a unique attribute such as contactid/,
+		);
 		expect(found[0].fix).toEqual({ kind: "add-root-order", attribute: "contactid" });
 		// top caps the results, so the query doesn't page however it was run
-		expect(adviseQueryMetadata(parse(C(`<order attribute="fullname" />`, ` top="50"`)), METADATA, { resultsPaged: true }).filter((f) => f.rule === "paging-order")).toEqual([]);
+		expect(
+			adviseQueryMetadata(parse(C(`<order attribute="fullname" />`, ` top="50"`)), METADATA, {
+				resultsPaged: true,
+			}).filter((f) => f.rule === "paging-order"),
+		).toEqual([]);
 	});
 });
 
@@ -207,7 +307,11 @@ describe("the prototype's scenario query", () => {
 
 	it("finds the choice order, the large text condition and the paging order; all advice", () => {
 		const found = advise(SCENARIO);
-		expect(found.map((f) => `${f.rule}:${f.target}`).sort()).toEqual(["large-text:description", "order-choice:statuscode", "paging-order:contactid"]);
+		expect(found.map((f) => `${f.rule}:${f.target}`).sort()).toEqual([
+			"large-text:description",
+			"order-choice:statuscode",
+			"paging-order:contactid",
+		]);
 		expect(found.every((f) => f.severity === "info" && f.kind === "advice")).toBe(true);
 	});
 });

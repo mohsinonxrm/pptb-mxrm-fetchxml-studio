@@ -51,8 +51,9 @@ const useStyles = makeStyles({
 /** Wider than the field, so most options stay on two lines (#25) */
 const LISTBOX_PROPS = { style: { minWidth: 420 } };
 
-const label = (item: { DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } } | undefined) =>
-	item?.DisplayName?.UserLocalizedLabel?.Label || undefined;
+const label = (
+	item: { DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } } | undefined,
+) => item?.DisplayName?.UserLocalizedLabel?.Label || undefined;
 
 /**
  * Metadata the picker couldn't load (#201): the relationships themselves, or only the display names
@@ -151,14 +152,22 @@ export function RelationshipPicker({
 
 				const entityByName = new Map(entities.map((e) => [e.LogicalName, e]));
 				const attributesOf = (entity: string) =>
-					entity === entityLogicalName ? ownAttributes : (metadataCache.getEntityAttributes(`${entity}__all`) ?? []);
+					entity === entityLogicalName
+						? ownAttributes
+						: (metadataCache.getEntityAttributes(`${entity}__all`) ?? []);
 				const options = buildRelationshipOptions(entityLogicalName, data, {
-					entity: (name) => label(entityByName.get(name) ?? metadataCache.getEntityMetadata(name)),
-					attribute: (entity, attribute) => label(attributesOf(entity).find((a) => a.LogicalName === attribute)),
+					entity: (name) =>
+						label(entityByName.get(name) ?? metadataCache.getEntityMetadata(name)),
+					attribute: (entity, attribute) =>
+						label(attributesOf(entity).find((a) => a.LogicalName === attribute)),
 				});
 
 				setRelationships(options);
-				setNamesError(namesFailure === undefined ? null : formatDataverseError(namesFailure, "The request failed."));
+				setNamesError(
+					namesFailure === undefined
+						? null
+						: formatDataverseError(namesFailure, "The request failed."),
+				);
 				setLoading(false);
 				debugLog("relationshipPicker", "Relationships loaded successfully:", {
 					entityLogicalName,
@@ -194,7 +203,10 @@ export function RelationshipPicker({
 	// Manual filtering that preserves grouping; the selected value's own text shows every option
 	const selected = relationships.find((r) => r.id === selectedId);
 	const searchQuery = selected && query === selected.displayText ? "" : query;
-	const filteredRelationships = useMemo(() => filterRelationshipOptions(relationships, searchQuery), [relationships, searchQuery]);
+	const filteredRelationships = useMemo(
+		() => filterRelationshipOptions(relationships, searchQuery),
+		[relationships, searchQuery],
+	);
 
 	const onOptionSelect: ComboboxProps["onOptionSelect"] = (_e, data) => {
 		const id = data.optionValue;
@@ -258,7 +270,9 @@ export function RelationshipPicker({
 									<Option key={rel.id} value={rel.id} text={rel.searchText}>
 										<span className={styles.option}>
 											<span>{rel.primaryText}</span>
-											<span className={styles.optionSecondary}>{rel.secondaryText}</span>
+											<span className={styles.optionSecondary}>
+												{rel.secondaryText}
+											</span>
 										</span>
 									</Option>
 								))}

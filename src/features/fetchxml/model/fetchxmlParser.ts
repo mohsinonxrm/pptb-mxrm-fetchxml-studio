@@ -107,7 +107,6 @@ export function getParseToTreeChanges(result: Pick<ParseResult, "warnings">): Pa
 
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 
-
 /**
  * A whole number as Dataverse reads top, count, page and utc-offset: optional spaces and sign,
  * digits only (#181). parseInt accepted "10abc" as 10. Verified live (2026-10-30): top="10abc"
@@ -227,7 +226,8 @@ function collectElementAttributes(
 		extras[name] = attr.value;
 		if (silent?.has(lower)) continue;
 
-		const isNamespaceDeclaration = attr.namespaceURI === XMLNS_NAMESPACE || lower.startsWith("xmlns:");
+		const isNamespaceDeclaration =
+			attr.namespaceURI === XMLNS_NAMESPACE || lower.startsWith("xmlns:");
 		issues.push({
 			message: isNamespaceDeclaration
 				? `Namespace declaration '${name}' is ignored by Dataverse.`
@@ -284,7 +284,11 @@ function updateAliasReferences(fetch: FetchNode, issues: ParseIssue[]): void {
 	};
 	const visitFilter = (filter: FilterNode) => {
 		for (const condition of filter.conditions) {
-			condition.entityname = rename(linkAliasRenames, condition.entityname, "condition entityname");
+			condition.entityname = rename(
+				linkAliasRenames,
+				condition.entityname,
+				"condition entityname",
+			);
 			if (condition.valueof) {
 				// The corrected alias can itself contain dots ("my.acct.name"): match the longest one
 				const valueof = condition.valueof;
@@ -366,7 +370,9 @@ export function parseFetchXml(xmlString: string): ParseResult {
 	} catch (e) {
 		return {
 			success: false,
-			errors: [{ message: `XML parsing error: ${e instanceof Error ? e.message : String(e)}` }],
+			errors: [
+				{ message: `XML parsing error: ${e instanceof Error ? e.message : String(e)}` },
+			],
 			warnings: [],
 		};
 	}
@@ -377,7 +383,9 @@ export function parseFetchXml(xmlString: string): ParseResult {
 		return {
 			success: false,
 			errors: [
-				{ message: `Root element must be <fetch>, found <${fetchElement?.nodeName || "none"}>` },
+				{
+					message: `Root element must be <fetch>, found <${fetchElement?.nodeName || "none"}>`,
+				},
 			],
 			warnings: [],
 		};
@@ -624,7 +632,6 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 		options.pagingCookie = pagingCookie;
 	}
 
-
 	return options;
 }
 
@@ -834,7 +841,8 @@ function parseOrder(orderElement: Element, issues: ParseIssue[]): OrderNode | nu
 
 	if (!attribute && !alias) {
 		issues.push({
-			message: "Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to tree drops it.",
+			message:
+				"Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to tree drops it.",
 			element: "order",
 			severity: "error",
 			kind: "dropped",
@@ -963,7 +971,8 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 	}
 	if (!operatorAttr) {
 		issues.push({
-			message: "Condition element missing 'operator' (Dataverse rejects it); Parse to tree uses 'eq'.",
+			message:
+				"Condition element missing 'operator' (Dataverse rejects it); Parse to tree uses 'eq'.",
 			element: "condition",
 			attribute: "operator",
 			severity: "error",
@@ -1032,7 +1041,9 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 			}
 			// uiname / uitype on lookup values in saved views, kept verbatim (#181)
 			if (valEl.attributes.length > 0) {
-				valueAttributes[valText] = Object.fromEntries(Array.from(valEl.attributes, (a) => [a.name, a.value]));
+				valueAttributes[valText] = Object.fromEntries(
+					Array.from(valEl.attributes, (a) => [a.name, a.value]),
+				);
 			}
 		}
 		condition.value = values;

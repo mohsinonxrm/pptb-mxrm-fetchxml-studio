@@ -76,8 +76,13 @@ function readFetch(xml: string): {
 		count: Number(fetch.getAttribute("count") ?? "5000"),
 		page: Number(fetch.getAttribute("page") ?? "1"),
 		pagingCookie: fetch.getAttribute("paging-cookie"),
-		attributes: [...(entity?.querySelectorAll(":scope > attribute") ?? [])].map((a) => a.getAttribute("name") ?? ""),
-		orders: [...(entity?.querySelectorAll(":scope > order") ?? [])].map((o) => ({ attribute: o.getAttribute("attribute") ?? "", descending: o.getAttribute("descending") === "true" })),
+		attributes: [...(entity?.querySelectorAll(":scope > attribute") ?? [])].map(
+			(a) => a.getAttribute("name") ?? "",
+		),
+		orders: [...(entity?.querySelectorAll(":scope > order") ?? [])].map((o) => ({
+			attribute: o.getAttribute("attribute") ?? "",
+			descending: o.getAttribute("descending") === "true",
+		})),
 	};
 }
 
@@ -153,22 +158,33 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		const table = bySet.get(set);
 		const fetch = readFetch(xml);
 		if (view) fetch.page = view.page;
-		if (!table || table.logicalName !== fetch.entity) throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
+		if (!table || table.logicalName !== fetch.entity)
+			throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
 		if (!view && fetch.page > 1) {
 			const expected = issuedCookies.get(cookieKey(fetch.entity, fetch.page));
 			if (expected !== undefined && fetch.pagingCookie !== expected) {
-				pagingErrors.push(`page ${fetch.page}: paging-cookie ${JSON.stringify(fetch.pagingCookie)}, expected ${JSON.stringify(expected)}`);
+				pagingErrors.push(
+					`page ${fetch.page}: paging-cookie ${JSON.stringify(fetch.pagingCookie)}, expected ${JSON.stringify(expected)}`,
+				);
 				throw new Error("0x80040203: Invalid paging cookie.");
 			}
 		}
 		await options.beforePage?.(fetch.page, fetch.entity);
 		const rows = [...table.rows];
 		for (const order of [...fetch.orders].reverse()) {
-			rows.sort((a, b) => String(a[order.attribute] ?? "").localeCompare(String(b[order.attribute] ?? "")) * (order.descending ? -1 : 1));
+			rows.sort(
+				(a, b) =>
+					String(a[order.attribute] ?? "").localeCompare(
+						String(b[order.attribute] ?? ""),
+					) * (order.descending ? -1 : 1),
+			);
 		}
 		const start = (fetch.page - 1) * fetch.count;
 		const pageRows = rows.slice(start, start + fetch.count).map((row) => {
-			const out: Record<string, unknown> = { "@odata.etag": 'W/"1"', [table.primaryId]: row[table.primaryId] };
+			const out: Record<string, unknown> = {
+				"@odata.etag": 'W/"1"',
+				[table.primaryId]: row[table.primaryId],
+			};
 			for (const name of fetch.attributes) out[name] = row[name] ?? null;
 			return out;
 		});
@@ -179,7 +195,11 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		const cookie = `<cookie page="${fetch.page}"><${table.primaryId} last="{${String(last).toUpperCase()}}" first="{${String(first).toUpperCase()}}" /></cookie>`;
 		issuedCookies.set(cookieKey(fetch.entity, fetch.page + 1), cookie);
 		const annotation = `<cookie pagenumber="${fetch.page + 1}" pagingcookie="${encodeURIComponent(encodeURIComponent(cookie))}" istracking="False" />`;
-		return { value: pageRows, "@Microsoft.Dynamics.CRM.fetchxmlpagingcookie": annotation, "@Microsoft.Dynamics.CRM.morerecords": true };
+		return {
+			value: pageRows,
+			"@Microsoft.Dynamics.CRM.fetchxmlpagingcookie": annotation,
+			"@Microsoft.Dynamics.CRM.morerecords": true,
+		};
 	}
 
 	async function queryData(query: string): Promise<unknown> {
@@ -189,23 +209,37 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 
 		// A saved view run by its id: Dataverse runs the view's FetchXML and pages with an absolute
 		// @odata.nextLink, to be used as given (Learn, "Page results" for the Web API)
-		const byId = /^([a-z_]+)\?(savedQuery|userQuery)=([0-9a-f-]+)(?:&\$skiptoken=(\d+))?$/i.exec(query);
+		const byId =
+			/^([a-z_]+)\?(savedQuery|userQuery)=([0-9a-f-]+)(?:&\$skiptoken=(\d+))?$/i.exec(query);
 		if (byId) {
 			const type = byId[2] === "savedQuery" ? "system" : "personal";
 			const view = views.find((v) => v.type === type && v.id === byId[3]);
-			if (!view) throw new Error(`0x80040217: ${byId[2]} With Id = ${byId[3]} Does Not Exist`);
+			if (!view)
+				throw new Error(`0x80040217: ${byId[2]} With Id = ${byId[3]} Does Not Exist`);
 			const page = Number(byId[4] ?? "1");
 			const result = await runFetch(byId[1], view.fetchxml, { page });
 			const rows = { value: result.value };
 			if (!("@Microsoft.Dynamics.CRM.morerecords" in result)) return rows;
-			return { ...rows, "@odata.nextLink": `${ORG_URL}api/data/v9.2/${byId[1]}?${byId[2]}=${byId[3]}&$skiptoken=${page + 1}` };
+			return {
+				...rows,
+				"@odata.nextLink": `${ORG_URL}api/data/v9.2/${byId[1]}?${byId[2]}=${byId[3]}&$skiptoken=${page + 1}`,
+			};
 		}
 
-		const privilege = /^systemusers\(([0-9a-f-]+)\)\/Microsoft\.Dynamics\.CRM\.RetrieveUserPrivilegeByPrivilegeName\(PrivilegeName='([^']+)'\)/.exec(query);
+		const privilege =
+			/^systemusers\(([0-9a-f-]+)\)\/Microsoft\.Dynamics\.CRM\.RetrieveUserPrivilegeByPrivilegeName\(PrivilegeName='([^']+)'\)/.exec(
+				query,
+			);
 		if (privilege) {
-			if (privilege[1] !== userId) throw new Error(`0x80040217: systemuser With Id = ${privilege[1]} Does Not Exist`);
-			const held = options.privileges === undefined || options.privileges === "all" || options.privileges.has(privilege[2]);
-			return { RolePrivileges: held ? [{ PrivilegeName: privilege[2], Depth: "Global" }] : [] };
+			if (privilege[1] !== userId)
+				throw new Error(`0x80040217: systemuser With Id = ${privilege[1]} Does Not Exist`);
+			const held =
+				options.privileges === undefined ||
+				options.privileges === "all" ||
+				options.privileges.has(privilege[2]);
+			return {
+				RolePrivileges: held ? [{ PrivilegeName: privilege[2], Depth: "Global" }] : [],
+			};
 		}
 
 		const entityScoped = /^EntityDefinitions\(LogicalName='([^']+)'\)(.*)$/.exec(query);
@@ -215,7 +249,8 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 			if (!table) return { value: [] };
 			if (rest.startsWith("/Attributes(LogicalName='statecode')")) return stateOptions;
 			if (rest.startsWith("/Attributes(LogicalName='statuscode')")) return statusOptions;
-			if (rest.startsWith("/Attributes")) return { value: table.attributes.map((a) => attributeDefinition(table, a)) };
+			if (rest.startsWith("/Attributes"))
+				return { value: table.attributes.map((a) => attributeDefinition(table, a)) };
 			if (/Relationships/.test(rest)) return { value: [] };
 			if (rest.includes("EnforceStateTransitions")) return { EnforceStateTransitions: false };
 			if (rest.includes("Privileges")) return { Privileges: [] };
@@ -239,16 +274,22 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 				ismanaged: false,
 				_ownerid_value: userId,
 			});
-			const matches = views.filter((v) => v.type === type && (!viewMatch[2] || v.id === viewMatch[2]));
+			const matches = views.filter(
+				(v) => v.type === type && (!viewMatch[2] || v.id === viewMatch[2]),
+			);
 			if (viewMatch[2]) {
-				if (!matches[0]) throw new Error(`0x80040217: ${viewMatch[1]} With Id = ${viewMatch[2]} Does Not Exist`);
+				if (!matches[0])
+					throw new Error(
+						`0x80040217: ${viewMatch[1]} With Id = ${viewMatch[2]} Does Not Exist`,
+					);
 				return toRecord(matches[0]);
 			}
 			const filterId = /(savedqueryid|userqueryid) eq ([0-9a-f-]+)/.exec(query)?.[2];
 			return { value: matches.filter((v) => !filterId || v.id === filterId).map(toRecord) };
 		}
 
-		if (/^(publishers|solutions|workflows|asyncoperations|systemusers)\b/.test(query)) return { value: [] };
+		if (/^(publishers|solutions|workflows|asyncoperations|systemusers)\b/.test(query))
+			return { value: [] };
 		unknown.push(query);
 		return { value: [] };
 	}
@@ -268,7 +309,8 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		},
 		execute: async (request: { operationName: string }) => {
 			calls.push(`execute ${request.operationName}`);
-			if (request.operationName === "WhoAmI") return { UserId: userId, BusinessUnitId: "bu", OrganizationId: "org" };
+			if (request.operationName === "WhoAmI")
+				return { UserId: userId, BusinessUnitId: "bu", OrganizationId: "org" };
 			unknown.push(`execute ${request.operationName}`);
 			return {};
 		},
@@ -284,7 +326,11 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 						deleted.push(`${table.logicalName}:${m[2]}`);
 						return { status: 204, headers: {} };
 					}
-					return { status: 404, headers: {}, body: { error: { code: "0x80040217", message: "Does Not Exist" } } };
+					return {
+						status: 404,
+						headers: {},
+						body: { error: { code: "0x80040217", message: "Does Not Exist" } },
+					};
 				}
 				return { status: 200, headers: {}, body: {} };
 			});
@@ -312,7 +358,8 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 
 /** Account and contact tables with a few rows each, enough for paging and record actions */
 export function sampleTables(accountCount = 5): FakeTable[] {
-	const id = (n: number, prefix: string) => `${prefix}000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
+	const id = (n: number, prefix: string) =>
+		`${prefix}000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 	return [
 		{
 			logicalName: "account",
@@ -327,7 +374,12 @@ export function sampleTables(accountCount = 5): FakeTable[] {
 				{ name: "statecode", type: "State", label: "Status" },
 				{ name: "statuscode", type: "Status", label: "Status Reason" },
 			],
-			rows: Array.from({ length: accountCount }, (_, i) => ({ accountid: id(i + 1, "aa"), name: `Account ${String(i + 1).padStart(2, "0")}`, statecode: 0, statuscode: 1 })),
+			rows: Array.from({ length: accountCount }, (_, i) => ({
+				accountid: id(i + 1, "aa"),
+				name: `Account ${String(i + 1).padStart(2, "0")}`,
+				statecode: 0,
+				statuscode: 1,
+			})),
 		},
 		{
 			logicalName: "contact",

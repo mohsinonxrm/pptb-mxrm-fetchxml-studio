@@ -80,7 +80,16 @@ export async function loadStringMaxLengths(logicalName: string): Promise<Map<str
 	const isCurrent = metadataCache.generationGuard();
 	const promise = pptbClient
 		.getStringAttributeMaxLengths(logicalName)
-		.then((attributes) => new Map(attributes.flatMap((a) => (typeof a.MaxLength === "number" ? [[a.LogicalName, a.MaxLength] as const] : []))));
+		.then(
+			(attributes) =>
+				new Map(
+					attributes.flatMap((a) =>
+						typeof a.MaxLength === "number"
+							? [[a.LogicalName, a.MaxLength] as const]
+							: [],
+					),
+				),
+		);
 	metadataCache.setStringMaxLengthsPromise(logicalName, promise);
 	try {
 		const maxLengths = await promise;
@@ -180,10 +189,19 @@ type EntityRelationships = {
  * (planIntersectEntityJoins, #57): joining "through" the intersect entity from itself makes no
  * sense, and Dataverse gives it no many-to-one relationships for those attributes.
  */
-async function withIntersectEntityJoins(logicalName: string, relationships: EntityRelationships): Promise<EntityRelationships> {
+async function withIntersectEntityJoins(
+	logicalName: string,
+	relationships: EntityRelationships,
+): Promise<EntityRelationships> {
 	const own = relationships.manyToMany.filter((r) => r.IntersectEntityName === logicalName);
 	if (!own.length) return relationships;
-	const targets = [...new Set(own.flatMap((r) => [r.Entity1LogicalName, r.Entity2LogicalName]).filter((e): e is string => !!e))];
+	const targets = [
+		...new Set(
+			own
+				.flatMap((r) => [r.Entity1LogicalName, r.Entity2LogicalName])
+				.filter((e): e is string => !!e),
+		),
+	];
 	const keys = new Map<string, string>();
 	await Promise.all(
 		targets.map(async (target) => {
@@ -194,7 +212,9 @@ async function withIntersectEntityJoins(logicalName: string, relationships: Enti
 			}
 		}),
 	);
-	const joins = planIntersectEntityJoins(logicalName, own as IntersectRelationship[], (entity) => keys.get(entity));
+	const joins = planIntersectEntityJoins(logicalName, own as IntersectRelationship[], (entity) =>
+		keys.get(entity),
+	);
 	return {
 		oneToMany: relationships.oneToMany,
 		manyToOne: [...relationships.manyToOne, ...joins],
@@ -216,7 +236,10 @@ export async function loadEntityRelationships(
 	let relationships = metadataCache.getEntityRelationships(cacheKey);
 	if (!relationships) {
 		const isCurrent = metadataCache.generationGuard();
-		relationships = await withIntersectEntityJoins(logicalName, await pptbClient.getEntityRelationships(logicalName, false));
+		relationships = await withIntersectEntityJoins(
+			logicalName,
+			await pptbClient.getEntityRelationships(logicalName, false),
+		);
 		if (isCurrent()) metadataCache.setEntityRelationships(cacheKey, relationships);
 	}
 	const inScope = (r: RelationshipMetadata) => isRelationshipInScope(r, advancedFindOnly);

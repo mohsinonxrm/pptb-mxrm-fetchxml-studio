@@ -58,15 +58,29 @@ export function ValueOfPicker({
 
 	const options = useMemo(() => {
 		const list: { value: string; label: string; entityName: string; secondary?: string }[] = [
-			{ value: SAME, label: `${effectiveEntityName} (same record)`, entityName: effectiveEntityName },
+			{
+				value: SAME,
+				label: `${effectiveEntityName} (same record)`,
+				entityName: effectiveEntityName,
+			},
 		];
 		if (rootEntityName && rootEntityName !== effectiveEntityName) {
-			list.push({ value: rootEntityName, label: `${rootEntityName} (root entity)`, entityName: rootEntityName });
+			list.push({
+				value: rootEntityName,
+				label: `${rootEntityName} (root entity)`,
+				entityName: rootEntityName,
+			});
 		}
-		const entityOf = new Map(collectLinkEntityReferences(fetchQuery).map((r) => [r.alias, r.entityName]));
+		const entityOf = new Map(
+			collectLinkEntityReferences(fetchQuery).map((r) => [r.alias, r.entityName]),
+		);
 		for (const alias of scope?.aliases ?? []) {
 			if (alias === sameAlias) continue;
-			list.push({ value: alias, label: `${alias} (${entityOf.get(alias) ?? "?"})`, entityName: entityOf.get(alias) ?? "" });
+			list.push({
+				value: alias,
+				label: `${alias} (${entityOf.get(alias) ?? "?"})`,
+				entityName: entityOf.get(alias) ?? "",
+			});
 		}
 		// Keep a parsed qualifier visible even when it can't be resolved (the rule finding explains why)
 		if (parsed.qualifier && !list.some((o) => o.value === parsed.qualifier)) {
@@ -75,7 +89,11 @@ export function ValueOfPicker({
 				value: parsed.qualifier,
 				label: parsed.qualifier,
 				entityName: reachable ? effectiveEntityName : "",
-				secondary: reachable ? "This record" : scope?.laterAliases.includes(parsed.qualifier) ? "Joined after this link-entity" : "Not a link-entity alias",
+				secondary: reachable
+					? "This record"
+					: scope?.laterAliases.includes(parsed.qualifier)
+						? "Joined after this link-entity"
+						: "Not a link-entity alias",
 			});
 		}
 		return list;
@@ -111,7 +129,9 @@ export function ValueOfPicker({
 						<Option key={o.value} value={o.value} text={o.label}>
 							<span className={styles.optionText}>
 								{o.label}
-								{o.secondary && <span className={styles.optionSecondary}>{o.secondary}</span>}
+								{o.secondary && (
+									<span className={styles.optionSecondary}>{o.secondary}</span>
+								)}
 							</span>
 						</Option>
 					))}
@@ -121,7 +141,12 @@ export function ValueOfPicker({
 			<InfoField
 				label="Attribute"
 				required
-				validation={validation ?? (!parsed.attribute ? { state: "error", message: "Choose the attribute to compare to." } : undefined)}
+				validation={
+					validation ??
+					(!parsed.attribute
+						? { state: "error", message: "Choose the attribute to compare to." }
+						: undefined)
+				}
 				info={
 					<Info
 						text={
@@ -138,9 +163,17 @@ export function ValueOfPicker({
 					value={parsed.attribute}
 					onChange={(logicalName) => {
 						const qualifier = current.value === SAME ? undefined : current.value;
-						onChange(logicalName ? (qualifier ? `${qualifier}.${logicalName}` : logicalName) : "");
+						onChange(
+							logicalName
+								? qualifier
+									? `${qualifier}.${logicalName}`
+									: logicalName
+								: "",
+						);
 					}}
-					placeholder={current.entityName ? "Select an attribute" : "Choose an entity first"}
+					placeholder={
+						current.entityName ? "Select an attribute" : "Choose an entity first"
+					}
 					disabled={!current.entityName || compatibleTypes.length === 0}
 					filterByTypes={compatibleTypes}
 				/>

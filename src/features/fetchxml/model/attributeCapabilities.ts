@@ -13,7 +13,14 @@ import type { AttributeNode } from "./nodes";
 
 export type AggregateFunction = NonNullable<AttributeNode["aggregate"]>;
 
-export const AGGREGATE_FUNCTIONS: readonly AggregateFunction[] = ["count", "countcolumn", "sum", "avg", "min", "max"];
+export const AGGREGATE_FUNCTIONS: readonly AggregateFunction[] = [
+	"count",
+	"countcolumn",
+	"sum",
+	"avg",
+	"min",
+	"max",
+];
 
 /** The metadata fields the rules need (AttributeMetadata subset). */
 export interface AttributeTypeInfo {
@@ -51,41 +58,70 @@ export function getAttributeCapabilities(type: AttributeTypeInfo): AttributeCapa
 	const t = type.typeName;
 	if (t === "MultiSelectPicklistType") {
 		// order / groupby: 0x80050224; count / countcolumn: 0x80060888; others: 0x8004112f
-		return { order: false, groupby: false, groupbyNeedsDateGrouping: false, functions: [],
-			reason: "Dataverse can't sort, group or aggregate multi-select option set attributes." };
+		return {
+			order: false,
+			groupby: false,
+			groupbyNeedsDateGrouping: false,
+			functions: [],
+			reason: "Dataverse can't sort, group or aggregate multi-select option set attributes.",
+		};
 	}
 	if (t === "VirtualType") {
 		// The "...name" label attributes: order works (304 of 312 on the sandbox); group by
 		// 0x8004e01d, aggregates 0x80044150 (#57)
-		return { order: true, groupby: false, groupbyNeedsDateGrouping: false, functions: [],
-			reason: "Label attributes (such as statuscodename) can't be grouped or aggregated." };
+		return {
+			order: true,
+			groupby: false,
+			groupbyNeedsDateGrouping: false,
+			functions: [],
+			reason: "Label attributes (such as statuscodename) can't be grouped or aggregated.",
+		};
 	}
 	if (NOT_QUERYABLE.has(t)) {
-		return { order: false, groupby: false, groupbyNeedsDateGrouping: false, functions: [],
-			reason: `Dataverse can't sort, group or aggregate ${t.replace(/Type$/, "")} attributes.` };
+		return {
+			order: false,
+			groupby: false,
+			groupbyNeedsDateGrouping: false,
+			functions: [],
+			reason: `Dataverse can't sort, group or aggregate ${t.replace(/Type$/, "")} attributes.`,
+		};
 	}
 	if (t === "MemoType" && type.isLogical) {
 		// Composite attributes: groupby / count / countcolumn 0x8004111e; sort works
-		return { order: true, groupby: false, groupbyNeedsDateGrouping: false, functions: [],
-			reason: "Composite attributes (such as address1_composite) can't be grouped or aggregated." };
+		return {
+			order: true,
+			groupby: false,
+			groupbyNeedsDateGrouping: false,
+			functions: [],
+			reason: "Composite attributes (such as address1_composite) can't be grouped or aggregated.",
+		};
 	}
 	const functions: AggregateFunction[] = [];
 	// Money counts fail in the Web API ("expected Money", 0x80060888) on both execution paths
 	if (t !== "MoneyType") functions.push("count", "countcolumn");
 	if (NUMERIC.has(t)) functions.push("sum", "avg"); // 0x8004112f otherwise
 	if (NUMERIC.has(t) || t === "DateTimeType") functions.push("min", "max"); // 0x8004112f otherwise
-	return { order: true, groupby: true, groupbyNeedsDateGrouping: t === "DateTimeType", functions };
+	return {
+		order: true,
+		groupby: true,
+		groupbyNeedsDateGrouping: t === "DateTimeType",
+		functions,
+	};
 }
 
 /** Why an aggregate function isn't available for an attribute type (for editor messages). */
-export function getUnsupportedFunctionReason(fn: AggregateFunction, type: AttributeTypeInfo): string | undefined {
+export function getUnsupportedFunctionReason(
+	fn: AggregateFunction,
+	type: AttributeTypeInfo,
+): string | undefined {
 	const caps = getAttributeCapabilities(type);
 	if (caps.functions.includes(fn)) return undefined;
 	if (caps.reason) return caps.reason;
 	if ((fn === "count" || fn === "countcolumn") && type.typeName === "MoneyType") {
 		return "Counts of Money attributes fail in the Dataverse Web API (0x80060888). Count another attribute, such as the primary key.";
 	}
-	if (fn === "sum" || fn === "avg") return "Sum and Average only work on number and Money attributes (Dataverse rejects it: 0x8004112f).";
+	if (fn === "sum" || fn === "avg")
+		return "Sum and Average only work on number and Money attributes (Dataverse rejects it: 0x8004112f).";
 	return "Minimum and Maximum only work on number, Money and DateTime attributes (Dataverse rejects it: 0x8004112f).";
 }
 
@@ -98,9 +134,13 @@ export function getAttributeMetadataIssues(
 	const issues: string[] = [];
 	if (attr.rowAggregate !== undefined && !context.aggregateQuery) {
 		if (context.isHierarchical === false) {
-			issues.push("Count child records only works on entities with a hierarchical relationship (Dataverse rejects it: 0x80047020).");
+			issues.push(
+				"Count child records only works on entities with a hierarchical relationship (Dataverse rejects it: 0x80047020).",
+			);
 		} else if (context.primaryIdAttribute && attr.name !== context.primaryIdAttribute) {
-			issues.push(`Count child records only works on the primary key (${context.primaryIdAttribute}); Dataverse rejects it on other attributes (0x80040203).`);
+			issues.push(
+				`Count child records only works on the primary key (${context.primaryIdAttribute}); Dataverse rejects it on other attributes (0x80040203).`,
+			);
 		}
 	}
 	if (!type || !context.aggregateQuery) return issues; // metadata unknown: don't block
@@ -112,7 +152,9 @@ export function getAttributeMetadataIssues(
 		issues.push(caps.reason ?? "Dataverse can't group by this attribute.");
 	}
 	if (attr.groupby && caps.groupbyNeedsDateGrouping && !attr.dategrouping) {
-		issues.push("Group by on a DateTime attribute needs a date grouping (Dataverse rejects it: 0x80041135).");
+		issues.push(
+			"Group by on a DateTime attribute needs a date grouping (Dataverse rejects it: 0x80041135).",
+		);
 	}
 	return issues;
 }

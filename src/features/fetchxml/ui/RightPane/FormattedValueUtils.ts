@@ -96,7 +96,7 @@ export function getFormattedValue(record: Record<string, unknown>, column: strin
 export function getColumnDisplayName(
 	column: string,
 	attributeMetadata?: Map<string, AttributeMetadata>,
-	record?: Record<string, unknown>
+	record?: Record<string, unknown>,
 ): string {
 	if (!column) return "";
 

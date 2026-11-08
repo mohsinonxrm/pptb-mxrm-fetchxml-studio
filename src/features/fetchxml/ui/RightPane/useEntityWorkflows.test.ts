@@ -23,7 +23,10 @@ function Probe({ entityName, fetch }: { entityName?: string; fetch?: Fetch }) {
 
 const render = (entityName: string | undefined, fetch?: Fetch) =>
 	act(async () => root.render(createElement(Probe, { entityName, fetch })));
-const load = () => act(async () => { await latest.load(); });
+const load = () =>
+	act(async () => {
+		await latest.load();
+	});
 
 /** A fetch that resolves when the test says so */
 function deferred() {

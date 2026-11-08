@@ -6,7 +6,21 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLOSE_ACTIONS, type CloseMessageAction } from "../../model/closeActions";
 import { toEntityStateModel } from "../../model/recordState";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	deferred,
+	dialogInput,
+	dialogText,
+	flush,
+	installHost,
+	isDisabled,
+	removeHost,
+	render,
+	scopeField,
+	typeInto,
+} from "../../../../shared/testing/ui";
 import type { BatchDeleteResult } from "../../api/pptbClient";
 
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
@@ -35,8 +49,10 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 const { CloseRecordsDialog } = await import("./CloseRecordsDialog");
 
 const win = CLOSE_ACTIONS.opportunity.find((a) => a.key === "win") as CloseMessageAction;
-const ids = (n: number) => Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
-const done = (n: number): BatchDeleteResult => ({ succeeded: n, failed: 0, errors: [] }) as unknown as BatchDeleteResult;
+const ids = (n: number) =>
+	Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
+const done = (n: number): BatchDeleteResult =>
+	({ succeeded: n, failed: 0, errors: [] }) as unknown as BatchDeleteResult;
 
 beforeEach(() => {
 	vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -68,7 +84,9 @@ describe("Close as won dialog", () => {
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
 		expect(scopeField("Scope")).toBe("2 records");
-		expect(text).toContain("To undo, run Activate on the records this changes. The close activities stay.");
+		expect(text).toContain(
+			"To undo, run Activate on the records this changes. The close activities stay.",
+		);
 
 		const closeButton = () => button("Close as won");
 		expect(isDisabled(closeButton())).toBe(false);

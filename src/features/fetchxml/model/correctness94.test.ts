@@ -63,7 +63,9 @@ describe("references to corrected aliases follow the correction (#94)", () => {
 		expect(fetch.entity.orders[0].entityname).toBe(newAlias);
 		expect(fetch.entity.filters[0].conditions[0].entityname).toBe(newAlias);
 		expect(fetch.entity.filters[0].conditions[1].valueof).toBe(`${newAlias}.name`);
-		expect(result.warnings.some((w) => w.kind === "corrected" && w.message.includes("references"))).toBe(true);
+		expect(
+			result.warnings.some((w) => w.kind === "corrected" && w.message.includes("references")),
+		).toBe(true);
 	});
 
 	it("attribute alias: aggregate order alias", () => {
@@ -86,12 +88,50 @@ describe("intellisense catalogue matches the FetchXML reference (#94)", () => {
 	const attrs = (element: string) => Object.keys(FETCHXML_SCHEMA.elements[element].attributes);
 	it.each([
 		// Every documented attribute (learn.microsoft.com/.../fetchxml/reference/*)
-		["fetch", ["aggregate", "aggregatelimit", "count", "datasource", "distinct", "latematerialize", "no-lock", "options", "page", "paging-cookie", "returntotalrecordcount", "top", "useraworderby"]],
+		[
+			"fetch",
+			[
+				"aggregate",
+				"aggregatelimit",
+				"count",
+				"datasource",
+				"distinct",
+				"latematerialize",
+				"no-lock",
+				"options",
+				"page",
+				"paging-cookie",
+				"returntotalrecordcount",
+				"top",
+				"useraworderby",
+			],
+		],
 		["entity", ["name"]],
 		["link-entity", ["name", "to", "from", "alias", "link-type", "intersect"]],
-		["attribute", ["aggregate", "alias", "dategrouping", "distinct", "groupby", "name", "rowaggregate", "usertimezone"]],
+		[
+			"attribute",
+			[
+				"aggregate",
+				"alias",
+				"dategrouping",
+				"distinct",
+				"groupby",
+				"name",
+				"rowaggregate",
+				"usertimezone",
+			],
+		],
 		["order", ["attribute", "alias", "descending", "entityname"]],
-		["filter", ["type", "hint", "isquickfindfields", "overridequickfindrecordlimitenabled", "overridequickfindrecordlimitdisabled"]],
+		[
+			"filter",
+			[
+				"type",
+				"hint",
+				"isquickfindfields",
+				"overridequickfindrecordlimitenabled",
+				"overridequickfindrecordlimitdisabled",
+			],
+		],
 		["condition", ["attribute", "entityname", "operator", "value", "valueof"]],
 	])("%s lists every documented attribute", (element, documented) => {
 		expect(attrs(element)).toEqual(expect.arrayContaining(documented));
@@ -103,7 +143,9 @@ describe("intellisense catalogue matches the FetchXML reference (#94)", () => {
 	});
 
 	it("offers every operator the parser accepts", () => {
-		expect(FETCHXML_SCHEMA.elements.condition.attributes.operator.values).toEqual([...KNOWN_OPERATORS]);
+		expect(FETCHXML_SCHEMA.elements.condition.attributes.operator.values).toEqual([
+			...KNOWN_OPERATORS,
+		]);
 	});
 
 	it("suggests values for hyphenated attributes (link-type, no-lock)", () => {
@@ -112,21 +154,34 @@ describe("intellisense catalogue matches the FetchXML reference (#94)", () => {
 			getValueInRange: () => `<fetch><entity name="account">${line}`,
 			getLineContent: () => line,
 		} as unknown as Monaco.editor.ITextModel;
-		const context = getElementContext(model, { lineNumber: 1, column: line.length + 1 } as Monaco.Position);
+		const context = getElementContext(model, {
+			lineNumber: 1,
+			column: line.length + 1,
+		} as Monaco.Position);
 		expect(context).toMatchObject({ inValue: true, attributeName: "link-type" });
 	});
 });
 
 describe("code generators (#94)", () => {
-	const pa = (xml: string) => generatePowerAutomateSpec(xml, "accounts").fields.find((f) => f.label === "Top Count")?.value;
+	const pa = (xml: string) =>
+		generatePowerAutomateSpec(xml, "accounts").fields.find((f) => f.label === "Top Count")
+			?.value;
 	it("Power Automate Top Count comes from top only, never from count (a page size)", () => {
 		expect(pa(`<fetch top="25"><entity name="account" /></fetch>`)).toBe("25");
 		expect(pa(`<fetch count="50" page="1"><entity name="account" /></fetch>`)).toBe("");
-		expect(pa(`<fetch><entity name="account"><attribute name="accountid" alias="top" aggregate="count" /></entity></fetch>`)).toBe("");
+		expect(
+			pa(
+				`<fetch><entity name="account"><attribute name="accountid" alias="top" aggregate="count" /></entity></fetch>`,
+			),
+		).toBe("");
 	});
 
 	it("Web API snippet asks for annotations and explains paging cookies", () => {
-		const code = generateFxsSyncCode("webapi", `<fetch count="50" page="1"><entity name="account" /></fetch>`, "accounts");
+		const code = generateFxsSyncCode(
+			"webapi",
+			`<fetch count="50" page="1"><entity name="account" /></fetch>`,
+			"accounts",
+		);
 		expect(code).toContain(`Prefer: odata.include-annotations="*"`);
 		expect(code).toContain("@Microsoft.Dynamics.CRM.fetchxmlpagingcookie");
 		expect(code).toContain("@Microsoft.Dynamics.CRM.morerecords");

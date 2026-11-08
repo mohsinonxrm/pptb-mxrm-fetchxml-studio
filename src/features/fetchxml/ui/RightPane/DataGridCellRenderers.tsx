@@ -122,7 +122,9 @@ export function PicklistCellRenderer({
 				: "tint";
 		return (
 			<div className={styles.picklistCell}>
-				<Badge appearance={appearance} size={badgeSize}>{String(formattedValue)}</Badge>
+				<Badge appearance={appearance} size={badgeSize}>
+					{String(formattedValue)}
+				</Badge>
 			</div>
 		);
 	}
@@ -146,7 +148,9 @@ export function PicklistCellRenderer({
 
 	return (
 		<div className={styles.picklistCell}>
-			<Badge appearance={appearance} size={badgeSize}>{label}</Badge>
+			<Badge appearance={appearance} size={badgeSize}>
+				{label}
+			</Badge>
 		</div>
 	);
 }
@@ -167,7 +171,11 @@ export function LookupCellRenderer({
 
 	// Prefer formatted value (just the name string)
 	if (formattedValue) {
-		return <span className={styles.lookupName}><HighlightText text={String(formattedValue)} /></span>;
+		return (
+			<span className={styles.lookupName}>
+				<HighlightText text={String(formattedValue)} />
+			</span>
+		);
 	}
 
 	// Fallback to raw value (structured object)
@@ -179,7 +187,9 @@ export function LookupCellRenderer({
 
 	return (
 		<div className={styles.lookupCell}>
-			<span className={styles.lookupName}><HighlightText text={lookupValue.Name || "—"} /></span>
+			<span className={styles.lookupName}>
+				<HighlightText text={lookupValue.Name || "—"} />
+			</span>
 			{/* A second line doesn't fit an Extra small row (#228) */}
 			{lookupValue.LogicalName && density !== "extra-small" && (
 				<span className={styles.lookupType}>{lookupValue.LogicalName}</span>
@@ -205,7 +215,11 @@ export function NumberCellRenderer({
 
 	// Prefer formatted value (already includes currency symbol, etc.)
 	if (formattedValue) {
-		return <span className={styles.numberCell}><HighlightText text={String(formattedValue)} /></span>;
+		return (
+			<span className={styles.numberCell}>
+				<HighlightText text={String(formattedValue)} />
+			</span>
+		);
 	}
 
 	// Fallback to manual formatting
@@ -224,7 +238,10 @@ export function NumberCellRenderer({
 		// No formatted value, so no currency: the amount alone, not a "$" (#184)
 		return (
 			<span className={styles.numberCell}>
-				{numValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+				{numValue.toLocaleString(undefined, {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				})}
 			</span>
 		);
 	}
@@ -262,7 +279,11 @@ export function DateTimeCellRenderer({
 
 	// Prefer formatted value
 	if (formattedValue) {
-		return <span className={styles.dateCell}><HighlightText text={String(formattedValue)} /></span>;
+		return (
+			<span className={styles.dateCell}>
+				<HighlightText text={String(formattedValue)} />
+			</span>
+		);
 	}
 
 	// Fallback to manual formatting
@@ -283,7 +304,9 @@ export function DateTimeCellRenderer({
 
 	// Check if DateOnly format
 	const isDateOnly =
-		!!dateOnlyText || attribute?.Format === "DateOnly" || attribute?.DateTimeBehavior?.Value === "DateOnly";
+		!!dateOnlyText ||
+		attribute?.Format === "DateOnly" ||
+		attribute?.DateTimeBehavior?.Value === "DateOnly";
 
 	if (isDateOnly) {
 		return (
@@ -330,6 +353,9 @@ export function TextCellRenderer({
 		return <span>—</span>;
 	}
 
-	return <span className={styles.truncateText}><HighlightText text={String(displayValue)} /></span>;
+	return (
+		<span className={styles.truncateText}>
+			<HighlightText text={String(displayValue)} />
+		</span>
+	);
 }
-

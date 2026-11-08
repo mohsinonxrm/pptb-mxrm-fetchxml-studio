@@ -5,7 +5,17 @@
  */
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { button, cleanup, click, dialogText, flush, installHost, isDisabled, removeHost, render } from "../../../../shared/testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	dialogText,
+	flush,
+	installHost,
+	isDisabled,
+	removeHost,
+	render,
+} from "../../../../shared/testing/ui";
 
 const ME = "11111111-1111-1111-1111-111111111111";
 const OTHER = "22222222-2222-2222-2222-222222222222";
@@ -28,7 +38,8 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 const { SaveViewDialog } = await import("./SaveViewDialog");
 
 const FETCH = "<fetch><entity name='contact'><attribute name='fullname'/></entity></fetch>";
-const LAYOUT = "<grid name='resultset' object='2' jump='fullname' select='1' icon='1' preview='1'><row name='result' id='contactid'><cell name='fullname' width='300'/></row></grid>";
+const LAYOUT =
+	"<grid name='resultset' object='2' jump='fullname' select='1' icon='1' preview='1'><row name='result' id='contactid'><cell name='fullname' width='300'/></row></grid>";
 
 const props = (loadedView: Parameters<typeof SaveViewDialog>[0]["loadedView"]) => ({
 	open: true,
@@ -60,11 +71,24 @@ describe("Save view: a personal view shared read-only (#142)", () => {
 	it("can't be overwritten, says who shared it, and offers Save a copy…", async () => {
 		installHost();
 		writeAccess.mockResolvedValue(false);
-		await render(createElement(SaveViewDialog, props({ id: VIEW, type: "personal", name: "Amy's contacts", ownerId: OTHER, ownerName: "Amy Alberts" })));
+		await render(
+			createElement(
+				SaveViewDialog,
+				props({
+					id: VIEW,
+					type: "personal",
+					name: "Amy's contacts",
+					ownerId: OTHER,
+					ownerName: "Amy Alberts",
+				}),
+			),
+		);
 		await flush();
 		const text = dialogText();
 		expect(text).toContain("Can't overwrite this view");
-		expect(text).toContain('Amy Alberts shared "Amy\'s contacts" with you without write access.');
+		expect(text).toContain(
+			'Amy Alberts shared "Amy\'s contacts" with you without write access.',
+		);
 		expect(isDisabled(button("Save"))).toBe(true);
 		expect(writeAccess).toHaveBeenCalledWith(VIEW);
 
@@ -72,14 +96,27 @@ describe("Save view: a personal view shared read-only (#142)", () => {
 		const copy = dialogText();
 		expect(copy).not.toContain("Can't overwrite this view");
 		expect(copy).toContain("A new personal view");
-		expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]')?.value).toBe("Amy's contacts (copy)");
+		expect(
+			document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]')?.value,
+		).toBe("Amy's contacts (copy)");
 		expect(isDisabled(button("Save"))).toBe(false);
 	});
 
 	it("a shared view with write access can be overwritten", async () => {
 		installHost();
 		writeAccess.mockResolvedValue(true);
-		await render(createElement(SaveViewDialog, props({ id: VIEW, type: "personal", name: "Team contacts", ownerId: OTHER, ownerName: "Amy Alberts" })));
+		await render(
+			createElement(
+				SaveViewDialog,
+				props({
+					id: VIEW,
+					type: "personal",
+					name: "Team contacts",
+					ownerId: OTHER,
+					ownerName: "Amy Alberts",
+				}),
+			),
+		);
 		await flush();
 		expect(dialogText()).not.toContain("Can't overwrite this view");
 		expect(isDisabled(button("Save"))).toBe(false);
@@ -89,7 +126,12 @@ describe("Save view: a personal view shared read-only (#142)", () => {
 describe("Save view: overwriting your own view (#69)", () => {
 	it("names the environment and the view, and says there's no undo", async () => {
 		installHost({ connection: { name: "CRM279420" } });
-		await render(createElement(SaveViewDialog, props({ id: VIEW, type: "personal", name: "My contacts", ownerId: ME })));
+		await render(
+			createElement(
+				SaveViewDialog,
+				props({ id: VIEW, type: "personal", name: "My contacts", ownerId: ME }),
+			),
+		);
 		await flush();
 		const text = dialogText();
 		expect(text).toContain("CRM279420");

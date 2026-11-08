@@ -133,7 +133,12 @@ class MetadataCache {
 			data: entities,
 			timestamp: Date.now(),
 		};
-		debugLog("metadataAPI", "[Cache] Global entity metadata cached:", entities.length, "entities");
+		debugLog(
+			"metadataAPI",
+			"[Cache] Global entity metadata cached:",
+			entities.length,
+			"entities",
+		);
 	}
 
 	/**
@@ -247,7 +252,7 @@ class MetadataCache {
 			oneToMany: RelationshipMetadata[];
 			manyToOne: RelationshipMetadata[];
 			manyToMany: RelationshipMetadata[];
-		}
+		},
 	): void {
 		const entry = this.getEntityEntry(logicalName);
 		if (!entry.data) entry.data = {};

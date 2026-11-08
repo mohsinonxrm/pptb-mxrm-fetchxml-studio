@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearMetadataLoadErrors, metadataLoadError, recordMetadataLoad, retryMetadataLoads } from "./metadataLoadErrors";
+import {
+	clearMetadataLoadErrors,
+	metadataLoadError,
+	recordMetadataLoad,
+	retryMetadataLoads,
+} from "./metadataLoadErrors";
 
 describe("metadata load failures for the property editors (#201)", () => {
 	afterEach(() => clearMetadataLoadErrors());
 
 	it("records a failure with Dataverse's message, per entity", () => {
-		recordMetadataLoad("columns", "account", new Error("Principal user is missing prvReadEntity privilege"));
+		recordMetadataLoad(
+			"columns",
+			"account",
+			new Error("Principal user is missing prvReadEntity privilege"),
+		);
 		expect(metadataLoadError("account")).toEqual({
 			kind: "columns",
 			message: expect.stringContaining("prvReadEntity"),
