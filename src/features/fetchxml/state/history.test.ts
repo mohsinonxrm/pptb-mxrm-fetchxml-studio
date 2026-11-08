@@ -29,7 +29,12 @@ interface Snap {
 	selected: string | null;
 }
 
-const snap = (text: string, extra: Partial<Snap> = {}): Snap => ({ text, width: 100, selected: null, ...extra });
+const snap = (text: string, extra: Partial<Snap> = {}): Snap => ({
+	text,
+	width: 100,
+	selected: null,
+	...extra,
+});
 
 const at = (h: History<Snap>, text: string, now = 0, mergeKey?: string, label = `Edit ${text}`) =>
 	record(h, { ...h.present, text }, { label, mergeKey, now });
@@ -125,7 +130,11 @@ describe("selection target", () => {
 		};
 		let h = createHistory(snap("a", { selected: "other" }), { restore });
 		// A context-menu delete of n2 while "other" stays selected
-		h = record(h, snap("b", { selected: "other" }), { label: "Delete filter", target: "n2", now: 0 });
+		h = record(h, snap("b", { selected: "other" }), {
+			label: "Delete filter",
+			target: "n2",
+			now: 0,
+		});
 		expect(h.past[0].target).toBe("n2");
 		h = redo(undo(h));
 		expect(seen).toEqual([
@@ -160,7 +169,9 @@ describe("selection target", () => {
 		const inSnapshot = new Set(["root", "filter-1"]);
 		const exists = (id: string) => inSnapshot.has(id);
 		expect(nearestExisting(["filter-1", "root"], exists)).toBe("filter-1");
-		expect(nearestExisting(["cond-9", "filter-2", "filter-1", "root"], exists)).toBe("filter-1");
+		expect(nearestExisting(["cond-9", "filter-2", "filter-1", "root"], exists)).toBe(
+			"filter-1",
+		);
 		expect(nearestExisting(["gone", "also-gone"], exists)).toBeNull();
 		expect(nearestExisting([], exists)).toBeNull();
 	});
@@ -275,7 +286,11 @@ describe("merging", () => {
 		for (let i = 0; i < 5; i++) {
 			text += "x";
 			h = at(h, text, i * 150, key, "Edit condition");
-			h = skip(h, { ...h.present, width: h.present.width + 1 }, { keepRedo: true, endsMerge: false });
+			h = skip(
+				h,
+				{ ...h.present, width: h.present.width + 1 },
+				{ keepRedo: true, endsMerge: false },
+			);
 		}
 		expect(h.past).toHaveLength(1);
 		expect(h.present.text).toBe("xxxxx");
@@ -497,7 +512,10 @@ describe("skip and redo", () => {
 		let h = createHistory(snap(""));
 		h = at(h, "a", 0, "k");
 		expect(skip(h, { ...h.present, width: 1 }).openMerge).toBeNull();
-		expect(skip(h, { ...h.present, width: 1 }, { endsMerge: false }).openMerge).toEqual({ key: "k", at: 0 });
+		expect(skip(h, { ...h.present, width: 1 }, { endsMerge: false }).openMerge).toEqual({
+			key: "k",
+			at: 0,
+		});
 	});
 });
 

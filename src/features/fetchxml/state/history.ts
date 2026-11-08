@@ -138,8 +138,10 @@ export interface SkipOptions {
 export function createHistory<S>(initial: S, options: HistoryOptions<S> = {}): History<S> {
 	const limit = options.limit ?? HISTORY_LIMIT;
 	const mergeWindowMs = options.mergeWindowMs ?? MERGE_WINDOW_MS;
-	if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`History limit must be a positive integer, got ${limit}`);
-	if (!(mergeWindowMs >= 0)) throw new RangeError(`Merge window must be 0 or more, got ${mergeWindowMs}`);
+	if (!Number.isInteger(limit) || limit < 1)
+		throw new RangeError(`History limit must be a positive integer, got ${limit}`);
+	if (!(mergeWindowMs >= 0))
+		throw new RangeError(`Merge window must be 0 or more, got ${mergeWindowMs}`);
 	return {
 		past: [],
 		present: initial,
@@ -164,12 +166,21 @@ function pushStep<S>(
 	before: S,
 	{ label, mergeKey, target, now }: RecordOptions,
 ): History<S> {
-	if (mergeKey !== undefined && h.openMerge?.key === mergeKey && now - h.openMerge.at <= h.mergeWindowMs) {
+	if (
+		mergeKey !== undefined &&
+		h.openMerge?.key === mergeKey &&
+		now - h.openMerge.at <= h.mergeWindowMs
+	) {
 		return { ...h, future: [], openMerge: { key: mergeKey, at: now } };
 	}
 	const entry: HistoryEntry<S> =
-		target === undefined ? { id: h.nextId, label, snapshot: before } : { id: h.nextId, label, snapshot: before, target };
-	const past = h.past.length >= h.limit ? [...h.past.slice(h.past.length - h.limit + 1), entry] : [...h.past, entry];
+		target === undefined
+			? { id: h.nextId, label, snapshot: before }
+			: { id: h.nextId, label, snapshot: before, target };
+	const past =
+		h.past.length >= h.limit
+			? [...h.past.slice(h.past.length - h.limit + 1), entry]
+			: [...h.past, entry];
 	return {
 		...h,
 		past,
@@ -244,7 +255,9 @@ export function undo<S>(h: History<S>): History<S> {
 	return {
 		...h,
 		past: h.past.slice(0, -1),
-		present: h.restore ? h.restore(entry.snapshot, h.present, { direction: "undo", target: entry.target }) : entry.snapshot,
+		present: h.restore
+			? h.restore(entry.snapshot, h.present, { direction: "undo", target: entry.target })
+			: entry.snapshot,
 		future: [...h.future, { ...entry, snapshot: h.present }],
 		openMerge: null,
 	};
@@ -257,7 +270,9 @@ export function redo<S>(h: History<S>): History<S> {
 	return {
 		...h,
 		past: [...h.past, { ...entry, snapshot: h.present }],
-		present: h.restore ? h.restore(entry.snapshot, h.present, { direction: "redo", target: entry.target }) : entry.snapshot,
+		present: h.restore
+			? h.restore(entry.snapshot, h.present, { direction: "redo", target: entry.target })
+			: entry.snapshot,
 		future: h.future.slice(0, -1),
 		openMerge: null,
 	};
@@ -287,13 +302,19 @@ export function mapSnapshots<S>(h: History<S>, fn: (snapshot: S) => S): History<
  * null. The store builds `path` from whichever tree holds the target and checks existence in the
  * restored snapshot.
  */
-export function nearestExisting(path: readonly string[], exists: (id: string) => boolean): string | null {
+export function nearestExisting(
+	path: readonly string[],
+	exists: (id: string) => boolean,
+): string | null {
 	return path.find(exists) ?? null;
 }
 
 export const canUndo = <S>(h: History<S>): boolean => h.past.length > 0 && !h.transaction;
 export const canRedo = <S>(h: History<S>): boolean => h.future.length > 0 && !h.transaction;
-export const undoLabel = <S>(h: History<S>): string | null => h.past[h.past.length - 1]?.label ?? null;
-export const redoLabel = <S>(h: History<S>): string | null => h.future[h.future.length - 1]?.label ?? null;
+export const undoLabel = <S>(h: History<S>): string | null =>
+	h.past[h.past.length - 1]?.label ?? null;
+export const redoLabel = <S>(h: History<S>): string | null =>
+	h.future[h.future.length - 1]?.label ?? null;
 /** The id of the step Undo would undo, or null */
-export const lastEntryId = <S>(h: History<S>): number | null => h.past[h.past.length - 1]?.id ?? null;
+export const lastEntryId = <S>(h: History<S>): number | null =>
+	h.past[h.past.length - 1]?.id ?? null;
