@@ -100,6 +100,16 @@ describe("Delete privilege name from entity metadata (#327)", () => {
 		expect(warn).toHaveBeenCalled();
 	});
 
+	it("denies, without the prvDelete{LogicalName} fallback, when the metadata lists no Delete", async () => {
+		PRIVILEGES.noDeleteEntity = [{ Name: "prvReadNoDeleteEntity", PrivilegeType: "Read" }];
+		try {
+			await expect(checkDeletePrivilege("noDeleteEntity")).resolves.toBe(false);
+			expect(checked).toEqual([]);
+		} finally {
+			delete PRIVILEGES.noDeleteEntity;
+		}
+	});
+
 	it("keeps denying, with a warning, when the fallback privilege doesn't exist", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		queryData.mockImplementation(async (query: string) => {

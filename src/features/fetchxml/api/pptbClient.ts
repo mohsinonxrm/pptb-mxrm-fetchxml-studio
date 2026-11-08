@@ -3099,9 +3099,10 @@ export async function resolveEntityPrivilegeName(
 
 /**
  * Check if user has delete privilege for a specific entity. The privilege name comes from the
- * entity's metadata (#327, e.g. savedquery → prvDeleteQuery). When the metadata can't be read, or
- * has no Delete privilege, the name built from the logical name (prvDelete{LogicalName}) is checked
- * as before; a privilege that doesn't exist is treated as denied (checkPrivilegeByName).
+ * entity's metadata (#327, e.g. savedquery → prvDeleteQuery). Metadata that lists no Delete
+ * privilege means the entity has none: denied. Only when the metadata can't be read is the name
+ * built from the logical name (prvDelete{LogicalName}) checked, as before; a privilege that doesn't
+ * exist is treated as denied (checkPrivilegeByName).
  */
 export async function checkDeletePrivilege(entityLogicalName: string): Promise<boolean> {
 	try {
@@ -3111,16 +3112,23 @@ export async function checkDeletePrivilege(entityLogicalName: string): Promise<b
 		let deletePriv: string | undefined;
 		try {
 			deletePriv = await resolveEntityPrivilegeName(entityLogicalName, "Delete");
+			if (!deletePriv) {
+				debugLog(
+					"accessAPI",
+					`checkDeletePrivilege(${entityLogicalName}): no Delete privilege in metadata, denied`,
+				);
+				return false;
+			}
 		} catch (error) {
 			console.warn(
 				`checkDeletePrivilege(${entityLogicalName}): couldn't read the privilege name from metadata, using prvDelete{LogicalName}:`,
 				error,
 			);
+			// Fallback: entity-specific delete privilege built from the logical name (e.g. prvDeleteAccount)
+			deletePriv = `prvDelete${entityLogicalName
+				.charAt(0)
+				.toUpperCase()}${entityLogicalName.slice(1)}`;
 		}
-		// Fallback: entity-specific delete privilege built from the logical name (e.g. prvDeleteAccount)
-		deletePriv ??= `prvDelete${entityLogicalName
-			.charAt(0)
-			.toUpperCase()}${entityLogicalName.slice(1)}`;
 		return await checkPrivilegeByName(user.UserId, deletePriv);
 	} catch (error) {
 		console.error("checkDeletePrivilege: Failed:", error);
