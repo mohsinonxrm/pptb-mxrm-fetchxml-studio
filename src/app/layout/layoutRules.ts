@@ -46,7 +46,9 @@ export function builderWidthLimits(windowWidth: number): SizeLimits {
 		min: BUILDER_WIDTH_MIN,
 		max: Math.max(BUILDER_WIDTH_MAX_FLOOR, windowWidth - BUILDER_WIDTH_WINDOW_MARGIN),
 		defaultValue:
-			windowWidth < DRAWER_WINDOW_BREAKPOINT ? BUILDER_WIDTH_NARROW_DEFAULT : BUILDER_WIDTH_DEFAULT,
+			windowWidth < DRAWER_WINDOW_BREAKPOINT
+				? BUILDER_WIDTH_NARROW_DEFAULT
+				: BUILDER_WIDTH_DEFAULT,
 	};
 }
 
@@ -70,7 +72,10 @@ export function propertiesHost(input: {
 	builderWidth: number;
 }): PropertiesHost {
 	if (input.pane !== "docked") return "peek";
-	if (input.windowWidth < DRAWER_WINDOW_BREAKPOINT || input.builderWidth < DRAWER_PANE_BREAKPOINT) {
+	if (
+		input.windowWidth < DRAWER_WINDOW_BREAKPOINT ||
+		input.builderWidth < DRAWER_PANE_BREAKPOINT
+	) {
 		return "drawer";
 	}
 	return "docked";
@@ -91,7 +96,11 @@ export function normalizePersistedLayout(raw: unknown): PersistedLayout {
 	if (!raw || typeof raw !== "object") return {};
 	const source = raw as Record<string, unknown>;
 	const result: PersistedLayout = {};
-	const builderWidth = validNumber(source.builderWidth, BUILDER_WIDTH_MIN, BUILDER_WIDTH_PERSIST_CAP);
+	const builderWidth = validNumber(
+		source.builderWidth,
+		BUILDER_WIDTH_MIN,
+		BUILDER_WIDTH_PERSIST_CAP,
+	);
 	if (builderWidth !== undefined) result.builderWidth = builderWidth;
 	const treeHeight = validNumber(source.treeHeight, TREE_HEIGHT_MIN, TREE_HEIGHT_MAX);
 	if (treeHeight !== undefined) result.treeHeight = treeHeight;

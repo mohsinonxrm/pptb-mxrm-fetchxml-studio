@@ -51,21 +51,33 @@ describe("propertiesHost", () => {
 		}
 	});
 	it("is drawer for a docked pane in a window under 1000", () => {
-		expect(propertiesHost({ pane: "docked", windowWidth: 999, builderWidth: 500 })).toBe("drawer");
+		expect(propertiesHost({ pane: "docked", windowWidth: 999, builderWidth: 500 })).toBe(
+			"drawer",
+		);
 	});
 	it("is docked at exactly a 1000 px window", () => {
-		expect(propertiesHost({ pane: "docked", windowWidth: 1000, builderWidth: 500 })).toBe("docked");
+		expect(propertiesHost({ pane: "docked", windowWidth: 1000, builderWidth: 500 })).toBe(
+			"docked",
+		);
 	});
 	it("is drawer for a docked pane under 320 and docked at exactly 320", () => {
-		expect(propertiesHost({ pane: "docked", windowWidth: 1600, builderWidth: 319 })).toBe("drawer");
-		expect(propertiesHost({ pane: "docked", windowWidth: 1600, builderWidth: 320 })).toBe("docked");
+		expect(propertiesHost({ pane: "docked", windowWidth: 1600, builderWidth: 319 })).toBe(
+			"drawer",
+		);
+		expect(propertiesHost({ pane: "docked", windowWidth: 1600, builderWidth: 320 })).toBe(
+			"docked",
+		);
 	});
 	it("covers every pane and size combination", () => {
 		for (const pane of panes) {
 			for (const windowWidth of [999, 1000]) {
 				for (const builderWidth of [319, 320]) {
 					const expected =
-						pane !== "docked" ? "peek" : windowWidth < 1000 || builderWidth < 320 ? "drawer" : "docked";
+						pane !== "docked"
+							? "peek"
+							: windowWidth < 1000 || builderWidth < 320
+								? "drawer"
+								: "docked";
 					expect(propertiesHost({ pane, windowWidth, builderWidth })).toBe(expected);
 				}
 			}
@@ -90,12 +102,12 @@ describe("normalizePersistedLayout", () => {
 		}
 	});
 	it("drops non-numbers, NaN, Infinity and out-of-range values", () => {
-		expect(
-			normalizePersistedLayout({ builderWidth: "400", treeHeight: Number.NaN }),
-		).toEqual({});
-		expect(
-			normalizePersistedLayout({ builderWidth: Infinity, treeHeight: -Infinity }),
-		).toEqual({});
+		expect(normalizePersistedLayout({ builderWidth: "400", treeHeight: Number.NaN })).toEqual(
+			{},
+		);
+		expect(normalizePersistedLayout({ builderWidth: Infinity, treeHeight: -Infinity })).toEqual(
+			{},
+		);
 		expect(normalizePersistedLayout({ builderWidth: 10, treeHeight: 50 })).toEqual({});
 		expect(normalizePersistedLayout({ builderWidth: -1, treeHeight: 5000 })).toEqual({});
 		expect(normalizePersistedLayout({ builderWidth: 1e9 })).toEqual({});
@@ -108,7 +120,9 @@ describe("normalizePersistedLayout", () => {
 	});
 	it("ignores legacy pane values", () => {
 		for (const pane of ["collapsed", "pinned", "peek", "docked", 1, null]) {
-			expect(normalizePersistedLayout({ pane, builderWidth: 380 })).toEqual({ builderWidth: 380 });
+			expect(normalizePersistedLayout({ pane, builderWidth: 380 })).toEqual({
+				builderWidth: 380,
+			});
 		}
 		expect(normalizePersistedLayout({ pane: "collapsed" })).toEqual({});
 	});
