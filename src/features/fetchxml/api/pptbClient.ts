@@ -3066,16 +3066,59 @@ export async function executeWorkflowBatch(
 	return result;
 }
 
+/** PrivilegeType members of an entity's Privileges (SecurityPrivilegeMetadata) */
+export type EntityPrivilegeType =
+	"Create" | "Read" | "Write" | "Delete" | "Assign" | "Share" | "Append" | "AppendTo";
+
 /**
- * Check if user has delete privilege for a specific entity
+ * The entity's privilege name of this type, from its metadata (EntityMetadata.Privileges:
+ * SecurityPrivilegeMetadata Name and PrivilegeType). Many don't follow prv{Type}{LogicalName}:
+ * savedquery uses prvDeleteQuery, userquery prvDeleteUserQuery, systemuser prvDeleteUser,
+ * activities prvWriteActivity (#143, #327). Privileges is read once per entity for the connection
+ * (memoizeForSession, cleared by resetDataverseSessionCache). Undefined when the entity has no
+ * privilege of that type; throws when the metadata can't be read.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/entitymetadata
+ */
+export async function resolveEntityPrivilegeName(
+	logicalName: string,
+	privilegeType: EntityPrivilegeType,
+): Promise<string | undefined> {
+	const definition = await memoizeForSession(
+		`privileges:${logicalName}`,
+		() =>
+			window.dataverseAPI!.queryData(
+				`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
+			) as unknown as Promise<{
+				Privileges?: { Name?: string; PrivilegeType?: string }[];
+			}>,
+	);
+	return (
+		definition?.Privileges?.find((p) => p.PrivilegeType === privilegeType)?.Name || undefined
+	);
+}
+
+/**
+ * Check if user has delete privilege for a specific entity. The privilege name comes from the
+ * entity's metadata (#327, e.g. savedquery → prvDeleteQuery). When the metadata can't be read, or
+ * has no Delete privilege, the name built from the logical name (prvDelete{LogicalName}) is checked
+ * as before; a privilege that doesn't exist is treated as denied (checkPrivilegeByName).
  */
 export async function checkDeletePrivilege(entityLogicalName: string): Promise<boolean> {
 	try {
 		const user = await whoAmI();
 		if (!user) return false;
 
-		// Entity-specific delete privilege (e.g., prvDeleteAccount)
-		const deletePriv = `prvDelete${entityLogicalName
+		let deletePriv: string | undefined;
+		try {
+			deletePriv = await resolveEntityPrivilegeName(entityLogicalName, "Delete");
+		} catch (error) {
+			console.warn(
+				`checkDeletePrivilege(${entityLogicalName}): couldn't read the privilege name from metadata, using prvDelete{LogicalName}:`,
+				error,
+			);
+		}
+		// Fallback: entity-specific delete privilege built from the logical name (e.g. prvDeleteAccount)
+		deletePriv ??= `prvDelete${entityLogicalName
 			.charAt(0)
 			.toUpperCase()}${entityLogicalName.slice(1)}`;
 		return await checkPrivilegeByName(user.UserId, deletePriv);
@@ -3386,16 +3429,7 @@ export async function checkEntityPrivilege(
 	try {
 		const user = await whoAmI();
 		if (!user) return undefined;
-		const definition = await memoizeForSession(
-			`privileges:${logicalName}`,
-			() =>
-				window.dataverseAPI!.queryData(
-					`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
-				) as unknown as Promise<{
-					Privileges?: { Name?: string; PrivilegeType?: string }[];
-				}>,
-		);
-		const name = definition.Privileges?.find((p) => p.PrivilegeType === privilegeType)?.Name;
+		const name = await resolveEntityPrivilegeName(logicalName, privilegeType);
 		if (!name) return undefined;
 		// Same session key as checkPrivilegeByName; a failed call isn't kept (#71)
 		return await memoizeForSession(`privilege:${user.UserId}:${name}`, () =>
