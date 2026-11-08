@@ -26,6 +26,8 @@ import { clearMetadataCache } from "../../features/fetchxml/api/dataverseMetadat
 import { resetDataverseSessionCache } from "../../features/fetchxml/api/sessionCache";
 import { metadataCache } from "../../features/fetchxml/state/cache";
 import { findCloseAction } from "../../features/fetchxml/model/closeActions";
+import { generateFetchXml } from "../../features/fetchxml/model/fetchxml";
+import { deleteRecord, deleteRecordsBatch } from "../../features/fetchxml/api/pptbClient";
 import type { PagingState } from "../../features/fetchxml/api/paging";
 import type { EntityMetadata, WorkflowInfo } from "../../features/fetchxml/api/pptbClient";
 import type { FetchNode } from "../../features/fetchxml/model/nodes";
@@ -37,25 +39,43 @@ import {
 	type RecordActionsInputs,
 } from "./useRecordActions";
 
+// The real deletes, wrapped so a test can make one throw (the close hold must still be released)
+vi.mock("../../features/fetchxml/api/pptbClient", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../features/fetchxml/api/pptbClient")>();
+	return {
+		...actual,
+		deleteRecord: vi.fn(actual.deleteRecord),
+		deleteRecordsBatch: vi.fn(actual.deleteRecordsBatch),
+	};
+});
+
 let latest: RecordActions;
 let availability: RecordActionAvailability;
 
-type ProbeProps = Omit<RecordActionsInputs, "entityLogicalName" | "availability">;
+type ProbeProps = Omit<RecordActionsInputs, "entityLogicalName" | "availability"> & {
+	/** The selected entity; the query's root by default */
+	entityLogicalName?: string;
+};
 
-function Probe(props: ProbeProps) {
-	const entityLogicalName = props.fetchQuery?.entity.name;
+function Probe({ entityLogicalName: entity, ...props }: ProbeProps) {
+	const entityLogicalName = entity ?? props.fetchQuery?.entity.name;
 	availability = useRecordActionAvailability(entityLogicalName);
 	latest = useRecordActions({ ...props, entityLogicalName, availability });
 	return null;
 }
 
-/** A query rooted at `entity`; options and link-entities as given */
+/** A query rooted at `entity`; options, attributes and link-entities as given */
 const query = (
 	entity: string,
 	{
 		options = {},
 		links = [],
-	}: { options?: Record<string, unknown>; links?: Record<string, unknown>[] } = {},
+		attributes = ["name"],
+	}: {
+		options?: Record<string, unknown>;
+		links?: Record<string, unknown>[];
+		attributes?: string[];
+	} = {},
 ) =>
 	({
 		id: "f",
@@ -65,7 +85,7 @@ const query = (
 			id: "e",
 			type: "entity",
 			name: entity,
-			attributes: [{ id: "a1", type: "attribute", name: "name" }],
+			attributes: attributes.map((name, i) => ({ id: `a${i}`, type: "attribute", name })),
 			orders: [],
 			filters: [],
 			links,
@@ -363,6 +383,41 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 		]);
 	});
 
+	it("drops a slow answer for an entity that's no longer selected (#143, #149)", async () => {
+		const gate = deferred<void>();
+		const fake = host.dataverseAPI.queryData;
+		host.dataverseAPI.queryData = async (q: unknown) => {
+			if (String(q).startsWith("EntityDefinitions(LogicalName='incident')/Attributes"))
+				await gate.promise;
+			return fake(q as string);
+		};
+		await show({ fetchQuery: query("incident"), entityMetadata: INCIDENT });
+		expect(latest.closeActions).toHaveLength(2);
+
+		await show();
+		await waitFor(() =>
+			dataverse.calls.some(
+				(c) =>
+					c ===
+					"queryData EntityDefinitions(LogicalName='account')?$select=EnforceStateTransitions",
+			),
+		);
+		await flush(10);
+		expect(latest.deactivateDisabledReason).toBeUndefined();
+		expect(latest.closeActions).toBeUndefined();
+
+		// The case answers last: it would bring back the Close menu and the case's Deactivate reason
+		gate.resolve();
+		await flush(10);
+		await waitFor(() =>
+			dataverse.calls.some((c) => c.includes("LogicalName='incident')?$select=Enforce")),
+		);
+		await flush(10);
+		expect(latest.activateDisabledReason).toBeUndefined();
+		expect(latest.deactivateDisabledReason).toBeUndefined();
+		expect(latest.closeActions).toBeUndefined();
+	});
+
 	it("says rows repeat when the query has a one-to-many link-entity", async () => {
 		await show({
 			fetchQuery: query("account", {
@@ -541,10 +596,49 @@ describe("useRecordActions: Delete", () => {
 		expect(dataverse.deleted).toEqual(ids.map((id) => `account:${id}`));
 		expect(latest.deleteProgress).toMatchObject({ completed: 4, total: 4, succeeded: 4 });
 		expect(rerun).toHaveBeenCalledTimes(1);
+		expect(closeHolds).toEqual({ prevented: 1, released: 1 });
 
 		await run(() => latest.dismissDeleteDialog());
 		expect(latest.deleteDialogState).toEqual({ open: false, recordIds: [] });
 		expect(latest.deleteProgress).toBeNull();
+	});
+
+	it("releases the close hold when the batch delete throws (#70)", async () => {
+		const failure = new Error("0x80040216: An unexpected error occurred.");
+		vi.mocked(deleteRecordsBatch).mockImplementationOnce(async () => {
+			throw failure;
+		});
+		await show();
+		await run(() => latest.deleteRecords([1, 2, 3, 4].map(accountId)));
+		await expect(run(() => latest.confirmDelete())).rejects.toBe(failure);
+		expect(closeHolds).toEqual({ prevented: 1, released: 1 });
+		expect(dataverse.deleted).toEqual([]);
+		expect(rerun).not.toHaveBeenCalled();
+	});
+
+	it("releases the close hold when a single delete throws, and returns the failure (#70)", async () => {
+		vi.mocked(deleteRecord).mockImplementationOnce(async () => {
+			throw new Error("0x80040216: An unexpected error occurred.");
+		});
+		await show();
+		await run(() => latest.deleteRecords([accountId(1)]));
+		const result = await run(() => latest.confirmDelete());
+		expect(result).toMatchObject({ succeeded: 0, failed: 1 });
+		expect(closeHolds).toEqual({ prevented: 1, released: 1 });
+		expect(dataverse.deleted).toEqual([]);
+	});
+
+	it("runs the latest query runner when a delete finishes, not the one it was opened with", async () => {
+		const first = vi.fn<() => Promise<void>>(async () => undefined);
+		const second = vi.fn<() => Promise<void>>(async () => undefined);
+		const handleExecuteRef = { current: first };
+		await show({ handleExecuteRef });
+		await run(() => latest.deleteRecords([accountId(1)]));
+		// AppShell's layout effect updates the ref after every render; no render in between here
+		handleExecuteRef.current = second;
+		await run(() => latest.confirmDelete());
+		expect(second).toHaveBeenCalledTimes(1);
+		expect(first).not.toHaveBeenCalled();
 	});
 
 	it("returns the failures and doesn't run the query again when nothing was deleted", async () => {
@@ -635,6 +729,10 @@ describe("useRecordActions: Delete", () => {
 	});
 
 	it("Delete all submits the FetchXML that ran, with the quick find value (#142)", async () => {
+		await show();
+		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
+		await run(() => latest.deleteRecords([]));
+		// Read when the job is submitted, not when the dialog opened
 		pagingRef.current = {
 			mode: "fetchxml",
 			xml: "<fetch><entity name='account'><filter><condition attribute='name' operator='like' value='Contoso%'/></filter></entity></fetch>",
@@ -644,14 +742,27 @@ describe("useRecordActions: Delete", () => {
 			isRetrieveAllInProgress: false,
 			retrieveAll: false,
 		};
-		await show();
-		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
-		await run(() => latest.deleteRecords([]));
 		const requests = captureExecute();
 		await run(() => latest.confirmBulkDelete("Delete all accounts"));
 		const conversion = dataverse.calls.find((c) => c.includes("FetchXmlToQueryExpression"));
 		expect(decodeURIComponent(conversion ?? "")).toContain("Contoso%");
 		expect(requests.map((r) => r.operationName)).toEqual(["BulkDelete"]);
+	});
+
+	it("Delete all without a paging state submits the query that ran, not the tree (#174)", async () => {
+		// A column added in the tree after the run: Delete all is still allowed, it matches the same records
+		const executed = query("account", { attributes: ["name"] });
+		const tree = query("account", { attributes: ["name", "telephone1"] });
+		await show({ fetchQuery: tree, queryResult: { query: executed, rows: accountRows() } });
+		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
+		expect(latest.deleteAllDisabledReason).toBeUndefined();
+		await run(() => latest.deleteRecords([]));
+		await run(() => latest.confirmBulkDelete("Delete all accounts"));
+		const conversion = dataverse.calls.find((c) => c.includes("FetchXmlToQueryExpression"));
+		const submitted = decodeURIComponent(conversion ?? "");
+		expect(generateFetchXml(executed)).not.toBe(generateFetchXml(tree));
+		expect(submitted).toContain(generateFetchXml(executed).replace(/'/g, "''"));
+		expect(submitted).not.toContain("telephone1");
 	});
 
 	it("keeps Delete all closed when the results are stale or there's no Bulk delete privilege", async () => {
@@ -671,6 +782,7 @@ describe("useRecordActions: Delete", () => {
 	});
 
 	it("Bulk delete fails with the exact messages when it can't run", async () => {
+		const requests = captureExecute();
 		await show({ entityMetadata: null });
 		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
 		await run(() => latest.bulkDeleteRecords([accountId(1)]));
@@ -678,12 +790,28 @@ describe("useRecordActions: Delete", () => {
 			"Missing entity information for bulk delete",
 		);
 
+		// Delete all after the tree changed which records match: Delete all's own reason (#174)
 		await show();
 		await run(() => latest.bulkDeleteRecords([]));
-		await show({ queryResult: { rows: accountRows() } });
+		expect(latest.bulkDeleteDialogState.isAllRecords).toBe(true);
+		await show({
+			fetchQuery: query("account", { options: { top: 3 } }),
+			queryResult: { query: query("account"), rows: accountRows() },
+		});
+		await expect(latest.confirmBulkDelete("job")).rejects.toThrow(
+			"The query has changed since these results were loaded. Run it again to see what Delete all would delete.",
+		);
+
+		// Delete all with no query that ran and no tree to compare: the fallback message
+		await show({ fetchQuery: null, entityLogicalName: "account", queryResult: null });
+		expect(latest.deleteAllDisabledReason).toBeUndefined();
+		await run(() => latest.bulkDeleteRecords([]));
+		expect(latest.bulkDeleteDialogState.isAllRecords).toBe(true);
 		await expect(latest.confirmBulkDelete("job")).rejects.toThrow(
 			"Run the query first: Delete all deletes the records the query on screen matches.",
 		);
+		expect(requests.map((r) => r.operationName)).not.toContain("BulkDelete");
+		expect(dataverse.calls.some((c) => c.includes("FetchXmlToQueryExpression"))).toBe(false);
 	});
 });
 
@@ -792,6 +920,18 @@ describe("useRecordActions: Activate / Deactivate (#143)", () => {
 		expect(closeHolds).toEqual({ prevented: 1, released: 1 });
 	});
 
+	it("runs the latest query runner when the change finishes, not the one it was opened with", async () => {
+		const first = vi.fn<() => Promise<void>>(async () => undefined);
+		const second = vi.fn<() => Promise<void>>(async () => undefined);
+		const handleExecuteRef = { current: first };
+		await show({ handleExecuteRef });
+		await run(() => latest.activateRecords([accountId(1)]));
+		handleExecuteRef.current = second;
+		await run(() => latest.executeStateChange({ statecode: 0, statuscode: 1 }, vi.fn()));
+		expect(second).toHaveBeenCalledTimes(1);
+		expect(first).not.toHaveBeenCalled();
+	});
+
 	it("doesn't run without an entity", async () => {
 		await show({ fetchQuery: null, queryResult: null });
 		await run(() => latest.activateRecords([accountId(1)]));
@@ -843,6 +983,23 @@ describe("useRecordActions: Close (#149)", () => {
 		await run(() => latest.dismissCloseDialog());
 		expect(latest.closeDialogState.open).toBe(false);
 		expect(latest.closeDialogState.recordIds).toEqual([incidentId(1), incidentId(2)]);
+	});
+
+	it("runs the latest query runner when the close finishes, not the one it was opened with", async () => {
+		const first = vi.fn<() => Promise<void>>(async () => undefined);
+		const second = vi.fn<() => Promise<void>>(async () => undefined);
+		const handleExecuteRef = { current: first };
+		await show({
+			fetchQuery: query("incident"),
+			entityMetadata: INCIDENT,
+			queryResult: { query: query("incident"), rows: [] },
+			handleExecuteRef,
+		});
+		await run(() => latest.closeRecords("resolve", [incidentId(1)]));
+		handleExecuteRef.current = second;
+		await run(() => latest.executeClose({ statuscode: 5, resolution: "Fixed" }, vi.fn()));
+		expect(second).toHaveBeenCalledTimes(1);
+		expect(first).not.toHaveBeenCalled();
 	});
 
 	it("ignores an unknown action or no records", async () => {
