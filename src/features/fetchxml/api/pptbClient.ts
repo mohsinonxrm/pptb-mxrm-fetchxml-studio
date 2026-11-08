@@ -3090,11 +3090,14 @@ export async function resolveEntityPrivilegeName(
 				`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
 			) as unknown as Promise<{
 				Privileges?: { Name?: string; PrivilegeType?: string }[];
-			}>,
+			} | null>,
+		// A null or malformed answer isn't kept: the next call reads the metadata again
+		(d) => Array.isArray(d?.Privileges),
 	);
-	return (
-		definition?.Privileges?.find((p) => p.PrivilegeType === privilegeType)?.Name || undefined
-	);
+	if (!Array.isArray(definition?.Privileges)) {
+		throw new Error(`EntityDefinitions(${logicalName}): no Privileges in the response`);
+	}
+	return definition.Privileges.find((p) => p.PrivilegeType === privilegeType)?.Name || undefined;
 }
 
 /**

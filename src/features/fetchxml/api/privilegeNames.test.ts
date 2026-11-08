@@ -110,6 +110,19 @@ describe("Delete privilege name from entity metadata (#327)", () => {
 		}
 	});
 
+	it("doesn't keep a null or malformed metadata answer for the session", async () => {
+		queryData
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ Privileges: "not a list" })
+			.mockImplementation(respond);
+		await expect(resolveEntityPrivilegeName("savedquery", "Delete")).rejects.toThrow();
+		await expect(resolveEntityPrivilegeName("savedquery", "Delete")).rejects.toThrow();
+		await expect(resolveEntityPrivilegeName("savedquery", "Delete")).resolves.toBe(
+			"prvDeleteQuery",
+		);
+		expect(metadataReads()).toBe(3);
+	});
+
 	it("keeps denying, with a warning, when the fallback privilege doesn't exist", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		queryData.mockImplementation(async (query: string) => {
