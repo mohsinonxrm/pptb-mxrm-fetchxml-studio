@@ -194,7 +194,7 @@ Nothing else writes to Dataverse:
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application, **version 1.2.7 or later**. FetchXML Studio 1.5 and later target PPTB 1.2.7 (`minAPI` 1.2.7); 1.4.x works with 1.2.2 or later
+- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application, **version 1.2.7 or later**. FetchXML Studio 1.5 and later target PPTB 1.2.7 (`minAPI` 1.2.7); 1.4.x, which is no longer supported, works with 1.2.2 or later
 - Connection to a Dataverse environment
 
 ### Installation
