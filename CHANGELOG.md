@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Advisories "Go to node" works when the node is already selected.** It used to do nothing, because the tree only revealed a node when the selection changed. It now expands the ancestors and scrolls the node into view every time.
+
 ### 🔧 Changed
 
 - **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
