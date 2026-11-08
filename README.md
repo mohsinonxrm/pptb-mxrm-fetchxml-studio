@@ -151,7 +151,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### 🔒 Privilege-Aware
 - **Export privilege check** — Only shows Dataverse export option if user has access
-- **Delete privilege check** — Validates entity-specific delete permissions before enabling delete actions
+- **Delete privilege check** — Validates entity-specific delete permissions before enabling delete actions, using the privilege name from the entity's metadata (e.g. `prvDeleteQuery` for saved views)
 - **Bulk delete privilege check** — Validates `prvBulkDelete` before surfacing bulk delete
 - **Status and close privilege check** — Activate, Deactivate and Close need Write on the entity (named from its metadata); close messages also need Create on activities (`prvCreateActivity`) for the close activity they create
 - **Workflow privilege check** — Validates `prvReadWorkflow` + `prvWorkflowExecution` before showing workflow picker

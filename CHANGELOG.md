@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
 
+### 🔧 Fixed
+
+- **Delete is no longer hidden on Entities whose delete privilege isn't `prvDelete{LogicalName}` (#327).** The name now comes from the Entity's metadata (`Privileges`, type Delete), so saved views check `prvDeleteQuery`, personal views `prvDeleteUserQuery` and users `prvDeleteUser`. It's read once per Entity per connection, shared with the Write and Create checks. If the metadata can't be read, the old name is checked as before.
+
 ## [1.6.0-beta.1] - 2026-11-07
 
 ### ✨ Added
