@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🏗️ Technical
 
 - AppShell: splitter state moved into `useSplitters` (#301)
+- AppShell: results export moved into `useResultsExport` (#301)
 
 ## [1.6.0-beta.1] - 2026-11-07
 
