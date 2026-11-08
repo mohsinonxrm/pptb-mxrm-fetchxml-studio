@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Edit columns keeps your reorder when you add columns.** Adding columns while the panel is open used to reset the list and discard reorders you hadn't applied. The panel now resets only when it opens; added columns are appended and removed ones dropped.
+
 ### 🔧 Changed
 
 - **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
