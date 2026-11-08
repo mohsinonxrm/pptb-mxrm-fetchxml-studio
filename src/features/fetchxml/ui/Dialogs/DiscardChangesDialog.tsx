@@ -5,7 +5,17 @@
  * Cancel and Escape keep the query. While the save runs, Discard waits and Cancel stays available.
  */
 
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner, Tooltip } from "@fluentui/react-components";
+import {
+	Button,
+	Dialog,
+	DialogActions,
+	DialogBody,
+	DialogContent,
+	DialogSurface,
+	DialogTitle,
+	Spinner,
+	Tooltip,
+} from "@fluentui/react-components";
 
 export interface DiscardChangesDialogProps {
 	open: boolean;
@@ -23,8 +33,15 @@ export interface DiscardChangesDialogProps {
 	saving?: boolean;
 }
 
-function discardChangesBody(intent: "new" | "open", viewName: string | null, targetViewName?: string): string {
-	const lead = viewName === null ? "Your query isn't saved." : `Your changes to "${viewName}" aren't saved.`;
+function discardChangesBody(
+	intent: "new" | "open",
+	viewName: string | null,
+	targetViewName?: string,
+): string {
+	const lead =
+		viewName === null
+			? "Your query isn't saved."
+			: `Your changes to "${viewName}" aren't saved.`;
 	const effect =
 		intent === "open"
 			? `Opening "${targetViewName ?? ""}" replaces the tree, the FetchXML and the results.`
@@ -32,10 +49,23 @@ function discardChangesBody(intent: "new" | "open", viewName: string | null, tar
 	return `${lead} ${effect}`;
 }
 
-export function DiscardChangesDialog({ open, intent, viewName, targetViewName, onSave, onDiscard, onCancel, saving = false }: DiscardChangesDialogProps) {
+export function DiscardChangesDialog({
+	open,
+	intent,
+	viewName,
+	targetViewName,
+	onSave,
+	onDiscard,
+	onCancel,
+	saving = false,
+}: DiscardChangesDialogProps) {
 	const saveLabel = intent === "open" ? "Save and open" : "Save and start new";
 	const discard = (
-		<Button appearance="secondary" disabledFocusable={saving} onClick={saving ? undefined : onDiscard}>
+		<Button
+			appearance="secondary"
+			disabledFocusable={saving}
+			onClick={saving ? undefined : onDiscard}
+		>
 			Discard changes
 		</Button>
 	);
@@ -50,7 +80,9 @@ export function DiscardChangesDialog({ open, intent, viewName, targetViewName, o
 			<DialogSurface>
 				<DialogBody>
 					<DialogTitle>Discard unsaved changes?</DialogTitle>
-					<DialogContent>{discardChangesBody(intent, viewName, targetViewName)}</DialogContent>
+					<DialogContent>
+						{discardChangesBody(intent, viewName, targetViewName)}
+					</DialogContent>
 					<DialogActions>
 						<Button
 							appearance="primary"
@@ -62,7 +94,10 @@ export function DiscardChangesDialog({ open, intent, viewName, targetViewName, o
 							{saving ? "Saving…" : saveLabel}
 						</Button>
 						{saving ? (
-							<Tooltip content="Wait for the save to finish" relationship="description">
+							<Tooltip
+								content="Wait for the save to finish"
+								relationship="description"
+							>
 								{discard}
 							</Tooltip>
 						) : (
