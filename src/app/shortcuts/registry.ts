@@ -30,22 +30,113 @@ export interface ShortcutEntry {
 }
 
 export const SHORTCUTS: readonly ShortcutEntry[] = [
-	{ id: "run", label: "Run query", keys: ["Ctrl+Enter"], aria: "Control+Enter", scope: "global", inEditable: true },
-	{ id: "save", label: "Save view", keys: ["Ctrl+S"], aria: "Control+S", scope: "global", inEditable: true },
-	{ id: "shortcuts", label: "Keyboard shortcuts", keys: ["Ctrl+/"], aria: "Control+/", scope: "global", inEditable: false },
+	{
+		id: "run",
+		label: "Run query",
+		keys: ["Ctrl+Enter"],
+		aria: "Control+Enter",
+		scope: "global",
+		inEditable: true,
+	},
+	{
+		id: "save",
+		label: "Save view",
+		keys: ["Ctrl+S"],
+		aria: "Control+S",
+		scope: "global",
+		inEditable: true,
+	},
+	{
+		id: "shortcuts",
+		label: "Keyboard shortcuts",
+		keys: ["Ctrl+/"],
+		aria: "Control+/",
+		scope: "global",
+		inEditable: false,
+	},
 	// Text fields and Monaco keep their own undo (owner decision on #192).
-	{ id: "undo", label: "Undo", keys: ["Ctrl+Z"], aria: "Control+Z", scope: "global", inEditable: false },
-	{ id: "redo", label: "Redo", keys: ["Ctrl+Y", "Ctrl+Shift+Z"], aria: "Control+Y Control+Shift+Z", scope: "global", inEditable: false },
+	{
+		id: "undo",
+		label: "Undo",
+		keys: ["Ctrl+Z"],
+		aria: "Control+Z",
+		scope: "global",
+		inEditable: false,
+	},
+	{
+		id: "redo",
+		label: "Redo",
+		keys: ["Ctrl+Y", "Ctrl+Shift+Z"],
+		aria: "Control+Y Control+Shift+Z",
+		scope: "global",
+		inEditable: false,
+	},
 	// Model-driven app keys (#186 Q5). Function keys, so they are safe in text fields and Monaco.
-	{ id: "nextArea", label: "Go to the next area", keys: ["Ctrl+F6"], aria: "Control+F6", scope: "global", inEditable: true },
-	{ id: "previousArea", label: "Go to the previous area", keys: ["Ctrl+Shift+F6"], aria: "Control+Shift+F6", scope: "global", inEditable: true },
-	{ id: "toasts", label: "Go to the newest notification", keys: ["F2"], aria: "F2", scope: "global", inEditable: true },
+	{
+		id: "nextArea",
+		label: "Go to the next area",
+		keys: ["Ctrl+F6"],
+		aria: "Control+F6",
+		scope: "global",
+		inEditable: true,
+	},
+	{
+		id: "previousArea",
+		label: "Go to the previous area",
+		keys: ["Ctrl+Shift+F6"],
+		aria: "Control+Shift+F6",
+		scope: "global",
+		inEditable: true,
+	},
+	{
+		id: "toasts",
+		label: "Go to the newest notification",
+		keys: ["F2"],
+		aria: "F2",
+		scope: "global",
+		inEditable: true,
+	},
 	// Documented only: handled where the focus is.
-	{ id: "removeNode", label: "Remove the node", keys: ["Delete"], aria: "Delete", scope: "documented", inEditable: false },
-	{ id: "openMenu", label: "Open the row or cell menu", keys: ["Shift+F10", "Menu"], aria: "Shift+F10 ContextMenu", scope: "documented", inEditable: false },
-	{ id: "closePopup", label: "Close the top-most popup or drawer", keys: ["Escape"], aria: "Escape", scope: "documented", inEditable: true },
-	{ id: "formatXml", label: "Format FetchXML", keys: ["Shift+Alt+F"], aria: "Shift+Alt+F", scope: "documented", inEditable: true },
-	{ id: "copyGrid", label: "Copy", keys: ["Ctrl+C"], aria: "Control+C", scope: "documented", inEditable: false },
+	{
+		id: "removeNode",
+		label: "Remove the node",
+		keys: ["Delete"],
+		aria: "Delete",
+		scope: "documented",
+		inEditable: false,
+	},
+	{
+		id: "openMenu",
+		label: "Open the row or cell menu",
+		keys: ["Shift+F10", "Menu"],
+		aria: "Shift+F10 ContextMenu",
+		scope: "documented",
+		inEditable: false,
+	},
+	{
+		id: "closePopup",
+		label: "Close the top-most popup or drawer",
+		keys: ["Escape"],
+		aria: "Escape",
+		scope: "documented",
+		inEditable: true,
+	},
+	{
+		id: "formatXml",
+		label: "Format FetchXML",
+		keys: ["Shift+Alt+F"],
+		aria: "Shift+Alt+F",
+		scope: "documented",
+		inEditable: true,
+	},
+	{
+		id: "copyGrid",
+		label: "Copy",
+		keys: ["Ctrl+C"],
+		aria: "Control+C",
+		scope: "documented",
+		inEditable: false,
+	},
 ];
 
 /** Combinations the PPTB 1.2.7 host menu owns; no global shortcut may use one. */
@@ -93,7 +184,12 @@ const MODIFIERS: Record<string, "ctrl" | "shift" | "alt"> = {
 	option: "alt",
 };
 
-const KEY_ALIASES: Record<string, string> = { plus: "+", esc: "escape", menu: "contextmenu", del: "delete" };
+const KEY_ALIASES: Record<string, string> = {
+	plus: "+",
+	esc: "escape",
+	menu: "contextmenu",
+	del: "delete",
+};
 
 /** Parses "Ctrl+Shift+Z" or "Control+Shift+Z" (the last segment is the key; write "Plus", not "+"). */
 function parseCombo(text: string): Combo {
@@ -113,7 +209,9 @@ function parseCombo(text: string): Combo {
 /** A canonical spelling for comparing combinations: "Control+shift+z" and "Ctrl+Shift+Z" are the same. */
 export function normalizeCombo(text: string): string {
 	const c = parseCombo(text);
-	return [c.ctrl ? "ctrl" : "", c.alt ? "alt" : "", c.shift ? "shift" : "", c.key].filter(Boolean).join("+");
+	return [c.ctrl ? "ctrl" : "", c.alt ? "alt" : "", c.shift ? "shift" : "", c.key]
+		.filter(Boolean)
+		.join("+");
 }
 
 export function getEntry(id: string): ShortcutEntry {
@@ -134,19 +232,32 @@ export function detectPlatform(): ShortcutPlatform {
  * one must be up). Shift and Alt must match exactly, so Ctrl+Shift+Z is not Ctrl+Z. `event.key` is
  * compared without case (Shift turns "z" into "Z"). "/" is its own key: Shift+/ ("?") doesn't match.
  */
-export function matches(event: KeyEventLike, id: string, platform: ShortcutPlatform = detectPlatform()): boolean {
+export function matches(
+	event: KeyEventLike,
+	id: string,
+	platform: ShortcutPlatform = detectPlatform(),
+): boolean {
 	const entry = getEntry(id);
-	const primary = platform === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+	const primary =
+		platform === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 	const noPrimary = !event.metaKey && !event.ctrlKey;
 	const key = event.key.toLowerCase();
 	return entry.aria.split(" ").some((text) => {
 		const c = parseCombo(text);
-		return c.key === key && c.shift === event.shiftKey && c.alt === event.altKey && (c.ctrl ? primary : noPrimary);
+		return (
+			c.key === key &&
+			c.shift === event.shiftKey &&
+			c.alt === event.altKey &&
+			(c.ctrl ? primary : noPrimary)
+		);
 	});
 }
 
 /** Display keys for the platform: "Ctrl" becomes "⌘" on a Mac and "Alt" becomes "Option". */
-export function formatKeys(entry: ShortcutEntry, platform: ShortcutPlatform = detectPlatform()): string[] {
+export function formatKeys(
+	entry: ShortcutEntry,
+	platform: ShortcutPlatform = detectPlatform(),
+): string[] {
 	if (platform !== "mac") return [...entry.keys];
 	return entry.keys.map((k) =>
 		k
@@ -156,7 +267,17 @@ export function formatKeys(entry: ShortcutEntry, platform: ShortcutPlatform = de
 	);
 }
 
-const NON_TEXT_INPUTS = new Set(["button", "checkbox", "radio", "submit", "reset", "range", "color", "file", "image"]);
+const NON_TEXT_INPUTS = new Set([
+	"button",
+	"checkbox",
+	"radio",
+	"submit",
+	"reset",
+	"range",
+	"color",
+	"file",
+	"image",
+]);
 
 /** Is focus somewhere the user types: a text input, a textarea, contenteditable, or Monaco? */
 export function isEditableTarget(target: EventTarget | null): boolean {
@@ -164,7 +285,8 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 	if (!el || typeof el.tagName !== "string") return false;
 	const tag = el.tagName.toLowerCase();
 	if (tag === "textarea") return true;
-	if (tag === "input") return !NON_TEXT_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
+	if (tag === "input")
+		return !NON_TEXT_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
 	if ((el as HTMLElement).isContentEditable) return true;
 	return !!el.closest?.('[contenteditable]:not([contenteditable="false"]), .monaco-editor');
 }
