@@ -97,7 +97,9 @@ export async function renderApp(options: AppHarnessOptions = {}): Promise<AppHar
 		const span = [...document.querySelectorAll("span")].find((e) => e.textContent?.startsWith("Rows:"));
 		return (span?.textContent ?? "").replace(/\s+/g, " ").trim();
 	};
-	const waitFor = async (predicate: () => boolean, ms = 4000) => {
+	// Generous by default: a wait returns as soon as its predicate holds, and a busy CI runner or a
+	// parallel full suite can take several seconds per page (seen: flakes at 4 s)
+	const waitFor = async (predicate: () => boolean, ms = 15000) => {
 		const end = Date.now() + ms;
 		while (!predicate()) {
 			if (Date.now() > end) throw new Error(`waitFor timed out. Status: "${status()}"`);
