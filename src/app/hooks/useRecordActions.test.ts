@@ -29,7 +29,6 @@ import { findCloseAction } from "../../features/fetchxml/model/closeActions";
 import type { PagingState } from "../../features/fetchxml/api/paging";
 import type { EntityMetadata, WorkflowInfo } from "../../features/fetchxml/api/pptbClient";
 import type { FetchNode } from "../../features/fetchxml/model/nodes";
-import type { QueryResult } from "../../features/fetchxml/ui/RightPane/ResultsGrid";
 import {
 	useRecordActionAvailability,
 	useRecordActions,
