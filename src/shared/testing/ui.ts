@@ -87,7 +87,9 @@ export function openDialog(): HTMLElement | undefined {
 
 /** The text of each toast on screen (#277), oldest first, with whitespace collapsed */
 export function toasts(): string[] {
-	return [...document.querySelectorAll<HTMLElement>(".fui-Toast")].map((t) => (t.textContent ?? "").replace(/\s+/g, " ").trim());
+	return [...document.querySelectorAll<HTMLElement>(".fui-Toast")].map((t) =>
+		(t.textContent ?? "").replace(/\s+/g, " ").trim(),
+	);
 }
 
 /** The open dialog's text, with whitespace collapsed */
