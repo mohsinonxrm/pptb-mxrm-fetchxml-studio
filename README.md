@@ -143,6 +143,28 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Entity source** — In the scope chip: *Publisher → solution* (full filter), *Solution only*, or *All entities* (no filter). Options your privileges don't allow are off. Persisted across sessions.
 - **Advanced Find only** (in the scope chip) — When on (default), entities, attributes and relationships are limited to the ones Advanced Find shows (`IsValidForAdvancedFind`), in every entity scope. Turn it off to build queries Advanced Find can't: system and customization entities (saved views, forms, plug-in steps, solution components), intersect entities (team membership, user roles), and hidden attributes and relationships. Attributes that can't be read (`IsValidForRead = false`) are never listed. Hidden label attributes (such as `statuscodename`) can be filtered and sorted. Toggling is instant: metadata is fetched once and filtered locally. Attributes already in a query keep their operators and value inputs either way.
 
+### ⌨️ Keyboard shortcuts
+
+> **Not all active yet.** This is the planned set (#186). The first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
+
+| Action | Keys | Where |
+| --- | --- | --- |
+| Run query | `Ctrl+Enter` | Everywhere, including text fields and the editor |
+| Save view | `Ctrl+S` | Everywhere, including text fields and the editor |
+| Keyboard shortcuts | `Ctrl+/` | Outside text fields and the editor |
+| Undo | `Ctrl+Z` | Outside text fields and the editor, which keep their own undo |
+| Redo | `Ctrl+Y` or `Ctrl+Shift+Z` | Outside text fields and the editor |
+| Go to the next area | `Ctrl+F6` | Everywhere, including text fields and the editor. Order: app bar, builder, output |
+| Go to the previous area | `Ctrl+Shift+F6` | Everywhere, including text fields and the editor |
+| Go to the newest notification | `F2` | Everywhere, including text fields and the editor (FetchXML has no rename, so the editor's `F2` is free) |
+| Remove the node | `Delete` | Handled where focus is: a focused tree row |
+| Open the row or cell menu | `Shift+F10` or `Menu` | Handled where focus is: tree row, results cell |
+| Close the top-most popup or drawer | `Escape` | Handled where focus is. It does not stop Retrieve all |
+| Format FetchXML | `Shift+Alt+F` | Handled where focus is: the FetchXML editor |
+| Copy | `Ctrl+C` | Handled where focus is: the results grid |
+
+Power Platform ToolBox owns some keys (reload, zoom, settings, tool feedback and the Edit menu's cut, copy, paste and select all), so the tool doesn't use them.
+
 ### 🔗 Tool-to-Tool (T2T) Integration
 - **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).
 - **Automatic tool discovery** — Targets are discovered via the PPTB capability registry — installed tools that declare the `fetchxml` capability. The Send to Tool control always renders as a dropdown listing the discovered tools (even a single match). No configuration needed.
@@ -270,7 +292,7 @@ npm run lint
 npm run format:check
 ```
 
-- **Component tests** (`*.test.ts` next to a component) render it in a `FluentProvider` with React's `act` and a stubbed ToolBox host, using the helpers in `src/shared/testing/ui.ts` (`render`, `click`, `typeInto`, `installHost`, `scopeField`, …). There's no Testing Library: React and the DOM only. Fluent dialogs and menus render in portals, so the helpers search `document`.
+- **Component tests** (`*.test.ts` next to a component) render it in a `FluentProvider` with React's `act` and a stubbed ToolBox host, using the helpers in `src/shared/testing/ui.ts` (`render`, `click`, `typeInto`, `installHost`, `scopeField`, …). There's no Testing Library: React and the DOM only. Fluent dialogs and menus render in portals, so the helpers search `document`. jsdom has no layout, so `stubOverflowWidths` gives Fluent's Overflow widths and fires its ResizeObserver to test what overflows.
 - **Golden code snippets:** `codeGenerators.golden.test.ts` runs every Microsoft Learn example through C# FetchExpression, JavaScript, pac CLI, Web API and the Power Automate spec, and compares the output with its snapshot. After an intended change, run `npx vitest run -u src/features/fetchxml/engine/codeGenerators.golden.test.ts` and review the snapshot diff in the PR.
 - **App flow tests:** `src/app/appFlows.test.ts` renders the whole tool against an in-memory Dataverse (`src/shared/testing/fakeDataverse.ts`) through `renderApp` (`src/shared/testing/app.ts`). Each test reads the screen, the Dataverse calls and the host notifications: running a launched query, paging and Retrieve all, Stop, a rejected query, a view opened from another tool (and a missing one), a saved view paged through `@odata.nextLink`, and deleting a selected row. The fake answers as the Web API does: FetchXML pages carry the double-encoded paging cookie and must send it back, and saved views page with an absolute `@odata.nextLink`. `app.expectClean()` fails a flow that left an unknown request, a wrong paging cookie or an unreleased close hold. Test files that render the app also mock `@monaco-editor/react`.
 
@@ -360,7 +382,9 @@ src/
 │       └── Settings/             # Settings drawer (display preferences)
 └── shared/
     ├── components/               # Reusable value pickers (option set, boolean,
-    │                             # date, numeric, multi-value, relationship, etc.)
+    │   │                         # date, numeric, multi-value, relationship, etc.)
+    │   └── commandBar/           # OverflowToolbar + OverflowTabList: Fluent Toolbar /
+    │                             # TabList in Overflow with a More menu (#232, not used yet)
     ├── contexts/                 # ThemeContext
     ├── hooks/                    # usePptbContext, useLazyMetadata, useAccessMode,
     │                             # usePublisherFilter, useSolutionFilter
