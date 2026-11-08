@@ -14,7 +14,7 @@ import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { useSplitters } from "./hooks/useSplitters";
 import { useResultsExport } from "./hooks/useResultsExport";
-import { loadAllEntityAttributes } from "../features/fetchxml/api/dataverseMetadata";
+import { useRootEntityMetadata } from "./hooks/useRootEntityMetadata";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
@@ -82,10 +82,7 @@ import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
 import { CloseRecordsDialog } from "../features/fetchxml/ui/Dialogs/CloseRecordsDialog";
 import type { CloseMenuItem } from "../features/fetchxml/ui/RightPane/ResultsCommandBar";
 import type {
-	AttributeMetadata,
 	LoadedViewInfo,
-	EntityMetadata,
-	RelationshipMetadata,
 	WorkflowInfo,
 	BatchDeleteProgress,
 	BatchDeleteResult,
@@ -113,7 +110,6 @@ import {
 	type ThrottleRetryOptions,
 } from "../features/fetchxml/api/throttleRetry";
 import { debugLog } from "../shared/utils/debug";
-import { getQueryEntities } from "../features/fetchxml/model/treeUtils";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
 import {
 	planRemoveColumns,
@@ -477,18 +473,6 @@ function AppContent({
 	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
 	const [isExecuting, setIsExecuting] = useState(false);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	// Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>>
-	const [attributeMetadata, setAttributeMetadata] = useState<
-		Map<string, Map<string, AttributeMetadata>>
-	>(new Map());
-	// State for entity metadata (for layoutxml generation)
-	const [loadedEntityMetadata, setLoadedEntityMetadata] = useState<EntityMetadata | null>(null);
-	// State for lookup relationships (many-to-one) and one-to-many relationships
-	const [lookupRelationships, setLookupRelationships] = useState<RelationshipMetadata[]>([]);
-	const [oneToManyRelationships, setOneToManyRelationships] = useState<RelationshipMetadata[]>(
-		[],
-	);
-	const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
 
 	// Paging for infinite scroll / Retrieve All (#58, #60). The ref is what the async page loops read
 	// (no stale closures); the state mirrors it for rendering.
@@ -755,93 +739,19 @@ function AppContent({
 		};
 	}, [entityLogicalName]);
 
-	// Root entity + all link-entity names. The root always comes from the query's <entity>
-	// element, never from a position in a sorted list (#54).
-	const queryEntities = useMemo(() => getQueryEntities(builder.fetchQuery), [builder.fetchQuery]);
-	const rootEntityName = queryEntities.rootEntityName;
-
-	// Only trust root metadata that belongs to the current root entity. While a new root's
-	// metadata is loading (or after a stale response), this is null rather than another table's.
-	const entityMetadata =
-		loadedEntityMetadata && loadedEntityMetadata.LogicalName === rootEntityName
-			? loadedEntityMetadata
-			: null;
-
-	// Load attribute metadata for all entities in the FetchXML query
-	// This includes the root entity and all link-entities
-	useEffect(() => {
-		const { rootEntityName, entityNames } = queryEntities;
-		if (!rootEntityName) {
-			setAttributeMetadata(new Map());
-			setLoadedEntityMetadata(null);
-			return;
-		}
-
-		// Ignore responses that arrive after the query's entities have changed.
-		let cancelled = false;
-
-		// Metadata of every attribute of the query's entities, for looking up the attributes in the
-		// query (grid formatting, columns, export); not filtered by "Advanced Find only" (#57)
-		Promise.all(
-			entityNames.map(async (entityName) => {
-				try {
-					const attributes = await loadAllEntityAttributes(entityName);
-					const attrMap = new Map<string, AttributeMetadata>();
-					attributes.forEach((attr) => {
-						attrMap.set(attr.LogicalName, attr);
-					});
-					return { entityName, attrMap };
-				} catch (error) {
-					console.error(`Failed to load attributes for ${entityName}:`, error);
-					return { entityName, attrMap: new Map<string, AttributeMetadata>() };
-				}
-			}),
-		).then((results) => {
-			if (cancelled) return;
-			const multiEntityMap = new Map<string, Map<string, AttributeMetadata>>();
-			results.forEach(({ entityName, attrMap }) => {
-				multiEntityMap.set(entityName, attrMap);
-			});
-			setAttributeMetadata(multiEntityMap);
-		});
-
-		// Load root entity metadata (ObjectTypeCode, PrimaryIdAttribute, EntitySetName, ...)
-		loadEntityMetadata(rootEntityName)
-			.then((entity) => {
-				if (!cancelled) setLoadedEntityMetadata(entity);
-			})
-			.catch((error) => {
-				console.error("Failed to load entity metadata:", error);
-				if (!cancelled) setLoadedEntityMetadata(null);
-			});
-
-		// Load relationships (many-to-one and one-to-many) for the Add Columns panel, per the
-		// "Advanced Find only" setting (#57)
-		setIsLoadingRelationships(true);
-		loadRelationships(rootEntityName)
-			.then((relationships) => {
-				if (cancelled) return;
-				// Store lookup relationships (many-to-one)
-				setLookupRelationships(relationships.manyToOne);
-				// Store one-to-many relationships for 1-N column support
-				setOneToManyRelationships(relationships.oneToMany);
-			})
-			.catch((error) => {
-				console.error("Failed to load relationships:", error);
-				if (cancelled) return;
-				setLookupRelationships([]);
-				setOneToManyRelationships([]);
-			})
-			.finally(() => {
-				if (!cancelled) setIsLoadingRelationships(false);
-			});
-
-		return () => {
-			cancelled = true;
-		};
-		// queryEntities.key changes whenever the root or the set of entities changes.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [queryEntities.key, loadEntityMetadata, loadRelationships, advancedFindOnly]);
+	// The query's entity metadata: attributes, the root entity, its relationships (#301)
+	const {
+		attributeMetadata,
+		entityMetadata,
+		lookupRelationships,
+		oneToManyRelationships,
+		isLoadingRelationships,
+	} = useRootEntityMetadata({
+		fetchQuery: builder.fetchQuery,
+		advancedFindOnly,
+		loadEntityMetadata,
+		loadRelationships,
+	});
 
 	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
 	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared.

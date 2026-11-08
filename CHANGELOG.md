@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **App notification provider, not used yet (#277).** `NotifyProvider`, `useNotify` and `useCopy` (`src/shared/feedback/`) are added with tests: one Toaster at the bottom end, timeouts by intent, an optional action and de-duplication. Nothing calls them yet; the callers move over in the next change.
 - **A shared overflow command bar and tab row, not used yet (#232).** `OverflowToolbar` and `OverflowTabList` (`src/shared/components/commandBar/`) put a Fluent Toolbar or TabList inside Overflow: commands and tabs that don't fit move into a More menu instead of wrapping, keeping their icon, disabled reason and submenu there; pinned commands and the selected tab stay visible. No bar uses them yet; the bars move onto them in the rest of #232. `stubOverflowWidths` in `ui.ts` lets component tests lay Overflow out in jsdom.
 - AppShell: results export moved into `useResultsExport` (#301)
+- AppShell: root entity metadata loading moved into `useRootEntityMetadata` (#301)
 
 ## [1.6.0-beta.1] - 2026-11-07
 
