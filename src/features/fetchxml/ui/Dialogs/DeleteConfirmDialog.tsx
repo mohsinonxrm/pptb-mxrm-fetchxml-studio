@@ -196,14 +196,20 @@ export function DeleteConfirmDialog({
 		const isTomorrow =
 			completionDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
 
-		const timeStr = completionDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+		const timeStr = completionDate.toLocaleTimeString([], {
+			hour: "2-digit",
+			minute: "2-digit",
+		});
 
 		if (isToday) {
 			return `Est. completion: today at ${timeStr}`;
 		} else if (isTomorrow) {
 			return `Est. completion: tomorrow at ${timeStr}`;
 		} else {
-			const dateStr = completionDate.toLocaleDateString([], { month: "short", day: "numeric" });
+			const dateStr = completionDate.toLocaleDateString([], {
+				month: "short",
+				day: "numeric",
+			});
 			return `Est. completion: ${dateStr} at ${timeStr}`;
 		}
 	};
@@ -250,7 +256,8 @@ export function DeleteConfirmDialog({
 								<MessageBarTitle>Deleting records...</MessageBarTitle>
 								{progress && (
 									<>
-										Processing batch {progress.batchesCompleted} of {progress.totalBatches}
+										Processing batch {progress.batchesCompleted} of{" "}
+										{progress.totalBatches}
 									</>
 								)}
 							</MessageBarBody>
@@ -261,14 +268,17 @@ export function DeleteConfirmDialog({
 								<ProgressBar value={progress.completed / progress.total} max={1} />
 								<div className={styles.progressStats}>
 									<Text size={200}>
-										{progress.completed} of {progress.total} ({progress.succeeded} succeeded,{" "}
-										{progress.failed} failed)
+										{progress.completed} of {progress.total} (
+										{progress.succeeded} succeeded, {progress.failed} failed)
 									</Text>
 									{/* While Dataverse throttles, the wait instead of the estimate (#183) */}
 									{progress.throttleWaitSeconds ? (
-										<Text className={styles.eta}>{throttleWaitMessage(progress.throttleWaitSeconds)}</Text>
+										<Text className={styles.eta}>
+											{throttleWaitMessage(progress.throttleWaitSeconds)}
+										</Text>
 									) : null}
-									{!progress.throttleWaitSeconds && progress.estimatedSecondsRemaining !== undefined &&
+									{!progress.throttleWaitSeconds &&
+										progress.estimatedSecondsRemaining !== undefined &&
 										progress.estimatedSecondsRemaining > 0 && (
 											<Text className={styles.eta}>
 												{formatEta(progress.estimatedSecondsRemaining)}
@@ -280,7 +290,11 @@ export function DeleteConfirmDialog({
 
 						{!progress && (
 							<div
-								style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: tokens.spacingHorizontalS,
+								}}
 							>
 								<Spinner size="small" />
 								<Text>Deleting...</Text>
@@ -311,7 +325,8 @@ export function DeleteConfirmDialog({
 								<MessageBarTitle>Partial success</MessageBarTitle>
 								{result && (
 									<>
-										{result.succeeded} of {result.succeeded + result.failed} records deleted.
+										{result.succeeded} of {result.succeeded + result.failed}{" "}
+										records deleted.
 										{result.failed} failed.
 									</>
 								)}
@@ -378,7 +393,11 @@ export function DeleteConfirmDialog({
 						<Button appearance="secondary" onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button appearance="primary" onClick={handleConfirm} disabled={!scopeConfirmed}>
+						<Button
+							appearance="primary"
+							onClick={handleConfirm}
+							disabled={!scopeConfirmed}
+						>
 							Delete
 						</Button>
 					</>

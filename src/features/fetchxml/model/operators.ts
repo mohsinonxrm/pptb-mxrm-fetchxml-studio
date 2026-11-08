@@ -17,8 +17,10 @@
 
 import type { ConditionNode, OperatorType } from "./nodes";
 
-const HIERARCHY_DOCS = "https://learn.microsoft.com/power-apps/developer/data-platform/query-hierarchical-data";
-const CHOICES_DOCS = "https://learn.microsoft.com/power-apps/developer/data-platform/multi-select-picklist#query-data-from-choices";
+const HIERARCHY_DOCS =
+	"https://learn.microsoft.com/power-apps/developer/data-platform/query-hierarchical-data";
+const CHOICES_DOCS =
+	"https://learn.microsoft.com/power-apps/developer/data-platform/multi-select-picklist#query-data-from-choices";
 /** query-hierarchical-data: "a default limit of 100 recursions" for above / under and their variants */
 const HIERARCHY_NOTE =
 	"Only for the primary key of an entity with a hierarchical relationship. Dataverse follows up to 100 levels.";
@@ -36,7 +38,8 @@ export interface OperatorDefinition {
 	 * - year: a four-digit fiscal year (verified: "23" fails);
 	 * - fiscalPeriodYear: two <value> elements, period then year.
 	 */
-	valueType?: "string" | "number" | "date" | "guid" | "boolean" | "integer" | "year" | "fiscalPeriodYear";
+	valueType?:
+		"string" | "number" | "date" | "guid" | "boolean" | "integer" | "year" | "fiscalPeriodYear";
 	applicableTypes: string[]; // AttributeType values ("MultiSelectPicklist" for multi-select choices)
 	/** Hierarchy operators: only the primary key of a hierarchical entity (verified: 0x80040203 otherwise) */
 	hierarchyPrimaryKeyOnly?: boolean;
@@ -107,25 +110,61 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		value: "lt",
 		label: "Less Than",
 		requiresValue: true,
-		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: [
+			"String",
+			"Memo",
+			"Integer",
+			"BigInt",
+			"Decimal",
+			"Double",
+			"Money",
+			"DateTime",
+		],
 	},
 	{
 		value: "le",
 		label: "Less Than or Equal",
 		requiresValue: true,
-		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: [
+			"String",
+			"Memo",
+			"Integer",
+			"BigInt",
+			"Decimal",
+			"Double",
+			"Money",
+			"DateTime",
+		],
 	},
 	{
 		value: "gt",
 		label: "Greater Than",
 		requiresValue: true,
-		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: [
+			"String",
+			"Memo",
+			"Integer",
+			"BigInt",
+			"Decimal",
+			"Double",
+			"Money",
+			"DateTime",
+		],
 	},
 	{
 		value: "ge",
 		label: "Greater Than or Equal",
 		requiresValue: true,
-		applicableTypes: ["String", "Memo", "Integer", "BigInt", "Decimal", "Double", "Money", "DateTime"],
+		applicableTypes: [
+			"String",
+			"Memo",
+			"Integer",
+			"BigInt",
+			"Decimal",
+			"Double",
+			"Money",
+			"DateTime",
+		],
 	},
 
 	// String operators
@@ -333,9 +372,24 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		requiresValue: false,
 		applicableTypes: ["DateTime"],
 	},
-	{ value: "last-month", label: "Last Month", requiresValue: false, applicableTypes: ["DateTime"] },
-	{ value: "this-month", label: "This Month", requiresValue: false, applicableTypes: ["DateTime"] },
-	{ value: "next-month", label: "Next Month", requiresValue: false, applicableTypes: ["DateTime"] },
+	{
+		value: "last-month",
+		label: "Last Month",
+		requiresValue: false,
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "this-month",
+		label: "This Month",
+		requiresValue: false,
+		applicableTypes: ["DateTime"],
+	},
+	{
+		value: "next-month",
+		label: "Next Month",
+		requiresValue: false,
+		applicableTypes: ["DateTime"],
+	},
 	{
 		value: "next-seven-days",
 		label: "Next Seven Days",
@@ -417,7 +471,12 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		valueType: "integer",
 		applicableTypes: ["DateTime"],
 	},
-	{ value: "on", label: "On (specific date)", requiresValue: true, applicableTypes: ["DateTime"] },
+	{
+		value: "on",
+		label: "On (specific date)",
+		requiresValue: true,
+		applicableTypes: ["DateTime"],
+	},
 	{
 		value: "on-or-before",
 		label: "On or Before",
@@ -646,7 +705,8 @@ export const ALL_OPERATORS: OperatorDefinition[] = [
 		// The reference: for Language attributes (Integer with the Language format)
 		applicableTypes: ["Integer"],
 		description: "For a language attribute: matches the current user's UI language.",
-		docsUrl: "https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators#eq-userlanguage",
+		docsUrl:
+			"https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators#eq-userlanguage",
 	},
 
 	// Hierarchy operators: query-hierarchical-data ("only apply for the table relationship specifically
@@ -729,7 +789,9 @@ export function getOperatorsForAttribute(
 	// Virtual covers several types: AttributeTypeName tells multi-select choices, images and files
 	// apart from the "...name" label attributes (VirtualType)
 	const typeName = attribute.AttributeTypeName?.Value;
-	const byTypeName = !!typeName && (attribute.AttributeType === "Virtual" || typeName === "MultiSelectPicklistType");
+	const byTypeName =
+		!!typeName &&
+		(attribute.AttributeType === "Virtual" || typeName === "MultiSelectPicklistType");
 	const type = (byTypeName ? typeName : attribute.AttributeType)
 		.replace(/Type$/, "")
 		.toLowerCase();
@@ -746,12 +808,15 @@ export function getOperatorsForAttribute(
  * @deprecated Use getOperatorsForAttribute, which also handles multi-select, primary keys and
  * date-only behaviour.
  */
-export function getOperatorsForAttributeType(attributeType: string | undefined): OperatorDefinition[] {
+export function getOperatorsForAttributeType(
+	attributeType: string | undefined,
+): OperatorDefinition[] {
 	return getOperatorsForAttribute(attributeType ? { AttributeType: attributeType } : undefined);
 }
 
 /** The shape of value an operator takes. */
-export type OperatorValueShape = "none" | "single" | "integer" | "year" | "two" | "fiscalPeriodYear" | "multiple";
+export type OperatorValueShape =
+	"none" | "single" | "integer" | "year" | "two" | "fiscalPeriodYear" | "multiple";
 
 export function operatorValueShape(operator: string): OperatorValueShape {
 	const op = ALL_OPERATORS.find((o) => o.value === operator);
@@ -830,4 +895,7 @@ export function getCommonOperators(): OperatorDefinition[] {
  * plus the deprecated "neq" (verified: works like "ne"). Shared by the parser and the editor's
  * intellisense. https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/operators
  */
-export const KNOWN_OPERATORS: ReadonlySet<string> = new Set<string>([...ALL_OPERATORS.map((o) => o.value), "neq"]);
+export const KNOWN_OPERATORS: ReadonlySet<string> = new Set<string>([
+	...ALL_OPERATORS.map((o) => o.value),
+	"neq",
+]);

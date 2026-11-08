@@ -9,11 +9,15 @@
 import { connectionKey } from "../../../shared/hooks/connectionIdentity";
 
 type ToolboxAPI = Window["toolboxAPI"];
-export type Connection = NonNullable<Awaited<ReturnType<ToolboxAPI["connections"]["getActiveConnection"]>>>;
+export type Connection = NonNullable<
+	Awaited<ReturnType<ToolboxAPI["connections"]["getActiveConnection"]>>
+>;
 
 /** window.toolboxAPI, or undefined outside the ToolBox (dev server, tests) */
 const toolbox = (): Partial<ToolboxAPI> | undefined =>
-	typeof window === "undefined" ? undefined : (window.toolboxAPI as Partial<ToolboxAPI> | undefined);
+	typeof window === "undefined"
+		? undefined
+		: (window.toolboxAPI as Partial<ToolboxAPI> | undefined);
 
 /**
  * The tool's primary connection (slot 0). PPTB ≥ 1.2.7: connections.getConnection(0), the
@@ -22,8 +26,10 @@ const toolbox = (): Partial<ToolboxAPI> | undefined =>
 export async function getPrimaryConnection(): Promise<Connection | null> {
 	const connections = toolbox()?.connections;
 	if (!connections) return null;
-	if (typeof connections.getConnection === "function") return (await connections.getConnection(0)) ?? null;
-	if (typeof connections.getActiveConnection === "function") return (await connections.getActiveConnection()) ?? null;
+	if (typeof connections.getConnection === "function")
+		return (await connections.getConnection(0)) ?? null;
+	if (typeof connections.getActiveConnection === "function")
+		return (await connections.getActiveConnection()) ?? null;
 	return null;
 }
 
@@ -112,7 +118,9 @@ export function holdClose(): () => void {
 		if (released) return;
 		released = true;
 		if (--closeHolds === 0) {
-			api.releasePreventClose!().catch((error: unknown) => console.warn("releasePreventClose failed:", error));
+			api.releasePreventClose!().catch((error: unknown) =>
+				console.warn("releasePreventClose failed:", error),
+			);
 		}
 	};
 }

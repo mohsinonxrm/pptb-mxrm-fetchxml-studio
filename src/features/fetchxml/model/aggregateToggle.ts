@@ -23,9 +23,18 @@ export interface AggregateOffPlan {
 type Container = EntityNode | LinkEntityNode;
 
 /** Attributes an aggregate order alias refers to (same scoping Dataverse uses). */
-function aliasScope(order: OrderNode, container: Container, isRoot: boolean, links: LinkEntityNode[]): Container {
+function aliasScope(
+	order: OrderNode,
+	container: Container,
+	isRoot: boolean,
+	links: LinkEntityNode[],
+): Container {
 	if (isRoot && order.entityname) {
-		return links.find((l) => l.alias === order.entityname) ?? links.find((l) => l.name === order.entityname) ?? container;
+		return (
+			links.find((l) => l.alias === order.entityname) ??
+			links.find((l) => l.name === order.entityname) ??
+			container
+		);
 	}
 	return container;
 }
@@ -38,7 +47,9 @@ export function planAggregateOff(fetch: FetchNode): AggregateOffPlan {
 		c.links.forEach((l) => visit(l, false));
 	};
 	visit(fetch.entity, true);
-	const links = containers.map((c) => c.container).filter((c): c is LinkEntityNode => c.type === "link-entity");
+	const links = containers
+		.map((c) => c.container)
+		.filter((c): c is LinkEntityNode => c.type === "link-entity");
 
 	for (const { container } of containers) {
 		for (const attr of container.attributes) {
@@ -56,7 +67,13 @@ export function planAggregateOff(fetch: FetchNode): AggregateOffPlan {
 			});
 			plan.updates.push({
 				nodeId: attr.id,
-				updates: { groupby: undefined, aggregate: undefined, dategrouping: undefined, usertimezone: undefined, distinct: undefined },
+				updates: {
+					groupby: undefined,
+					aggregate: undefined,
+					dategrouping: undefined,
+					usertimezone: undefined,
+					distinct: undefined,
+				},
 			});
 		}
 	}
@@ -65,10 +82,18 @@ export function planAggregateOff(fetch: FetchNode): AggregateOffPlan {
 	for (const { container, isRoot } of containers) {
 		for (const order of container.orders) {
 			if (!order.alias) continue;
-			const source = aliasScope(order, container, isRoot, links).attributes.find((a) => a.alias === order.alias);
+			const source = aliasScope(order, container, isRoot, links).attributes.find(
+				(a) => a.alias === order.alias,
+			);
 			if (source?.groupby) {
-				plan.converted.push({ element: "order", message: `Sort by alias ${order.alias} → sort by attribute ${source.name}` });
-				plan.updates.push({ nodeId: order.id, updates: { alias: undefined, attribute: source.name } });
+				plan.converted.push({
+					element: "order",
+					message: `Sort by alias ${order.alias} → sort by attribute ${source.name}`,
+				});
+				plan.updates.push({
+					nodeId: order.id,
+					updates: { alias: undefined, attribute: source.name },
+				});
 			} else {
 				removedOrders.push({
 					element: "order",

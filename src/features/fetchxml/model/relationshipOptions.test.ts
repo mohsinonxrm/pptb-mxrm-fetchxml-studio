@@ -3,10 +3,24 @@ import { buildRelationshipOptions, filterRelationshipOptions } from "./relations
 import type { RelationshipMetadata } from "../api/pptbClient";
 
 const rel = (r: Partial<RelationshipMetadata>): RelationshipMetadata =>
-	({ MetadataId: r.SchemaName, ReferencedAttribute: "", ReferencingAttribute: "", ReferencedEntity: "", ReferencingEntity: "", ...r }) as RelationshipMetadata;
+	({
+		MetadataId: r.SchemaName,
+		ReferencedAttribute: "",
+		ReferencingAttribute: "",
+		ReferencedEntity: "",
+		ReferencingEntity: "",
+		...r,
+	}) as RelationshipMetadata;
 
-const ENTITIES: Record<string, string> = { account: "Account", contact: "Contact", opportunity: "Opportunity" };
-const ATTRIBUTES: Record<string, string> = { "account.primarycontactid": "Primary Contact", "contact.parentcustomerid": "Company Name" };
+const ENTITIES: Record<string, string> = {
+	account: "Account",
+	contact: "Contact",
+	opportunity: "Opportunity",
+};
+const ATTRIBUTES: Record<string, string> = {
+	"account.primarycontactid": "Primary Contact",
+	"contact.parentcustomerid": "Company Name",
+};
 const labels = {
 	entity: (name: string) => ENTITIES[name],
 	attribute: (entity: string, attribute: string) => ATTRIBUTES[`${entity}.${attribute}`],
@@ -59,7 +73,9 @@ describe("buildRelationshipOptions (#25)", () => {
 		const [n1] = options;
 		expect(n1.category).toBe("Many-to-one (N:1)");
 		expect(n1.primaryText).toBe("Contact (contact)");
-		expect(n1.secondaryText).toBe("via Primary Contact (primarycontactid) · account_primary_contact");
+		expect(n1.secondaryText).toBe(
+			"via Primary Contact (primarycontactid) · account_primary_contact",
+		);
 		expect(n1.displayText).toBe("Contact via Primary Contact");
 	});
 
@@ -67,7 +83,9 @@ describe("buildRelationshipOptions (#25)", () => {
 		const c = options.find((o) => o.schemaName === "contact_customer_accounts")!;
 		expect(c.category).toBe("One-to-many (1:N)");
 		expect(c.primaryText).toBe("Contact (contact)");
-		expect(c.secondaryText).toBe("via Company Name (parentcustomerid) · contact_customer_accounts");
+		expect(c.secondaryText).toBe(
+			"via Company Name (parentcustomerid) · contact_customer_accounts",
+		);
 		expect(c.displayText).toBe("Contact via Company Name");
 	});
 
@@ -96,11 +114,15 @@ describe("buildRelationshipOptions (#25)", () => {
 
 describe("filterRelationshipOptions (#25)", () => {
 	it("matches the entity, the lookup's display or logical name, or the schema name", () => {
-		const schemas = (q: string) => filterRelationshipOptions(options, q).map((o) => o.schemaName);
+		const schemas = (q: string) =>
+			filterRelationshipOptions(options, q).map((o) => o.schemaName);
 		expect(schemas("company name")).toEqual(["contact_customer_accounts"]);
 		expect(schemas("PRIMARYCONTACTID")).toEqual(["account_primary_contact"]);
 		expect(schemas("opportunity_parent")).toEqual(["opportunity_parent_account"]);
-		expect(schemas("contact")).toEqual(["account_primary_contact", "contact_customer_accounts"]);
+		expect(schemas("contact")).toEqual([
+			"account_primary_contact",
+			"contact_customer_accounts",
+		]);
 		expect(schemas("  ")).toHaveLength(4);
 	});
 });

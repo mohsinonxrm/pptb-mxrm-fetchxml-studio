@@ -25,7 +25,10 @@ export interface EditorSyncValue {
 
 export const EditorSyncContext = createContext<EditorSyncValue | null>(null);
 
-const NO_SYNC: EditorSyncValue = { sync: async () => ({ status: "unchanged" }), editorHasContent: false };
+const NO_SYNC: EditorSyncValue = {
+	sync: async () => ({ status: "unchanged" }),
+	editorHasContent: false,
+};
 
 /** Editor sync for the surrounding PreviewTabs, or a no-op outside it. */
 export function useEditorSync(): EditorSyncValue {

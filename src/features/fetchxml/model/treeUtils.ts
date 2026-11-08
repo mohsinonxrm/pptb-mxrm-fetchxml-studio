@@ -76,7 +76,7 @@ export function collectLinkEntityReferences(node: FetchNode | null): LinkEntityR
  */
 export function isConditionInRootEntityFilter(
 	fetchNode: FetchNode | null,
-	conditionId: NodeId
+	conditionId: NodeId,
 ): boolean {
 	if (!fetchNode?.entity) {
 		return false;
@@ -111,7 +111,7 @@ export function isConditionInRootEntityFilter(
  */
 export function findParentEntityForNode(
 	fetchNode: FetchNode | null,
-	nodeId: NodeId
+	nodeId: NodeId,
 ): string | null {
 	if (!fetchNode?.entity) {
 		return null;
@@ -120,7 +120,7 @@ export function findParentEntityForNode(
 	function findInEntity(
 		entity: EntityNode | LinkEntityNode,
 		targetId: NodeId,
-		parentName: string
+		parentName: string,
 	): string | null {
 		// Check in attributes
 		for (const attr of entity.attributes) {
@@ -141,7 +141,8 @@ export function findParentEntityForNode(
 		}
 
 		// Check in nested link-entities
-		const currentName = entity.type === "link-entity" ? entity.alias || entity.name : entity.name;
+		const currentName =
+			entity.type === "link-entity" ? entity.alias || entity.name : entity.name;
 		for (const link of entity.links) {
 			if (link.id === targetId) return parentName;
 			const result = findInEntity(link, targetId, currentName);
@@ -228,11 +229,19 @@ export interface NodeContainer {
  * Find the entity or link-entity that holds a node (attribute, order, filter or condition),
  * including link-entities nested in filters (any / not any / all / not all).
  */
-export function findNodeContainer(fetchNode: FetchNode | null, nodeId: NodeId): NodeContainer | null {
+export function findNodeContainer(
+	fetchNode: FetchNode | null,
+	nodeId: NodeId,
+): NodeContainer | null {
 	if (!fetchNode?.entity) return null;
 	let found: NodeContainer | null = null;
 
-	const visitFilter = (filter: FilterNode, container: EntityNode | LinkEntityNode, isRoot: boolean, depth: number) => {
+	const visitFilter = (
+		filter: FilterNode,
+		container: EntityNode | LinkEntityNode,
+		isRoot: boolean,
+		depth: number,
+	) => {
 		if (found) return;
 		if (filter.id === nodeId || filter.conditions.some((c) => c.id === nodeId)) {
 			found = { container, isRoot, filterDepth: depth };
@@ -243,7 +252,10 @@ export function findNodeContainer(fetchNode: FetchNode | null, nodeId: NodeId): 
 	};
 	const visitContainer = (container: EntityNode | LinkEntityNode, isRoot: boolean) => {
 		if (found) return;
-		if (container.attributes.some((a) => a.id === nodeId) || container.orders.some((o) => o.id === nodeId)) {
+		if (
+			container.attributes.some((a) => a.id === nodeId) ||
+			container.orders.some((o) => o.id === nodeId)
+		) {
 			found = { container, isRoot };
 			return;
 		}
@@ -299,10 +311,16 @@ export function findOrdersUsingAlias(
 	alias: string,
 ): OrderNode[] {
 	if (!fetchNode?.entity || !alias) return [];
-	const inScope = container.orders.filter((o) => o.alias === alias && (container.type === "link-entity" || !o.entityname));
+	const inScope = container.orders.filter(
+		(o) => o.alias === alias && (container.type === "link-entity" || !o.entityname),
+	);
 	if (container.type === "link-entity") {
 		const names = new Set([container.alias, container.name].filter(Boolean));
-		inScope.push(...fetchNode.entity.orders.filter((o) => o.alias === alias && o.entityname && names.has(o.entityname)));
+		inScope.push(
+			...fetchNode.entity.orders.filter(
+				(o) => o.alias === alias && o.entityname && names.has(o.entityname),
+			),
+		);
 	}
 	return inScope;
 }

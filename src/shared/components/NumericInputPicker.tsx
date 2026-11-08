@@ -60,7 +60,10 @@ export function NumericInputPicker({
 		}
 
 		// Decimal and Double: use precision if available
-		if ((attrType === "Decimal" || attrType === "Double") && attribute.Precision !== undefined) {
+		if (
+			(attrType === "Decimal" || attrType === "Double") &&
+			attribute.Precision !== undefined
+		) {
 			// step = 10^(-precision), e.g., precision 2 → step 0.01
 			return Math.pow(10, -attribute.Precision);
 		}
@@ -78,7 +81,10 @@ export function NumericInputPicker({
 		}
 
 		// Decimal and Double: round to precision
-		if ((attrType === "Decimal" || attrType === "Double") && attribute.Precision !== undefined) {
+		if (
+			(attrType === "Decimal" || attrType === "Double") &&
+			attribute.Precision !== undefined
+		) {
 			const multiplier = Math.pow(10, attribute.Precision);
 			return Math.round(val * multiplier) / multiplier;
 		}

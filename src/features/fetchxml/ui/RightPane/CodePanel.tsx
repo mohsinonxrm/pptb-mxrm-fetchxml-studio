@@ -162,7 +162,9 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 
 	// Dataverse conversions (C# QueryExpression, SQL): for the selected format only, after typing
 	// pauses, and once per query and environment (#199)
-	const [conversions, setConversions] = useState<Partial<Record<ServerConversion, ConversionResult>>>({});
+	const [conversions, setConversions] = useState<
+		Partial<Record<ServerConversion, ConversionResult>>
+	>({});
 	const lastRequestedRef = useRef<Partial<Record<ServerConversion, string>>>({});
 	const conversionsRef = useRef(conversions);
 	useEffect(() => {
@@ -200,7 +202,8 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		// Wait until typing pauses: until then the debounced query is behind the one on screen
 		if (!kind || !debouncedXml || debouncedXml !== fetchXml || !connected) return;
 		const key = conversionKey(debouncedXml, environmentUrl);
-		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind])) return;
+		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind]))
+			return;
 		lastRequestedRef.current[kind] = key;
 		// Retrying a failed conversion: show it loading, not the old error
 		if (conversionsRef.current[kind]?.key === key) {
@@ -221,7 +224,8 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		};
 		request.then(
 			(code) => settle({ key, code, error: null }),
-			(err: unknown) => settle({ key, code: "", error: err instanceof Error ? err.message : String(err) }),
+			(err: unknown) =>
+				settle({ key, code: "", error: err instanceof Error ? err.message : String(err) }),
 		);
 	}, [debouncedXml, fetchXml, selectedFormat, connected, environmentUrl]);
 
@@ -251,7 +255,14 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 		}
 		// paEntitySetName loads after the query changes: without it the Web API snippet kept the old
 		// (or no) entity set name (#65)
-	}, [selectedFormat, fetchXml, conversionIsCurrent, currentConversion, environmentUrl, paEntitySetName]);
+	}, [
+		selectedFormat,
+		fetchXml,
+		conversionIsCurrent,
+		currentConversion,
+		environmentUrl,
+		paEntitySetName,
+	]);
 
 	const handleCopy = useCallback(() => {
 		const code = currentCode();
@@ -304,11 +315,17 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 											</Badge>
 										</Tooltip>
 									)}
-									{(fmt === "csharp-queryexpr" || fmt === "sql") && !connected && (
-										<Tooltip content="Connect to an environment to generate" relationship="label">
-											<Info20Regular style={{ opacity: 0.5, width: 14, height: 14 }} />
-										</Tooltip>
-									)}
+									{(fmt === "csharp-queryexpr" || fmt === "sql") &&
+										!connected && (
+											<Tooltip
+												content="Connect to an environment to generate"
+												relationship="label"
+											>
+												<Info20Regular
+													style={{ opacity: 0.5, width: 14, height: 14 }}
+												/>
+											</Tooltip>
+										)}
 								</span>
 							</Tab>
 						))}
@@ -330,7 +347,12 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 						icon={<Copy20Regular />}
 						className={styles.copyButton}
 						onClick={handleCopy}
-						disabled={isAsyncLoading || showOffline || !code || selectedFormat === "powerautomate"}
+						disabled={
+							isAsyncLoading ||
+							showOffline ||
+							!code ||
+							selectedFormat === "powerautomate"
+						}
 						aria-label="Copy code to clipboard"
 					>
 						{copied ? "Copied!" : "Copy"}
@@ -365,38 +387,47 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 						<Info20Regular style={{ opacity: 0.4, width: 32, height: 32 }} />
 						<p className={styles.offlineText}>
 							Connect to a Dataverse environment to generate{" "}
-							{selectedFormat === "csharp-queryexpr" ? "C# QueryExpression" : "SQL"} code.
+							{selectedFormat === "csharp-queryexpr" ? "C# QueryExpression" : "SQL"}{" "}
+							code.
 						</p>
 					</div>
 				)}
 
 				{/* Power Automate pane — field-by-field form */}
-				{!isAsyncLoading && !asyncError && !showOffline && selectedFormat === "powerautomate" && (
-					<div className={styles.paPane}>
-						<PowerAutomatePane spec={generatePowerAutomateSpec(fetchXml, paEntitySetName)} />
-					</div>
-				)}
+				{!isAsyncLoading &&
+					!asyncError &&
+					!showOffline &&
+					selectedFormat === "powerautomate" && (
+						<div className={styles.paPane}>
+							<PowerAutomatePane
+								spec={generatePowerAutomateSpec(fetchXml, paEntitySetName)}
+							/>
+						</div>
+					)}
 
 				{/* Monaco editor for all other formats */}
-				{!isAsyncLoading && !asyncError && !showOffline && selectedFormat !== "powerautomate" && (
-					<Editor
-						height="100%"
-						language={monacoLang}
-						value={code}
-						theme={monacoTheme}
-						options={{
-							readOnly: true,
-							minimap: { enabled: false },
-							scrollBeyondLastLine: false,
-							wordWrap: selectedFormat === "webapi" ? "on" : "off",
-							fontSize: 13,
-							lineNumbers: "on",
-							renderLineHighlight: "none",
-							folding: true,
-							automaticLayout: true,
-						}}
-					/>
-				)}
+				{!isAsyncLoading &&
+					!asyncError &&
+					!showOffline &&
+					selectedFormat !== "powerautomate" && (
+						<Editor
+							height="100%"
+							language={monacoLang}
+							value={code}
+							theme={monacoTheme}
+							options={{
+								readOnly: true,
+								minimap: { enabled: false },
+								scrollBeyondLastLine: false,
+								wordWrap: selectedFormat === "webapi" ? "on" : "off",
+								fontSize: 13,
+								lineNumbers: "on",
+								renderLineHighlight: "none",
+								folding: true,
+								automaticLayout: true,
+							}}
+						/>
+					)}
 			</div>
 		</div>
 	);

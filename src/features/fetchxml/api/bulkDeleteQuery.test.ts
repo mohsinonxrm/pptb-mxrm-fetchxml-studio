@@ -10,17 +10,51 @@ const converted = {
 		FilterOperator: "And",
 		FilterHint: null,
 		Conditions: [
-			{ EntityName: null, AttributeName: "name", Operator: "Equal", Values: [{ Type: "System.String", Value: "Contoso" }] },
-			{ EntityName: null, AttributeName: "statecode", Operator: "Equal", Values: [{ Type: "System.Int32", Value: 0 }] },
-			{ EntityName: null, AttributeName: "donotemail", Operator: "Equal", Values: [{ Type: "System.Boolean", Value: false }] },
-			{ EntityName: null, AttributeName: "revenue", Operator: "GreaterThan", Values: [{ Type: "System.Decimal", Value: 100.5 }] },
-			{ EntityName: null, AttributeName: "numberofemployees", Operator: "In", Values: [{ Type: "System.Int32", Value: 1 }, { Type: "System.Int32", Value: 2 }] },
+			{
+				EntityName: null,
+				AttributeName: "name",
+				Operator: "Equal",
+				Values: [{ Type: "System.String", Value: "Contoso" }],
+			},
+			{
+				EntityName: null,
+				AttributeName: "statecode",
+				Operator: "Equal",
+				Values: [{ Type: "System.Int32", Value: 0 }],
+			},
+			{
+				EntityName: null,
+				AttributeName: "donotemail",
+				Operator: "Equal",
+				Values: [{ Type: "System.Boolean", Value: false }],
+			},
+			{
+				EntityName: null,
+				AttributeName: "revenue",
+				Operator: "GreaterThan",
+				Values: [{ Type: "System.Decimal", Value: 100.5 }],
+			},
+			{
+				EntityName: null,
+				AttributeName: "numberofemployees",
+				Operator: "In",
+				Values: [
+					{ Type: "System.Int32", Value: 1 },
+					{ Type: "System.Int32", Value: 2 },
+				],
+			},
 			{ EntityName: null, AttributeName: "industrycode", Operator: "NotNull", Values: [] },
 		],
 		Filters: [
 			{
 				FilterOperator: "Or",
-				Conditions: [{ AttributeName: "numberofemployees", Operator: "GreaterThan", Values: [{ Type: "System.Int32", Value: 50 }] }],
+				Conditions: [
+					{
+						AttributeName: "numberofemployees",
+						Operator: "GreaterThan",
+						Values: [{ Type: "System.Int32", Value: 50 }],
+					},
+				],
 				Filters: [],
 			},
 		],
@@ -30,7 +64,13 @@ const converted = {
 			LinkToEntityName: "contact",
 			LinkCriteria: {
 				FilterOperator: "And",
-				Conditions: [{ AttributeName: "statecode", Operator: "Equal", Values: [{ Type: "System.Int32", Value: 0 }] }],
+				Conditions: [
+					{
+						AttributeName: "statecode",
+						Operator: "Equal",
+						Values: [{ Type: "System.Int32", Value: 0 }],
+					},
+				],
 				Filters: [],
 			},
 			LinkEntities: [],
@@ -55,8 +95,12 @@ describe("BulkDelete query (#224)", () => {
 
 	it("also converts nested filters and link-entity criteria", () => {
 		const q = withStringConditionValues(converted);
-		expect(q.Criteria.Filters[0].Conditions[0].Values).toEqual([{ Type: "System.Int32", Value: "50" }]);
-		expect(q.LinkEntities[0].LinkCriteria.Conditions[0].Values).toEqual([{ Type: "System.Int32", Value: "0" }]);
+		expect(q.Criteria.Filters[0].Conditions[0].Values).toEqual([
+			{ Type: "System.Int32", Value: "50" },
+		]);
+		expect(q.LinkEntities[0].LinkCriteria.Conditions[0].Values).toEqual([
+			{ Type: "System.Int32", Value: "0" },
+		]);
 	});
 
 	it("leaves everything else alone and doesn't change the input", () => {
@@ -69,12 +113,17 @@ describe("BulkDelete query (#224)", () => {
 	});
 
 	it("keeps null values null", () => {
-		const q = withStringConditionValues({ Criteria: { Conditions: [{ Values: [{ Type: "System.String", Value: null }] }] } });
+		const q = withStringConditionValues({
+			Criteria: { Conditions: [{ Values: [{ Type: "System.String", Value: null }] }] },
+		});
 		expect(q.Criteria.Conditions[0].Values[0].Value).toBeNull();
 	});
 
 	it("builds the selected-records query locally, with string GUIDs (no URL limit, #177)", () => {
-		const ids = Array.from({ length: 1000 }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
+		const ids = Array.from(
+			{ length: 1000 },
+			(_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`,
+		);
 		const q = selectedRecordsQuery("account", "accountid", ids);
 		expect(q["@odata.type"]).toBe("Microsoft.Dynamics.CRM.QueryExpression");
 		expect(q.EntityName).toBe("account");

@@ -4,11 +4,19 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isDataverseAvailable, validateFetchXmlExpression } from "../../api/pptbClient";
-import { loadAllEntityAttributes, loadEntityMetadata, loadStringMaxLengths } from "../../api/dataverseMetadata";
+import {
+	loadAllEntityAttributes,
+	loadEntityMetadata,
+	loadStringMaxLengths,
+} from "../../api/dataverseMetadata";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { toAttributeTypeInfo } from "../../model/attributeCapabilities";
 import { advisorEntityNames, type DataverseCheck } from "../../model/advisories";
-import type { AdvisorAttributeInfo, AdvisorEntityInfo, AdvisorMetadata } from "../../model/queryAdvisor";
+import type {
+	AdvisorAttributeInfo,
+	AdvisorEntityInfo,
+	AdvisorMetadata,
+} from "../../model/queryAdvisor";
 import type { FetchNode } from "../../model/nodes";
 
 /**
@@ -19,7 +27,10 @@ import type { FetchNode } from "../../model/nodes";
  * Loaded only once `enabled` (#170): from the Advisories tab's first open, not as soon as an entity
  * is chosen (in the spirit of #71). The tab's count then grows when it's opened.
  */
-export function useAdvisorMetadata(fetch: FetchNode | null | undefined, enabled = true): AdvisorMetadata | undefined {
+export function useAdvisorMetadata(
+	fetch: FetchNode | null | undefined,
+	enabled = true,
+): AdvisorMetadata | undefined {
 	const root = fetch?.entity.name;
 	const names = fetch ? advisorEntityNames(fetch) : [];
 	const key = names.join(",");
@@ -37,7 +48,10 @@ export function useAdvisorMetadata(fetch: FetchNode | null | undefined, enabled 
 					entity === root ? loadEntityMetadata(entity) : Promise.resolve(undefined),
 				]);
 				const info: AdvisorEntityInfo = {
-					primaryIdAttribute: metadata.status === "fulfilled" ? metadata.value?.PrimaryIdAttribute : undefined,
+					primaryIdAttribute:
+						metadata.status === "fulfilled"
+							? metadata.value?.PrimaryIdAttribute
+							: undefined,
 				};
 				if (attributes.status === "fulfilled") {
 					const maxLengths = lengths.status === "fulfilled" ? lengths.value : undefined;
@@ -46,7 +60,8 @@ export function useAdvisorMetadata(fetch: FetchNode | null | undefined, enabled 
 							a.LogicalName,
 							{
 								typeName: toAttributeTypeInfo(a).typeName,
-								sourceType: typeof a.SourceType === "number" ? a.SourceType : undefined,
+								sourceType:
+									typeof a.SourceType === "number" ? a.SourceType : undefined,
 								maxLength: maxLengths?.get(a.LogicalName),
 							},
 						]),
@@ -109,7 +124,11 @@ export function useDataverseCheck() {
 		} catch (error) {
 			if (request !== requestRef.current) return;
 			// Dataverse's own message, made actionable where the code is documented (#96)
-			setState((prev) => ({ ...prev, checking: false, error: formatDataverseError(error, "Couldn't check with Dataverse.") }));
+			setState((prev) => ({
+				...prev,
+				checking: false,
+				error: formatDataverseError(error, "Couldn't check with Dataverse."),
+			}));
 		}
 	}, []);
 

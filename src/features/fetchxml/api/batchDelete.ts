@@ -39,18 +39,21 @@ export type ExecuteBatch = (requests: BatchRequest[]) => Promise<BatchResult[]>;
 /** Records per $batch. Small enough for steady progress and short requests; Learn allows 1,000. */
 export const DELETE_BATCH_SIZE = 25;
 
-
 /** `${EntitySetName}(${id})`, the Web API URL of a record (relative, as executeBatch requires) */
-export const recordUrl = (entitySetName: string, recordId: string) => `${entitySetName}(${recordId.replace(/[{}]/g, "")})`;
+export const recordUrl = (entitySetName: string, recordId: string) =>
+	`${entitySetName}(${recordId.replace(/[{}]/g, "")})`;
 
 /** The Dataverse error code and message of a failed batch operation */
 export function batchResultError(result: BatchResult): { code?: string; message: string } {
-	const body = result.body as { error?: { code?: string; message?: string } } | string | undefined;
+	const body = result.body as
+		{ error?: { code?: string; message?: string } } | string | undefined;
 	if (body && typeof body === "object" && body.error) {
 		return { code: body.error.code, message: body.error.message || `HTTP ${result.status}` };
 	}
 	const text = typeof body === "string" && body.trim() ? `: ${body.trim()}` : "";
-	return { message: `HTTP ${result.status}${result.statusText ? ` ${result.statusText}` : ""}${text}` };
+	return {
+		message: `HTTP ${result.status}${result.statusText ? ` ${result.statusText}` : ""}${text}`,
+	};
 }
 
 const isSuccess = (result: BatchResult) => result.status >= 200 && result.status < 300;
@@ -64,7 +67,10 @@ export function isRecordNotFound(result: BatchResult): boolean {
 	if (result.status !== 404) return false;
 	const { code, message } = batchResultError(result);
 	if (code?.toLowerCase() === "0x80040217") return true;
-	return !/0x80060888|Resource not found for the segment/i.test(`${code} ${message}`) && /does not exist/i.test(message);
+	return (
+		!/0x80060888|Resource not found for the segment/i.test(`${code} ${message}`) &&
+		/does not exist/i.test(message)
+	);
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -72,7 +78,8 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const SERVICE_PROTECTION_CODES = new Set(["0x80072322", "0x80072321", "0x80072326"]);
 /** An operation the batch answered with a service protection error: Dataverse didn't run it */
 const isThrottledResult = (result: BatchResult) =>
-	result.status === 429 || SERVICE_PROTECTION_CODES.has(batchResultError(result).code?.toLowerCase() ?? "");
+	result.status === 429 ||
+	SERVICE_PROTECTION_CODES.has(batchResultError(result).code?.toLowerCase() ?? "");
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface RecordBatchOptions {
@@ -98,10 +105,12 @@ export interface RecordBatchOptions {
 export type BatchDeleteOptions = RecordBatchOptions;
 
 /** Why records weren't deleted after shouldContinue said stop */
-export const CONNECTION_CHANGED_MESSAGE = "Not deleted: the tool's connection changed during the delete";
+export const CONNECTION_CHANGED_MESSAGE =
+	"Not deleted: the tool's connection changed during the delete";
 
 /** Why records weren't changed after shouldContinue said stop (#143) */
-export const STATE_CONNECTION_CHANGED_MESSAGE = "Not changed: the tool's connection changed during the update";
+export const STATE_CONNECTION_CHANGED_MESSAGE =
+	"Not changed: the tool's connection changed during the update";
 
 /** What differs between the operations the runner sends */
 interface RecordOperation {
@@ -142,7 +151,13 @@ interface RecordOperation {
 async function sendWithRetry(
 	requests: BatchRequest[],
 	execute: ExecuteBatch,
-	{ wait, shouldContinue, onWait, random, policy = LONG_RUNNING_RETRY }: {
+	{
+		wait,
+		shouldContinue,
+		onWait,
+		random,
+		policy = LONG_RUNNING_RETRY,
+	}: {
 		wait: (ms: number) => Promise<void>;
 		shouldContinue: () => boolean | Promise<boolean>;
 		onWait?: (seconds: number) => void;
@@ -193,7 +208,11 @@ async function sendWithRetry(
  * Deletes records in $batch requests of `batchSize`, reporting per-record errors and progress
  * (same shape as the parallel-request path it replaces).
  */
-export function deleteRecordsInBatches(entitySetName: string, recordIds: string[], options: BatchDeleteOptions): Promise<BatchDeleteResult> {
+export function deleteRecordsInBatches(
+	entitySetName: string,
+	recordIds: string[],
+	options: BatchDeleteOptions,
+): Promise<BatchDeleteResult> {
 	return runRecordBatches(recordIds, options, {
 		toRequest: (id) => ({ method: "DELETE", url: recordUrl(entitySetName, id) }),
 		stoppedMessage: CONNECTION_CHANGED_MESSAGE,
@@ -216,19 +235,29 @@ export function updateRecordStatesInBatches(
 	return runRecordBatches(recordIds, options, {
 		toRequest: (id) => buildStatePatchRequest(entitySetName, id, target),
 		stoppedMessage: STATE_CONNECTION_CHANGED_MESSAGE,
-		formatError: (result) => formatDataverseError(result.body && typeof result.body === "object" ? result.body : new Error(batchResultError(result).message)),
+		formatError: (result) =>
+			formatDataverseError(
+				result.body && typeof result.body === "object"
+					? result.body
+					: new Error(batchResultError(result).message),
+			),
 	});
 }
 
 /** The batch request that sets a record's state (#143): PATCH {EntitySetName}(id) { statecode, statuscode } */
-export const buildStatePatchRequest = (entitySetName: string, recordId: string, target: StateTarget): BatchRequest => ({
+export const buildStatePatchRequest = (
+	entitySetName: string,
+	recordId: string,
+	target: StateTarget,
+): BatchRequest => ({
 	method: "PATCH",
 	url: recordUrl(entitySetName, recordId),
 	body: statePatchBody(target),
 });
 
 /** Why records weren't closed after shouldContinue said stop (#149) */
-export const CLOSE_CONNECTION_CHANGED_MESSAGE = "Not closed: the tool's connection changed while closing";
+export const CLOSE_CONNECTION_CHANGED_MESSAGE =
+	"Not closed: the tool's connection changed while closing";
 
 /**
  * Close messages (#149): POST the action (WinOpportunity, CloseIncident, ...) once per record in
@@ -242,18 +271,26 @@ export const CLOSE_CONNECTION_CHANGED_MESSAGE = "Not closed: the tool's connecti
 export function closeRecordsInBatches(
 	recordIds: string[],
 	toRequest: (recordId: string) => BatchRequest,
-	options: RecordBatchOptions & { completedInStoppedBatch?: (recordIds: string[]) => Promise<Set<string>> },
+	options: RecordBatchOptions & {
+		completedInStoppedBatch?: (recordIds: string[]) => Promise<Set<string>>;
+	},
 ): Promise<BatchDeleteResult> {
 	return runRecordBatches(recordIds, options, {
 		toRequest,
 		stoppedMessage: CLOSE_CONNECTION_CHANGED_MESSAGE,
-		formatError: (result) => formatDataverseError(result.body && typeof result.body === "object" ? result.body : new Error(batchResultError(result).message)),
+		formatError: (result) =>
+			formatDataverseError(
+				result.body && typeof result.body === "object"
+					? result.body
+					: new Error(batchResultError(result).message),
+			),
 		completedInStoppedBatch: options.completedInStoppedBatch,
 	});
 }
 
 /** Why records weren't started after shouldContinue said stop (#264) */
-export const WORKFLOW_CONNECTION_CHANGED_MESSAGE = "Not run: the tool's connection changed during the run";
+export const WORKFLOW_CONNECTION_CHANGED_MESSAGE =
+	"Not run: the tool's connection changed during the run";
 
 /** A stopped batch's record whose system jobs couldn't be read: it may have started (#264) */
 export const WORKFLOW_UNKNOWN_MESSAGE =
@@ -277,7 +314,9 @@ export const WORKFLOW_UNKNOWN_MESSAGE =
 export function runWorkflowInBatches(
 	workflowId: string,
 	recordIds: string[],
-	options: RecordBatchOptions & { jobsFor: (recordIds: string[]) => Promise<Map<string, Set<string>>> },
+	options: RecordBatchOptions & {
+		jobsFor: (recordIds: string[]) => Promise<Map<string, Set<string>>>;
+	},
 ): Promise<BatchDeleteResult> {
 	let before: Map<string, Set<string>> | undefined;
 	return runRecordBatches(recordIds, options, {
@@ -287,7 +326,12 @@ export function runWorkflowInBatches(
 			body: { EntityId: recordId.replace(/[{}]/g, "") },
 		}),
 		stoppedMessage: WORKFLOW_CONNECTION_CHANGED_MESSAGE,
-		formatError: (result) => formatDataverseError(result.body && typeof result.body === "object" ? result.body : new Error(batchResultError(result).message)),
+		formatError: (result) =>
+			formatDataverseError(
+				result.body && typeof result.body === "object"
+					? result.body
+					: new Error(batchResultError(result).message),
+			),
 		beforeChunk: async (chunk) => {
 			try {
 				before = await options.jobsFor(chunk);
@@ -300,7 +344,11 @@ export function runWorkflowInBatches(
 			const baseline = before;
 			if (!baseline) throw new Error("The system jobs before the batch couldn't be read.");
 			const after = await options.jobsFor(chunk);
-			return new Set(chunk.filter((id) => [...(after.get(id) ?? [])].some((job) => !baseline.get(id)?.has(job))));
+			return new Set(
+				chunk.filter((id) =>
+					[...(after.get(id) ?? [])].some((job) => !baseline.get(id)?.has(job)),
+				),
+			);
 		},
 		unknownMessage: WORKFLOW_UNKNOWN_MESSAGE,
 	});
@@ -309,7 +357,15 @@ export function runWorkflowInBatches(
 /** Sends one request per record in $batch requests of `batchSize` (see the file comment) */
 async function runRecordBatches(
 	recordIds: string[],
-	{ executeBatch, onProgress, batchSize = DELETE_BATCH_SIZE, shouldContinue = () => true, wait = sleep, random, retry }: RecordBatchOptions,
+	{
+		executeBatch,
+		onProgress,
+		batchSize = DELETE_BATCH_SIZE,
+		shouldContinue = () => true,
+		wait = sleep,
+		random,
+		retry,
+	}: RecordBatchOptions,
 	{
 		toRequest,
 		stoppedMessage,
@@ -357,7 +413,8 @@ async function runRecordBatches(
 			onWait: (seconds) => onProgress?.({ ...lastProgress, throttleWaitSeconds: seconds }),
 		});
 	let stopped = false;
-	const stop = (ids: string[]) => ids.forEach((id) => record(id, new Error(stoppedMessage), false));
+	const stop = (ids: string[]) =>
+		ids.forEach((id) => record(id, new Error(stoppedMessage), false));
 	for (let index = 0; index < chunks.length; index++) {
 		const chunk = chunks[index];
 		const started = Date.now();
@@ -383,7 +440,10 @@ async function runRecordBatches(
 					record(chunk[0], new Error(errorMessage(error)), false);
 				} else {
 					failedEarly = true;
-					console.warn(`Batch ${index + 1} stopped early, retrying its records one by one:`, error);
+					console.warn(
+						`Batch ${index + 1} stopped early, retrying its records one by one:`,
+						error,
+					);
 				}
 			}
 		}
@@ -406,7 +466,10 @@ async function runRecordBatches(
 					completedIds = await completedInStoppedBatch(chunk);
 				} catch (error) {
 					unknown = unknownMessage !== undefined;
-					console.warn(`Batch ${index + 1}: couldn't tell which records it completed, ${unknown ? "not sending them again" : "redoing all"}:`, error);
+					console.warn(
+						`Batch ${index + 1}: couldn't tell which records it completed, ${unknown ? "not sending them again" : "redoing all"}:`,
+						error,
+					);
 				}
 			}
 			if (unknown) chunk.forEach((id) => record(id, new Error(unknownMessage), false));
@@ -445,7 +508,8 @@ async function runRecordBatches(
 			failed: result.failed,
 			batchesCompleted: index + 1,
 			totalBatches: chunks.length,
-			estimatedSecondsRemaining: chunkTimes.length >= 2 ? Math.ceil((average * remaining) / 1000) : undefined,
+			estimatedSecondsRemaining:
+				chunkTimes.length >= 2 ? Math.ceil((average * remaining) / 1000) : undefined,
 		};
 		onProgress?.(lastProgress);
 	}

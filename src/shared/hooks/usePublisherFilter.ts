@@ -18,9 +18,9 @@ import { debugLog } from "../utils/debug";
 
 export function usePublisherFilter() {
 	// Publishers with solutions (combined)
-	const [publishersWithSolutions, setPublishersWithSolutions] = useState<PublisherWithSolutions[]>(
-		[]
-	);
+	const [publishersWithSolutions, setPublishersWithSolutions] = useState<
+		PublisherWithSolutions[]
+	>([]);
 	const [publishersLoading, setPublishersLoading] = useState(false);
 	const [publishersError, setPublishersError] = useState<string | null>(null);
 	// The publisher request has finished (or came from the cache), for restoring a selection (#25)
@@ -140,7 +140,11 @@ export function usePublisherFilter() {
 				setEntitiesLoading(true);
 				setEntitiesError(null);
 
-				debugLog("entityFilters", "[usePublisherFilter] Loading entities for solutions:", selectedSolutionIds);
+				debugLog(
+					"entityFilters",
+					"[usePublisherFilter] Loading entities for solutions:",
+					selectedSolutionIds,
+				);
 
 				// Get solution components (entities only) - cached per solution
 				const components = await getSolutionComponents(selectedSolutionIds);
@@ -152,13 +156,17 @@ export function usePublisherFilter() {
 
 				// Extract unique entity logical names
 				const logicalNames = Array.from(
-					new Set(components.map((c) => c.msdyn_name).filter(Boolean))
+					new Set(components.map((c) => c.msdyn_name).filter(Boolean)),
 				);
 
-				debugLog("entityFilters", "[usePublisherFilter] Unique entity logical names extracted:", {
-					count: logicalNames.length,
-					names: logicalNames,
-				});
+				debugLog(
+					"entityFilters",
+					"[usePublisherFilter] Unique entity logical names extracted:",
+					{
+						count: logicalNames.length,
+						names: logicalNames,
+					},
+				);
 
 				// Filter from global cached metadata (instant, no API call)
 				const data = filterCachedEntitiesByNames(logicalNames);

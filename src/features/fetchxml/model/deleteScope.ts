@@ -21,7 +21,9 @@ type Container = EntityNode | LinkEntityNode;
 function restrictsRecords(link: LinkEntityNode): boolean {
 	if (link.linkType !== "outer") return true;
 	const hasFilter = (filters: FilterNode[] | undefined): boolean =>
-		(filters ?? []).some((f) => f.conditions.length > 0 || (f.links?.length ?? 0) > 0 || hasFilter(f.subfilters));
+		(filters ?? []).some(
+			(f) => f.conditions.length > 0 || (f.links?.length ?? 0) > 0 || hasFilter(f.subfilters),
+		);
 	return hasFilter(link.filters) || link.links.some(restrictsRecords);
 }
 
@@ -52,9 +54,13 @@ export function deleteScopeKey(fetch: FetchNode): string {
  * Why "Delete all" isn't available, or undefined when it is: the results on screen must come from
  * a query that matches the same records as the tree.
  */
-export function deleteAllUnavailableReason(executed: FetchNode | null | undefined, current: FetchNode | null | undefined): string | undefined {
+export function deleteAllUnavailableReason(
+	executed: FetchNode | null | undefined,
+	current: FetchNode | null | undefined,
+): string | undefined {
 	if (!current) return undefined;
-	if (!executed) return "Run the query first: Delete all deletes the records the query on screen matches.";
+	if (!executed)
+		return "Run the query first: Delete all deletes the records the query on screen matches.";
 	if (deleteScopeKey(executed) !== deleteScopeKey(current)) {
 		return "The query has changed since these results were loaded. Run it again to see what Delete all would delete.";
 	}
@@ -69,7 +75,10 @@ export const MAX_DIRECT_DELETE = 100;
  * MAX_DIRECT_DELETE selected records are deleted by a Bulk Delete job, which needs prvBulkDelete.
  * Without it the tool used to fall back to deleting every one of them itself.
  */
-export function deleteSelectionUnavailableReason(selectedCount: number, canBulkDelete: boolean): string | undefined {
+export function deleteSelectionUnavailableReason(
+	selectedCount: number,
+	canBulkDelete: boolean,
+): string | undefined {
 	if (selectedCount <= MAX_DIRECT_DELETE || canBulkDelete) return undefined;
 	return (
 		`Deleting more than ${MAX_DIRECT_DELETE} records submits a Bulk Delete job, which needs the Bulk Delete ` +
