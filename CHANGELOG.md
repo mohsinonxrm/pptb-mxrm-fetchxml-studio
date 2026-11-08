@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🔧 Changed
-
-- **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
-
 ### 🏗️ Technical
 
 - AppShell: splitter state moved into `useSplitters` (#301)
@@ -27,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A shared overflow command bar and tab row, not used yet (#232).** `OverflowToolbar` and `OverflowTabList` (`src/shared/components/commandBar/`) put a Fluent Toolbar or TabList inside Overflow: commands and tabs that don't fit move into a More menu instead of wrapping, keeping their icon, disabled reason and submenu there; pinned commands and the selected tab stay visible. No bar uses them yet; the bars move onto them in the rest of #232. `stubOverflowWidths` in `ui.ts` lets component tests lay Overflow out in jsdom.
 - AppShell: results export moved into `useResultsExport` (#301)
 - AppShell: root entity metadata loading moved into `useRootEntityMetadata` (#301)
+
+## [1.6.0-beta.2] - 2026-11-07
+
+### 🔧 Changed
+
+- **1.4.x is no longer supported** (SECURITY.md, README). It ended 2026-11-07, and 1.4.6 is deprecated on npm. The 30-day support window for the previous minor still applies to future releases.
+
+### 🔧 Fixed
+
+- **Edit columns keeps your reorder when you add columns.** Adding columns while the panel is open used to reset the list and discard reorders you hadn't applied. The panel now resets only when it opens; added columns are appended and removed ones dropped.
+- **Advisories "Go to node" works when the node is already selected.** It used to do nothing, because the tree only revealed a node when the selection changed. It now expands the ancestors and scrolls the node into view every time.
+- **Delete is no longer hidden on Entities whose delete privilege isn't `prvDelete{LogicalName}` (#327).** The name now comes from the Entity's metadata (`Privileges`, type Delete), so saved views check `prvDeleteQuery`, personal views `prvDeleteUserQuery` and users `prvDeleteUser`. It's read once per Entity per connection, shared with the Write and Create checks. If the metadata can't be read, the old name is checked as before.
 
 ## [1.6.0-beta.1] - 2026-11-07
 

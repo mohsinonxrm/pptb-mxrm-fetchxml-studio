@@ -27,6 +27,7 @@ import {
 	ReOrder16Regular,
 } from "@fluentui/react-icons";
 import type { LayoutColumn } from "../../model/layoutxml";
+import { mergeColumns } from "./mergeColumns";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -150,12 +151,22 @@ export function EditColumnsPanel({
 	const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 	const dragNodeRef = useRef<HTMLDivElement | null>(null);
 
-	// Initialize local state when panel opens or columns change (also when there are none)
+	// Initialise local state only when the panel opens. While it is open, merge changes to
+	// `columns` (e.g. from Add columns) so unapplied reorders are not thrown away.
+	const wasOpenRef = useRef(false);
 	useEffect(() => {
-		if (open) {
+		if (!open) {
+			wasOpenRef.current = false;
+			return;
+		}
+		if (!wasOpenRef.current) {
+			wasOpenRef.current = true;
 			setLocalColumns([...columns]);
 			setSelectedIndex(null);
+			return;
 		}
+		setLocalColumns((prev) => mergeColumns(prev, columns));
+		setSelectedIndex(null);
 	}, [open, columns]);
 
 	// Drag and drop handlers
