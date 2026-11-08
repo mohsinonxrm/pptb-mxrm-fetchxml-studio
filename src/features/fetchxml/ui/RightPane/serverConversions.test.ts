@@ -12,8 +12,12 @@ describe("Code tab: Dataverse conversions (#199)", () => {
 
 	it("keys a result by environment and query", () => {
 		const xml = '<fetch><entity name="account" /></fetch>';
-		expect(conversionKey(xml, "https://a.crm.dynamics.com")).not.toBe(conversionKey(xml, "https://b.crm.dynamics.com"));
-		expect(conversionKey(xml, "https://a.crm.dynamics.com")).toBe(conversionKey(xml, "https://a.crm.dynamics.com"));
+		expect(conversionKey(xml, "https://a.crm.dynamics.com")).not.toBe(
+			conversionKey(xml, "https://b.crm.dynamics.com"),
+		);
+		expect(conversionKey(xml, "https://a.crm.dynamics.com")).toBe(
+			conversionKey(xml, "https://a.crm.dynamics.com"),
+		);
 		expect(conversionKey(xml, undefined)).not.toBe(conversionKey(`${xml} `, undefined));
 	});
 

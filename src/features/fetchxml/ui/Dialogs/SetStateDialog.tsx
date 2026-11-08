@@ -32,7 +32,14 @@ import { CheckmarkCircle20Regular } from "@fluentui/react-icons";
 import type { BatchDeleteProgress, BatchDeleteResult } from "../../api/pptbClient";
 import { getEntityStateModel, getRecordStatuses } from "../../api/pptbClient";
 import { formatDataverseError } from "../../api/dataverseErrors";
-import { hasCloseMenu, planStateChange, stateNote, type StateAction, type StatePlan, type StateTarget } from "../../model/recordState";
+import {
+	hasCloseMenu,
+	planStateChange,
+	stateNote,
+	type StateAction,
+	type StatePlan,
+	type StateTarget,
+} from "../../model/recordState";
 import { planCloseStateChange, type CloseStateAction } from "../../model/closeActions";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
@@ -84,7 +91,10 @@ export interface SetStateDialogProps {
 	closeAction?: CloseStateAction;
 	onClose: () => void;
 	/** Runs the change; resolves with per-record results */
-	onExecute: (target: StateTarget, onProgress: (progress: BatchDeleteProgress) => void) => Promise<BatchDeleteResult>;
+	onExecute: (
+		target: StateTarget,
+		onProgress: (progress: BatchDeleteProgress) => void,
+	) => Promise<BatchDeleteResult>;
 }
 
 type Phase = "loading" | "confirm" | "running" | "done" | "error";
@@ -118,9 +128,16 @@ export function SetStateDialog({
 
 	const verb = closeAction?.label ?? (action === "activate" ? "Activate" : "Deactivate");
 	// The way back (#69): Activate undoes a Close or Deactivate; Close replaces Deactivate where there's a Close menu
-	const undoVerb = closeAction || action === "deactivate" ? "Activate" : hasCloseMenu(entityLogicalName) ? "Close" : "Deactivate";
+	const undoVerb =
+		closeAction || action === "deactivate"
+			? "Activate"
+			: hasCloseMenu(entityLogicalName)
+				? "Close"
+				: "Deactivate";
 	const count = recordIds.length;
-	const title = closeAction ? closeAction.title(count) : `${verb} ${count === 1 ? "1 record" : `${count} records`}`;
+	const title = closeAction
+		? closeAction.title(count)
+		: `${verb} ${count === 1 ? "1 record" : `${count} records`}`;
 
 	// Plan when the dialog opens: the state model, then (if transitions are enforced) the records'
 	// current status reasons
@@ -135,10 +152,16 @@ export function SetStateDialog({
 		setResult(null);
 		(async () => {
 			const model = await getEntityStateModel(entityLogicalName);
-			if (!model) return { kind: "none", reason: "This entity has no Status (statecode) column." } as StatePlan;
+			if (!model)
+				return {
+					kind: "none",
+					reason: "This entity has no Status (statecode) column.",
+				} as StatePlan;
 			const primaryId = primaryIdRef.current;
 			const statuses =
-				model.enforceTransitions && primaryId ? await getRecordStatuses(entityLogicalName, primaryId, recordIds) : undefined;
+				model.enforceTransitions && primaryId
+					? await getRecordStatuses(entityLogicalName, primaryId, recordIds)
+					: undefined;
 			return closeAction
 				? planCloseStateChange(model, closeAction, statuses)
 				: planStateChange(model, action, statuses, entityLogicalName);
@@ -227,20 +250,27 @@ export function SetStateDialog({
 							scope={{ kind: "records", count }}
 							onConfirmationChange={setScopeConfirmed}
 						/>
-						{plan && plan.kind !== "none" &&
+						{plan &&
+							plan.kind !== "none" &&
 							(plan.undo.available ? (
 								<UndoNote undo="possible">
 									To undo, run {undoVerb} on the records this changes
-									{plan.undo.transitionsEnforced ? ", if this entity's status reason transitions allow it." : "."}
-									{plan.undo.picksStatusReason && " The previous status reason isn't restored, so set it again if needed."}
+									{plan.undo.transitionsEnforced
+										? ", if this entity's status reason transitions allow it."
+										: "."}
+									{plan.undo.picksStatusReason &&
+										" The previous status reason isn't restored, so set it again if needed."}
 								</UndoNote>
 							) : (
 								<UndoNote undo="none">
-									There's no undo here: this entity has no {action === "activate" ? "inactive" : "active"} state to go
-									back to.
+									There's no undo here: this entity has no{" "}
+									{action === "activate" ? "inactive" : "active"} state to go back
+									to.
 								</UndoNote>
 							))}
-						{closeAction?.note && <Text className={styles.note}>{closeAction.note}</Text>}
+						{closeAction?.note && (
+							<Text className={styles.note}>{closeAction.note}</Text>
+						)}
 						{plan?.kind === "none" && (
 							<MessageBar intent="warning" layout="multiline">
 								<MessageBarBody>
@@ -251,8 +281,8 @@ export function SetStateDialog({
 						)}
 						{plan?.kind === "simple" && (
 							<Text>
-								Sets Status to <strong>{plan.stateLabel}</strong> and Status Reason to{" "}
-								<strong>{plan.statusLabel}</strong>.
+								Sets Status to <strong>{plan.stateLabel}</strong> and Status Reason
+								to <strong>{plan.statusLabel}</strong>.
 							</Text>
 						)}
 						{plan?.kind === "choose" && (
@@ -271,11 +301,21 @@ export function SetStateDialog({
 									}
 								>
 									<Dropdown
-										value={selectedChoice ? `${selectedChoice.group.label}: ${selectedChoice.choice.label}` : ""}
+										value={
+											selectedChoice
+												? `${selectedChoice.group.label}: ${selectedChoice.choice.label}`
+												: ""
+										}
 										selectedOptions={target ? [targetKey(target)] : []}
 										onOptionSelect={(_, data) => {
-											const [statecode, statuscode] = (data.optionValue ?? "").split(":").map(Number);
-											if (Number.isFinite(statecode) && Number.isFinite(statuscode)) setTarget({ statecode, statuscode });
+											const [statecode, statuscode] = (data.optionValue ?? "")
+												.split(":")
+												.map(Number);
+											if (
+												Number.isFinite(statecode) &&
+												Number.isFinite(statuscode)
+											)
+												setTarget({ statecode, statuscode });
 										}}
 									>
 										{plan.groups.map((group) => (
@@ -283,10 +323,15 @@ export function SetStateDialog({
 												{group.choices.map((choice) => (
 													<Option
 														key={choice.statuscode}
-														value={targetKey({ statecode: group.statecode, statuscode: choice.statuscode })}
+														value={targetKey({
+															statecode: group.statecode,
+															statuscode: choice.statuscode,
+														})}
 														text={`${group.label}: ${choice.label}`}
 													>
-														{choice.isDefault ? `${choice.label} (default)` : choice.label}
+														{choice.isDefault
+															? `${choice.label} (default)`
+															: choice.label}
 													</Option>
 												))}
 											</OptionGroup>
@@ -308,14 +353,16 @@ export function SetStateDialog({
 						<MessageBar intent="info">
 							<MessageBarBody>
 								<MessageBarTitle>Updating records...</MessageBarTitle>
-								{progress && `Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
+								{progress &&
+									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
 						</MessageBar>
 						{progress ? (
 							<>
 								<ProgressBar value={progress.completed / progress.total} max={1} />
 								<Text size={200}>
-									{progress.completed} of {progress.total} ({progress.succeeded} succeeded, {progress.failed} failed)
+									{progress.completed} of {progress.total} ({progress.succeeded}{" "}
+									succeeded, {progress.failed} failed)
 								</Text>
 							</>
 						) : (
@@ -332,7 +379,8 @@ export function SetStateDialog({
 						<MessageBar intent="warning" layout="multiline">
 							<MessageBarBody>
 								<MessageBarTitle>Partly done</MessageBarTitle>
-								{result.succeeded} of {result.succeeded + result.failed} records updated. {result.failed} failed.
+								{result.succeeded} of {result.succeeded + result.failed} records
+								updated. {result.failed} failed.
 							</MessageBarBody>
 						</MessageBar>
 						{renderErrors()}
@@ -341,7 +389,9 @@ export function SetStateDialog({
 					<div className={styles.success}>
 						<CheckmarkCircle20Regular />
 						<Text weight="semibold">
-							{result?.succeeded === 1 ? "1 record updated." : `${result?.succeeded ?? 0} records updated.`}
+							{result?.succeeded === 1
+								? "1 record updated."
+								: `${result?.succeeded ?? 0} records updated.`}
 						</Text>
 					</div>
 				);
@@ -372,7 +422,12 @@ export function SetStateDialog({
 						<Button
 							appearance="primary"
 							onClick={handleRun}
-							disabled={phase !== "confirm" || !target || plan?.kind === "none" || !scopeConfirmed}
+							disabled={
+								phase !== "confirm" ||
+								!target ||
+								plan?.kind === "none" ||
+								!scopeConfirmed
+							}
 						>
 							{verb}
 						</Button>

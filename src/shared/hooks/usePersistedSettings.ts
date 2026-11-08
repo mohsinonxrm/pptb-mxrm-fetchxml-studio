@@ -63,7 +63,10 @@ export function usePersistedSettings(): [DisplaySettings, (settings: DisplaySett
 						debugLog("settings", "⚙️ Settings loaded from toolboxAPI:", merged);
 					}
 				} else {
-					debugLog("settings", "⚙️ toolboxAPI.settings not available — using in-memory defaults");
+					debugLog(
+						"settings",
+						"⚙️ toolboxAPI.settings not available — using in-memory defaults",
+					);
 				}
 			} catch (err) {
 				console.warn("⚙️ Failed to load settings from toolboxAPI:", err);

@@ -186,7 +186,10 @@ export async function click(element: Element | null | undefined): Promise<void> 
 }
 
 /** Types into a React-controlled input: sets the value through the native setter, then fires input */
-export async function typeInto(input: HTMLInputElement | null | undefined, text: string): Promise<void> {
+export async function typeInto(
+	input: HTMLInputElement | null | undefined,
+	text: string,
+): Promise<void> {
 	if (!input) throw new Error("typeInto: input not found");
 	const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 	await act(async () => {
@@ -198,7 +201,9 @@ export async function typeInto(input: HTMLInputElement | null | undefined, text:
 
 /** The open dialog (Fluent renders it in a portal), or undefined */
 export function openDialog(): HTMLElement | undefined {
-	return [...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')].pop();
+	return [
+		...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]'),
+	].pop();
 }
 
 /** The open dialog's text, with whitespace collapsed */
@@ -212,29 +217,45 @@ export function dialogText(): string {
  */
 export function scopeField(label: "Environment" | "Entity" | "Scope"): string | undefined {
 	const dialog = openDialog();
-	const labelElement = [...(dialog?.querySelectorAll("span, div") ?? [])].find((e) => e.children.length === 0 && e.textContent === label);
+	const labelElement = [...(dialog?.querySelectorAll("span, div") ?? [])].find(
+		(e) => e.children.length === 0 && e.textContent === label,
+	);
 	const value = labelElement?.nextElementSibling;
 	if (!value) return undefined;
-	const parts = [...value.querySelectorAll("*")].filter((e) => e.children.length === 0).map((e) => e.textContent?.trim()).filter(Boolean);
+	const parts = [...value.querySelectorAll("*")]
+		.filter((e) => e.children.length === 0)
+		.map((e) => e.textContent?.trim())
+		.filter(Boolean);
 	return (parts.length ? parts.join(" ") : (value.textContent ?? "")).trim();
 }
 
 /** A button by its visible text (exact, trimmed) or a pattern, searched in the open dialog first */
-export function button(text: string | RegExp, scope: ParentNode | undefined = openDialog() ?? document): HTMLButtonElement | undefined {
-	const matches = (value: string) => (typeof text === "string" ? value.trim() === text : text.test(value.trim()));
-	return [...(scope ?? document).querySelectorAll<HTMLButtonElement>("button")].find((b) => matches(b.textContent ?? ""));
+export function button(
+	text: string | RegExp,
+	scope: ParentNode | undefined = openDialog() ?? document,
+): HTMLButtonElement | undefined {
+	const matches = (value: string) =>
+		typeof text === "string" ? value.trim() === text : text.test(value.trim());
+	return [...(scope ?? document).querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+		matches(b.textContent ?? ""),
+	);
 }
 
 /** Whether a button can't be pressed: disabled, or Fluent's disabledFocusable. Throws when it's missing,
  * so a renamed or removed button fails the test instead of counting as disabled. */
 export function isDisabled(element: HTMLElement | undefined): boolean {
 	if (!element) throw new Error("isDisabled: element not found");
-	return (element as HTMLButtonElement).disabled || element.getAttribute("aria-disabled") === "true";
+	return (
+		(element as HTMLButtonElement).disabled || element.getAttribute("aria-disabled") === "true"
+	);
 }
 
 /** The first text input in the open dialog */
 export function dialogInput(): HTMLInputElement | undefined {
-	return openDialog()?.querySelector<HTMLInputElement>('input[type="text"], input:not([type])') ?? undefined;
+	return (
+		openDialog()?.querySelector<HTMLInputElement>('input[type="text"], input:not([type])') ??
+		undefined
+	);
 }
 
 export interface StubConnection {
@@ -256,11 +277,22 @@ export interface HostStub {
  * notifications collected, and no Dataverse calls unless a test provides them. There's no
  * preventClose, so holdClose does nothing.
  */
-export function installHost(options: { connection?: Partial<StubConnection> | null; dataverseAPI?: HostStub["dataverseAPI"] } = {}): HostStub {
+export function installHost(
+	options: {
+		connection?: Partial<StubConnection> | null;
+		dataverseAPI?: HostStub["dataverseAPI"];
+	} = {},
+): HostStub {
 	const connection =
 		options.connection === null
 			? null
-			: { id: "c1", name: "Test environment", url: "https://test.crm.dynamics.com/", environment: "Dev", ...options.connection };
+			: {
+					id: "c1",
+					name: "Test environment",
+					url: "https://test.crm.dynamics.com/",
+					environment: "Dev",
+					...options.connection,
+				};
 	const notifications: HostStub["notifications"] = [];
 	const dataverseAPI: HostStub["dataverseAPI"] = {
 		queryData: async () => ({ value: [] }),
@@ -290,7 +322,11 @@ export function removeHost(): void {
 }
 
 /** A promise the test resolves or rejects when it chooses */
-export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
+export function deferred<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T) => void;
+	reject: (error: unknown) => void;
+} {
 	let resolve!: (value: T) => void;
 	let reject!: (error: unknown) => void;
 	const promise = new Promise<T>((res, rej) => {

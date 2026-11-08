@@ -65,20 +65,35 @@ export function WildcardValueField({ operator, value, advice, onChange }: Wildca
 	// To Custom pattern: the pattern written so far, to edit; from it: the text inside the wildcards
 	const changeMatch = (match: LikeMatch) => {
 		if (match === "custom") {
-			return update({ match, text: state.text === "" ? "" : buildWildcardValue(operator, state), literal: false });
+			return update({
+				match,
+				text: state.text === "" ? "" : buildWildcardValue(operator, state),
+				literal: false,
+			});
 		}
 		if (state.match !== "custom") return update({ match });
 		const parsed = parseWildcardValue(operator, state.text);
-		update(parsed.match === "custom" ? { match } : { match, text: parsed.text, literal: parsed.literal });
+		update(
+			parsed.match === "custom"
+				? { match }
+				: { match, text: parsed.text, literal: parsed.literal },
+		);
 	};
 
 	const custom = isLike && state.match === "custom";
 	const strayWildcard = !isLike && !state.literal && hasWildcard(state.text);
 	const noWildcard = custom && state.text !== "" && !hasWildcard(state.text);
 	const helperWarning: Validation = strayWildcard
-		? { state: "warning", message: "This value contains a wildcard character (% _ [). Turn on Match literally to search for it as text." }
+		? {
+				state: "warning",
+				message:
+					"This value contains a wildcard character (% _ [). Turn on Match literally to search for it as text.",
+			}
 		: noWildcard
-			? { state: "warning", message: "No wildcard: this matches the whole value, like Equals." }
+			? {
+					state: "warning",
+					message: "No wildcard: this matches the whole value, like Equals.",
+				}
 			: undefined;
 
 	return (

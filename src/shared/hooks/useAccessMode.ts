@@ -47,7 +47,10 @@ export function useAccessMode() {
 								);
 							})
 							.catch((err) => {
-								console.error("[useAccessMode] Failed to preload entity metadata:", err);
+								console.error(
+									"[useAccessMode] Failed to preload entity metadata:",
+									err,
+								);
 							});
 					}
 				}

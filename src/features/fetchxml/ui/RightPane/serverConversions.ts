@@ -34,7 +34,11 @@ export interface ConversionResult {
  * Whether to send a request for `key`: not when one was already sent for it, unless that one
  * failed (so selecting the format again retries).
  */
-export function needsConversion(key: string, lastRequested: string | undefined, result: ConversionResult | undefined): boolean {
+export function needsConversion(
+	key: string,
+	lastRequested: string | undefined,
+	result: ConversionResult | undefined,
+): boolean {
 	if (lastRequested !== key) return true;
 	return result?.key === key && result.error !== null;
 }

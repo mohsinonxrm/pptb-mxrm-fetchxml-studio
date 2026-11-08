@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { defaultDisplaySettings, GRID_DENSITY_LABELS, normalizeGridDensity, treeSizeFor } from "./displaySettings";
+import {
+	defaultDisplaySettings,
+	GRID_DENSITY_LABELS,
+	normalizeGridDensity,
+	treeSizeFor,
+} from "./displaySettings";
 import { mergeWithDefaults } from "../../../shared/hooks/usePersistedSettings";
 
 describe("grid and tree density (#228)", () => {

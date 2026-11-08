@@ -6,7 +6,15 @@
  * Sort state is derived from FetchXML orders - clicking headers triggers onSortChange callback
  */
 
-import { useMemo, useCallback, useEffect, useState, useRef, forwardRef, useImperativeHandle } from "react";
+import {
+	useMemo,
+	useCallback,
+	useEffect,
+	useState,
+	useRef,
+	forwardRef,
+	useImperativeHandle,
+} from "react";
 import {
 	createTableColumn,
 	makeStyles,
@@ -56,7 +64,11 @@ import {
 	Filter20Regular,
 	FilterDismiss20Regular,
 } from "@fluentui/react-icons";
-import { retrieveTotalRecordCount, type AttributeMetadata, type EntityMetadata } from "../../api/pptbClient";
+import {
+	retrieveTotalRecordCount,
+	type AttributeMetadata,
+	type EntityMetadata,
+} from "../../api/pptbClient";
 import { throttleWaitMessage } from "../../api/throttleRetry";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { adviseCondition } from "../../model/queryAdvisor";
@@ -65,14 +77,22 @@ import { getCellRenderer } from "./getCellRenderer";
 import { buildRowIdentity } from "./rowIdentity";
 import { getFormattedValue } from "./FormattedValueUtils";
 import type { ConditionNode, FetchNode } from "../../model/nodes";
-import { columnFilterTarget, type ColumnFilterTarget, type NewCondition } from "../../model/columnFilters";
+import {
+	columnFilterTarget,
+	type ColumnFilterTarget,
+	type NewCondition,
+} from "../../model/columnFilters";
 import { ALL_OPERATORS, operatorRequiresValue } from "../../model/operators";
 import { collectAllLinkEntities } from "../../model/treeUtils";
 import { ConditionEditor } from "../LeftPane/PropertiesPanel/editors/ConditionEditor";
 import { HighlightText } from "./HighlightText";
 import { SearchHighlightContext } from "./searchHighlightContext";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
-import { normalizeGridDensity, type DisplaySettings, type GridDensity } from "../../model/displaySettings";
+import {
+	normalizeGridDensity,
+	type DisplaySettings,
+	type GridDensity,
+} from "../../model/displaySettings";
 import { GridDensityContext } from "./gridDensityContext";
 import { metadataCache } from "../../state/cache";
 import { joinedLinkAliases, resolveColumn, sortedColumns } from "../../model/queryColumns";
@@ -279,7 +299,8 @@ function hasRequiredValue(condition: ConditionNode): boolean {
 	if (!condition.operator) return false;
 	if (!operatorRequiresValue(condition.operator)) return true;
 	const { value } = condition;
-	if (Array.isArray(value)) return value.length > 0 && value.every((v) => v !== "" && v !== undefined && v !== null);
+	if (Array.isArray(value))
+		return value.length > 0 && value.every((v) => v !== "" && v !== undefined && v !== null);
 	return value !== undefined && value !== null && value !== "";
 }
 
@@ -341,28 +362,31 @@ interface ResultsGridProps {
 	onVisibleCountChange?: (count: number) => void;
 }
 
-export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(function ResultsGrid({
-	result,
-	isLoading,
-	isLoadingMore,
-	throttleWaitSeconds,
-	attributeMetadata,
-	fetchQuery,
-	primaryIdAttribute,
-	onSelectedCountChange,
-	onSelectionChange,
-	columnConfig,
-	onColumnResize,
-	onSortChange,
-	onLoadMore,
-	displaySettings,
-	searchText = "",
-	onSearchTextChange,
-	columnFilters,
-	onAddColumnFilter,
-	onRemoveColumnFilters,
-	onVisibleCountChange,
-}: ResultsGridProps, ref) {
+export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(function ResultsGrid(
+	{
+		result,
+		isLoading,
+		isLoadingMore,
+		throttleWaitSeconds,
+		attributeMetadata,
+		fetchQuery,
+		primaryIdAttribute,
+		onSelectedCountChange,
+		onSelectionChange,
+		columnConfig,
+		onColumnResize,
+		onSortChange,
+		onLoadMore,
+		displaySettings,
+		searchText = "",
+		onSearchTextChange,
+		columnFilters,
+		onAddColumnFilter,
+		onRemoveColumnFilters,
+		onVisibleCountChange,
+	}: ResultsGridProps,
+	ref,
+) {
 	const styles = useStyles();
 	// One density for the grid and the tree (#228)
 	const density = normalizeGridDensity(displaySettings?.gridDensity);
@@ -382,12 +406,19 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			return;
 		}
 
-		debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: setting up observer on container", container);
+		debugLog(
+			"resultsGrid",
+			"[ResultsGrid] ResizeObserver: setting up observer on container",
+			container,
+		);
 
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				const { width, height } = entry.contentRect;
-				debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: dimensions updated", { width, height });
+				debugLog("resultsGrid", "[ResultsGrid] ResizeObserver: dimensions updated", {
+					width,
+					height,
+				});
 				setGridDimensions({ width, height });
 			}
 		});
@@ -430,7 +461,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			map.set(key, { direction });
 			// Root lookups also come back as _name_value
 			const column = resolveColumn(fetchQuery, key);
-			if (column?.isRoot && !column.attribute.alias) map.set(`_${column.attribute.name}_value`, { direction });
+			if (column?.isRoot && !column.attribute.alias)
+				map.set(`_${column.attribute.name}_value`, { direction });
 		}
 		return map;
 	}, [fetchQuery]);
@@ -447,8 +479,12 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	// null values aren't returned, and later pages can have columns the first one didn't.
 	const gridColumns = useMemo(() => {
 		if (!result) return [];
-		const getAttribute = (entityName: string, attributeName: string) => attributeMetadata?.get(entityName)?.get(attributeName);
-		return orderByLayout(resultColumns(fetchQuery, result.rows, getAttribute, result.query), columnConfig);
+		const getAttribute = (entityName: string, attributeName: string) =>
+			attributeMetadata?.get(entityName)?.get(attributeName);
+		return orderByLayout(
+			resultColumns(fetchQuery, result.rows, getAttribute, result.query),
+			columnConfig,
+		);
 	}, [result, fetchQuery, attributeMetadata, columnConfig]);
 	// The query column key behind a grid column (layout cells and sort state use it)
 	const queryKeyOf = useMemo(() => {
@@ -524,7 +560,6 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							linkEntityAlias: linkAlias,
 							lookupAttribute: lookupAttr,
 						});
-
 					});
 				}
 
@@ -554,162 +589,273 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 
 		// Columns from a link-entity's <all-attributes /> come back as "linkalias.attribute" (#91)
 		const linkAliases = fetchQuery ? joinedLinkAliases(fetchQuery) : new Map<string, string>();
-		const linksByAlias = new Map(collectAllLinkEntities(fetchQuery ?? null).map((l) => [linkAliases.get(l.id), l]));
+		const linksByAlias = new Map(
+			collectAllLinkEntities(fetchQuery ?? null).map((l) => [linkAliases.get(l.id), l]),
+		);
 		const allAttributesInfo = (col: string): ColumnDisplayInfo | undefined => {
 			const dot = col.indexOf(".");
 			const linkAlias = col.slice(0, dot);
 			const link = dot > 0 ? linksByAlias.get(linkAlias) : undefined;
-			return link ? { attributeName: col.slice(dot + 1), entityName: link.name, linkEntityAlias: linkAlias, lookupAttribute: link.to } : undefined;
+			return link
+				? {
+						attributeName: col.slice(dot + 1),
+						entityName: link.name,
+						linkEntityAlias: linkAlias,
+						lookupAttribute: link.to,
+					}
+				: undefined;
 		};
 
 		const displayNames = new Map<string, string>();
 		const attrTypes = new Map<string, string | undefined>();
 		// The grid's columns as copied, in grid order (#50)
 		const copyCols: CopyColumn[] = [];
-		const columnDefs = gridColumns.map((c) => c.key).flatMap((col) => {
-			// Get column display info from our comprehensive map; cross-apply columns come back by
-			// schema name, so they're found by their query key (#91)
-			const displayInfo = columnDisplayMap.get(col) ?? columnDisplayMap.get(queryKeyOf(col)) ?? allAttributesInfo(col);
+		const columnDefs = gridColumns
+			.map((c) => c.key)
+			.flatMap((col) => {
+				// Get column display info from our comprehensive map; cross-apply columns come back by
+				// schema name, so they're found by their query key (#91)
+				const displayInfo =
+					columnDisplayMap.get(col) ??
+					columnDisplayMap.get(queryKeyOf(col)) ??
+					allAttributesInfo(col);
 
-			// Helper to get attribute metadata from multi-entity map
-			const getAttributeMetadata = (
-				entityName: string,
-				attrName: string,
-			): AttributeMetadata | undefined => {
-				return attributeMetadata?.get(entityName)?.get(attrName);
-			};
+				// Helper to get attribute metadata from multi-entity map
+				const getAttributeMetadata = (
+					entityName: string,
+					attrName: string,
+				): AttributeMetadata | undefined => {
+					return attributeMetadata?.get(entityName)?.get(attrName);
+				};
 
-			// Resolve attribute metadata based on display info
-			let attribute: AttributeMetadata | undefined;
+				// Resolve attribute metadata based on display info
+				let attribute: AttributeMetadata | undefined;
 
-			if (displayInfo) {
-				attribute = getAttributeMetadata(displayInfo.entityName, displayInfo.attributeName);
-			} else if (col.startsWith("_") && col.endsWith("_value")) {
-				// Fallback for lookup columns not in our map
-				const baseAttr = col.slice(1, -6);
-				const rootEntity = fetchQuery?.entity?.name;
-				if (rootEntity) {
-					attribute = getAttributeMetadata(rootEntity, baseAttr);
-				}
-			} else {
-				// Fallback: try root entity
-				const rootEntity = fetchQuery?.entity?.name;
-				if (rootEntity) {
-					attribute = getAttributeMetadata(rootEntity, col);
-				}
-			}
-
-			// Determine display name with comprehensive logic:
-			// 1. For aliased columns: Use the alias as display name
-			// 2. For lookup columns (_attr_value): Use attribute display name (e.g., "Primary Contact")
-			// 3. For link-entity columns: "{Attribute Display Name} ({Lookup Attribute Display Name})"
-			// 4. For root entity columns: Use attribute display name
-			// 5. Fallback: Clean up column name
-			// If displaySettings.useLogicalNames is true, show logical names instead
-			let displayName: string;
-
-			// Helper to get logical name (column key or attribute LogicalName)
-			const getLogicalName = (): string => {
-				if (displayInfo?.isLookupColumn) {
-					return displayInfo.attributeName || col.slice(1, -6);
-				}
-				if (displayInfo?.linkEntityAlias) {
-					return `${displayInfo.linkEntityAlias}.${displayInfo.attributeName || col}`;
-				}
-				return displayInfo?.attributeName || col;
-			};
-
-			if (displaySettings?.useLogicalNames) {
-				// Show logical name
-				displayName = getLogicalName();
-			} else if (displayInfo?.alias) {
-				// User-specified alias takes precedence
-				displayName = displayInfo.alias;
-			} else if (displayInfo?.isLookupColumn) {
-				// Lookup column: show attribute display name (represents the lookup field)
-				displayName =
-					attribute?.DisplayName?.UserLocalizedLabel?.Label ||
-					displayInfo.attributeName ||
-					col.slice(1, -6); // Remove _ prefix and _value suffix
-			} else if (displayInfo?.linkEntityAlias) {
-				// Link-entity column: "Attribute Display Name (Related Entity Display Name)"
-				// e.g., "Email (Contact)" or "Email (Primary Contact)"
-				const attrDisplayName =
-					attribute?.DisplayName?.UserLocalizedLabel?.Label || displayInfo.attributeName;
-
-				// Determine what to show in parentheses:
-				// - For N:1 (many-to-one): Show the lookup attribute display name (e.g., "Primary Contact")
-				// - For 1:N (one-to-many): Show the related entity display name (e.g., "Contact")
-				let relatedDisplayName = displayInfo.linkEntityAlias;
-
-				// N:1: 'to' is a lookup on the parent, so name the lookup ("Primary Contact"). 1:N (and N:N
-				// through an intersect entity): 'to' is the parent's key, which says nothing about the
-				// related side, so name the related entity ("Contact")
-				const rootEntityName = fetchQuery?.entity?.name;
-				const lookupAttr =
-					displayInfo.lookupAttribute && rootEntityName
-						? getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute)
-						: undefined;
-				const toIsLookup = ["Lookup", "Customer", "Owner"].includes(lookupAttr?.AttributeType ?? "");
-				if (toIsLookup && lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
-					relatedDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
+				if (displayInfo) {
+					attribute = getAttributeMetadata(
+						displayInfo.entityName,
+						displayInfo.attributeName,
+					);
+				} else if (col.startsWith("_") && col.endsWith("_value")) {
+					// Fallback for lookup columns not in our map
+					const baseAttr = col.slice(1, -6);
+					const rootEntity = fetchQuery?.entity?.name;
+					if (rootEntity) {
+						attribute = getAttributeMetadata(rootEntity, baseAttr);
+					}
 				} else {
-					// Entity details are cached per entity once opened; the entity lists have every entity
-					const byName = (list: EntityMetadata[] | undefined) =>
-						list?.find((e) => e.LogicalName === displayInfo.entityName);
-					const entityMetadata =
-						metadataCache.getEntityMetadata(displayInfo.entityName) ??
-						byName(metadataCache.getAllEntityMetadata()) ??
-						byName(metadataCache.getAllEntities());
-					if (entityMetadata?.DisplayName?.UserLocalizedLabel?.Label) {
-						relatedDisplayName = entityMetadata.DisplayName.UserLocalizedLabel.Label;
+					// Fallback: try root entity
+					const rootEntity = fetchQuery?.entity?.name;
+					if (rootEntity) {
+						attribute = getAttributeMetadata(rootEntity, col);
 					}
 				}
 
-				displayName = `${attrDisplayName} (${relatedDisplayName})`;
-			} else if (attribute?.DisplayName?.UserLocalizedLabel?.Label) {
-				// Root entity attribute with metadata display name
-				displayName = attribute.DisplayName.UserLocalizedLabel.Label;
-			} else if (col.startsWith("_") && col.endsWith("_value")) {
-				// Fallback for lookup columns without metadata
-				displayName = col.slice(1, -6);
-			} else {
-				// Final fallback: use column name as-is
-				displayName = col;
-			}
+				// Determine display name with comprehensive logic:
+				// 1. For aliased columns: Use the alias as display name
+				// 2. For lookup columns (_attr_value): Use attribute display name (e.g., "Primary Contact")
+				// 3. For link-entity columns: "{Attribute Display Name} ({Lookup Attribute Display Name})"
+				// 4. For root entity columns: Use attribute display name
+				// 5. Fallback: Clean up column name
+				// If displaySettings.useLogicalNames is true, show logical names instead
+				let displayName: string;
 
-			// Check if this column is sorted (from FetchXML orders)
-			const sortInfo = sortStateMap.get(col) ?? sortStateMap.get(queryKeyOf(col));
-			// Whether a column filter targets this column (#23)
-			const filterTarget = fetchQuery ? columnFilterTarget(fetchQuery, col) : undefined;
-			const isFiltered =
-				!!filterTarget && !("reason" in filterTarget) && !!columnFilters?.some((c) => sameTarget(c, filterTarget));
-			const valueMode = displaySettings?.valueDisplayMode ?? "formatted";
+				// Helper to get logical name (column key or attribute LogicalName)
+				const getLogicalName = (): string => {
+					if (displayInfo?.isLookupColumn) {
+						return displayInfo.attributeName || col.slice(1, -6);
+					}
+					if (displayInfo?.linkEntityAlias) {
+						return `${displayInfo.linkEntityAlias}.${displayInfo.attributeName || col}`;
+					}
+					return displayInfo?.attributeName || col;
+				};
 
-			// For "both" mode, check if this column has formatted values in the result set
-			// Only create a raw column if at least one record has a different formatted value
-			const hasFormattedValues =
-				valueMode === "both" &&
-				result?.rows?.some((record: Record<string, unknown>) => {
-					const rawValue = record[col];
-					const formattedValue = getFormattedValue(record, col);
-					return formattedValue !== undefined && formattedValue !== rawValue;
+				if (displaySettings?.useLogicalNames) {
+					// Show logical name
+					displayName = getLogicalName();
+				} else if (displayInfo?.alias) {
+					// User-specified alias takes precedence
+					displayName = displayInfo.alias;
+				} else if (displayInfo?.isLookupColumn) {
+					// Lookup column: show attribute display name (represents the lookup field)
+					displayName =
+						attribute?.DisplayName?.UserLocalizedLabel?.Label ||
+						displayInfo.attributeName ||
+						col.slice(1, -6); // Remove _ prefix and _value suffix
+				} else if (displayInfo?.linkEntityAlias) {
+					// Link-entity column: "Attribute Display Name (Related Entity Display Name)"
+					// e.g., "Email (Contact)" or "Email (Primary Contact)"
+					const attrDisplayName =
+						attribute?.DisplayName?.UserLocalizedLabel?.Label ||
+						displayInfo.attributeName;
+
+					// Determine what to show in parentheses:
+					// - For N:1 (many-to-one): Show the lookup attribute display name (e.g., "Primary Contact")
+					// - For 1:N (one-to-many): Show the related entity display name (e.g., "Contact")
+					let relatedDisplayName = displayInfo.linkEntityAlias;
+
+					// N:1: 'to' is a lookup on the parent, so name the lookup ("Primary Contact"). 1:N (and N:N
+					// through an intersect entity): 'to' is the parent's key, which says nothing about the
+					// related side, so name the related entity ("Contact")
+					const rootEntityName = fetchQuery?.entity?.name;
+					const lookupAttr =
+						displayInfo.lookupAttribute && rootEntityName
+							? getAttributeMetadata(rootEntityName, displayInfo.lookupAttribute)
+							: undefined;
+					const toIsLookup = ["Lookup", "Customer", "Owner"].includes(
+						lookupAttr?.AttributeType ?? "",
+					);
+					if (toIsLookup && lookupAttr?.DisplayName?.UserLocalizedLabel?.Label) {
+						relatedDisplayName = lookupAttr.DisplayName.UserLocalizedLabel.Label;
+					} else {
+						// Entity details are cached per entity once opened; the entity lists have every entity
+						const byName = (list: EntityMetadata[] | undefined) =>
+							list?.find((e) => e.LogicalName === displayInfo.entityName);
+						const entityMetadata =
+							metadataCache.getEntityMetadata(displayInfo.entityName) ??
+							byName(metadataCache.getAllEntityMetadata()) ??
+							byName(metadataCache.getAllEntities());
+						if (entityMetadata?.DisplayName?.UserLocalizedLabel?.Label) {
+							relatedDisplayName =
+								entityMetadata.DisplayName.UserLocalizedLabel.Label;
+						}
+					}
+
+					displayName = `${attrDisplayName} (${relatedDisplayName})`;
+				} else if (attribute?.DisplayName?.UserLocalizedLabel?.Label) {
+					// Root entity attribute with metadata display name
+					displayName = attribute.DisplayName.UserLocalizedLabel.Label;
+				} else if (col.startsWith("_") && col.endsWith("_value")) {
+					// Fallback for lookup columns without metadata
+					displayName = col.slice(1, -6);
+				} else {
+					// Final fallback: use column name as-is
+					displayName = col;
+				}
+
+				// Check if this column is sorted (from FetchXML orders)
+				const sortInfo = sortStateMap.get(col) ?? sortStateMap.get(queryKeyOf(col));
+				// Whether a column filter targets this column (#23)
+				const filterTarget = fetchQuery ? columnFilterTarget(fetchQuery, col) : undefined;
+				const isFiltered =
+					!!filterTarget &&
+					!("reason" in filterTarget) &&
+					!!columnFilters?.some((c) => sameTarget(c, filterTarget));
+				const valueMode = displaySettings?.valueDisplayMode ?? "formatted";
+
+				// For "both" mode, check if this column has formatted values in the result set
+				// Only create a raw column if at least one record has a different formatted value
+				const hasFormattedValues =
+					valueMode === "both" &&
+					result?.rows?.some((record: Record<string, unknown>) => {
+						const rawValue = record[col];
+						const formattedValue = getFormattedValue(record, col);
+						return formattedValue !== undefined && formattedValue !== rawValue;
+					});
+
+				// Track display name and attribute type for column sizing options
+				displayNames.set(col, displayName);
+				attrTypes.set(col, attribute?.AttributeType);
+
+				// For "both" mode with formatted values, create two columns
+				if (valueMode === "both" && hasFormattedValues) {
+					copyCols.push(
+						{ id: col, header: displayName, sourceCol: col, showsRaw: false },
+						{
+							id: `${col}__raw`,
+							header: `${displayName} (Raw)`,
+							sourceCol: col,
+							showsRaw: true,
+						},
+					);
+					displayNames.set(`${col}__raw`, `${displayName} (Raw)`);
+					attrTypes.set(`${col}__raw`, attribute?.AttributeType);
+					// Create formatted value column
+					const formattedColumn = createTableColumn<Record<string, unknown>>({
+						columnId: col,
+						compare: (a, b) => {
+							const aVal = String(getFormattedValue(a, col) ?? a[col] ?? "");
+							const bVal = String(getFormattedValue(b, col) ?? b[col] ?? "");
+							return aVal.localeCompare(bVal);
+						},
+						renderHeaderCell: () => (
+							<span className={styles.headerCellContent}>
+								<span style={{ fontWeight: 600 }}>{displayName}</span>
+								{isFiltered && (
+									<Filter16Regular
+										className={styles.filterIndicator}
+										aria-label="Filtered"
+									/>
+								)}
+								{/* Show sort indicator based on FetchXML order state */}
+								{sortInfo && (
+									<span className={styles.sortIndicator}>
+										{sortInfo.direction === "ascending" ? (
+											<ArrowSortUp16Regular />
+										) : (
+											<ArrowSortDown16Regular />
+										)}
+									</span>
+								)}
+							</span>
+						),
+						renderCell: (item) => {
+							const rawValue = item[col];
+							const formattedValue = getFormattedValue(item, col);
+							return (
+								<TableCellLayout truncate>
+									{getCellRenderer(
+										attribute?.AttributeType,
+										rawValue,
+										formattedValue,
+										attribute,
+									)}
+								</TableCellLayout>
+							);
+						},
+					});
+
+					// Create raw value column
+					const rawColumn = createTableColumn<Record<string, unknown>>({
+						columnId: `${col}__raw`,
+						compare: (a, b) => {
+							const aVal = String(a[col] ?? "");
+							const bVal = String(b[col] ?? "");
+							return aVal.localeCompare(bVal);
+						},
+						renderHeaderCell: () => (
+							<span className={styles.headerCellContent}>
+								<span style={{ fontWeight: 600 }}>{displayName} (Raw)</span>
+							</span>
+						),
+						renderCell: (item) => {
+							const rawValue = item[col];
+							return (
+								<TableCellLayout truncate>
+									{rawValue === null || rawValue === undefined ? (
+										<span>—</span>
+									) : (
+										<span>
+											<HighlightText text={String(rawValue)} />
+										</span>
+									)}
+								</TableCellLayout>
+							);
+						},
+					});
+
+					return [formattedColumn, rawColumn];
+				}
+
+				// Standard single column (formatted or raw mode)
+				copyCols.push({
+					id: col,
+					header: displayName,
+					sourceCol: col,
+					showsRaw: valueMode === "raw",
 				});
-
-			// Track display name and attribute type for column sizing options
-			displayNames.set(col, displayName);
-			attrTypes.set(col, attribute?.AttributeType);
-
-			// For "both" mode with formatted values, create two columns
-			if (valueMode === "both" && hasFormattedValues) {
-				copyCols.push(
-					{ id: col, header: displayName, sourceCol: col, showsRaw: false },
-					{ id: `${col}__raw`, header: `${displayName} (Raw)`, sourceCol: col, showsRaw: true },
-				);
-				displayNames.set(`${col}__raw`, `${displayName} (Raw)`);
-				attrTypes.set(`${col}__raw`, attribute?.AttributeType);
-				// Create formatted value column
-				const formattedColumn = createTableColumn<Record<string, unknown>>({
+				return createTableColumn<Record<string, unknown>>({
 					columnId: col,
 					compare: (a, b) => {
 						const aVal = String(getFormattedValue(a, col) ?? a[col] ?? "");
@@ -719,7 +865,12 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					renderHeaderCell: () => (
 						<span className={styles.headerCellContent}>
 							<span style={{ fontWeight: 600 }}>{displayName}</span>
-							{isFiltered && <Filter16Regular className={styles.filterIndicator} aria-label="Filtered" />}
+							{isFiltered && (
+								<Filter16Regular
+									className={styles.filterIndicator}
+									aria-label="Filtered"
+								/>
+							)}
 							{/* Show sort indicator based on FetchXML order state */}
 							{sortInfo && (
 								<span className={styles.sortIndicator}>
@@ -735,100 +886,37 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					renderCell: (item) => {
 						const rawValue = item[col];
 						const formattedValue = getFormattedValue(item, col);
-						return (
-							<TableCellLayout truncate>
-								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
-							</TableCellLayout>
-						);
+
+						// Determine what to display based on value display mode
+						if (valueMode === "raw") {
+							// Show raw value only (skip cell renderer formatting)
+							return (
+								<TableCellLayout truncate>
+									{rawValue === null || rawValue === undefined ? (
+										<span>—</span>
+									) : (
+										<span>
+											<HighlightText text={String(rawValue)} />
+										</span>
+									)}
+								</TableCellLayout>
+							);
+						} else {
+							// Default: formatted (use cell renderer)
+							return (
+								<TableCellLayout truncate>
+									{getCellRenderer(
+										attribute?.AttributeType,
+										rawValue,
+										formattedValue,
+										attribute,
+									)}
+								</TableCellLayout>
+							);
+						}
 					},
 				});
-
-				// Create raw value column
-				const rawColumn = createTableColumn<Record<string, unknown>>({
-					columnId: `${col}__raw`,
-					compare: (a, b) => {
-						const aVal = String(a[col] ?? "");
-						const bVal = String(b[col] ?? "");
-						return aVal.localeCompare(bVal);
-					},
-					renderHeaderCell: () => (
-						<span className={styles.headerCellContent}>
-							<span style={{ fontWeight: 600 }}>{displayName} (Raw)</span>
-						</span>
-					),
-					renderCell: (item) => {
-						const rawValue = item[col];
-						return (
-							<TableCellLayout truncate>
-								{rawValue === null || rawValue === undefined ? (
-									<span>—</span>
-								) : (
-									<span>
-										<HighlightText text={String(rawValue)} />
-									</span>
-								)}
-							</TableCellLayout>
-						);
-					},
-				});
-
-				return [formattedColumn, rawColumn];
-			}
-
-			// Standard single column (formatted or raw mode)
-			copyCols.push({ id: col, header: displayName, sourceCol: col, showsRaw: valueMode === "raw" });
-			return createTableColumn<Record<string, unknown>>({
-				columnId: col,
-				compare: (a, b) => {
-					const aVal = String(getFormattedValue(a, col) ?? a[col] ?? "");
-					const bVal = String(getFormattedValue(b, col) ?? b[col] ?? "");
-					return aVal.localeCompare(bVal);
-				},
-				renderHeaderCell: () => (
-					<span className={styles.headerCellContent}>
-						<span style={{ fontWeight: 600 }}>{displayName}</span>
-						{isFiltered && <Filter16Regular className={styles.filterIndicator} aria-label="Filtered" />}
-						{/* Show sort indicator based on FetchXML order state */}
-						{sortInfo && (
-							<span className={styles.sortIndicator}>
-								{sortInfo.direction === "ascending" ? (
-									<ArrowSortUp16Regular />
-								) : (
-									<ArrowSortDown16Regular />
-								)}
-							</span>
-						)}
-					</span>
-				),
-				renderCell: (item) => {
-					const rawValue = item[col];
-					const formattedValue = getFormattedValue(item, col);
-
-					// Determine what to display based on value display mode
-					if (valueMode === "raw") {
-						// Show raw value only (skip cell renderer formatting)
-						return (
-							<TableCellLayout truncate>
-								{rawValue === null || rawValue === undefined ? (
-									<span>—</span>
-								) : (
-									<span>
-										<HighlightText text={String(rawValue)} />
-									</span>
-								)}
-							</TableCellLayout>
-						);
-					} else {
-						// Default: formatted (use cell renderer)
-						return (
-							<TableCellLayout truncate>
-								{getCellRenderer(attribute?.AttributeType, rawValue, formattedValue, attribute)}
-							</TableCellLayout>
-						);
-					}
-				},
 			});
-		});
 		return {
 			columns: columnDefs,
 			columnDisplayNames: displayNames,
@@ -860,7 +948,11 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	);
 
 	// ---- Header menu: sort and column filters (#23) ----
-	const [headerMenu, setHeaderMenu] = useState<{ open: boolean; anchor?: HTMLElement; columnId?: string }>({
+	const [headerMenu, setHeaderMenu] = useState<{
+		open: boolean;
+		anchor?: HTMLElement;
+		columnId?: string;
+	}>({
 		open: false,
 	});
 	const [filterFor, setFilterFor] = useState<{
@@ -879,8 +971,14 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		) => {
 			const columnKey = String(data.sortColumn);
 			if (!e.shiftKey) {
-				const anchor = (e.target as HTMLElement).closest<HTMLElement>('[role="columnheader"]');
-				setHeaderMenu({ open: true, anchor: anchor ?? (e.currentTarget as HTMLElement), columnId: columnKey });
+				const anchor = (e.target as HTMLElement).closest<HTMLElement>(
+					'[role="columnheader"]',
+				);
+				setHeaderMenu({
+					open: true,
+					anchor: anchor ?? (e.currentTarget as HTMLElement),
+					columnId: columnKey,
+				});
 				return;
 			}
 			if (!onSortChange) return;
@@ -910,22 +1008,38 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	// ---- Total record count (#98): the query's count from returntotalrecordcount, and on request the
 	// entity's unfiltered total (RetrieveTotalRecordCount) when the count reaches its limit. The
 	// unfiltered total is kept per entity: it ignores the query, so it holds for any query on it.
-	const [entityTotal, setEntityTotal] = useState<{ entity: string; status: "loading" | "done" | "error"; text: string } | null>(null);
+	const [entityTotal, setEntityTotal] = useState<{
+		entity: string;
+		status: "loading" | "done" | "error";
+		text: string;
+	} | null>(null);
 	const countEntityTotal = useCallback((entity: string) => {
 		setEntityTotal({ entity, status: "loading", text: `Counting all ${entity} records…` });
 		retrieveTotalRecordCount(entity).then(
 			(total) =>
 				setEntityTotal(
 					total === undefined
-						? { entity, status: "error", text: `Dataverse returned no total for ${entity}.` }
+						? {
+								entity,
+								status: "error",
+								text: `Dataverse returned no total for ${entity}.`,
+							}
 						: { entity, status: "done", text: entityTotalText(entity, total) },
 				),
 			(error: unknown) =>
-				setEntityTotal({ entity, status: "error", text: `Couldn't count all ${entity} records. ${formatDataverseError(error)}` }),
+				setEntityTotal({
+					entity,
+					status: "error",
+					text: `Couldn't count all ${entity} records. ${formatDataverseError(error)}`,
+				}),
 		);
 	}, []);
 	const totalText = result
-		? totalCountText(result.totalRecordCount, result.totalRecordCountLimitExceeded, result.rows.length)
+		? totalCountText(
+				result.totalRecordCount,
+				result.totalRecordCountLimitExceeded,
+				result.rows.length,
+			)
 		: undefined;
 
 	// ---- Quick search over the loaded rows (#23) ----
@@ -935,7 +1049,9 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		if (!search) return rows;
 		const q = search.toLowerCase();
 		// Matches the values as shown, in any column
-		return rows.filter((r) => copyColumns.some((c) => cellText(r, c).toLowerCase().includes(q)));
+		return rows.filter((r) =>
+			copyColumns.some((c) => cellText(r, c).toLowerCase().includes(q)),
+		);
 	}, [result, search, copyColumns]);
 
 	useEffect(() => {
@@ -947,7 +1063,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		if (!search || selectedItems.size === 0) return;
 		const visible = new Set<string | number>(visibleRows.map((r) => getRowId(r)));
 		const kept = new Set([...selectedItems].filter((id) => visible.has(id)));
-		if (kept.size !== selectedItems.size) handleSelectionChange(undefined, { selectedItems: kept });
+		if (kept.size !== selectedItems.size)
+			handleSelectionChange(undefined, { selectedItems: kept });
 	}, [search, visibleRows, selectedItems, getRowId, handleSelectionChange]);
 
 	// ---- Copy (#50) ----
@@ -972,7 +1089,9 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			const ok = await writeClipboard(text);
 			dispatchToast(
 				<Toast>
-					<ToastTitle>{ok ? `${what} copied` : "Couldn't copy to the clipboard"}</ToastTitle>
+					<ToastTitle>
+						{ok ? `${what} copied` : "Couldn't copy to the clipboard"}
+					</ToastTitle>
 				</Toast>,
 				{ intent: ok ? "success" : "error", timeout: ok ? 2000 : 4000 },
 			);
@@ -991,27 +1110,43 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	useImperativeHandle(
 		ref,
 		() => ({
-			copyRows: (scope, mode) => copyRecords(scope === "all" ? visibleRows : selectedRecords(), mode),
+			copyRows: (scope, mode) =>
+				copyRecords(scope === "all" ? visibleRows : selectedRecords(), mode),
 		}),
 		[copyRecords, visibleRows, selectedRecords],
 	);
 
-	const openCellMenu = useCallback((e: React.MouseEvent<HTMLElement>, item: Record<string, unknown>, columnId: string) => {
-		e.preventDefault();
-		// Open at the mouse; the context menu key reports (0, 0), so open at the cell instead
-		const { clientX: x, clientY: y } = e;
-		const target: PositioningVirtualElement | HTMLElement =
-			x === 0 && y === 0
-				? e.currentTarget
-				: { getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0 }) };
-		setCellMenu({ open: true, target, item, columnId });
-	}, []);
+	const openCellMenu = useCallback(
+		(e: React.MouseEvent<HTMLElement>, item: Record<string, unknown>, columnId: string) => {
+			e.preventDefault();
+			// Open at the mouse; the context menu key reports (0, 0), so open at the cell instead
+			const { clientX: x, clientY: y } = e;
+			const target: PositioningVirtualElement | HTMLElement =
+				x === 0 && y === 0
+					? e.currentTarget
+					: {
+							getBoundingClientRect: () => ({
+								x,
+								y,
+								top: y,
+								left: x,
+								bottom: y,
+								right: x,
+								width: 0,
+								height: 0,
+							}),
+						};
+			setCellMenu({ open: true, target, item, columnId });
+		},
+		[],
+	);
 
 	// Ctrl+C copies the selected rows, or else the focused cell, as shown. Text the user has
 	// highlighted copies as usual.
 	const handleGridKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
-			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c" || e.altKey || e.shiftKey) return;
+			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c" || e.altKey || e.shiftKey)
+				return;
 			if (window.getSelection()?.toString()) return;
 			if (selectedItems.size > 0) {
 				e.preventDefault();
@@ -1045,7 +1180,10 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	// ---- Column filters (#23) ----
 	const headerMenuColumnKey = headerMenu.columnId?.replace(/__raw$/, "");
 	const headerMenuTarget = useMemo(
-		() => (fetchQuery && headerMenuColumnKey ? columnFilterTarget(fetchQuery, headerMenuColumnKey) : undefined),
+		() =>
+			fetchQuery && headerMenuColumnKey
+				? columnFilterTarget(fetchQuery, headerMenuColumnKey)
+				: undefined,
 		[fetchQuery, headerMenuColumnKey],
 	);
 	const headerMenuFilters =
@@ -1057,11 +1195,18 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	);
 
 	const sortFromMenu = (direction: SortDirection) => {
-		if (headerMenuColumnKey) onSortChange?.({ columnId: headerMenuColumnKey, direction, isMultiSort: false });
+		if (headerMenuColumnKey)
+			onSortChange?.({ columnId: headerMenuColumnKey, direction, isMultiSort: false });
 	};
 
 	const openFilter = () => {
-		if (!headerMenu.anchor || !headerMenuColumnKey || !headerMenuTarget || "reason" in headerMenuTarget) return;
+		if (
+			!headerMenu.anchor ||
+			!headerMenuColumnKey ||
+			!headerMenuTarget ||
+			"reason" in headerMenuTarget
+		)
+			return;
 		setFilterFor({
 			anchor: headerMenu.anchor,
 			header: copyColumnById(headerMenuColumnKey)?.header ?? headerMenuTarget.attribute,
@@ -1088,22 +1233,36 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	// "Annual Revenue greater than 100000", "Status Reason equals Active"
 	const filterLabel = useCallback(
 		(c: ConditionNode): string => {
-			const link = c.entityname ? linkEntities.find((l) => (l.alias || l.name) === c.entityname) : undefined;
+			const link = c.entityname
+				? linkEntities.find((l) => (l.alias || l.name) === c.entityname)
+				: undefined;
 			const entityName = link?.name ?? fetchQuery?.entity.name ?? "";
 			const attribute = attributeMetadata?.get(entityName)?.get(c.attribute);
 			const name = displaySettings?.useLogicalNames
 				? `${c.entityname ? `${c.entityname}.` : ""}${c.attribute}`
 				: `${attribute?.DisplayName?.UserLocalizedLabel?.Label ?? c.attribute}${c.entityname ? ` (${c.entityname})` : ""}`;
 			// A column filter edited in Properties can have its operator cleared (1.4.3: never throw here)
-			const operator = (ALL_OPERATORS.find((o) => o.value === c.operator)?.label ?? c.operator ?? "").toLowerCase();
-			const values = c.value === undefined || c.value === null ? [] : Array.isArray(c.value) ? c.value : [c.value];
+			const operator = (
+				ALL_OPERATORS.find((o) => o.value === c.operator)?.label ??
+				c.operator ??
+				""
+			).toLowerCase();
+			const values =
+				c.value === undefined || c.value === null
+					? []
+					: Array.isArray(c.value)
+						? c.value
+						: [c.value];
 			// Choice values show as their labels, taken from a loaded row with the same value
 			const column = copyColumns.find((col) => {
-				const target = fetchQuery ? columnFilterTarget(fetchQuery, col.sourceCol) : undefined;
+				const target = fetchQuery
+					? columnFilterTarget(fetchQuery, col.sourceCol)
+					: undefined;
 				return !!target && !("reason" in target) && sameTarget(c, target);
 			});
 			const valueText = (v: unknown) => {
-				const row = column && result?.rows.find((r) => rawText(r, column.sourceCol) === String(v));
+				const row =
+					column && result?.rows.find((r) => rawText(r, column.sourceCol) === String(v));
 				return row && column ? formattedText(row, column.sourceCol) : String(v);
 			};
 			return [name, operator, values.map(valueText).join(", ")].filter(Boolean).join(" ");
@@ -1130,7 +1289,12 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							{columnFilters.map((c) => {
 								const label = filterLabel(c);
 								return (
-									<Tag key={c.id} value={c.id} dismissible dismissIcon={{ "aria-label": `Remove filter: ${label}` }}>
+									<Tag
+										key={c.id}
+										value={c.id}
+										dismissible
+										dismissIcon={{ "aria-label": `Remove filter: ${label}` }}
+									>
 										{label}
 									</Tag>
 								);
@@ -1140,7 +1304,9 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							<Button
 								size="small"
 								appearance="transparent"
-								onClick={() => onRemoveColumnFilters?.(columnFilters.map((c) => c.id))}
+								onClick={() =>
+									onRemoveColumnFilters?.(columnFilters.map((c) => c.id))
+								}
 							>
 								Clear all
 							</Button>
@@ -1172,7 +1338,9 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 				{({ renderCell, columnId }) => (
 					<DataGridCell
 						focusMode="group"
-						onContextMenu={(e: React.MouseEvent<HTMLElement>) => openCellMenu(e, item, String(columnId))}
+						onContextMenu={(e: React.MouseEvent<HTMLElement>) =>
+							openCellMenu(e, item, String(columnId))
+						}
 						onFocus={() => {
 							focusedCellRef.current = { item, columnId: String(columnId) };
 						}}
@@ -1182,7 +1350,11 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					>
 						{isScrolling ? (
 							<Skeleton style={{ width: "100%" }}>
-								<SkeletonItem shape="rectangle" animation="pulse" appearance="translucent" />
+								<SkeletonItem
+									shape="rectangle"
+									animation="pulse"
+									appearance="translucent"
+								/>
 							</Skeleton>
 						) : (
 							renderCell(item)
@@ -1196,8 +1368,10 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 
 	// Build column sizing options from columnConfig or defaults
 	const columnSizingOptions = useMemo(() => {
-		const options: Record<string, { minWidth: number; defaultWidth: number; idealWidth?: number }> =
-			{};
+		const options: Record<
+			string,
+			{ minWidth: number; defaultWidth: number; idealWidth?: number }
+		> = {};
 
 		// Minimum width implied by the attribute's data type (data content is often wider than the header)
 		const typeBasedMinWidth = (attrType: string | undefined): number => {
@@ -1234,7 +1408,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		// When no config width is available, estimate from the display name so headers don't overlap
 		for (const col of columns) {
 			const columnId = String(col.columnId);
-			const configWidth = configWidths.get(columnId) ?? configWidths.get(queryKeyOf(columnId));
+			const configWidth =
+				configWidths.get(columnId) ?? configWidths.get(queryKeyOf(columnId));
 
 			if (configWidth !== undefined) {
 				// Use the layout-XML / user-resized width as-is
@@ -1324,7 +1499,9 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	}
 
 	if (!result) {
-		return withFilterBar(<div className={styles.emptyState}>Click Execute to run the query</div>);
+		return withFilterBar(
+			<div className={styles.emptyState}>Click Execute to run the query</div>,
+		);
 	}
 
 	if (result.rows.length === 0) {
@@ -1347,49 +1524,60 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			<div className={styles.gridWrapper} onKeyDown={handleGridKeyDown}>
 				<div ref={containerRef} className={styles.gridContent}>
 					<GridDensityContext.Provider value={density}>
-					<SearchHighlightContext.Provider value={search}>
-						<DataGrid
-							aria-label={result?.entityLogicalName ?? "Results"}
-							size={density}
-							items={visibleRows}
-							columns={columns}
-							sortable
-							// Controlled sortState with a sentinel column ID that never matches any real column.
-							// This suppresses Fluent's built-in sort indicator entirely so only our custom
-							// renderHeaderCell arrows (driven by FetchXML order state) are ever visible.
-							sortState={{ sortColumn: "__sort_managed_externally__", sortDirection: "ascending" }}
-							resizableColumns
-							resizableColumnsOptions={{ autoFitColumns: false }}
-							columnSizingOptions={columnSizingOptions}
-							onColumnResize={handleColumnResize}
-							onSortChange={handleSortChange}
-							selectionMode="multiselect"
-							selectedItems={selectedItems}
-							onSelectionChange={handleSelectionChange}
-							getRowId={getRowId}
-						>
-							<DataGridHeader ref={headerRef} style={{ paddingRight: scrollbarWidth }}>
-								<DataGridRow style={{ minHeight: HEADER_HEIGHT[density], maxHeight: HEADER_HEIGHT[density] }}>
-									{({ renderHeaderCell }) => (
-										<DataGridHeaderCell className={styles.headerCell}>
-											{renderHeaderCell()}
-										</DataGridHeaderCell>
-									)}
-								</DataGridRow>
-							</DataGridHeader>
-							<DataGridBody<Record<string, unknown>>
-								itemSize={ROW_HEIGHT[density]}
-								height={Math.max(0, gridDimensions.height - headerHeight)}
-								listProps={{
-									useIsScrolling: true,
-									className: styles.body,
-									onItemsRendered: handleItemsRendered,
+						<SearchHighlightContext.Provider value={search}>
+							<DataGrid
+								aria-label={result?.entityLogicalName ?? "Results"}
+								size={density}
+								items={visibleRows}
+								columns={columns}
+								sortable
+								// Controlled sortState with a sentinel column ID that never matches any real column.
+								// This suppresses Fluent's built-in sort indicator entirely so only our custom
+								// renderHeaderCell arrows (driven by FetchXML order state) are ever visible.
+								sortState={{
+									sortColumn: "__sort_managed_externally__",
+									sortDirection: "ascending",
 								}}
+								resizableColumns
+								resizableColumnsOptions={{ autoFitColumns: false }}
+								columnSizingOptions={columnSizingOptions}
+								onColumnResize={handleColumnResize}
+								onSortChange={handleSortChange}
+								selectionMode="multiselect"
+								selectedItems={selectedItems}
+								onSelectionChange={handleSelectionChange}
+								getRowId={getRowId}
 							>
-								{renderRow}
-							</DataGridBody>
-						</DataGrid>
-					</SearchHighlightContext.Provider>
+								<DataGridHeader
+									ref={headerRef}
+									style={{ paddingRight: scrollbarWidth }}
+								>
+									<DataGridRow
+										style={{
+											minHeight: HEADER_HEIGHT[density],
+											maxHeight: HEADER_HEIGHT[density],
+										}}
+									>
+										{({ renderHeaderCell }) => (
+											<DataGridHeaderCell className={styles.headerCell}>
+												{renderHeaderCell()}
+											</DataGridHeaderCell>
+										)}
+									</DataGridRow>
+								</DataGridHeader>
+								<DataGridBody<Record<string, unknown>>
+									itemSize={ROW_HEIGHT[density]}
+									height={Math.max(0, gridDimensions.height - headerHeight)}
+									listProps={{
+										useIsScrolling: true,
+										className: styles.body,
+										onItemsRendered: handleItemsRendered,
+									}}
+								>
+									{renderRow}
+								</DataGridBody>
+							</DataGrid>
+						</SearchHighlightContext.Provider>
 					</GridDensityContext.Provider>
 				</div>
 				<div className={styles.infoBar}>
@@ -1401,17 +1589,29 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								? `${result.rows.length} of ${totalText}`
 								: result.rows.length}
 						{result.moreRecords && !isLoadingMore && " (more available)"}
-						{isLoadingMore && (throttleWaitSeconds ? ` (${throttleWaitMessage(throttleWaitSeconds)})` : " (loading more...)")}
-						{result.executionTimeMs !== undefined && ` | Executed in ${result.executionTimeMs}ms`}
+						{isLoadingMore &&
+							(throttleWaitSeconds
+								? ` (${throttleWaitMessage(throttleWaitSeconds)})`
+								: " (loading more...)")}
+						{result.executionTimeMs !== undefined &&
+							` | Executed in ${result.executionTimeMs}ms`}
 						{result.totalRecordCountLimitExceeded && result.entityLogicalName && (
 							<>
 								{" | "}
-								{entityTotal?.entity === result.entityLogicalName && entityTotal.status !== "error" ? (
+								{entityTotal?.entity === result.entityLogicalName &&
+								entityTotal.status !== "error" ? (
 									entityTotal.text
 								) : (
 									<>
-										{entityTotal?.entity === result.entityLogicalName && `${entityTotal.text} `}
-										<Link as="button" inline onClick={() => countEntityTotal(result.entityLogicalName!)}>
+										{entityTotal?.entity === result.entityLogicalName &&
+											`${entityTotal.text} `}
+										<Link
+											as="button"
+											inline
+											onClick={() =>
+												countEntityTotal(result.entityLogicalName!)
+											}
+										>
 											{`Count all ${result.entityLogicalName} records (unfiltered snapshot)`}
 										</Link>
 									</>
@@ -1425,7 +1625,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							selectedItems.size === result.rows.length &&
 							result.moreRecords && (
 								<span className={styles.selectionWarning}>
-									⚠ Selection limited to loaded records. Use "Retrieve all pages" to load more.
+									⚠ Selection limited to loaded records. Use "Retrieve all pages"
+									to load more.
 								</span>
 							)}
 					</span>
@@ -1441,23 +1642,44 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 						<MenuList>
 							<MenuItem
 								icon={<Copy20Regular />}
-								onClick={() => void copy(cellMenuContent.shown, cellMenuContent.column.header)}
+								onClick={() =>
+									void copy(cellMenuContent.shown, cellMenuContent.column.header)
+								}
 							>
 								Copy value
 							</MenuItem>
-							{cellMenuContent.raw !== "" && cellMenuContent.raw !== cellMenuContent.shown && (
-								<MenuItem onClick={() => void copy(cellMenuContent.raw, `${cellMenuContent.column.header} (raw)`)}>
-									Copy raw value{cellMenuContent.rawKind ? ` (${cellMenuContent.rawKind})` : ""}
-								</MenuItem>
-							)}
+							{cellMenuContent.raw !== "" &&
+								cellMenuContent.raw !== cellMenuContent.shown && (
+									<MenuItem
+										onClick={() =>
+											void copy(
+												cellMenuContent.raw,
+												`${cellMenuContent.column.header} (raw)`,
+											)
+										}
+									>
+										Copy raw value
+										{cellMenuContent.rawKind
+											? ` (${cellMenuContent.rawKind})`
+											: ""}
+									</MenuItem>
+								)}
 							<MenuDivider />
-							<MenuItem onClick={() => copyRecords([cellMenuContent.item], "shown")}>Copy row</MenuItem>
-							<MenuItem disabled={selectedItems.size === 0} onClick={() => copyRecords(selectedRecords(), "shown")}>
+							<MenuItem onClick={() => copyRecords([cellMenuContent.item], "shown")}>
+								Copy row
+							</MenuItem>
+							<MenuItem
+								disabled={selectedItems.size === 0}
+								onClick={() => copyRecords(selectedRecords(), "shown")}
+							>
 								Copy selected rows ({selectedItems.size})
 							</MenuItem>
 							<MenuItem
 								onClick={() =>
-									void copy(columnToText(visibleRows, cellMenuContent.column), `${cellMenuContent.column.header} column`)
+									void copy(
+										columnToText(visibleRows, cellMenuContent.column),
+										`${cellMenuContent.column.header} column`,
+									)
 								}
 							>
 								Copy column
@@ -1473,28 +1695,46 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			>
 				<MenuPopover>
 					<MenuList>
-						<MenuItem icon={<ArrowSortUp20Regular />} disabled={!onSortChange} onClick={() => sortFromMenu("ascending")}>
+						<MenuItem
+							icon={<ArrowSortUp20Regular />}
+							disabled={!onSortChange}
+							onClick={() => sortFromMenu("ascending")}
+						>
 							{sortAscLabel}
 						</MenuItem>
-						<MenuItem icon={<ArrowSortDown20Regular />} disabled={!onSortChange} onClick={() => sortFromMenu("descending")}>
+						<MenuItem
+							icon={<ArrowSortDown20Regular />}
+							disabled={!onSortChange}
+							onClick={() => sortFromMenu("descending")}
+						>
 							{sortDescLabel}
 						</MenuItem>
 						<MenuDivider />
 						{headerMenuTarget && "reason" in headerMenuTarget ? (
-							<Tooltip content={headerMenuTarget.reason} relationship="description" positioning="after">
+							<Tooltip
+								content={headerMenuTarget.reason}
+								relationship="description"
+								positioning="after"
+							>
 								<MenuItem icon={<Filter20Regular />} disabled>
 									Filter by…
 								</MenuItem>
 							</Tooltip>
 						) : (
-							<MenuItem icon={<Filter20Regular />} disabled={!onAddColumnFilter || !headerMenuTarget} onClick={openFilter}>
+							<MenuItem
+								icon={<Filter20Regular />}
+								disabled={!onAddColumnFilter || !headerMenuTarget}
+								onClick={openFilter}
+							>
 								Filter by…
 							</MenuItem>
 						)}
 						{headerMenuFilters.length > 0 && (
 							<MenuItem
 								icon={<FilterDismiss20Regular />}
-								onClick={() => onRemoveColumnFilters?.(headerMenuFilters.map((c) => c.id))}
+								onClick={() =>
+									onRemoveColumnFilters?.(headerMenuFilters.map((c) => c.id))
+								}
 							>
 								Clear filter
 							</MenuItem>
@@ -1511,7 +1751,10 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 				withArrow
 				trapFocus
 			>
-				<PopoverSurface className={styles.filterSurface} aria-label={filterFor ? `Filter by ${filterFor.header}` : undefined}>
+				<PopoverSurface
+					className={styles.filterSurface}
+					aria-label={filterFor ? `Filter by ${filterFor.header}` : undefined}
+				>
 					{filterFor && draftCondition && fetchQuery && (
 						<>
 							<Text weight="semibold">Filter by {filterFor.header}</Text>
@@ -1521,14 +1764,21 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								entityName={filterFor.target.entityName}
 								fetchQuery={fetchQuery}
 								findings={adviseCondition(draftCondition)}
-								onUpdate={(updates) => setDraftCondition((d) => (d ? { ...d, ...updates } : d))}
+								onUpdate={(updates) =>
+									setDraftCondition((d) => (d ? { ...d, ...updates } : d))
+								}
 							/>
 							<Text size={200} className={styles.filterNote}>
-								Adds a condition to the query and runs it again, so it covers every record.
+								Adds a condition to the query and runs it again, so it covers every
+								record.
 							</Text>
 							<div className={styles.filterActions}>
 								<Button onClick={() => setFilterFor(null)}>Cancel</Button>
-								<Button appearance="primary" disabled={!hasRequiredValue(draftCondition)} onClick={applyFilter}>
+								<Button
+									appearance="primary"
+									disabled={!hasRequiredValue(draftCondition)}
+									onClick={applyFilter}
+								>
 									Apply
 								</Button>
 							</div>

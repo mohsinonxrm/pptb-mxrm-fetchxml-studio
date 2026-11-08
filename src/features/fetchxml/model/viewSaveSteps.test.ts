@@ -3,7 +3,10 @@ import { runViewSaveSteps, viewSaveSteps, type ViewSaveStep } from "./viewSaveSt
 
 describe("Save View follow-up steps (#180)", () => {
 	it("adds to the solution before publishing, and only the steps asked for", () => {
-		expect(viewSaveSteps({ addToSolution: true, publish: true })).toEqual(["solution", "publish"]);
+		expect(viewSaveSteps({ addToSolution: true, publish: true })).toEqual([
+			"solution",
+			"publish",
+		]);
 		expect(viewSaveSteps({ addToSolution: false, publish: true })).toEqual(["publish"]);
 		expect(viewSaveSteps({ addToSolution: true, publish: false })).toEqual(["solution"]);
 		expect(viewSaveSteps({ addToSolution: false, publish: false })).toEqual([]);

@@ -30,7 +30,11 @@ export interface RelationshipOption {
 	intersectEntity?: string;
 }
 
-export const RELATIONSHIP_CATEGORIES = ["Many-to-one (N:1)", "One-to-many (1:N)", "Many-to-many (N:N)"] as const;
+export const RELATIONSHIP_CATEGORIES = [
+	"Many-to-one (N:1)",
+	"One-to-many (1:N)",
+	"Many-to-many (N:N)",
+] as const;
 export type RelationshipCategory = (typeof RELATIONSHIP_CATEGORIES)[number];
 
 const CATEGORY: Record<RelationshipKind, RelationshipCategory> = {
@@ -46,7 +50,8 @@ export interface RelationshipLabels {
 }
 
 /** "Display (logical)", or the logical name alone when there's no other display name */
-const named = (logical: string, display: string | undefined) => (display && display !== logical ? `${display} (${logical})` : logical);
+const named = (logical: string, display: string | undefined) =>
+	display && display !== logical ? `${display} (${logical})` : logical;
 
 function option(
 	rel: RelationshipMetadata,
@@ -54,16 +59,25 @@ function option(
 	related: string,
 	via: { logical: string; display?: string },
 	labels: RelationshipLabels,
-): Omit<RelationshipOption, "referencedEntity" | "referencingEntity" | "referencedAttribute" | "referencingAttribute"> {
+): Omit<
+	RelationshipOption,
+	"referencedEntity" | "referencingEntity" | "referencedAttribute" | "referencingAttribute"
+> {
 	const relatedDisplay = labels.entity(related);
-	const secondaryText = via.logical ? `via ${named(via.logical, via.display)} · ${rel.SchemaName}` : rel.SchemaName;
+	const secondaryText = via.logical
+		? `via ${named(via.logical, via.display)} · ${rel.SchemaName}`
+		: rel.SchemaName;
 	return {
 		id: relationshipKey(rel),
 		schemaName: rel.SchemaName,
-		displayText: via.logical ? `${relatedDisplay || related} via ${via.display || via.logical}` : relatedDisplay || related,
+		displayText: via.logical
+			? `${relatedDisplay || related} via ${via.display || via.logical}`
+			: relatedDisplay || related,
 		primaryText: named(related, relatedDisplay),
 		secondaryText,
-		searchText: [relatedDisplay, related, via.display, via.logical, rel.SchemaName].filter(Boolean).join(" "),
+		searchText: [relatedDisplay, related, via.display, via.logical, rel.SchemaName]
+			.filter(Boolean)
+			.join(" "),
 		type,
 		category: CATEGORY[type],
 	};
@@ -75,7 +89,11 @@ function option(
  */
 export function buildRelationshipOptions(
 	entityLogicalName: string,
-	data: { oneToMany: RelationshipMetadata[]; manyToOne: RelationshipMetadata[]; manyToMany: RelationshipMetadata[] },
+	data: {
+		oneToMany: RelationshipMetadata[];
+		manyToOne: RelationshipMetadata[];
+		manyToMany: RelationshipMetadata[];
+	},
 	labels: RelationshipLabels,
 ): RelationshipOption[] {
 	const options: RelationshipOption[] = [];
@@ -90,7 +108,16 @@ export function buildRelationshipOptions(
 	for (const rel of data.manyToOne) {
 		const lookup = rel.ReferencingAttribute || "";
 		options.push({
-			...option(rel, "N1", rel.ReferencedEntity, { logical: lookup, display: lookup ? labels.attribute(rel.ReferencingEntity, lookup) : undefined }, labels),
+			...option(
+				rel,
+				"N1",
+				rel.ReferencedEntity,
+				{
+					logical: lookup,
+					display: lookup ? labels.attribute(rel.ReferencingEntity, lookup) : undefined,
+				},
+				labels,
+			),
 			...endpoints(rel),
 		});
 	}
@@ -99,7 +126,16 @@ export function buildRelationshipOptions(
 	for (const rel of data.oneToMany) {
 		const lookup = rel.ReferencingAttribute || "";
 		options.push({
-			...option(rel, "1N", rel.ReferencingEntity, { logical: lookup, display: lookup ? labels.attribute(rel.ReferencingEntity, lookup) : undefined }, labels),
+			...option(
+				rel,
+				"1N",
+				rel.ReferencingEntity,
+				{
+					logical: lookup,
+					display: lookup ? labels.attribute(rel.ReferencingEntity, lookup) : undefined,
+				},
+				labels,
+			),
 			...endpoints(rel),
 		});
 	}
@@ -111,7 +147,13 @@ export function buildRelationshipOptions(
 		const related = entity1 === entityLogicalName ? entity2 : entity1;
 		const intersect = rel.IntersectEntityName || "";
 		options.push({
-			...option(rel, "NN", related, { logical: intersect, display: intersect ? labels.entity(intersect) : undefined }, labels),
+			...option(
+				rel,
+				"NN",
+				related,
+				{ logical: intersect, display: intersect ? labels.entity(intersect) : undefined },
+				labels,
+			),
 			referencedEntity: entity2, // Store entity2 as "referenced" for compatibility
 			referencingEntity: entity1, // Store entity1 as "referencing" for compatibility
 			referencedAttribute: rel.Entity2IntersectAttribute || "",
@@ -124,7 +166,10 @@ export function buildRelationshipOptions(
 }
 
 /** The options the search matches, any part of either line */
-export function filterRelationshipOptions(options: RelationshipOption[], query: string): RelationshipOption[] {
+export function filterRelationshipOptions(
+	options: RelationshipOption[],
+	query: string,
+): RelationshipOption[] {
 	const q = query.trim().toLowerCase();
 	if (!q) return options;
 	return options.filter((o) => o.searchText.toLowerCase().includes(q));

