@@ -12,6 +12,7 @@ import {
 } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
+import { useSplitters } from "./hooks/useSplitters";
 import { loadAllEntityAttributes } from "../features/fetchxml/api/dataverseMetadata";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
@@ -616,71 +617,7 @@ function AppContent({
 	}, [displaySettings.advancedFindOnly]);
 	const advancedFindOnly = useAdvancedFindOnly();
 
-	// State for resizable split
-	const [topHeight, setTopHeight] = useState(58); // Percentage of left pane height for tree/properties
-	const [leftPaneWidth, setLeftPaneWidth] = useState(480); // Width of left pane in pixels
-	const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false); // Tree/Properties resize
-	const [isDraggingVertical, setIsDraggingVertical] = useState(false); // Left/Right pane resize
-
-	// Handle horizontal resize (tree/properties split)
-	useEffect(() => {
-		if (!isDraggingHorizontal) return;
-
-		const handleMouseMove = (e: MouseEvent) => {
-			const leftPane = document.querySelector("[data-left-pane]") as HTMLElement;
-			if (!leftPane) return;
-
-			const rect = leftPane.getBoundingClientRect();
-			const newTopHeight = ((e.clientY - rect.top) / rect.height) * 100;
-
-			// Constrain between 30% and 80%
-			if (newTopHeight >= 30 && newTopHeight <= 80) {
-				setTopHeight(newTopHeight);
-			}
-		};
-
-		const handleMouseUp = () => {
-			setIsDraggingHorizontal(false);
-		};
-
-		document.addEventListener("mousemove", handleMouseMove);
-		document.addEventListener("mouseup", handleMouseUp);
-
-		return () => {
-			document.removeEventListener("mousemove", handleMouseMove);
-			document.removeEventListener("mouseup", handleMouseUp);
-		};
-	}, [isDraggingHorizontal]);
-
-	// Handle vertical resize (left/right pane split)
-	useEffect(() => {
-		if (!isDraggingVertical) return;
-
-		const handleMouseMove = (e: MouseEvent) => {
-			const appRoot = document.querySelector("[data-app-root]") as HTMLElement;
-			if (!appRoot) return;
-
-			const rect = appRoot.getBoundingClientRect();
-			const newLeftPaneWidth = e.clientX - rect.left;
-
-			// Constrain between 300px and 800px
-			if (newLeftPaneWidth >= 300 && newLeftPaneWidth <= 800) {
-				setLeftPaneWidth(newLeftPaneWidth);
-			}
-		};
-
-		const handleMouseUp = () => {
-			setIsDraggingVertical(false);
-		};
-
-		document.addEventListener("mousemove", handleMouseMove);
-		document.addEventListener("mouseup", handleMouseUp);
-
-		return () => {
-			document.removeEventListener("mousemove", handleMouseMove);
-			document.removeEventListener("mouseup", handleMouseUp);
-		};
-	}, [isDraggingVertical]);
+	const { topHeight, leftPaneWidth, startHorizontalDrag, startVerticalDrag } = useSplitters();
 
 	// Check Dataverse API on mount. WhoAmI is memoized per connection, so this shares the startup
 	// request with the privilege checks (#71); the details are debug output only.
@@ -2270,7 +2207,7 @@ function AppContent({
 				{/* Resize Handle */}
 				<div
 					className={styles.horizontalResizeHandle}
-					onMouseDown={() => setIsDraggingHorizontal(true)}
+					onMouseDown={startHorizontalDrag}
 					title="Drag to resize"
 				>
 					<span className={styles.horizontalGrip}>
@@ -2302,7 +2239,7 @@ function AppContent({
 			{/* Vertical Resize Handle */}
 			<div
 				className={styles.verticalResizeHandle}
-				onMouseDown={() => setIsDraggingVertical(true)}
+				onMouseDown={startVerticalDrag}
 				title="Drag to resize"
 			>
 				<span className={styles.verticalGrip}>
