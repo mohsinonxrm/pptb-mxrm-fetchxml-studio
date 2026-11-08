@@ -48,24 +48,44 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			description: "Root element for a FetchXML query",
 			attributes: {
 				aggregate: { description: "Return aggregate values", type: "boolean" },
-				aggregatelimit: { description: "Aggregate record limit below the standard 50,000", type: "integer" },
+				aggregatelimit: {
+					description: "Aggregate record limit below the standard 50,000",
+					type: "integer",
+				},
 				count: { description: "Number of records per page", type: "integer" },
-				datasource: { description: "'retained' queries long-term retained rows only", values: ["retained"] },
+				datasource: {
+					description: "'retained' queries long-term retained rows only",
+					values: ["retained"],
+				},
 				distinct: { description: "Leave out duplicate rows", type: "boolean" },
-				latematerialize: { description: "Break the query into smaller parts (performance)", type: "boolean" },
-				"no-lock": { description: "Legacy setting to prevent shared locks; no longer necessary", type: "boolean" },
+				latematerialize: {
+					description: "Break the query into smaller parts (performance)",
+					type: "boolean",
+				},
+				"no-lock": {
+					description: "Legacy setting to prevent shared locks; no longer necessary",
+					type: "boolean",
+				},
 				options: {
-					description: "SQL Server query hints, comma-separated (only when Microsoft support recommends them)",
+					description:
+						"SQL Server query hints, comma-separated (only when Microsoft support recommends them)",
 					values: QUERY_HINTS,
 				},
 				page: { description: "Page number to return", type: "integer" },
 				"paging-cookie": { description: "Paging cookie from the previous page" },
-				returntotalrecordcount: { description: "Return the total number of matching records", type: "boolean" },
+				returntotalrecordcount: {
+					description: "Return the total number of matching records",
+					type: "boolean",
+				},
 				top: {
-					description: "Number of records to return (at most 5,000; not with page, count or returntotalrecordcount)",
+					description:
+						"Number of records to return (at most 5,000; not with page, count or returntotalrecordcount)",
 					type: "integer",
 				},
-				useraworderby: { description: "Sort choice columns by their integer value instead of the label", type: "boolean" },
+				useraworderby: {
+					description: "Sort choice columns by their integer value instead of the label",
+					type: "boolean",
+				},
 				"utc-offset": { description: `UTC offset in minutes. ${LEGACY}`, type: "integer" },
 				version: { description: LEGACY },
 				mapping: { description: LEGACY, values: ["logical", "internal"] },
@@ -78,8 +98,13 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			description: "The entity the query is based on (one per query)",
 			attributes: {
 				name: { description: "Logical name of the entity", required: true },
-				enableprefiltering: { description: "Report prefiltering (SQL Server Reporting Services reports)", type: "boolean" },
-				prefilterparametername: { description: "Report prefiltering parameter name (start it with CRM_)" },
+				enableprefiltering: {
+					description: "Report prefiltering (SQL Server Reporting Services reports)",
+					type: "boolean",
+				},
+				prefilterparametername: {
+					description: "Report prefiltering parameter name (start it with CRM_)",
+				},
 			},
 			children: ["all-attributes", "attribute", "order", "filter", "link-entity"],
 		},
@@ -87,22 +112,46 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			description: "Join a related entity, or filter on related records inside a filter",
 			attributes: {
 				name: { description: "Logical name of the related entity", required: true },
-				from: { description: "Attribute of the related entity that matches 'to' (usually set)" },
-				to: { description: "Attribute of the parent entity that matches 'from' (usually set)" },
-				alias: { description: "Name to reference this link-entity in conditions, valueof and orders" },
+				from: {
+					description: "Attribute of the related entity that matches 'to' (usually set)",
+				},
+				to: {
+					description: "Attribute of the parent entity that matches 'from' (usually set)",
+				},
+				alias: {
+					description:
+						"Name to reference this link-entity in conditions, valueof and orders",
+				},
 				"link-type": {
 					description:
 						"inner (default), outer, exists, in, matchfirstrowusingcrossapply; inside a filter: any, not any, all, not all. natural: " +
 						LEGACY,
-					values: ["inner", "outer", "exists", "in", "matchfirstrowusingcrossapply", "any", "not any", "all", "not all", "natural"],
+					values: [
+						"inner",
+						"outer",
+						"exists",
+						"in",
+						"matchfirstrowusingcrossapply",
+						"any",
+						"not any",
+						"all",
+						"not all",
+						"natural",
+					],
 				},
 				intersect: {
-					description: "Shows the link-entity only joins and returns no attributes (doesn't change how the query runs)",
+					description:
+						"Shows the link-entity only joins and returns no attributes (doesn't change how the query runs)",
 					type: "boolean",
 				},
 				visible: { description: `${LEGACY} Dataverse ignores it.`, type: "boolean" },
-				enableprefiltering: { description: `Report prefiltering. ${LEGACY}`, type: "boolean" },
-				prefilterparametername: { description: `Report prefiltering parameter name. ${LEGACY}` },
+				enableprefiltering: {
+					description: `Report prefiltering. ${LEGACY}`,
+					type: "boolean",
+				},
+				prefilterparametername: {
+					description: `Report prefiltering parameter name. ${LEGACY}`,
+				},
 			},
 			children: ["all-attributes", "attribute", "order", "filter", "link-entity"],
 		},
@@ -115,19 +164,42 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			description: "An attribute to return",
 			attributes: {
 				name: { description: "Logical name of the attribute", required: true },
-				alias: { description: "Name of the returned column (required in aggregate queries)" },
+				alias: {
+					description: "Name of the returned column (required in aggregate queries)",
+				},
 				aggregate: {
 					description: "Aggregate function",
 					values: ["count", "countcolumn", "sum", "avg", "min", "max"],
 				},
-				groupby: { description: "Group by this attribute (aggregate queries)", type: "boolean" },
+				groupby: {
+					description: "Group by this attribute (aggregate queries)",
+					type: "boolean",
+				},
 				dategrouping: {
 					description: "Date part to group by",
-					values: ["day", "week", "month", "quarter", "year", "fiscal-period", "fiscal-year"],
+					values: [
+						"day",
+						"week",
+						"month",
+						"quarter",
+						"year",
+						"fiscal-period",
+						"fiscal-year",
+					],
 				},
-				usertimezone: { description: "Group dates in the user's time zone (default true); false uses UTC", type: "boolean" },
-				distinct: { description: "With countcolumn, count only unique values", type: "boolean" },
-				rowaggregate: { description: "CountChildren returns the number of hierarchical child records", values: ["CountChildren"] },
+				usertimezone: {
+					description:
+						"Group dates in the user's time zone (default true); false uses UTC",
+					type: "boolean",
+				},
+				distinct: {
+					description: "With countcolumn, count only unique values",
+					type: "boolean",
+				},
+				rowaggregate: {
+					description: "CountChildren returns the number of hierarchical child records",
+					values: ["CountChildren"],
+				},
 			},
 			children: [],
 		},
@@ -137,18 +209,34 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 				attribute: { description: "Attribute to sort by (non-aggregate queries)" },
 				alias: { description: "Attribute alias to sort by (aggregate queries)" },
 				descending: { description: "Sort in descending order", type: "boolean" },
-				entityname: { description: "Alias of a link-entity, to apply its sort first (orders in the entity only)" },
+				entityname: {
+					description:
+						"Alias of a link-entity, to apply its sort first (orders in the entity only)",
+				},
 			},
 			children: [],
 		},
 		filter: {
 			description: "Conditions that must be true",
 			attributes: {
-				type: { description: "All (and) or any (or) of the conditions", values: ["and", "or"], default: "and" },
-				hint: { description: "union: can improve performance of an 'or' filter (one per query)", values: ["union"] },
+				type: {
+					description: "All (and) or any (or) of the conditions",
+					values: ["and", "or"],
+					default: "and",
+				},
+				hint: {
+					description: "union: can improve performance of an 'or' filter (one per query)",
+					values: ["union"],
+				},
 				isquickfindfields: { description: "Run as a quick find query", type: "boolean" },
-				overridequickfindrecordlimitenabled: { description: "Apply the quick find record limit (testing)", type: "boolean" },
-				overridequickfindrecordlimitdisabled: { description: "Bypass the quick find record limit (testing)", type: "boolean" },
+				overridequickfindrecordlimitenabled: {
+					description: "Apply the quick find record limit (testing)",
+					type: "boolean",
+				},
+				overridequickfindrecordlimitdisabled: {
+					description: "Bypass the quick find record limit (testing)",
+					type: "boolean",
+				},
 			},
 			children: ["condition", "filter", "link-entity"],
 		},
@@ -156,17 +244,27 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			description: "A condition on an attribute value",
 			attributes: {
 				// The reference lists attribute as optional, but Dataverse rejects a condition without it (0x8004111e)
-				attribute: { description: "Attribute to filter on (Dataverse requires it)", required: true },
+				attribute: {
+					description: "Attribute to filter on (Dataverse requires it)",
+					required: true,
+				},
 				operator: {
 					description: "Comparison operator",
 					required: true,
 					values: [...KNOWN_OPERATORS],
 				},
-				value: { description: "Value for operators that take one value (use <value> elements for several)" },
-				valueof: {
-					description: "Compare to another attribute: name, or alias.name for a link-entity (eq, ne, gt, ge, lt, le only)",
+				value: {
+					description:
+						"Value for operators that take one value (use <value> elements for several)",
 				},
-				entityname: { description: "Alias or name of a link-entity: apply the condition after the join" },
+				valueof: {
+					description:
+						"Compare to another attribute: name, or alias.name for a link-entity (eq, ne, gt, ge, lt, le only)",
+				},
+				entityname: {
+					description:
+						"Alias or name of a link-entity: apply the condition after the join",
+				},
 				uiname: { description: SAVED_VIEW },
 				uitype: { description: SAVED_VIEW },
 				uihidden: { description: SAVED_VIEW, values: ["0", "1"] },
@@ -191,7 +289,7 @@ type ElementName = keyof typeof FETCHXML_SCHEMA.elements;
  */
 export function getElementContext(
 	model: Monaco.editor.ITextModel,
-	position: Monaco.Position
+	position: Monaco.Position,
 ): {
 	element: string | null;
 	inAttribute: boolean;
@@ -264,7 +362,7 @@ function createCompletionItem(
 	detail: string,
 	insertText: string,
 	range: Monaco.IRange,
-	documentation?: string
+	documentation?: string,
 ): Monaco.languages.CompletionItem {
 	return {
 		label,
@@ -283,13 +381,16 @@ type ModelFilter = (model: Monaco.editor.ITextModel) => boolean;
 /**
  * Register FetchXML completion provider with Monaco
  */
-export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: ModelFilter): Monaco.IDisposable {
+export function registerFetchXmlIntellisense(
+	monaco: typeof Monaco,
+	appliesTo?: ModelFilter,
+): Monaco.IDisposable {
 	return monaco.languages.registerCompletionItemProvider("xml", {
 		triggerCharacters: ["<", " ", "=", '"', "'"],
 
 		provideCompletionItems(
 			model: Monaco.editor.ITextModel,
-			position: Monaco.Position
+			position: Monaco.Position,
 		): Monaco.languages.ProviderResult<Monaco.languages.CompletionList> {
 			if (appliesTo && !appliesTo(model)) return undefined;
 			const word = model.getWordUntilPosition(position);
@@ -311,7 +412,9 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 				const elementDef = FETCHXML_SCHEMA.elements[context.element as ElementName];
 				if (elementDef) {
 					const attrDef =
-						elementDef.attributes[context.attributeName as keyof typeof elementDef.attributes];
+						elementDef.attributes[
+							context.attributeName as keyof typeof elementDef.attributes
+						];
 					if (attrDef && "values" in attrDef && attrDef.values) {
 						for (const value of attrDef.values) {
 							suggestions.push(
@@ -320,8 +423,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 									monaco.languages.CompletionItemKind.Value,
 									`Value for ${context.attributeName}`,
 									value,
-									range
-								)
+									range,
+								),
 							);
 						}
 					} else if (attrDef && "type" in attrDef && attrDef.type === "boolean") {
@@ -331,8 +434,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 								monaco.languages.CompletionItemKind.Value,
 								"Boolean true",
 								"true",
-								range
-							)
+								range,
+							),
 						);
 						suggestions.push(
 							createCompletionItem(
@@ -340,8 +443,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 								monaco.languages.CompletionItemKind.Value,
 								"Boolean false",
 								"false",
-								range
-							)
+								range,
+							),
 						);
 					}
 				}
@@ -366,8 +469,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 								required ? "(required)" : "(optional)",
 								hasValues ? `${attrName}="$1"` : `${attrName}="$1"`,
 								range,
-								attrDef.description
-							)
+								attrDef.description,
+							),
 						);
 					}
 				}
@@ -397,8 +500,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 							monaco.languages.CompletionItemKind.Keyword,
 							`Close <${context.element}> tag`,
 							`/${context.element}>`,
-							range
-						)
+							range,
+						),
 					);
 				}
 
@@ -431,8 +534,8 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 								"FetchXML element",
 								snippet,
 								range,
-								elemDef.description
-							)
+								elemDef.description,
+							),
 						);
 					}
 				}
@@ -448,11 +551,14 @@ export function registerFetchXmlIntellisense(monaco: typeof Monaco, appliesTo?: 
 /**
  * Get FetchXML hover information
  */
-export function registerFetchXmlHoverProvider(monaco: typeof Monaco, appliesTo?: ModelFilter): Monaco.IDisposable {
+export function registerFetchXmlHoverProvider(
+	monaco: typeof Monaco,
+	appliesTo?: ModelFilter,
+): Monaco.IDisposable {
 	return monaco.languages.registerHoverProvider("xml", {
 		provideHover(
 			model: Monaco.editor.ITextModel,
-			position: Monaco.Position
+			position: Monaco.Position,
 		): Monaco.languages.ProviderResult<Monaco.languages.Hover> {
 			if (appliesTo && !appliesTo(model)) return null;
 			const word = model.getWordAtPosition(position);
@@ -488,7 +594,8 @@ export function registerFetchXmlHoverProvider(monaco: typeof Monaco, appliesTo?:
 				if (context.element) {
 					const elemDef = FETCHXML_SCHEMA.elements[context.element as ElementName];
 					if (elemDef) {
-						const attrDef = elemDef.attributes[word.word as keyof typeof elemDef.attributes];
+						const attrDef =
+							elemDef.attributes[word.word as keyof typeof elemDef.attributes];
 						if (attrDef) {
 							const contents: Monaco.IMarkdownString[] = [
 								{ value: `**${word.word}**` },
@@ -496,7 +603,9 @@ export function registerFetchXmlHoverProvider(monaco: typeof Monaco, appliesTo?:
 							];
 
 							if ("values" in attrDef && attrDef.values) {
-								contents.push({ value: `\n**Valid values:** ${attrDef.values.join(", ")}` });
+								contents.push({
+									value: `\n**Valid values:** ${attrDef.values.join(", ")}`,
+								});
 							}
 							if ("type" in attrDef && attrDef.type) {
 								contents.push({ value: `\n**Type:** ${attrDef.type}` });
@@ -524,14 +633,18 @@ export function registerFetchXmlHoverProvider(monaco: typeof Monaco, appliesTo?:
 const fetchXmlEditors = new Set<Monaco.editor.ICodeEditor>();
 let registration: { monaco: typeof Monaco; disposables: Monaco.IDisposable[] } | undefined;
 
-const isFetchXmlModel: ModelFilter = (model) => [...fetchXmlEditors].some((editor) => editor.getModel() === model);
+const isFetchXmlModel: ModelFilter = (model) =>
+	[...fetchXmlEditors].some((editor) => editor.getModel() === model);
 
 /**
  * Gives an editor FetchXML completions and hovers. The providers are registered once, however
  * often editors mount (the editor remounts on every connection change), and removed when the last
  * editor's handle is disposed. Other XML editors, such as the LayoutXML viewer, don't get them.
  */
-export function attachFetchXmlLanguageFeatures(monaco: typeof Monaco, editor: Monaco.editor.ICodeEditor): Monaco.IDisposable {
+export function attachFetchXmlLanguageFeatures(
+	monaco: typeof Monaco,
+	editor: Monaco.editor.ICodeEditor,
+): Monaco.IDisposable {
 	if (registration?.monaco !== monaco) {
 		registration?.disposables.forEach((d) => d.dispose());
 		registration = {

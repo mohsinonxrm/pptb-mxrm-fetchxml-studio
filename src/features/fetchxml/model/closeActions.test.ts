@@ -24,26 +24,75 @@ import { toEntityStateModel } from "./recordState";
 const label = (text: string) => ({ UserLocalizedLabel: { Label: text } });
 const model = (states: [number, string, number][], statuses: [number, string, number][]) =>
 	toEntityStateModel(
-		states.map(([Value, text, DefaultStatus]) => ({ Value, Label: label(text), DefaultStatus })),
+		states.map(([Value, text, DefaultStatus]) => ({
+			Value,
+			Label: label(text),
+			DefaultStatus,
+		})),
 		statuses.map(([Value, text, State]) => ({ Value, Label: label(text), State })),
 		false,
 	);
 
 const opportunity = model(
-	[[0, "Open", 1], [1, "Won", 3], [2, "Lost", 4]],
-	[[1, "In Progress", 0], [2, "On Hold", 0], [3, "Won", 1], [4, "Canceled", 2], [5, "Out-Sold", 2]],
+	[
+		[0, "Open", 1],
+		[1, "Won", 3],
+		[2, "Lost", 4],
+	],
+	[
+		[1, "In Progress", 0],
+		[2, "On Hold", 0],
+		[3, "Won", 1],
+		[4, "Canceled", 2],
+		[5, "Out-Sold", 2],
+	],
 );
 const incident = model(
-	[[0, "Active", 1], [1, "Resolved", 5], [2, "Cancelled", 6]],
-	[[5, "Problem Solved", 1], [1000, "Information Provided", 1], [6, "Cancelled", 2], [2000, "Merged", 2], [1, "In Progress", 0]],
+	[
+		[0, "Active", 1],
+		[1, "Resolved", 5],
+		[2, "Cancelled", 6],
+	],
+	[
+		[5, "Problem Solved", 1],
+		[1000, "Information Provided", 1],
+		[6, "Cancelled", 2],
+		[2000, "Merged", 2],
+		[1, "In Progress", 0],
+	],
 );
 const quote = model(
-	[[0, "Draft", 1], [1, "Active", 2], [2, "Won", 4], [3, "Closed", 7]],
-	[[1, "In Progress", 0], [2, "In Progress", 1], [3, "Open", 1], [4, "Won", 2], [5, "Lost", 3], [6, "Canceled", 3], [7, "Revised", 3]],
+	[
+		[0, "Draft", 1],
+		[1, "Active", 2],
+		[2, "Won", 4],
+		[3, "Closed", 7],
+	],
+	[
+		[1, "In Progress", 0],
+		[2, "In Progress", 1],
+		[3, "Open", 1],
+		[4, "Won", 2],
+		[5, "Lost", 3],
+		[6, "Canceled", 3],
+		[7, "Revised", 3],
+	],
 );
 const invoice = model(
-	[[0, "Active", 1], [1, "Closed (deprecated)", 100003], [2, "Paid", 100001], [3, "Canceled", 100003]],
-	[[1, "New", 0], [3, "Canceled (deprecated)", 1], [7, "Paid in Full (deprecated)", 1], [100001, "Complete", 2], [100002, "Partial", 2], [100003, "Canceled", 3]],
+	[
+		[0, "Active", 1],
+		[1, "Closed (deprecated)", 100003],
+		[2, "Paid", 100001],
+		[3, "Canceled", 100003],
+	],
+	[
+		[1, "New", 0],
+		[3, "Canceled (deprecated)", 1],
+		[7, "Paid in Full (deprecated)", 1],
+		[100001, "Complete", 2],
+		[100002, "Partial", 2],
+		[100003, "Canceled", 3],
+	],
 );
 
 const message = (entity: string, key: string) => findCloseAction(entity, key) as CloseMessageAction;
@@ -52,7 +101,10 @@ const state = (entity: string, key: string) => findCloseAction(entity, key) as C
 describe("CLOSE_ACTIONS", () => {
 	it("defines the documented actions per entity, in menu order", () => {
 		const summary = Object.fromEntries(
-			Object.entries(CLOSE_ACTIONS).map(([entity, actions]) => [entity, actions.map((a) => (a.kind === "message" ? a.message : `PATCH ${a.targetState}`))]),
+			Object.entries(CLOSE_ACTIONS).map(([entity, actions]) => [
+				entity,
+				actions.map((a) => (a.kind === "message" ? a.message : `PATCH ${a.targetState}`)),
+			]),
 		);
 		expect(summary).toEqual({
 			opportunity: ["WinOpportunity", "LoseOpportunity"],
@@ -85,7 +137,11 @@ describe("closeStatusChoices", () => {
 			{ statuscode: 5, label: "Out-Sold", isDefault: false },
 		]);
 		expect(lose.preselected).toBe(4);
-		expect(closeStatusChoices(opportunity, message("opportunity", "win")).choices.map((c) => c.statuscode)).toEqual([3]);
+		expect(
+			closeStatusChoices(opportunity, message("opportunity", "win")).choices.map(
+				(c) => c.statuscode,
+			),
+		).toEqual([3]);
 	});
 
 	it("preselects Lost for Close quote, not the metadata default Revised", () => {
@@ -95,7 +151,13 @@ describe("closeStatusChoices", () => {
 	});
 
 	it("falls back to the default when the preselected status isn't in metadata", () => {
-		const custom = model([[3, "Closed", 7]], [[6, "Canceled", 3], [7, "Revised", 3]]);
+		const custom = model(
+			[[3, "Closed", 7]],
+			[
+				[6, "Canceled", 3],
+				[7, "Revised", 3],
+			],
+		);
 		expect(closeStatusChoices(custom, message("quote", "close")).preselected).toBe(7);
 	});
 
@@ -104,7 +166,13 @@ describe("closeStatusChoices", () => {
 		const choices = closeStatusChoices(opportunity, lose);
 		expect(suggestedCloseStatus(lose, choices, undefined)).toBe(4);
 		expect(suggestedCloseStatus(lose, choices, "c1")).toBe(5);
-		expect(suggestedCloseStatus(message("opportunity", "win"), closeStatusChoices(opportunity, message("opportunity", "win")), "c1")).toBe(3);
+		expect(
+			suggestedCloseStatus(
+				message("opportunity", "win"),
+				closeStatusChoices(opportunity, message("opportunity", "win")),
+				"c1",
+			),
+		).toBe(3);
 	});
 });
 
@@ -138,7 +206,10 @@ describe("planCloseStateChange", () => {
 			note: undefined,
 			undo: { available: true, picksStatusReason: false, transitionsEnforced: false },
 		});
-		expect(planCloseStateChange(invoice, state("invoice", "cancel"))).toMatchObject({ kind: "simple", target: { statecode: 3, statuscode: 100003 } });
+		expect(planCloseStateChange(invoice, state("invoice", "cancel"))).toMatchObject({
+			kind: "simple",
+			target: { statecode: 3, statuscode: 100003 },
+		});
 	});
 
 	it("says so when the state is missing", () => {
@@ -157,24 +228,62 @@ describe("validateCloseValues", () => {
 	it("checks the revenue amount (Money, 2 decimals)", () => {
 		const win = message("opportunity", "win");
 		expect(validateCloseValues(win, { ...base, revenue: "25000.50" })).toEqual({});
-		expect(validateCloseValues(win, { ...base, revenue: "25,000" }).revenue).toBe("Enter an amount, like 25000 or 25000.50.");
+		expect(validateCloseValues(win, { ...base, revenue: "25,000" }).revenue).toBe(
+			"Enter an amount, like 25000 or 25000.50.",
+		);
 		expect(validateCloseValues(win, { ...base, revenue: "1.234" }).revenue).toBeDefined();
 		expect(validateCloseValues(win, { ...base, revenue: "-5" }).revenue).toBeDefined();
-		expect(validateCloseValues(win, { ...base, revenue: "9999999999999999" }).revenue).toBeDefined();
+		expect(
+			validateCloseValues(win, { ...base, revenue: "9999999999999999" }).revenue,
+		).toBeDefined();
 	});
 
 	it("requires the close date and, for Resolve case, the resolution", () => {
-		expect(validateCloseValues(message("quote", "win"), { ...base, date: null }).date).toBe("Select a close date.");
+		expect(validateCloseValues(message("quote", "win"), { ...base, date: null }).date).toBe(
+			"Select a close date.",
+		);
 		const resolve = message("incident", "resolve");
-		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "  " }).resolution).toBe("Enter a resolution.");
-		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "Fixed", billableMinutes: 30 })).toEqual({});
-		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "Fixed", billableMinutes: -1 }).billable).toBeDefined();
-		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "Fixed", billableMinutes: 1.5 }).billable).toBeDefined();
-		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "Fixed", billableMinutes: null })).toEqual({});
+		expect(validateCloseValues(resolve, { statuscode: 5, resolution: "  " }).resolution).toBe(
+			"Enter a resolution.",
+		);
+		expect(
+			validateCloseValues(resolve, {
+				statuscode: 5,
+				resolution: "Fixed",
+				billableMinutes: 30,
+			}),
+		).toEqual({});
+		expect(
+			validateCloseValues(resolve, {
+				statuscode: 5,
+				resolution: "Fixed",
+				billableMinutes: -1,
+			}).billable,
+		).toBeDefined();
+		expect(
+			validateCloseValues(resolve, {
+				statuscode: 5,
+				resolution: "Fixed",
+				billableMinutes: 1.5,
+			}).billable,
+		).toBeDefined();
+		expect(
+			validateCloseValues(resolve, {
+				statuscode: 5,
+				resolution: "Fixed",
+				billableMinutes: null,
+			}),
+		).toEqual({});
 	});
 
 	it("ignores fields the action doesn't have", () => {
-		expect(validateCloseValues(message("salesorder", "cancel"), { ...base, revenue: "x", resolution: "" })).toEqual({});
+		expect(
+			validateCloseValues(message("salesorder", "cancel"), {
+				...base,
+				revenue: "x",
+				resolution: "",
+			}),
+		).toEqual({});
 	});
 });
 
@@ -254,18 +363,41 @@ describe("buildCloseParameters / closeRequestUrl", () => {
 	});
 
 	it("trims long values to the column lengths", () => {
-		const params = buildCloseParameters(message("quote", "close"), "quotes", id, { statuscode: 5, date, description: "x".repeat(2500) });
-		expect(((params.QuoteClose as Record<string, unknown>).description as string).length).toBe(2000);
-		const resolve = buildCloseParameters(message("incident", "resolve"), "incidents", id, { statuscode: 5, resolution: "y".repeat(300) });
-		expect(((resolve.IncidentResolution as Record<string, unknown>).subject as string).length).toBe(200);
+		const params = buildCloseParameters(message("quote", "close"), "quotes", id, {
+			statuscode: 5,
+			date,
+			description: "x".repeat(2500),
+		});
+		expect(((params.QuoteClose as Record<string, unknown>).description as string).length).toBe(
+			2000,
+		);
+		const resolve = buildCloseParameters(message("incident", "resolve"), "incidents", id, {
+			statuscode: 5,
+			resolution: "y".repeat(300),
+		});
+		expect(
+			((resolve.IncidentResolution as Record<string, unknown>).subject as string).length,
+		).toBe(200);
 	});
 
 	it("FulfillSalesOrder is bound to the collection; the others are unbound", () => {
-		expect(closeRequestUrl(message("salesorder", "fulfill"), "salesorders")).toBe("salesorders/Microsoft.Dynamics.CRM.FulfillSalesOrder");
-		expect(closeRequestUrl(message("salesorder", "cancel"), "salesorders")).toBe("CancelSalesOrder");
+		expect(closeRequestUrl(message("salesorder", "fulfill"), "salesorders")).toBe(
+			"salesorders/Microsoft.Dynamics.CRM.FulfillSalesOrder",
+		);
+		expect(closeRequestUrl(message("salesorder", "cancel"), "salesorders")).toBe(
+			"CancelSalesOrder",
+		);
 		expect(closeRequestUrl(message("quote", "win"), "quotes")).toBe("WinQuote");
-		expect(buildCloseParameters(message("salesorder", "fulfill"), "salesorders", id, { statuscode: 100001, date })).toMatchObject({
-			OrderClose: { "@odata.type": "Microsoft.Dynamics.CRM.orderclose", "salesorderid@odata.bind": "/salesorders(11111111-2222-3333-4444-555555555555)" },
+		expect(
+			buildCloseParameters(message("salesorder", "fulfill"), "salesorders", id, {
+				statuscode: 100001,
+				date,
+			}),
+		).toMatchObject({
+			OrderClose: {
+				"@odata.type": "Microsoft.Dynamics.CRM.orderclose",
+				"salesorderid@odata.bind": "/salesorders(11111111-2222-3333-4444-555555555555)",
+			},
 			Status: 100001,
 		});
 	});
@@ -285,6 +417,8 @@ describe("completedByStoppedBatch", () => {
 			["c", 1],
 			["e", 1],
 		]);
-		expect([...completedByStoppedBatch(before, after, 1, ["a", "b", "c", "d", "e"])]).toEqual(["a"]);
+		expect([...completedByStoppedBatch(before, after, 1, ["a", "b", "c", "d", "e"])]).toEqual([
+			"a",
+		]);
 	});
 });

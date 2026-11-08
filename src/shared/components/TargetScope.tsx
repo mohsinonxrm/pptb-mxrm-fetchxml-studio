@@ -106,10 +106,17 @@ export function TargetScope({
 	const isProduction = isProductionEnvironment(connection?.environment);
 	const displayName =
 		entityDisplayName ||
-		(entityLogicalName ? metadataCache.getEntityMetadata(entityLogicalName)?.DisplayName?.UserLocalizedLabel?.Label : undefined);
+		(entityLogicalName
+			? metadataCache.getEntityMetadata(entityLogicalName)?.DisplayName?.UserLocalizedLabel
+					?.Label
+			: undefined);
 	const expected = entityLogicalName || "confirm";
-	const askToType = !!onConfirmationChange && state.status === "ready" && requiresTypedConfirmation(connection?.environment, scope);
-	const confirmed = state.status === "ready" && (!askToType || isTypedConfirmation(typed, expected));
+	const askToType =
+		!!onConfirmationChange &&
+		state.status === "ready" &&
+		requiresTypedConfirmation(connection?.environment, scope);
+	const confirmed =
+		state.status === "ready" && (!askToType || isTypedConfirmation(typed, expected));
 
 	useEffect(() => {
 		onConfirmationChange?.(confirmed);
@@ -153,7 +160,9 @@ export function TargetScope({
 				<Text className={styles.label}>Entity</Text>
 				<div className={styles.value}>
 					<Text weight="semibold">{displayName || entityLogicalName || "Unknown"}</Text>
-					{displayName && entityLogicalName && displayName !== entityLogicalName && <Text className={styles.secondary}>({entityLogicalName})</Text>}
+					{displayName && entityLogicalName && displayName !== entityLogicalName && (
+						<Text className={styles.secondary}>({entityLogicalName})</Text>
+					)}
 				</div>
 				<Text className={styles.label}>Scope</Text>
 				<div className={styles.value}>
@@ -167,9 +176,18 @@ export function TargetScope({
 							Type <strong>{expected}</strong> to confirm
 						</>
 					}
-					hint={isProduction ? "Required on a Production environment." : "Required for more than 100 records, or when the total isn't known."}
+					hint={
+						isProduction
+							? "Required on a Production environment."
+							: "Required for more than 100 records, or when the total isn't known."
+					}
 				>
-					<Input value={typed} onChange={(_, data) => setTyped(data.value)} disabled={disabled} autoComplete="off" />
+					<Input
+						value={typed}
+						onChange={(_, data) => setTyped(data.value)}
+						disabled={disabled}
+						autoComplete="off"
+					/>
 				</Field>
 			)}
 		</div>

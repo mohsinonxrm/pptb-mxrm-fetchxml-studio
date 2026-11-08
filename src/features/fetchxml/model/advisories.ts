@@ -7,9 +7,22 @@
  * (kind "ignored") aren't advisories; the property editors and Validate show them.
  */
 
-import { validateQueryRules, type AdvisorFix, type AdvisorRuleId, type RuleFinding } from "./fetchxmlRules";
+import {
+	validateQueryRules,
+	type AdvisorFix,
+	type AdvisorRuleId,
+	type RuleFinding,
+} from "./fetchxmlRules";
 import { adviseQueryMetadata, type AdvisorContext, type AdvisorMetadata } from "./queryAdvisor";
-import type { ConditionNode, EntityNode, FetchNode, FilterNode, LinkEntityNode, NodeId, OrderNode } from "./nodes";
+import type {
+	ConditionNode,
+	EntityNode,
+	FetchNode,
+	FilterNode,
+	LinkEntityNode,
+	NodeId,
+	OrderNode,
+} from "./nodes";
 
 export type AdvisoryLevel = "error" | "warning" | "advice";
 /** Who reported it: FetchXML Studio, Dataverse, or both ("Dataverse agrees") */
@@ -52,21 +65,90 @@ const ANTIPATTERNS_LABEL = "Query anti-patterns";
 
 /** Title and Learn page per Query Advisor rule */
 const RULES: Record<AdvisorRuleId, { title: string; doc: { label: string; href: string } }> = {
-	"leading-wildcard": { title: "Leading wildcard", doc: { label: ANTIPATTERNS_LABEL, href: `${ANTIPATTERNS}#avoid-leading-wild-cards-in-filter-conditions` } },
-	"all-attributes": { title: "All attributes returned", doc: { label: "Select columns", href: `${FETCHXML}/select-columns` } },
-	"no-attributes": { title: "No attributes selected", doc: { label: "Select columns", href: `${FETCHXML}/select-columns` } },
-	"order-link": { title: "Order on a link-entity attribute", doc: { label: "Page results", href: `${FETCHXML}/page-results#queries-that-dont-support-paging-cookies` } },
-	"distinct-order": { title: "Distinct without an order", doc: { label: "Return distinct results", href: `${FETCHXML}/overview#return-distinct-results` } },
-	"simple-paging-limit": { title: "Paging past 50,000 records", doc: { label: "Page results", href: `${FETCHXML}/page-results#simple-paging` } },
-	"aggregate-limit": { title: "Aggregate query without a filter", doc: { label: "Aggregate data", href: `${FETCHXML}/aggregate-data#aggregate-query-record-limit-error` } },
-	"no-lock": { title: "Legacy no-lock setting", doc: { label: "Optimize performance", href: `${FETCHXML}/optimize-performance#no-lock` } },
-	"link-entity-limit": { title: "Too many link-entities", doc: { label: "Join tables", href: `${FETCHXML}/join-tables#limitations` } },
-	"condition-limit": { title: "Too many conditions", doc: { label: "Filter rows", href: `${FETCHXML}/filter-rows#condition-limits` } },
-	"url-length": { title: "FetchXML too long for a URL", doc: { label: "Retrieve data", href: `${FETCHXML}/retrieve-data#use-fetchxml-within-a-batch-request` } },
-	"order-choice": { title: "Order on a choice attribute", doc: { label: ANTIPATTERNS_LABEL, href: `${ANTIPATTERNS}#avoid-ordering-by-choice-columns` } },
-	"large-text": { title: "Condition on a large text attribute", doc: { label: ANTIPATTERNS_LABEL, href: `${ANTIPATTERNS}#avoid-using-conditions-on-large-text-columns` } },
-	"calculated-filter": { title: "Condition on a calculated attribute", doc: { label: ANTIPATTERNS_LABEL, href: `${ANTIPATTERNS}#avoid-using-formula-or-calculated-columns-in-filter-conditions` } },
-	"paging-order": { title: "Paging without a unique order", doc: { label: "Order rows", href: `${FETCHXML}/order-rows#ordering-and-paging` } },
+	"leading-wildcard": {
+		title: "Leading wildcard",
+		doc: {
+			label: ANTIPATTERNS_LABEL,
+			href: `${ANTIPATTERNS}#avoid-leading-wild-cards-in-filter-conditions`,
+		},
+	},
+	"all-attributes": {
+		title: "All attributes returned",
+		doc: { label: "Select columns", href: `${FETCHXML}/select-columns` },
+	},
+	"no-attributes": {
+		title: "No attributes selected",
+		doc: { label: "Select columns", href: `${FETCHXML}/select-columns` },
+	},
+	"order-link": {
+		title: "Order on a link-entity attribute",
+		doc: {
+			label: "Page results",
+			href: `${FETCHXML}/page-results#queries-that-dont-support-paging-cookies`,
+		},
+	},
+	"distinct-order": {
+		title: "Distinct without an order",
+		doc: {
+			label: "Return distinct results",
+			href: `${FETCHXML}/overview#return-distinct-results`,
+		},
+	},
+	"simple-paging-limit": {
+		title: "Paging past 50,000 records",
+		doc: { label: "Page results", href: `${FETCHXML}/page-results#simple-paging` },
+	},
+	"aggregate-limit": {
+		title: "Aggregate query without a filter",
+		doc: {
+			label: "Aggregate data",
+			href: `${FETCHXML}/aggregate-data#aggregate-query-record-limit-error`,
+		},
+	},
+	"no-lock": {
+		title: "Legacy no-lock setting",
+		doc: { label: "Optimize performance", href: `${FETCHXML}/optimize-performance#no-lock` },
+	},
+	"link-entity-limit": {
+		title: "Too many link-entities",
+		doc: { label: "Join tables", href: `${FETCHXML}/join-tables#limitations` },
+	},
+	"condition-limit": {
+		title: "Too many conditions",
+		doc: { label: "Filter rows", href: `${FETCHXML}/filter-rows#condition-limits` },
+	},
+	"url-length": {
+		title: "FetchXML too long for a URL",
+		doc: {
+			label: "Retrieve data",
+			href: `${FETCHXML}/retrieve-data#use-fetchxml-within-a-batch-request`,
+		},
+	},
+	"order-choice": {
+		title: "Order on a choice attribute",
+		doc: {
+			label: ANTIPATTERNS_LABEL,
+			href: `${ANTIPATTERNS}#avoid-ordering-by-choice-columns`,
+		},
+	},
+	"large-text": {
+		title: "Condition on a large text attribute",
+		doc: {
+			label: ANTIPATTERNS_LABEL,
+			href: `${ANTIPATTERNS}#avoid-using-conditions-on-large-text-columns`,
+		},
+	},
+	"calculated-filter": {
+		title: "Condition on a calculated attribute",
+		doc: {
+			label: ANTIPATTERNS_LABEL,
+			href: `${ANTIPATTERNS}#avoid-using-formula-or-calculated-columns-in-filter-conditions`,
+		},
+	},
+	"paging-order": {
+		title: "Paging without a unique order",
+		doc: { label: "Order rows", href: `${FETCHXML}/order-rows#ordering-and-paging` },
+	},
 };
 
 const LEVEL_TITLE: Record<AdvisoryLevel, string> = {
@@ -90,16 +172,21 @@ function levelOf(f: RuleFinding): AdvisoryLevel | undefined {
 }
 
 /** The FetchXML reference page for an element (rules without their own page) */
-const referenceDoc = (element: string) => ({ label: "FetchXML reference", href: `${FETCHXML}/reference/${element}` });
+const referenceDoc = (element: string) => ({
+	label: "FetchXML reference",
+	href: `${FETCHXML}/reference/${element}`,
+});
 
 // ---- locations
 
 type Container = EntityNode | LinkEntityNode;
 
-const containerLabel = (c: Container) => (c.type === "link-entity" && c.alias ? `${c.name} (${c.alias})` : c.name);
+const containerLabel = (c: Container) =>
+	c.type === "link-entity" && c.alias ? `${c.name} (${c.alias})` : c.name;
 const qualified = (entityname: string | undefined, attribute: string | undefined) =>
 	`${entityname ? `${entityname}.` : ""}${attribute ?? ""}`;
-const conditionLabel = (c: ConditionNode) => `${qualified(c.entityname, c.attribute)} ${c.operator}`;
+const conditionLabel = (c: ConditionNode) =>
+	`${qualified(c.entityname, c.attribute)} ${c.operator}`;
 const orderLabel = (o: OrderNode) => `order ${qualified(o.entityname, o.attribute ?? o.alias)}`;
 
 /** A location per node: its entity / link-entity path, then the node (consecutive filters shown once). */
@@ -114,7 +201,9 @@ export function nodeLocations(fetch: FetchNode): Map<NodeId, string> {
 		c.orders.forEach((o) => map.set(o.id, join([...path, orderLabel(o)])));
 		const visitFilter = (f: FilterNode, filterPath: string[]) => {
 			map.set(f.id, join(filterPath));
-			f.conditions.forEach((cond) => map.set(cond.id, join([...filterPath, conditionLabel(cond)])));
+			f.conditions.forEach((cond) =>
+				map.set(cond.id, join([...filterPath, conditionLabel(cond)])),
+			);
 			f.subfilters.forEach((sub) => visitFilter(sub, filterPath));
 			f.links?.forEach((l) => visitContainer(l, filterPath));
 		};
@@ -147,11 +236,19 @@ export function nodeEntities(fetch: FetchNode): Map<NodeId, AdvisoryEntity> {
 		});
 	};
 	collect(fetch.entity);
-	const entityOf = (c: Container, isRoot: boolean): AdvisoryEntity => ({ name: c.name, alias: c.type === "link-entity" ? c.alias : undefined, isRoot });
+	const entityOf = (c: Container, isRoot: boolean): AdvisoryEntity => ({
+		name: c.name,
+		alias: c.type === "link-entity" ? c.alias : undefined,
+		isRoot,
+	});
 	const root = entityOf(fetch.entity, true);
 	const byEntityname = (key: string | undefined, fallback: AdvisoryEntity): AdvisoryEntity => {
 		if (!key || key === fetch.entity.name) return fallback;
-		const named = links.find((l) => l.alias === key) ?? (links.filter((l) => l.name === key).length === 1 ? links.find((l) => l.name === key) : undefined);
+		const named =
+			links.find((l) => l.alias === key) ??
+			(links.filter((l) => l.name === key).length === 1
+				? links.find((l) => l.name === key)
+				: undefined);
 		return named ? entityOf(named, false) : fallback;
 	};
 	map.set(fetch.id, root);
@@ -180,8 +277,15 @@ export function nodeEntities(fetch: FetchNode): Map<NodeId, AdvisoryEntity> {
  * Every advisory FetchXML Studio finds without a request: the query rules, plus the metadata rules
  * when metadata is given. Sorted by level (stable, so tree order within a level).
  */
-export function collectAdvisories(fetch: FetchNode, metadata?: AdvisorMetadata, context?: AdvisorContext): Advisory[] {
-	const findings = [...validateQueryRules(fetch), ...(metadata ? adviseQueryMetadata(fetch, metadata, context) : [])];
+export function collectAdvisories(
+	fetch: FetchNode,
+	metadata?: AdvisorMetadata,
+	context?: AdvisorContext,
+): Advisory[] {
+	const findings = [
+		...validateQueryRules(fetch),
+		...(metadata ? adviseQueryMetadata(fetch, metadata, context) : []),
+	];
 	const locations = nodeLocations(fetch);
 	const entities = nodeEntities(fetch);
 	const list: Advisory[] = [];
@@ -247,10 +351,12 @@ const QUERY_LEVEL_TYPES = new Set([6]);
  * ({ Count, Keys: [...], Values: [...] } as returned live), else "Attribute <name>" in the text.
  */
 export function issueAttribute(issue: DataverseIssue): string | undefined {
-	const bag = issue.OptionalPropertyBag as { Keys?: unknown; Values?: unknown; Attribute?: unknown } | undefined;
+	const bag = issue.OptionalPropertyBag as
+		{ Keys?: unknown; Values?: unknown; Attribute?: unknown } | undefined;
 	if (bag && Array.isArray(bag.Keys) && Array.isArray(bag.Values)) {
 		const i = bag.Keys.indexOf("Attribute");
-		if (i >= 0 && typeof bag.Values[i] === "string" && bag.Values[i]) return bag.Values[i] as string;
+		if (i >= 0 && typeof bag.Values[i] === "string" && bag.Values[i])
+			return bag.Values[i] as string;
 	}
 	if (bag && typeof bag.Attribute === "string" && bag.Attribute) return bag.Attribute;
 	const match = /\bAttribute\s+([A-Za-z_]\w*)\b(?!\s*:)/.exec(issue.LocalizedMessageText ?? "");
@@ -268,12 +374,14 @@ const ENTITY_KEYS = ["Entity", "EntityName", "EntityAlias", "Alias", "Table"];
  * later version adds them.
  */
 export function issueEntity(issue: DataverseIssue): string | undefined {
-	const bag = issue.OptionalPropertyBag as { Keys?: unknown; Values?: unknown } & Record<string, unknown> | undefined;
+	const bag = issue.OptionalPropertyBag as
+		({ Keys?: unknown; Values?: unknown } & Record<string, unknown>) | undefined;
 	if (!bag) return undefined;
 	for (const key of ENTITY_KEYS) {
 		if (Array.isArray(bag.Keys) && Array.isArray(bag.Values)) {
 			const i = bag.Keys.indexOf(key);
-			if (i >= 0 && typeof bag.Values[i] === "string" && bag.Values[i]) return bag.Values[i] as string;
+			if (i >= 0 && typeof bag.Values[i] === "string" && bag.Values[i])
+				return bag.Values[i] as string;
 		}
 		if (typeof bag[key] === "string" && bag[key]) return bag[key] as string;
 	}
@@ -288,21 +396,37 @@ export function issueEntity(issue: DataverseIssue): string | undefined {
  * in the root's filter is), and its messages don't say which entity, so "Attribute name" most
  * likely means the root's. Ties go to the first in tree order.
  */
-function findAgreeing(list: Advisory[], rules: readonly AdvisorRuleId[], attribute: string | undefined, entity: string | undefined, queryLevel: boolean): Advisory | undefined {
+function findAgreeing(
+	list: Advisory[],
+	rules: readonly AdvisorRuleId[],
+	attribute: string | undefined,
+	entity: string | undefined,
+	queryLevel: boolean,
+): Advisory | undefined {
 	const want = attribute?.toLowerCase();
 	const candidates = list.filter(
-		(a) => a.source === "fxs" && a.rule !== undefined && rules.includes(a.rule) && (queryLevel || a.target?.toLowerCase() === want),
+		(a) =>
+			a.source === "fxs" &&
+			a.rule !== undefined &&
+			rules.includes(a.rule) &&
+			(queryLevel || a.target?.toLowerCase() === want),
 	);
 	if (queryLevel) return candidates[0];
 	if (entity) {
 		const key = entity.toLowerCase();
-		return candidates.find((a) => a.entity?.alias?.toLowerCase() === key || a.entity?.name?.toLowerCase() === key);
+		return candidates.find(
+			(a) => a.entity?.alias?.toLowerCase() === key || a.entity?.name?.toLowerCase() === key,
+		);
 	}
 	return candidates.find((a) => a.entity?.isRoot) ?? candidates[0];
 }
 
 /** The node a Dataverse-only finding points at: the first condition / order on the attribute, else the root. */
-function locateIssue(fetch: FetchNode, rule: AdvisorRuleId | undefined, attribute: string | undefined): NodeId {
+function locateIssue(
+	fetch: FetchNode,
+	rule: AdvisorRuleId | undefined,
+	attribute: string | undefined,
+): NodeId {
 	if (!attribute || !rule) return fetch.entity.id;
 	const want = attribute.toLowerCase();
 	const containers: Container[] = [];
@@ -319,7 +443,9 @@ function locateIssue(fetch: FetchNode, rule: AdvisorRuleId | undefined, attribut
 	};
 	visit(fetch.entity);
 	if (rule === "order-choice" || rule === "order-link") {
-		const order = containers.flatMap((c) => c.orders).find((o) => o.attribute?.toLowerCase() === want);
+		const order = containers
+			.flatMap((c) => c.orders)
+			.find((o) => o.attribute?.toLowerCase() === want);
 		return order?.id ?? fetch.entity.id;
 	}
 	// A condition the user is still editing can have no attribute yet (#217): never throw here
@@ -364,7 +490,9 @@ export function mergeDataverseCheck(
 				id: `dataverse:${index}`,
 				level: "advice",
 				title: RULES[rule].title,
-				detail: attribute ? `Dataverse reported this for '${attribute}'.` : "Dataverse reported this for the query.",
+				detail: attribute
+					? `Dataverse reported this for '${attribute}'.`
+					: "Dataverse reported this for the query.",
 				nodeId,
 				location: locations.get(nodeId) ?? fetch.entity.name,
 				doc: RULES[rule].doc,
@@ -383,12 +511,19 @@ export function mergeDataverseCheck(
 			detail: "Dataverse's query check reported this.",
 			nodeId: fetch.entity.id,
 			location: locations.get(fetch.entity.id) ?? fetch.entity.name,
-			doc: check.helplink ? { label: "Dataverse help", href: check.helplink } : { label: ANTIPATTERNS_LABEL, href: ANTIPATTERNS },
+			doc: check.helplink
+				? { label: "Dataverse help", href: check.helplink }
+				: { label: ANTIPATTERNS_LABEL, href: ANTIPATTERNS },
 			source: "dataverse",
 			dataverseText: text,
 		});
 	});
-	return { advisories: [...merged, ...added].sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]), added: added.length };
+	return {
+		advisories: [...merged, ...added].sort(
+			(a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level],
+		),
+		added: added.length,
+	};
 }
 
 /** The entities whose metadata the metadata rules use: the root, then every link-entity (also inside filters). */

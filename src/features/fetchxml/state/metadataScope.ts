@@ -15,7 +15,10 @@
 import { useSyncExternalStore } from "react";
 import type { AttributeMetadata, EntityMetadata, RelationshipMetadata } from "../api/pptbClient";
 
-export function isEntityInScope(entity: Pick<EntityMetadata, "IsValidForAdvancedFind">, advancedFindOnly: boolean): boolean {
+export function isEntityInScope(
+	entity: Pick<EntityMetadata, "IsValidForAdvancedFind">,
+	advancedFindOnly: boolean,
+): boolean {
 	return !advancedFindOnly || entity.IsValidForAdvancedFind !== false;
 }
 
@@ -27,7 +30,10 @@ export function isAttributeInScope(
 	return !advancedFindOnly || attribute.IsValidForAdvancedFind?.Value !== false;
 }
 
-export function isRelationshipInScope(relationship: Pick<RelationshipMetadata, "IsValidForAdvancedFind">, advancedFindOnly: boolean): boolean {
+export function isRelationshipInScope(
+	relationship: Pick<RelationshipMetadata, "IsValidForAdvancedFind">,
+	advancedFindOnly: boolean,
+): boolean {
 	return !advancedFindOnly || relationship.IsValidForAdvancedFind !== false;
 }
 

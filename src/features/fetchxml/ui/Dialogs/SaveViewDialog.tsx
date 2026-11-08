@@ -201,7 +201,8 @@ export interface SavedViewDetails {
 }
 
 /** A message ending with a full stop, so the next sentence reads on (#180) */
-const asSentence = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+const asSentence = (text: string): string =>
+	/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
 
 interface SaveViewDialogProps {
 	/** Whether the dialog is open */
@@ -243,8 +244,12 @@ interface ValidationState {
 }
 
 /** The fields the user edits, compared with how the dialog opened (#264) */
-const formSnapshot = (form: { name: string; description: string; viewType: string; makeDefault: boolean }) =>
-	JSON.stringify([form.name, form.description, form.viewType, form.makeDefault]);
+const formSnapshot = (form: {
+	name: string;
+	description: string;
+	viewType: string;
+	makeDefault: boolean;
+}) => JSON.stringify([form.name, form.description, form.viewType, form.makeDefault]);
 
 export function SaveViewDialog({
 	open,
@@ -311,31 +316,46 @@ export function SaveViewDialog({
 	const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
 	// RetrievePrincipalAccess on a personal view the user may not own (#142): "unknown" when it
 	// couldn't be determined, which allows the save (Dataverse decides)
-	const [writeAccess, setWriteAccess] = useState<"checking" | "allowed" | "denied" | "unknown">("unknown");
+	const [writeAccess, setWriteAccess] = useState<"checking" | "allowed" | "denied" | "unknown">(
+		"unknown",
+	);
 	// Managed system view: its solution, named in the warning (#142)
-	const [managedSolution, setManagedSolution] = useState<{ friendlyName: string; uniqueName: string } | null>(null);
+	const [managedSolution, setManagedSolution] = useState<{
+		friendlyName: string;
+		uniqueName: string;
+	} | null>(null);
 	// Set as default view (#142)
 	const [makeDefault, setMakeDefault] = useState(false);
 	// The fields as the dialog opened, to tell edits apart (#264)
 	const [initialForm, setInitialForm] = useState<string | null>(null);
-	const [currentDefaultView, setCurrentDefaultView] = useState<{ id: string; name: string } | null>(null);
+	const [currentDefaultView, setCurrentDefaultView] = useState<{
+		id: string;
+		name: string;
+	} | null>(null);
 
 	// Check if this is a "Save" to existing view
 	const isOverwriteRequest = mode === "save" && loadedView !== null;
 	const isOverwriteMode = isOverwriteRequest && !savingCopy;
 	// A system view whose iscustomizable managed property is false can't be updated (#93)
-	const isNotCustomizable = isOverwriteMode && loadedView !== null && !canOverwriteView(loadedView);
+	const isNotCustomizable =
+		isOverwriteMode && loadedView !== null && !canOverwriteView(loadedView);
 	// A personal view shared with the user without write access (#142)
 	const isReadOnlyShare = isOverwriteMode && writeAccess === "denied";
 	const isOverwriteBlocked = isNotCustomizable || isReadOnlyShare;
 	const isCheckingAccess = isOverwriteMode && writeAccess === "checking";
-	const isShared = isOverwriteMode && loadedView !== null && isSharedView(loadedView, currentUserId);
-	const isManagedOverwrite = isOverwriteMode && loadedView?.type === "system" && loadedView.isManaged === true;
+	const isShared =
+		isOverwriteMode && loadedView !== null && isSharedView(loadedView, currentUserId);
+	const isManagedOverwrite =
+		isOverwriteMode && loadedView?.type === "system" && loadedView.isManaged === true;
 	// Public system views only: the loaded one on overwrite, a new system view on Save as (#142)
 	const showDefaultOption =
-		!isOverwriteBlocked && (isOverwriteMode && loadedView ? canSetDefaultView(loadedView) : viewType === "system");
+		!isOverwriteBlocked &&
+		(isOverwriteMode && loadedView ? canSetDefaultView(loadedView) : viewType === "system");
 	const isAlreadyDefault = isOverwriteMode && loadedView?.isDefault === true;
-	const hasQuickFindPlaceholders = useMemo(() => countQuickFindPlaceholders(fetchXml) > 0, [fetchXml]);
+	const hasQuickFindPlaceholders = useMemo(
+		() => countQuickFindPlaceholders(fetchXml) > 0,
+		[fetchXml],
+	);
 
 	// Initialize form when dialog opens
 	useEffect(() => {
@@ -343,8 +363,18 @@ export function SaveViewDialog({
 			const initial =
 				isOverwriteRequest && loadedView
 					? // Overwrite keeps the view's description unless it's edited (#142)
-						{ name: loadedView.name, description: loadedView.description ?? "", viewType: loadedView.type, makeDefault: loadedView.isDefault === true }
-					: { name: "", description: "", viewType: "personal" as const, makeDefault: false };
+						{
+							name: loadedView.name,
+							description: loadedView.description ?? "",
+							viewType: loadedView.type,
+							makeDefault: loadedView.isDefault === true,
+						}
+					: {
+							name: "",
+							description: "",
+							viewType: "personal" as const,
+							makeDefault: false,
+						};
 			setName(initial.name);
 			setViewType(initial.viewType);
 			setDescription(initial.description);
@@ -360,7 +390,10 @@ export function SaveViewDialog({
 	}, [open, isOverwriteRequest, loadedView]);
 
 	// With edits in the form, PPTB warns before the tool closes (#264); the host shows its own prompt
-	const hasEdits = open && initialForm !== null && formSnapshot({ name, description, viewType, makeDefault }) !== initialForm;
+	const hasEdits =
+		open &&
+		initialForm !== null &&
+		formSnapshot({ name, description, viewType, makeDefault }) !== initialForm;
 	useEffect(() => (hasEdits ? holdClose() : undefined), [hasEdits]);
 
 	// Who owns the view, and whether the user can write it (#142). Their own views skip the check.
@@ -375,7 +408,8 @@ export function SaveViewDialog({
 			const user = await whoAmI();
 			if (!active) return;
 			setCurrentUserId(user?.UserId);
-			const ownView = !!user && !!loadedView.ownerId && !isSharedView(loadedView, user.UserId);
+			const ownView =
+				!!user && !!loadedView.ownerId && !isSharedView(loadedView, user.UserId);
 			const canWrite = ownView ? true : await checkUserQueryWriteAccess(loadedView.id);
 			if (!active) return;
 			setWriteAccess(canWrite === undefined ? "unknown" : canWrite ? "allowed" : "denied");
@@ -476,17 +510,29 @@ export function SaveViewDialog({
 		(severity: number) => {
 			switch (severity) {
 				case 0:
-					return <InfoRegular className={`${styles.severityIcon} ${styles.severityLow}`} />;
+					return (
+						<InfoRegular className={`${styles.severityIcon} ${styles.severityLow}`} />
+					);
 				case 1:
-					return <WarningRegular className={`${styles.severityIcon} ${styles.severityMedium}`} />;
+					return (
+						<WarningRegular
+							className={`${styles.severityIcon} ${styles.severityMedium}`}
+						/>
+					);
 				case 2:
 				case 3:
-					return <ErrorCircleRegular className={`${styles.severityIcon} ${styles.severityHigh}`} />;
+					return (
+						<ErrorCircleRegular
+							className={`${styles.severityIcon} ${styles.severityHigh}`}
+						/>
+					);
 				default:
-					return <InfoRegular className={`${styles.severityIcon} ${styles.severityLow}`} />;
+					return (
+						<InfoRegular className={`${styles.severityIcon} ${styles.severityLow}`} />
+					);
 			}
 		},
-		[styles]
+		[styles],
 	);
 
 	// Can save check
@@ -502,13 +548,27 @@ export function SaveViewDialog({
 			if (!personalPrivileges?.canWrite) return false;
 		}
 		return true;
-	}, [name, isSaving, isOverwriteBlocked, isCheckingAccess, viewType, systemPrivileges, personalPrivileges]);
+	}, [
+		name,
+		isSaving,
+		isOverwriteBlocked,
+		isCheckingAccess,
+		viewType,
+		systemPrivileges,
+		personalPrivileges,
+	]);
 
 	// One follow-up step for a saved system view (#180)
 	const runViewSaveStep = useCallback(
 		async (step: ViewSaveStep, viewId: string, solution: Solution | null) => {
 			if (step === "solution") {
-				if (solution) await addSolutionComponent(viewId, COMPONENT_TYPE_SAVEDQUERY, solution.uniquename, false);
+				if (solution)
+					await addSolutionComponent(
+						viewId,
+						COMPONENT_TYPE_SAVEDQUERY,
+						solution.uniquename,
+						false,
+					);
 			} else {
 				// Publishes the view's entity: the documented PublishXml form (#93 h)
 				await publishEntityViews(entityLogicalName);
@@ -527,11 +587,20 @@ export function SaveViewDialog({
 				runViewSaveStep(step, partialSave.viewId, partialSave.solution),
 			);
 			if (failed) {
-				setPartialSave({ ...partialSave, remaining: failed.remaining, error: formatDataverseError(failed.error, "The step failed") });
+				setPartialSave({
+					...partialSave,
+					remaining: failed.remaining,
+					error: formatDataverseError(failed.error, "The step failed"),
+				});
 				return;
 			}
 			setPartialSave(null);
-			onSaveComplete(partialSave.viewId, partialSave.viewType, partialSave.name, partialSave.details);
+			onSaveComplete(
+				partialSave.viewId,
+				partialSave.viewType,
+				partialSave.name,
+				partialSave.details,
+			);
 		} finally {
 			releaseClose();
 			setIsSaving(false);
@@ -544,7 +613,12 @@ export function SaveViewDialog({
 		if (isSaving) return;
 		if (partialSave) {
 			setPartialSave(null);
-			onSaveComplete(partialSave.viewId, partialSave.viewType, partialSave.name, partialSave.details);
+			onSaveComplete(
+				partialSave.viewId,
+				partialSave.viewType,
+				partialSave.name,
+				partialSave.details,
+			);
 			return;
 		}
 		onClose();
@@ -605,9 +679,21 @@ export function SaveViewDialog({
 				const clearOtherDefaults = async (savedViewId: string) => {
 					if (!setAsDefault && !(isAlreadyDefault && showDefaultOption)) return;
 					try {
-						defaultsNotCleared = await clearOtherDefaultPublicViews(entityLogicalName, savedViewId);
+						defaultsNotCleared = await clearOtherDefaultPublicViews(
+							entityLogicalName,
+							savedViewId,
+						);
 					} catch (error) {
-						defaultsNotCleared = [{ id: "", name: "", error: formatDataverseError(error, "Couldn't check the other default views") }];
+						defaultsNotCleared = [
+							{
+								id: "",
+								name: "",
+								error: formatDataverseError(
+									error,
+									"Couldn't check the other default views",
+								),
+							},
+						];
 					}
 				};
 
@@ -633,7 +719,10 @@ export function SaveViewDialog({
 					});
 					await clearOtherDefaults(viewId);
 				}
-				steps = viewSaveSteps({ addToSolution: isNewView && selectedSolution !== null, publish: shouldPublish });
+				steps = viewSaveSteps({
+					addToSolution: isNewView && selectedSolution !== null,
+					publish: shouldPublish,
+				});
 			}
 
 			const details: SavedViewDetails = {
@@ -648,7 +737,9 @@ export function SaveViewDialog({
 					type: "warning",
 				});
 			}
-			const failed = await runViewSaveSteps(steps, (step) => runViewSaveStep(step, viewId, selectedSolution));
+			const failed = await runViewSaveSteps(steps, (step) =>
+				runViewSaveStep(step, viewId, selectedSolution),
+			);
 			if (failed) {
 				setPartialSave({
 					viewId,
@@ -709,7 +800,8 @@ export function SaveViewDialog({
 	// What the save writes, for the environment and scope block (#69)
 	const scopeText = useMemo(() => {
 		const publish = shouldPublish && viewType === "system" ? ", then published" : "";
-		if (isOverwriteMode && loadedView) return `The ${loadedView.type} view "${loadedView.name}" (overwritten${publish})`;
+		if (isOverwriteMode && loadedView)
+			return `The ${loadedView.type} view "${loadedView.name}" (overwritten${publish})`;
 		return `A new ${viewType} view${publish}`;
 	}, [isOverwriteMode, loadedView, shouldPublish, viewType]);
 
@@ -732,7 +824,10 @@ export function SaveViewDialog({
 					</DialogTitle>
 					<DialogContent className={styles.content}>
 						{/* Environment and scope (#69) */}
-						<TargetScope entityLogicalName={entityLogicalName} scope={{ kind: "text", text: scopeText }} />
+						<TargetScope
+							entityLogicalName={entityLogicalName}
+							scope={{ kind: "text", text: scopeText }}
+						/>
 						{isOverwriteMode &&
 							loadedView &&
 							!isOverwriteBlocked &&
@@ -741,13 +836,13 @@ export function SaveViewDialog({
 								// Removing the unmanaged layer brings the managed definition back:
 								// https://learn.microsoft.com/power-apps/maker/data-platform/solution-layers#remove-an-unmanaged-layer
 								<UndoNote undo="possible">
-									To undo, remove the view's unmanaged layer in Power Apps (Solution layers): the managed definition
-									comes back.
+									To undo, remove the view's unmanaged layer in Power Apps
+									(Solution layers): the managed definition comes back.
 								</UndoNote>
 							) : (
 								<UndoNote undo="none">
-									There's no undo: the view's current definition is replaced. To keep it, cancel and use Save as
-									instead.
+									There's no undo: the view's current definition is replaced. To
+									keep it, cancel and use Save as instead.
 								</UndoNote>
 							))}
 
@@ -769,22 +864,33 @@ export function SaveViewDialog({
 										<Text>No performance issues found</Text>
 									</>
 								)}
-								{(validation.status === "warning" || validation.status === "error") && (
+								{(validation.status === "warning" ||
+									validation.status === "error") && (
 									<>
 										{validation.status === "error" ? (
-											<ErrorCircleRegular style={{ color: tokens.colorPaletteRedForeground1 }} />
+											<ErrorCircleRegular
+												style={{ color: tokens.colorPaletteRedForeground1 }}
+											/>
 										) : (
-											<WarningRegular style={{ color: tokens.colorPaletteYellowForeground1 }} />
+											<WarningRegular
+												style={{
+													color: tokens.colorPaletteYellowForeground1,
+												}}
+											/>
 										)}
 										<Text>
 											{validation.messages.length} validation{" "}
-											{validation.messages.length === 1 ? "message" : "messages"}
+											{validation.messages.length === 1
+												? "message"
+												: "messages"}
 										</Text>
 									</>
 								)}
 								{validation.status === "unavailable" && (
 									<>
-										<InfoRegular style={{ color: tokens.colorNeutralForeground3 }} />
+										<InfoRegular
+											style={{ color: tokens.colorNeutralForeground3 }}
+										/>
 										<Text>{validation.errorMessage}</Text>
 									</>
 								)}
@@ -814,163 +920,197 @@ export function SaveViewDialog({
 
 						{/* Form Fields */}
 						{!isCheckingAccess && (
-						<div className={styles.fieldGroup}>
-							{/* Shared without write access: only a copy can be saved (#142) */}
-							{isReadOnlyShare && loadedView && (
-								<MessageBar intent="error" layout="multiline">
-									<MessageBarBody>
-										<MessageBarTitle>Can't overwrite this view</MessageBarTitle>
-										{loadedView.ownerName
-											? `${loadedView.ownerName} shared "${loadedView.name}" with you without write access. Save a copy instead.`
-											: `"${loadedView.name}" was shared with you without write access. Save a copy instead.`}
-									</MessageBarBody>
-								</MessageBar>
-							)}
-							<Field label="Name" required>
-								<Input
-									value={name}
-									onChange={(_, data) => setName(data.value)}
-									placeholder="Enter view name"
-									disabled={formLocked || isOverwriteBlocked}
-								/>
-							</Field>
-							<Field
-								label="Description"
-								hint={isOverwriteMode && loadedView?.description ? "Loaded from the view." : undefined}
-							>
-								<Textarea
-									value={description}
-									onChange={(_, data) => setDescription(data.value)}
-									placeholder="Optional description"
-									disabled={formLocked || isOverwriteBlocked}
-									rows={2}
-								/>
-							</Field>
-							{/* View Type Selection - only for Save As */}
-							{!isOverwriteMode && (
-								<Field label="View type">
-									<RadioGroup
-										value={viewType}
-										onChange={(_, data) => setViewType(data.value as "system" | "personal")}
-										disabled={formLocked}
-									>
-										<Radio
-											value="personal"
-											label="Personal view"
-											disabled={!personalPrivileges?.canWrite}
-										/>
-										<div className={styles.radioDescription}>
-											{personalPrivileges?.canWrite
-												? "Only visible to you"
-												: "You don't have permission to create personal views"}
-										</div>
-										<Radio
-											value="system"
-											label="System view"
-											disabled={!systemPrivileges?.canWrite}
-										/>
-										<div className={styles.radioDescription}>
-											{systemPrivileges?.canWrite
-												? "Visible to all users with access to this entity"
-												: "You don't have permission to create system views"}
-										</div>
-									</RadioGroup>
-								</Field>
-							)}
-							{/* Solution Picker for System Views */}
-							{viewType === "system" && !isOverwriteMode && (
-								<>
-									{solutionsLoading ? (
-										<div className={styles.solutionInfo}>
-											<Spinner size="tiny" label="Loading solutions..." />
-										</div>
-									) : (
-										<SolutionPicker
-											solutions={unmanagedSolutions}
-											selectedSolution={selectedSolution}
-											onSolutionChange={setSelectedSolution}
-											disabled={formLocked}
-										/>
-									)}
-								</>
-							)}{" "}
-							{/* Set as default view: public system views only (#142) */}
-							{showDefaultOption && (
-								<Field
-									hint={
-										isAlreadyDefault
-											? "This is the default view. To change the default, set another public view as default."
-											: currentDefaultView && currentDefaultView.id !== loadedView?.id
-												? `Replaces "${currentDefaultView.name}" as the default public view for ${entityDisplayName || entityLogicalName}.`
-												: undefined
-									}
-								>
-									<Checkbox
-										label="Set as default view"
-										checked={makeDefault}
-										disabled={formLocked || isAlreadyDefault}
-										onChange={(_, data) => setMakeDefault(data.checked === true)}
+							<div className={styles.fieldGroup}>
+								{/* Shared without write access: only a copy can be saved (#142) */}
+								{isReadOnlyShare && loadedView && (
+									<MessageBar intent="error" layout="multiline">
+										<MessageBarBody>
+											<MessageBarTitle>
+												Can't overwrite this view
+											</MessageBarTitle>
+											{loadedView.ownerName
+												? `${loadedView.ownerName} shared "${loadedView.name}" with you without write access. Save a copy instead.`
+												: `"${loadedView.name}" was shared with you without write access. Save a copy instead.`}
+										</MessageBarBody>
+									</MessageBar>
+								)}
+								<Field label="Name" required>
+									<Input
+										value={name}
+										onChange={(_, data) => setName(data.value)}
+										placeholder="Enter view name"
+										disabled={formLocked || isOverwriteBlocked}
 									/>
 								</Field>
-							)}
-							{/* Not customizable: the view can only be saved as a copy (#93) */}
-							{isNotCustomizable && loadedView && (
-								<MessageBar intent="error" className={styles.overwriteWarning}>
-									<MessageBarBody>
-										<MessageBarTitle>Can't overwrite this view</MessageBarTitle>
-										"{loadedView.name}" isn't customizable. Save a copy instead.
-									</MessageBarBody>
-								</MessageBar>
-							)}
-							{/* Managed system view: a warning, not a block (#142). Saving adds an unmanaged
+								<Field
+									label="Description"
+									hint={
+										isOverwriteMode && loadedView?.description
+											? "Loaded from the view."
+											: undefined
+									}
+								>
+									<Textarea
+										value={description}
+										onChange={(_, data) => setDescription(data.value)}
+										placeholder="Optional description"
+										disabled={formLocked || isOverwriteBlocked}
+										rows={2}
+									/>
+								</Field>
+								{/* View Type Selection - only for Save As */}
+								{!isOverwriteMode && (
+									<Field label="View type">
+										<RadioGroup
+											value={viewType}
+											onChange={(_, data) =>
+												setViewType(data.value as "system" | "personal")
+											}
+											disabled={formLocked}
+										>
+											<Radio
+												value="personal"
+												label="Personal view"
+												disabled={!personalPrivileges?.canWrite}
+											/>
+											<div className={styles.radioDescription}>
+												{personalPrivileges?.canWrite
+													? "Only visible to you"
+													: "You don't have permission to create personal views"}
+											</div>
+											<Radio
+												value="system"
+												label="System view"
+												disabled={!systemPrivileges?.canWrite}
+											/>
+											<div className={styles.radioDescription}>
+												{systemPrivileges?.canWrite
+													? "Visible to all users with access to this entity"
+													: "You don't have permission to create system views"}
+											</div>
+										</RadioGroup>
+									</Field>
+								)}
+								{/* Solution Picker for System Views */}
+								{viewType === "system" && !isOverwriteMode && (
+									<>
+										{solutionsLoading ? (
+											<div className={styles.solutionInfo}>
+												<Spinner size="tiny" label="Loading solutions..." />
+											</div>
+										) : (
+											<SolutionPicker
+												solutions={unmanagedSolutions}
+												selectedSolution={selectedSolution}
+												onSolutionChange={setSelectedSolution}
+												disabled={formLocked}
+											/>
+										)}
+									</>
+								)}{" "}
+								{/* Set as default view: public system views only (#142) */}
+								{showDefaultOption && (
+									<Field
+										hint={
+											isAlreadyDefault
+												? "This is the default view. To change the default, set another public view as default."
+												: currentDefaultView &&
+													  currentDefaultView.id !== loadedView?.id
+													? `Replaces "${currentDefaultView.name}" as the default public view for ${entityDisplayName || entityLogicalName}.`
+													: undefined
+										}
+									>
+										<Checkbox
+											label="Set as default view"
+											checked={makeDefault}
+											disabled={formLocked || isAlreadyDefault}
+											onChange={(_, data) =>
+												setMakeDefault(data.checked === true)
+											}
+										/>
+									</Field>
+								)}
+								{/* Not customizable: the view can only be saved as a copy (#93) */}
+								{isNotCustomizable && loadedView && (
+									<MessageBar intent="error" className={styles.overwriteWarning}>
+										<MessageBarBody>
+											<MessageBarTitle>
+												Can't overwrite this view
+											</MessageBarTitle>
+											"{loadedView.name}" isn't customizable. Save a copy
+											instead.
+										</MessageBarBody>
+									</MessageBar>
+								)}
+								{/* Managed system view: a warning, not a block (#142). Saving adds an unmanaged
 							    layer, which sits on top of the managed layers and defines the view's behavior.
 							    https://learn.microsoft.com/power-apps/maker/data-platform/solution-layers#remove-an-unmanaged-layer
 							    https://learn.microsoft.com/power-platform/alm/solution-layers-alm */}
-							{isManagedOverwrite && !isOverwriteBlocked && loadedView && (
-								<MessageBar intent="warning" layout="multiline" className={styles.overwriteWarning}>
-									<MessageBarBody>
-										<MessageBarTitle>Managed view</MessageBarTitle>
-										{managedSolution
-											? `"${loadedView.name}" comes from the managed solution ${managedSolution.friendlyName} (${managedSolution.uniqueName}).`
-											: `"${loadedView.name}" comes from a managed solution.`}{" "}
-										Saving adds an unmanaged customization on top of it, which stays in effect until it's
-										removed, even after the solution is updated.
-									</MessageBarBody>
-								</MessageBar>
-							)}
-							{/* A view someone else owns and shared with write access (#142) */}
-							{isShared && !isOverwriteBlocked && loadedView && (
-								<MessageBar intent="warning" layout="multiline" className={styles.overwriteWarning}>
-									<MessageBarBody>
-										<MessageBarTitle>Overwrite warning</MessageBarTitle>
-										"{loadedView.name}" belongs to {loadedView.ownerName || "another user"}. Saving changes it for
-										everyone it's shared with.
-									</MessageBarBody>
-								</MessageBar>
-							)}
-							{/* Overwrite Warning */}
-							{isOverwriteMode && !isOverwriteBlocked && !isManagedOverwrite && !isShared && loadedView && (
-								<MessageBar intent="warning" className={styles.overwriteWarning}>
-									<MessageBarBody>
-										<MessageBarTitle>Overwrite warning</MessageBarTitle>
-										This will overwrite the existing view "{loadedView.name}".
-									</MessageBarBody>
-								</MessageBar>
-							)}
-							{/* Quick find placeholders are saved as written; the test value only runs (#142) */}
-							{hasQuickFindPlaceholders && !isOverwriteBlocked && (
-								<Text className={styles.placeholderNote}>
-									<span className={styles.code}>{"{0}"}</span> placeholders are saved as written. The quick find test
-									value is only used to run the query.
-								</Text>
-							)}
-							{/* Publish Note */}
-							{shouldPublish && viewType === "system" && (
-								<Text className={styles.publishNote}>
-									The view will be published after saving, making it immediately available to users.
-								</Text>
-							)}
-						</div>
+								{isManagedOverwrite && !isOverwriteBlocked && loadedView && (
+									<MessageBar
+										intent="warning"
+										layout="multiline"
+										className={styles.overwriteWarning}
+									>
+										<MessageBarBody>
+											<MessageBarTitle>Managed view</MessageBarTitle>
+											{managedSolution
+												? `"${loadedView.name}" comes from the managed solution ${managedSolution.friendlyName} (${managedSolution.uniqueName}).`
+												: `"${loadedView.name}" comes from a managed solution.`}{" "}
+											Saving adds an unmanaged customization on top of it,
+											which stays in effect until it's removed, even after the
+											solution is updated.
+										</MessageBarBody>
+									</MessageBar>
+								)}
+								{/* A view someone else owns and shared with write access (#142) */}
+								{isShared && !isOverwriteBlocked && loadedView && (
+									<MessageBar
+										intent="warning"
+										layout="multiline"
+										className={styles.overwriteWarning}
+									>
+										<MessageBarBody>
+											<MessageBarTitle>Overwrite warning</MessageBarTitle>"
+											{loadedView.name}" belongs to{" "}
+											{loadedView.ownerName || "another user"}. Saving changes
+											it for everyone it's shared with.
+										</MessageBarBody>
+									</MessageBar>
+								)}
+								{/* Overwrite Warning */}
+								{isOverwriteMode &&
+									!isOverwriteBlocked &&
+									!isManagedOverwrite &&
+									!isShared &&
+									loadedView && (
+										<MessageBar
+											intent="warning"
+											className={styles.overwriteWarning}
+										>
+											<MessageBarBody>
+												<MessageBarTitle>Overwrite warning</MessageBarTitle>
+												This will overwrite the existing view "
+												{loadedView.name}".
+											</MessageBarBody>
+										</MessageBar>
+									)}
+								{/* Quick find placeholders are saved as written; the test value only runs (#142) */}
+								{hasQuickFindPlaceholders && !isOverwriteBlocked && (
+									<Text className={styles.placeholderNote}>
+										<span className={styles.code}>{"{0}"}</span> placeholders
+										are saved as written. The quick find test value is only used
+										to run the query.
+									</Text>
+								)}
+								{/* Publish Note */}
+								{shouldPublish && viewType === "system" && (
+									<Text className={styles.publishNote}>
+										The view will be published after saving, making it
+										immediately available to users.
+									</Text>
+								)}
+							</div>
 						)}
 
 						{/* Save Error */}
@@ -989,14 +1129,20 @@ export function SaveViewDialog({
 								<MessageBarBody>
 									{partialSave.remaining[0] === "solution" ? (
 										<>
-											<MessageBarTitle>Saved, but not added to the solution</MessageBarTitle>
+											<MessageBarTitle>
+												Saved, but not added to the solution
+											</MessageBarTitle>
 											{`The view "${partialSave.name}" was created, but adding it to "${
-												partialSave.solution?.friendlyname ?? partialSave.solution?.uniquename ?? ""
+												partialSave.solution?.friendlyname ??
+												partialSave.solution?.uniquename ??
+												""
 											}" failed: ${asSentence(partialSave.error)} Retry, or close: the view stays, outside the solution.`}
 										</>
 									) : (
 										<>
-											<MessageBarTitle>Saved, but not published</MessageBarTitle>
+											<MessageBarTitle>
+												Saved, but not published
+											</MessageBarTitle>
 											{`The view was saved, but publishing ${entityDisplayName || entityLogicalName} failed: ${asSentence(
 												partialSave.error,
 											)} Users see the change once it's published.`}
@@ -1009,7 +1155,11 @@ export function SaveViewDialog({
 					<DialogActions>
 						{/* A view that can't be overwritten can be saved as a copy (#142) */}
 						{isOverwriteBlocked && (
-							<Button appearance="secondary" onClick={handleSaveCopy} disabled={isSaving}>
+							<Button
+								appearance="secondary"
+								onClick={handleSaveCopy}
+								disabled={isSaving}
+							>
 								Save a copy…
 							</Button>
 						)}

@@ -69,9 +69,13 @@ export function SendToToolButton({
 			const synced = await sync("send");
 			if (synced.status === "cancelled") return;
 			const xmlToSend = synced.status === "synced" ? synced.fetchXml : fetchXml;
-			const entityToSend = synced.status === "synced" ? synced.fetchQuery.entity.name : entityLogicalName;
+			const entityToSend =
+				synced.status === "synced" ? synced.fetchQuery.entity.name : entityLogicalName;
 			if (!xmlToSend || !entityToSend) return;
-			const prefill: FetchXmlStudioT2TPrefill = { fetchXml: xmlToSend, entityLogicalName: entityToSend };
+			const prefill: FetchXmlStudioT2TPrefill = {
+				fetchXml: xmlToSend,
+				entityLogicalName: entityToSend,
+			};
 			// Fire-and-forget — do not await (see file header). Errors are surfaced async.
 			void sendFetchXmlToTool(targetToolId, prefill).catch(async (err) => {
 				const message = err instanceof Error ? err.message : String(err);
