@@ -111,6 +111,15 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		MetadataId: `00000000-0000-0000-0000-${String(t.objectTypeCode).padStart(12, "0")}`,
 	});
 
+	/** EntityMetadata.Privileges, named prv{Type}{LogicalName} like most user-owned tables (#327) */
+	const entityPrivileges = (t: FakeTable) =>
+		["Create", "Read", "Write", "Delete", "Append", "AppendTo", "Assign", "Share"].map(
+			(type) => ({
+				Name: `prv${type}${t.logicalName.charAt(0).toUpperCase()}${t.logicalName.slice(1)}`,
+				PrivilegeType: type,
+			}),
+		);
+
 	const attributeDefinition = (t: FakeTable, a: FakeAttribute) => ({
 		LogicalName: a.name,
 		SchemaName: a.name,
@@ -253,7 +262,7 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 				return { value: table.attributes.map((a) => attributeDefinition(table, a)) };
 			if (/Relationships/.test(rest)) return { value: [] };
 			if (rest.includes("EnforceStateTransitions")) return { EnforceStateTransitions: false };
-			if (rest.includes("Privileges")) return { Privileges: [] };
+			if (rest.includes("Privileges")) return { Privileges: entityPrivileges(table) };
 			return entityDefinition(table);
 		}
 		if (query.startsWith("EntityDefinitions")) return { value: tables.map(entityDefinition) };
