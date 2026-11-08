@@ -57,8 +57,10 @@ export function BetweenInputPicker({
 	const [value1, value2] = value;
 
 	// Dates come as the condition's text, written for the column's behaviour (#207)
-	const handleValue1Change = (newValue: number | string | undefined) => onChange([newValue, value2]);
-	const handleValue2Change = (newValue: number | string | undefined) => onChange([value1, newValue]);
+	const handleValue1Change = (newValue: number | string | undefined) =>
+		onChange([newValue, value2]);
+	const handleValue2Change = (newValue: number | string | undefined) =>
+		onChange([value1, newValue]);
 
 	const isNumeric =
 		attribute.AttributeType === "Integer" ||
@@ -68,7 +70,9 @@ export function BetweenInputPicker({
 
 	const isDateTime = attribute.AttributeType === "DateTime";
 	const timeZone = useDataverseTimeZone();
-	const hint = isDateTime ? timeZoneHint(dateValueContext(attribute, undefined, timeZone), timeZone) : undefined;
+	const hint = isDateTime
+		? timeZoneHint(dateValueContext(attribute, undefined, timeZone), timeZone)
+		: undefined;
 
 	return (
 		<div>

@@ -46,47 +46,122 @@ describe("getAttributeCapabilities", () => {
 	});
 
 	it("DateTime group by needs a date grouping", () => {
-		expect(getAttributeCapabilities({ typeName: "DateTimeType" }).groupbyNeedsDateGrouping).toBe(true);
-		expect(getAttributeCapabilities({ typeName: "IntegerType" }).groupbyNeedsDateGrouping).toBe(false);
+		expect(
+			getAttributeCapabilities({ typeName: "DateTimeType" }).groupbyNeedsDateGrouping,
+		).toBe(true);
+		expect(getAttributeCapabilities({ typeName: "IntegerType" }).groupbyNeedsDateGrouping).toBe(
+			false,
+		);
 	});
 
 	it("reads AttributeTypeName, falling back to AttributeType", () => {
-		expect(toAttributeTypeInfo({ AttributeType: "Virtual", AttributeTypeName: { Value: "MultiSelectPicklistType" } }).typeName).toBe("MultiSelectPicklistType");
+		expect(
+			toAttributeTypeInfo({
+				AttributeType: "Virtual",
+				AttributeTypeName: { Value: "MultiSelectPicklistType" },
+			}).typeName,
+		).toBe("MultiSelectPicklistType");
 		expect(toAttributeTypeInfo({ AttributeType: "Money" }).typeName).toBe("MoneyType");
 	});
 });
 
 describe("editor messages", () => {
 	it("explains why Money can't be counted", () => {
-		expect(getUnsupportedFunctionReason("count", { typeName: "MoneyType" })).toMatch(/0x80060888/);
+		expect(getUnsupportedFunctionReason("count", { typeName: "MoneyType" })).toMatch(
+			/0x80060888/,
+		);
 		expect(getUnsupportedFunctionReason("sum", { typeName: "MoneyType" })).toBeUndefined();
 	});
 
 	it("flags unsupported aggregates, group by and missing date grouping in aggregate queries", () => {
 		const ctx = { aggregateQuery: true };
-		expect(getAttributeMetadataIssues({ id: "1", type: "attribute", name: "revenue", alias: "r", aggregate: "count" }, { typeName: "MoneyType" }, ctx)).toHaveLength(1);
-		expect(getAttributeMetadataIssues({ id: "1", type: "attribute", name: "name", alias: "n", aggregate: "sum" }, { typeName: "StringType" }, ctx)[0]).toMatch(/0x8004112f/);
-		expect(getAttributeMetadataIssues({ id: "1", type: "attribute", name: "createdon", alias: "c", groupby: true }, { typeName: "DateTimeType" }, ctx)[0]).toMatch(/0x80041135/);
-		expect(getAttributeMetadataIssues({ id: "1", type: "attribute", name: "createdon", alias: "c", groupby: true, dategrouping: "year" }, { typeName: "DateTimeType" }, ctx)).toEqual([]);
+		expect(
+			getAttributeMetadataIssues(
+				{ id: "1", type: "attribute", name: "revenue", alias: "r", aggregate: "count" },
+				{ typeName: "MoneyType" },
+				ctx,
+			),
+		).toHaveLength(1);
+		expect(
+			getAttributeMetadataIssues(
+				{ id: "1", type: "attribute", name: "name", alias: "n", aggregate: "sum" },
+				{ typeName: "StringType" },
+				ctx,
+			)[0],
+		).toMatch(/0x8004112f/);
+		expect(
+			getAttributeMetadataIssues(
+				{ id: "1", type: "attribute", name: "createdon", alias: "c", groupby: true },
+				{ typeName: "DateTimeType" },
+				ctx,
+			)[0],
+		).toMatch(/0x80041135/);
+		expect(
+			getAttributeMetadataIssues(
+				{
+					id: "1",
+					type: "attribute",
+					name: "createdon",
+					alias: "c",
+					groupby: true,
+					dategrouping: "year",
+				},
+				{ typeName: "DateTimeType" },
+				ctx,
+			),
+		).toEqual([]);
 	});
 
 	it("doesn't block when metadata is unknown", () => {
-		expect(getAttributeMetadataIssues({ id: "1", type: "attribute", name: "x", alias: "x", aggregate: "sum" }, undefined, { aggregateQuery: true })).toEqual([]);
+		expect(
+			getAttributeMetadataIssues(
+				{ id: "1", type: "attribute", name: "x", alias: "x", aggregate: "sum" },
+				undefined,
+				{ aggregateQuery: true },
+			),
+		).toEqual([]);
 		expect(getOrderMetadataIssue(undefined)).toBeUndefined();
 	});
 
 	it("count child records needs a hierarchical entity and the primary key", () => {
-		const attr = { id: "1", type: "attribute" as const, name: "accountid", alias: "k", rowAggregate: "CountChildren" };
-		expect(getAttributeMetadataIssues(attr, undefined, { aggregateQuery: false, isHierarchical: false })[0]).toMatch(/0x80047020/);
-		expect(getAttributeMetadataIssues({ ...attr, name: "parentaccountid" }, undefined, { aggregateQuery: false, isHierarchical: true, primaryIdAttribute: "accountid" })[0]).toMatch(/0x80040203/);
-		expect(getAttributeMetadataIssues(attr, undefined, { aggregateQuery: false, isHierarchical: true, primaryIdAttribute: "accountid" })).toEqual([]);
+		const attr = {
+			id: "1",
+			type: "attribute" as const,
+			name: "accountid",
+			alias: "k",
+			rowAggregate: "CountChildren",
+		};
+		expect(
+			getAttributeMetadataIssues(attr, undefined, {
+				aggregateQuery: false,
+				isHierarchical: false,
+			})[0],
+		).toMatch(/0x80047020/);
+		expect(
+			getAttributeMetadataIssues({ ...attr, name: "parentaccountid" }, undefined, {
+				aggregateQuery: false,
+				isHierarchical: true,
+				primaryIdAttribute: "accountid",
+			})[0],
+		).toMatch(/0x80040203/);
+		expect(
+			getAttributeMetadataIssues(attr, undefined, {
+				aggregateQuery: false,
+				isHierarchical: true,
+				primaryIdAttribute: "accountid",
+			}),
+		).toEqual([]);
 	});
 
 	it("orders on multi-select option sets and retained data without retention are flagged", () => {
 		expect(getOrderMetadataIssue({ typeName: "MultiSelectPicklistType" })).toBeTruthy();
 		expect(getOrderMetadataIssue({ typeName: "PicklistType" })).toBeUndefined();
-		expect(getDataSourceIssue("retained", { logicalName: "account", isRetentionEnabled: false })).toMatch(/IsRetentionEnabled/);
-		expect(getDataSourceIssue("retained", { logicalName: "account", isRetentionEnabled: true })).toBeUndefined();
+		expect(
+			getDataSourceIssue("retained", { logicalName: "account", isRetentionEnabled: false }),
+		).toMatch(/IsRetentionEnabled/);
+		expect(
+			getDataSourceIssue("retained", { logicalName: "account", isRetentionEnabled: true }),
+		).toBeUndefined();
 		expect(getDataSourceIssue("retained", { logicalName: "account" })).toBeUndefined();
 	});
 });

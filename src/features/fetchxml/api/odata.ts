@@ -19,6 +19,10 @@ export function odataString(value: string): string {
  * PPTB VS Code extension puts it in the URL raw, #173).
  * https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-functions#passing-parameters-to-a-function
  */
-export function functionWithString(functionName: string, parameterName: string, value: string): string {
+export function functionWithString(
+	functionName: string,
+	parameterName: string,
+	value: string,
+): string {
 	return `${functionName}(${parameterName}=@p1)?@p1='${encodeURIComponent(odataString(value))}'`;
 }

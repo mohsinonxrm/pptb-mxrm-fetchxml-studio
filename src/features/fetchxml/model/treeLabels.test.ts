@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { countDescendants, deleteConfirmationText, linkEntityLabel, linkEntityLookup, showsNoAttributesHint } from "./treeLabels";
+import {
+	countDescendants,
+	deleteConfirmationText,
+	linkEntityLabel,
+	linkEntityLookup,
+	showsNoAttributesHint,
+} from "./treeLabels";
 import { parseFetchXml } from "./fetchxmlParser";
 import type { LinkEntityNode } from "./nodes";
 
@@ -19,11 +25,18 @@ const link = (overrides: Partial<LinkEntityNode>): LinkEntityNode => ({
 
 describe("linkEntityLabel (#25)", () => {
 	it("names the parent's lookup (to) for a many-to-one join", () => {
-		expect(linkEntityLabel(link({ relationshipType: "N1" }), "accountid")).toBe("contact via primarycontactid (outer)");
+		expect(linkEntityLabel(link({ relationshipType: "N1" }), "accountid")).toBe(
+			"contact via primarycontactid (outer)",
+		);
 	});
 
 	it("names the related entity's lookup (from) for a one-to-many join", () => {
-		const l = link({ from: "parentcustomerid", to: "accountid", linkType: "inner", relationshipType: "1N" });
+		const l = link({
+			from: "parentcustomerid",
+			to: "accountid",
+			linkType: "inner",
+			relationshipType: "1N",
+		});
 		expect(linkEntityLabel(l)).toBe("contact via parentcustomerid (inner)");
 	});
 
@@ -35,19 +48,25 @@ describe("linkEntityLabel (#25)", () => {
 	});
 
 	it("keeps the alias label unchanged", () => {
-		expect(linkEntityLabel(link({ alias: "owner", linkType: "inner" }), "accountid")).toBe("owner (inner)");
+		expect(linkEntityLabel(link({ alias: "owner", linkType: "inner" }), "accountid")).toBe(
+			"owner (inner)",
+		);
 	});
 
 	it("falls back to the name when no attribute is set", () => {
 		expect(linkEntityLabel(link({ from: "", to: "" }))).toBe("contact (outer)");
-		expect(linkEntityLabel(link({ from: "contactid", to: "", relationshipType: "N1" }))).toBe("contact via contactid (outer)");
+		expect(linkEntityLabel(link({ from: "contactid", to: "", relationshipType: "N1" }))).toBe(
+			"contact via contactid (outer)",
+		);
 	});
 });
 
 describe("showsNoAttributesHint (#24)", () => {
 	it("shows for a returning link type with no attributes", () => {
 		expect(showsNoAttributesHint(link({ linkType: "inner" }))).toBe(true);
-		expect(showsNoAttributesHint(link({ linkType: "matchfirstrowusingcrossapply" }))).toBe(true);
+		expect(showsNoAttributesHint(link({ linkType: "matchfirstrowusingcrossapply" }))).toBe(
+			true,
+		);
 	});
 
 	it("doesn't show for link types that can't return attributes", () => {
@@ -57,9 +76,21 @@ describe("showsNoAttributesHint (#24)", () => {
 	});
 
 	it("doesn't show with attributes, all-attributes or for an intersect link-entity", () => {
-		expect(showsNoAttributesHint(link({ attributes: [{ id: "a", type: "attribute", name: "fullname" }] }))).toBe(false);
-		expect(showsNoAttributesHint(link({ allAttributes: { id: "aa", type: "all-attributes", enabled: true } }))).toBe(false);
-		expect(showsNoAttributesHint(link({ allAttributes: { id: "aa", type: "all-attributes", enabled: false } }))).toBe(true);
+		expect(
+			showsNoAttributesHint(
+				link({ attributes: [{ id: "a", type: "attribute", name: "fullname" }] }),
+			),
+		).toBe(false);
+		expect(
+			showsNoAttributesHint(
+				link({ allAttributes: { id: "aa", type: "all-attributes", enabled: true } }),
+			),
+		).toBe(false);
+		expect(
+			showsNoAttributesHint(
+				link({ allAttributes: { id: "aa", type: "all-attributes", enabled: false } }),
+			),
+		).toBe(true);
 		expect(showsNoAttributesHint(link({ intersect: true }))).toBe(false);
 	});
 });

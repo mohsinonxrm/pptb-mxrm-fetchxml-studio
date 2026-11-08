@@ -43,7 +43,10 @@ describe("parseFetchXml", () => {
 		const root = result.fetchNode!.entity;
 		expect(result.fetchNode!.options.aggregate).toBe(true);
 		expect(root.name).toBe("msdyn_timeentry");
-		expect(root.attributes.map((a) => a.name)).toEqual(["bookableresourceid", "msdyn_duration"]);
+		expect(root.attributes.map((a) => a.name)).toEqual([
+			"bookableresourceid",
+			"msdyn_duration",
+		]);
 		expect(root.attributes[1]).toMatchObject({ alias: "duration", aggregate: "sum" });
 
 		const [statusCondition] = root.filters[0].conditions.filter((c) => c.operator === "in");
@@ -100,7 +103,9 @@ describe("parseFetchXml", () => {
 
 describe("validateFetchXmlSyntax", () => {
 	it("accepts a minimal query", () => {
-		expect(validateFetchXmlSyntax("<fetch><entity name='account' /></fetch>")).toEqual({ valid: true });
+		expect(validateFetchXmlSyntax("<fetch><entity name='account' /></fetch>")).toEqual({
+			valid: true,
+		});
 	});
 
 	it("rejects a non-fetch root", () => {
@@ -110,15 +115,26 @@ describe("validateFetchXmlSyntax", () => {
 
 describe("XML comments (#200)", () => {
 	it("are listed as removed, so the confirmation shows them instead of dropping them silently", () => {
-		const result = parseFetchXml(`<!-- saved from FXB --><fetch><!-- columns --><entity name="account"><attribute name="name" /><!-- todo --></entity></fetch>`);
+		const result = parseFetchXml(
+			`<!-- saved from FXB --><fetch><!-- columns --><entity name="account"><attribute name="name" /><!-- todo --></entity></fetch>`,
+		);
 		expect(result.success).toBe(true);
 		expect(getParseToTreeChanges(result)).toEqual([
-			expect.objectContaining({ kind: "dropped", message: "XML comments aren't kept in the tree, so 3 comments are removed." }),
+			expect.objectContaining({
+				kind: "dropped",
+				message: "XML comments aren't kept in the tree, so 3 comments are removed.",
+			}),
 		]);
 	});
 
 	it("say nothing when there are none, and use the singular for one", () => {
-		expect(getParseToTreeChanges(parseFetchXml(`<fetch><entity name="account" /></fetch>`))).toEqual([]);
-		expect(getParseToTreeChanges(parseFetchXml(`<fetch><!-- x --><entity name="account" /></fetch>`))[0].message).toMatch(/so 1 comment is removed\.$/);
+		expect(
+			getParseToTreeChanges(parseFetchXml(`<fetch><entity name="account" /></fetch>`)),
+		).toEqual([]);
+		expect(
+			getParseToTreeChanges(
+				parseFetchXml(`<fetch><!-- x --><entity name="account" /></fetch>`),
+			)[0].message,
+		).toMatch(/so 1 comment is removed\.$/);
 	});
 });

@@ -30,13 +30,19 @@ export interface WallClock {
 export type DateTimeBehaviorName = "UserLocal" | "DateOnly" | "TimeZoneIndependent";
 
 /** DateTimeAttributeMetadata's behaviour; User Local when it isn't known (the default) */
-export function dateTimeBehavior(attribute: { DateTimeBehavior?: { Value?: string } } | undefined): DateTimeBehaviorName {
+export function dateTimeBehavior(
+	attribute: { DateTimeBehavior?: { Value?: string } } | undefined,
+): DateTimeBehaviorName {
 	const value = attribute?.DateTimeBehavior?.Value;
 	return value === "DateOnly" || value === "TimeZoneIndependent" ? value : "UserLocal";
 }
 
 /** Operators that compare dates, not times: their value is written as YYYY-MM-DD */
-export const DATE_ONLY_OPERATORS: ReadonlySet<string> = new Set(["on", "on-or-before", "on-or-after"]);
+export const DATE_ONLY_OPERATORS: ReadonlySet<string> = new Set([
+	"on",
+	"on-or-before",
+	"on-or-after",
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The user's Dataverse time zone
@@ -70,7 +76,12 @@ export interface DataverseTimeZone {
 	standard?: TransitionRule;
 }
 
-export const UTC_TIME_ZONE: DataverseTimeZone = { name: "UTC", bias: 0, standardBias: 0, daylightBias: 0 };
+export const UTC_TIME_ZONE: DataverseTimeZone = {
+	name: "UTC",
+	bias: 0,
+	standardBias: 0,
+	daylightBias: 0,
+};
 
 /** UserSettings columns for the time zone (select these) */
 export const USER_SETTINGS_TIME_ZONE_COLUMNS = [
@@ -91,7 +102,10 @@ export const USER_SETTINGS_TIME_ZONE_COLUMNS = [
 ] as const;
 
 /** The time zone from a UserSettings row and the time zone definition's standard name */
-export function timeZoneFromUserSettings(settings: Record<string, unknown>, name: string): DataverseTimeZone {
+export function timeZoneFromUserSettings(
+	settings: Record<string, unknown>,
+	name: string,
+): DataverseTimeZone {
 	const n = (key: string) => (typeof settings[key] === "number" ? (settings[key] as number) : 0);
 	const rule = (prefix: "timezonestandard" | "timezonedaylight"): TransitionRule | undefined =>
 		n(`${prefix}month`) > 0
@@ -128,7 +142,8 @@ export function utcOffsetMinutes(tz: DataverseTimeZone, utcMs: number): number {
 	if (!tz.daylight || !tz.standard) return 0 - (tz.bias + tz.standardBias);
 	const year = new Date(utcMs).getUTCFullYear();
 	// Daylight time starts at a standard-time clock reading and ends at a daylight-time one
-	const daylightStarts = transitionWallMs(year, tz.daylight) + (tz.bias + tz.standardBias) * 60_000;
+	const daylightStarts =
+		transitionWallMs(year, tz.daylight) + (tz.bias + tz.standardBias) * 60_000;
 	const daylightEnds = transitionWallMs(year, tz.standard) + (tz.bias + tz.daylightBias) * 60_000;
 	const inDaylight =
 		daylightStarts < daylightEnds
@@ -166,7 +181,8 @@ const wallClockOf = (d: Date): WallClock => ({
 const pad = (n: number, width = 2) => String(Math.abs(n)).padStart(width, "0");
 
 const formatDate = (w: WallClock) => `${pad(w.year, 4)}-${pad(w.month)}-${pad(w.day)}`;
-const formatWall = (w: WallClock) => `${formatDate(w)}T${pad(w.hour)}:${pad(w.minute)}:${pad(w.second)}`;
+const formatWall = (w: WallClock) =>
+	`${formatDate(w)}T${pad(w.hour)}:${pad(w.minute)}:${pad(w.second)}`;
 
 /** "+09:00", "-07:00", "+00:00" */
 export function formatOffset(minutes: number): string {
@@ -208,7 +224,8 @@ export function formatConditionDate(wall: WallClock, ctx: DateValueContext): str
 	return `${formatWall(wall)}${formatOffset(offset)}`;
 }
 
-const VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?)?$/i;
+const VALUE_PATTERN =
+	/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?)?$/i;
 
 /**
  * A condition value as the wall clock to show in the picker, read the way Dataverse reads it
@@ -240,14 +257,27 @@ function zoneMinutes(zone: string): number {
 
 function isValidWall(w: WallClock): boolean {
 	const d = new Date(wallMs(w));
-	return d.getUTCFullYear() === w.year && d.getUTCMonth() + 1 === w.month && d.getUTCDate() === w.day && w.hour < 24 && w.minute < 60 && w.second < 60;
+	return (
+		d.getUTCFullYear() === w.year &&
+		d.getUTCMonth() + 1 === w.month &&
+		d.getUTCDate() === w.day &&
+		w.hour < 24 &&
+		w.minute < 60 &&
+		w.second < 60
+	);
 }
 
 /** Which time zone a picked time is in, for the hint under the time picker (#207) */
-export function timeZoneHint(ctx: DateValueContext, timeZone: DataverseTimeZone | undefined): string | undefined {
+export function timeZoneHint(
+	ctx: DateValueContext,
+	timeZone: DataverseTimeZone | undefined,
+): string | undefined {
 	if (ctx.dateOnly) return undefined;
-	if (ctx.behavior === "TimeZoneIndependent") return "Time zone independent: no time zone is applied.";
-	return timeZone?.name ? `Time in your Dataverse time zone (${timeZone.name}).` : "Time in your Dataverse time zone.";
+	if (ctx.behavior === "TimeZoneIndependent")
+		return "Time zone independent: no time zone is applied.";
+	return timeZone?.name
+		? `Time in your Dataverse time zone (${timeZone.name}).`
+		: "Time in your Dataverse time zone.";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,7 +301,11 @@ export const pickerDate = (w: WallClock): Date => new Date(w.year, w.month - 1, 
 export const pickerTime = (w: WallClock): Date => new Date(2000, 0, 15, w.hour, w.minute, w.second);
 
 /** A wall clock with a picked date; the time is kept unless only the date counts */
-export function withPickedDate(current: WallClock | undefined, date: Date, dateOnly: boolean): WallClock {
+export function withPickedDate(
+	current: WallClock | undefined,
+	date: Date,
+	dateOnly: boolean,
+): WallClock {
 	const keepTime = !dateOnly && current;
 	return {
 		year: date.getFullYear(),
@@ -296,7 +330,11 @@ export const withPickedTime = (current: WallClock, time: Date): WallClock => ({
  * their date, Time Zone Independent values are their stored reading, User Local values are the
  * instant in the user's Dataverse time zone.
  */
-export function resultWallClock(raw: string, behavior: DateTimeBehaviorName, timeZone: DataverseTimeZone): WallClock | undefined {
+export function resultWallClock(
+	raw: string,
+	behavior: DateTimeBehaviorName,
+	timeZone: DataverseTimeZone,
+): WallClock | undefined {
 	const m = VALUE_PATTERN.exec(raw.trim());
 	if (!m) return undefined;
 	const [, y, mo, d, h = "0", mi = "0", s = "0", zone] = m;
