@@ -3071,6 +3071,22 @@ export type EntityPrivilegeType =
 	"Create" | "Read" | "Write" | "Delete" | "Assign" | "Share" | "Append" | "AppendTo";
 
 /**
+ * PrivilegeType EnumType values. The Web API answers with the member name ("Delete"); the number is
+ * accepted too.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/privilegetype
+ */
+const PRIVILEGE_TYPE_NUMBERS: Record<EntityPrivilegeType, number> = {
+	Create: 1,
+	Read: 2,
+	Write: 3,
+	Delete: 4,
+	Assign: 5,
+	Share: 6,
+	Append: 7,
+	AppendTo: 8,
+};
+
+/**
  * The entity's privilege name of this type, from its metadata (EntityMetadata.Privileges:
  * SecurityPrivilegeMetadata Name and PrivilegeType). Many don't follow prv{Type}{LogicalName}:
  * savedquery uses prvDeleteQuery, userquery prvDeleteUserQuery, systemuser prvDeleteUser,
@@ -3089,7 +3105,7 @@ export async function resolveEntityPrivilegeName(
 			window.dataverseAPI!.queryData(
 				`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
 			) as unknown as Promise<{
-				Privileges?: { Name?: string; PrivilegeType?: string }[];
+				Privileges?: { Name?: string; PrivilegeType?: string | number }[];
 			} | null>,
 		// A null or malformed answer isn't kept: the next call reads the metadata again
 		(d) => Array.isArray(d?.Privileges),
@@ -3097,7 +3113,12 @@ export async function resolveEntityPrivilegeName(
 	if (!Array.isArray(definition?.Privileges)) {
 		throw new Error(`EntityDefinitions(${logicalName}): no Privileges in the response`);
 	}
-	return definition.Privileges.find((p) => p.PrivilegeType === privilegeType)?.Name || undefined;
+	const typeNumber = PRIVILEGE_TYPE_NUMBERS[privilegeType];
+	return (
+		definition.Privileges.find(
+			(p) => p.PrivilegeType === privilegeType || p.PrivilegeType === typeNumber,
+		)?.Name || undefined
+	);
 }
 
 /**

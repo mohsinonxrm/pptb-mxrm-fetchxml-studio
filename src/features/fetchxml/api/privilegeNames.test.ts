@@ -110,6 +110,21 @@ describe("Delete privilege name from entity metadata (#327)", () => {
 		}
 	});
 
+	it("accepts PrivilegeType as the enum number too (Delete = 4)", async () => {
+		queryData.mockImplementation(async (query: string) =>
+			query.startsWith("EntityDefinitions")
+				? {
+						Privileges: [
+							{ Name: "prvWriteQuery", PrivilegeType: 3 },
+							{ Name: "prvDeleteQuery", PrivilegeType: 4 },
+						],
+					}
+				: respond(query),
+		);
+		await expect(checkDeletePrivilege("savedquery")).resolves.toBe(true);
+		expect(checked).toEqual(["prvDeleteQuery"]);
+	});
+
 	it("doesn't keep a null or malformed metadata answer for the session", async () => {
 		queryData
 			.mockResolvedValueOnce(null)
