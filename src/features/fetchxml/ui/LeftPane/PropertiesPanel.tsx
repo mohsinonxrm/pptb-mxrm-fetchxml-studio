@@ -68,12 +68,17 @@ interface PropertiesPanelProps {
 export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: PropertiesPanelProps) {
 	const styles = useStyles();
 	const { removeNode } = useBuilder();
-	const findings = useMemo(() => (fetchQuery ? validateQueryRules(fetchQuery) : []), [fetchQuery]);
+	const findings = useMemo(
+		() => (fetchQuery ? validateQueryRules(fetchQuery) : []),
+		[fetchQuery],
+	);
 
 	if (!selectedNode || !fetchQuery) {
 		return (
 			<div className={styles.container}>
-				<div className={styles.emptyState}>Select a node in the tree to view its properties.</div>
+				<div className={styles.emptyState}>
+					Select a node in the tree to view its properties.
+				</div>
 			</div>
 		);
 	}
@@ -87,14 +92,23 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 	const renderEditor = () => {
 		switch (selectedNode.type) {
 			case "fetch":
-				return <FetchOptionsEditor node={selectedNode} findings={nodeFindings} onUpdate={update} />;
+				return (
+					<FetchOptionsEditor
+						node={selectedNode}
+						findings={nodeFindings}
+						onUpdate={update}
+					/>
+				);
 
 			case "entity":
 				return <EntityEditor node={selectedNode} onUpdate={update} />;
 
 			case "all-attributes":
 				return (
-					<AllAttributesEditor isAggregateQuery={isAggregateQuery} onRemove={() => removeNode(selectedNode.id)} />
+					<AllAttributesEditor
+						isAggregateQuery={isAggregateQuery}
+						onRemove={() => removeNode(selectedNode.id)}
+					/>
 				);
 
 			case "attribute":
@@ -129,7 +143,9 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<FilterEditor
 						node={selectedNode}
-						unionElsewhere={collectAllFilters(fetchQuery).some((f) => f.id !== selectedNode.id && f.hint === "union")}
+						unionElsewhere={collectAllFilters(fetchQuery).some(
+							(f) => f.id !== selectedNode.id && f.hint === "union",
+						)}
 						findings={nodeFindings}
 						onUpdate={update}
 					/>
@@ -139,7 +155,11 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<ConditionEditor
 						node={selectedNode}
-						entityName={location?.container.name ?? findParentEntityForNode(fetchQuery, selectedNode.id) ?? ""}
+						entityName={
+							location?.container.name ??
+							findParentEntityForNode(fetchQuery, selectedNode.id) ??
+							""
+						}
 						fetchQuery={fetchQuery}
 						findings={nodeFindings}
 						onUpdate={update}
@@ -150,8 +170,13 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<LinkEntityEditor
 						node={selectedNode}
-						parentEntityName={findParentEntityForNode(fetchQuery, selectedNode.id) ?? fetchQuery.entity.name}
-						inFilter={collectAllFilters(fetchQuery).some((f) => f.links?.some((l) => l.id === selectedNode.id))}
+						parentEntityName={
+							findParentEntityForNode(fetchQuery, selectedNode.id) ??
+							fetchQuery.entity.name
+						}
+						inFilter={collectAllFilters(fetchQuery).some((f) =>
+							f.links?.some((l) => l.id === selectedNode.id),
+						)}
 						findings={nodeFindings}
 						onUpdate={update}
 					/>

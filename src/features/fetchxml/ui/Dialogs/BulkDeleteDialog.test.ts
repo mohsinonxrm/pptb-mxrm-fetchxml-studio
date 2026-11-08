@@ -24,14 +24,27 @@ const props = (over: Partial<BulkDeleteDialogProps>): BulkDeleteDialogProps => (
 
 const render = (over: Partial<BulkDeleteDialogProps>) =>
 	act(async () => {
-		root.render(createElement(FluentProvider, { theme: webLightTheme }, createElement(BulkDeleteDialog, props(over))));
+		root.render(
+			createElement(
+				FluentProvider,
+				{ theme: webLightTheme },
+				createElement(BulkDeleteDialog, props(over)),
+			),
+		);
 		await Promise.resolve();
 	});
 
 const jobNameInput = () => {
-	const label = [...document.querySelectorAll("label")].find((l) => /job name/i.test(l.textContent ?? ""));
-	const input = label?.htmlFor ? (document.getElementById(label.htmlFor) as HTMLInputElement | null) : null;
-	return input ?? (document.querySelector("input[type=text], input:not([type])") as HTMLInputElement | null);
+	const label = [...document.querySelectorAll("label")].find((l) =>
+		/job name/i.test(l.textContent ?? ""),
+	);
+	const input = label?.htmlFor
+		? (document.getElementById(label.htmlFor) as HTMLInputElement | null)
+		: null;
+	return (
+		input ??
+		(document.querySelector("input[type=text], input:not([type])") as HTMLInputElement | null)
+	);
 };
 
 beforeEach(() => {

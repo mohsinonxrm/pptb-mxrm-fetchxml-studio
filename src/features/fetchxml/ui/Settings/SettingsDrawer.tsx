@@ -21,10 +21,7 @@ import {
 	RadioGroup,
 } from "@fluentui/react-components";
 import { Dismiss24Regular, Settings20Regular } from "@fluentui/react-icons";
-import type {
-	DisplaySettings,
-	ValueDisplayMode,
-} from "../../model/displaySettings";
+import type { DisplaySettings, ValueDisplayMode } from "../../model/displaySettings";
 import type { TreeIconStyle } from "../../model/treeIcons";
 
 const useStyles = makeStyles({
@@ -79,12 +76,7 @@ export interface SettingsDrawerProps {
 	onSettingsChange: (settings: DisplaySettings) => void;
 }
 
-export function SettingsDrawer({
-	open,
-	settings,
-	onClose,
-	onSettingsChange,
-}: SettingsDrawerProps) {
+export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: SettingsDrawerProps) {
 	const styles = useStyles();
 
 	const handleLogicalNamesChange = useCallback(
@@ -137,8 +129,8 @@ export function SettingsDrawer({
 					<Text className={styles.sectionTitle}>Query scope</Text>
 
 					<Text className={styles.settingDescription} block>
-						Set where entities come from (publisher, solutions, all entities) and Advanced Find only from the
-						scope button above the entity picker.
+						Set where entities come from (publisher, solutions, all entities) and
+						Advanced Find only from the scope button above the entity picker.
 					</Text>
 				</div>
 
@@ -154,7 +146,8 @@ export function SettingsDrawer({
 							<div>
 								<Text className={styles.settingLabel}>Use logical names</Text>
 								<Text className={styles.settingDescription} block>
-									Show attribute logical names in column headers instead of display names
+									Show attribute logical names in column headers instead of
+									display names
 								</Text>
 							</div>
 							<Switch
@@ -194,15 +187,21 @@ export function SettingsDrawer({
 					<div className={styles.settingItem}>
 						<Text className={styles.settingLabel}>Tree icons</Text>
 						<Text className={styles.settingDescription} block>
-							Each node type has its own icon, coloured by what it does: tables, columns, criteria, sort
+							Each node type has its own icon, coloured by what it does: tables,
+							columns, criteria, sort
 						</Text>
 						<RadioGroup
 							value={settings.treeIconStyle}
-							onChange={(_e, data) => handleTreeIconStyleChange(data.value as TreeIconStyle)}
+							onChange={(_e, data) =>
+								handleTreeIconStyleChange(data.value as TreeIconStyle)
+							}
 							aria-label="Tree icons"
 						>
 							<Radio value="tinted" label="Tinted icons" />
-							<Radio value="color" label="Color icons (multicolour where available)" />
+							<Radio
+								value="color"
+								label="Color icons (multicolour where available)"
+							/>
 						</RadioGroup>
 					</div>
 				</div>

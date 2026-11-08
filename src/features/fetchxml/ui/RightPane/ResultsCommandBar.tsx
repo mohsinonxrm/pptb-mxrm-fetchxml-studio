@@ -194,7 +194,14 @@ function StateButton({
 	reason?: string;
 }) {
 	const button = (
-		<ToolbarButton appearance="subtle" icon={icon} disabled={disabled} disabledFocusable={!!reason} onClick={onClick} aria-label={ariaLabel}>
+		<ToolbarButton
+			appearance="subtle"
+			icon={icon}
+			disabled={disabled}
+			disabledFocusable={!!reason}
+			onClick={onClick}
+			aria-label={ariaLabel}
+		>
 			{label}
 		</ToolbarButton>
 	);
@@ -264,7 +271,9 @@ export function ResultsCommandBar({
 	const recordActionsUnavailable = !!recordActionsDisabledReason;
 	const deleteAllBlocked = !hasSelection && !!deleteAllDisabledReason;
 	// More than 100 selected without prvBulkDelete (#177): blocked, with the reason, like Delete all
-	const deleteSelectionReason = hasSelection ? deleteSelectionUnavailableReason(selectedCount, canBulkDelete) : undefined;
+	const deleteSelectionReason = hasSelection
+		? deleteSelectionUnavailableReason(selectedCount, canBulkDelete)
+		: undefined;
 	const deleteBlockedReason = deleteAllBlocked ? deleteAllDisabledReason : deleteSelectionReason;
 	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || !!deleteBlockedReason;
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
@@ -300,14 +309,16 @@ export function ResultsCommandBar({
 			// Remove the attributes behind removed columns, all at once
 			if (columns && onRemoveColumns) {
 				const updatedNames = new Set(updatedColumns.map((c) => c.name));
-				const removed = columns.filter((col) => !updatedNames.has(col.name)).map((col) => col.name);
+				const removed = columns
+					.filter((col) => !updatedNames.has(col.name))
+					.map((col) => col.name);
 				if (removed.length > 0) onRemoveColumns(removed);
 			}
 			// Apply reordering
 			onReorderColumns?.(updatedColumns);
 			setEditPanelOpen(false);
 		},
-		[columns, onReorderColumns, onRemoveColumns]
+		[columns, onReorderColumns, onRemoveColumns],
 	);
 
 	const handleAddApply = useCallback(
@@ -322,7 +333,7 @@ export function ResultsCommandBar({
 			}
 			setAddPanelOpen(false);
 		},
-		[onAddColumn, onAddRelatedColumns]
+		[onAddColumn, onAddRelatedColumns],
 	);
 
 	const handleOpenAddFromEdit = useCallback(() => {
@@ -334,7 +345,11 @@ export function ResultsCommandBar({
 			<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
 				{isRetrieveAllInProgress && onStopRetrieveAll && (
 					<>
-						<ToolbarButton appearance="subtle" icon={<Stop20Regular />} onClick={onStopRetrieveAll}>
+						<ToolbarButton
+							appearance="subtle"
+							icon={<Stop20Regular />}
+							onClick={onStopRetrieveAll}
+						>
 							Stop
 						</ToolbarButton>
 						<ToolbarDivider />
@@ -361,11 +376,12 @@ export function ResultsCommandBar({
 				</ToolbarButton>
 
 				{recordActionsDisabledReason && (
-					<Tooltip content={recordActionsDisabledReason} relationship="description" withArrow>
-						<ToolbarButton
-							appearance="transparent"
-							icon={<Info20Regular />}
-						>
+					<Tooltip
+						content={recordActionsDisabledReason}
+						relationship="description"
+						withArrow
+					>
+						<ToolbarButton appearance="transparent" icon={<Info20Regular />}>
 							Record actions unavailable
 						</ToolbarButton>
 					</Tooltip>
@@ -384,7 +400,13 @@ export function ResultsCommandBar({
 				/>
 
 				{closeActions && closeActions.length > 0 && closeDisabledReason ? (
-					<StateButton label="Close" ariaLabel="Close selected records" icon={<CircleOff20Regular />} disabled reason={closeDisabledReason} />
+					<StateButton
+						label="Close"
+						ariaLabel="Close selected records"
+						icon={<CircleOff20Regular />}
+						disabled
+						reason={closeDisabledReason}
+					/>
 				) : closeActions && closeActions.length > 0 ? (
 					// Close (#149): the entity's close messages, in place of Deactivate
 					<Menu positioning="below-start">
@@ -401,7 +423,9 @@ export function ResultsCommandBar({
 						<MenuPopover>
 							<MenuList>
 								<MenuGroup>
-									{entityDisplayName && <MenuGroupHeader>{entityDisplayName}</MenuGroupHeader>}
+									{entityDisplayName && (
+										<MenuGroupHeader>{entityDisplayName}</MenuGroupHeader>
+									)}
 									{closeActions.map((item, i) => {
 										const menuItem = (
 											<MenuItem
@@ -414,9 +438,18 @@ export function ResultsCommandBar({
 										);
 										return (
 											<Fragment key={item.key}>
-												{i > 0 && item.destructive && !closeActions[i - 1].destructive && <MenuDivider />}
+												{i > 0 &&
+													item.destructive &&
+													!closeActions[i - 1].destructive && (
+														<MenuDivider />
+													)}
 												{item.disabledReason ? (
-													<Tooltip content={item.disabledReason} relationship="description" positioning="after" withArrow>
+													<Tooltip
+														content={item.disabledReason}
+														relationship="description"
+														positioning="after"
+														withArrow
+													>
 														{menuItem}
 													</Tooltip>
 												) : (
@@ -435,7 +468,9 @@ export function ResultsCommandBar({
 						ariaLabel="Deactivate selected records"
 						icon={<DismissCircle20Regular />}
 						onClick={onDeactivate}
-						disabled={stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason}
+						disabled={
+							stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason
+						}
 						reason={deactivateDisabledReason}
 					/>
 				)}
@@ -464,7 +499,9 @@ export function ResultsCommandBar({
 									disabled={isDeleteDisabled}
 									icon={<Delete20Regular />}
 									aria-label={
-										hasSelection ? "Delete selected records" : "Delete all records from view"
+										hasSelection
+											? "Delete selected records"
+											: "Delete all records from view"
 									}
 								>
 									{hasSelection ? "Delete" : "Delete all"}
@@ -473,7 +510,11 @@ export function ResultsCommandBar({
 						</MenuTrigger>
 						<MenuPopover>
 							<MenuList>
-								<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={isDeleteDisabled}>
+								<MenuItem
+									icon={<Delete20Regular />}
+									onClick={onDelete}
+									disabled={isDeleteDisabled}
+								>
 									Delete{hasSelection ? ` (${selectedCount})` : " All"}
 								</MenuItem>
 								{canBulkDelete && (
@@ -507,10 +548,14 @@ export function ResultsCommandBar({
 						</MenuTrigger>
 						<MenuPopover>
 							<MenuList>
-								{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
-								{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
-									<MenuItem disabled>No workflows available</MenuItem>
+								{isLoadingWorkflows && (
+									<MenuItem disabled>Loading workflows...</MenuItem>
 								)}
+								{!isLoadingWorkflows &&
+									workflows.length === 0 &&
+									workflowsLoaded && (
+										<MenuItem disabled>No workflows available</MenuItem>
+									)}
 								{!isLoadingWorkflows &&
 									workflows.map((wf) => (
 										<MenuItem
@@ -531,20 +576,30 @@ export function ResultsCommandBar({
 				{/* Copy rows as tab-separated values with headers; pastes into Excel (#50) */}
 				<Menu
 					checkedValues={{ copyValues: [copyMode] }}
-					onCheckedValueChange={(_, data) => setCopyMode(data.checkedItems[0] as CopyValueMode)}
+					onCheckedValueChange={(_, data) =>
+						setCopyMode(data.checkedItems[0] as CopyValueMode)
+					}
 				>
 					<MenuTrigger disableButtonEnhancement>
-						<MenuButton appearance="subtle" icon={<Copy20Regular />} disabled={loadedCount === 0}>
+						<MenuButton
+							appearance="subtle"
+							icon={<Copy20Regular />}
+							disabled={loadedCount === 0}
+						>
 							Copy
 						</MenuButton>
 					</MenuTrigger>
 					<MenuPopover>
 						<MenuList>
-							<MenuItem disabled={selectedCount === 0} onClick={() => onCopyRows?.("selected", copyMode)}>
+							<MenuItem
+								disabled={selectedCount === 0}
+								onClick={() => onCopyRows?.("selected", copyMode)}
+							>
 								Selected rows ({selectedCount})
 							</MenuItem>
 							<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
-								{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount})
+								{searchText.trim() ? "All matching rows" : "All loaded rows"} (
+								{loadedCount})
 							</MenuItem>
 							<MenuDivider />
 							<MenuGroup>
@@ -583,7 +638,8 @@ export function ResultsCommandBar({
 								content={
 									canExport
 										? "Export using Dataverse API (all records)"
-										: exportDisabledReason || "Save as a view first to enable server export"
+										: exportDisabledReason ||
+											"Save as a view first to enable server export"
 								}
 								relationship="description"
 								positioning="before"
@@ -614,7 +670,9 @@ export function ResultsCommandBar({
 				{onDensityChange && (
 					<Menu
 						checkedValues={{ density: [density] }}
-						onCheckedValueChange={(_, data) => onDensityChange(data.checkedItems[0] as GridDensity)}
+						onCheckedValueChange={(_, data) =>
+							onDensityChange(data.checkedItems[0] as GridDensity)
+						}
 					>
 						<MenuTrigger disableButtonEnhancement>
 							<Tooltip content="Density (grid and tree)" relationship="description">

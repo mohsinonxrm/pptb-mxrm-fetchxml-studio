@@ -3,9 +3,21 @@
  * resulting joins were executed live and matched the intersect entity's rows.
  */
 import { describe, expect, it } from "vitest";
-import { planIntersectEntityJoins, planManyToManyJoin, relationshipKey, type IntersectRelationship, type ManyToManyRelationship } from "./manyToMany";
+import {
+	planIntersectEntityJoins,
+	planManyToManyJoin,
+	relationshipKey,
+	type IntersectRelationship,
+	type ManyToManyRelationship,
+} from "./manyToMany";
 
-const PK: Record<string, string> = { systemuser: "systemuserid", team: "teamid", connectionrole: "connectionroleid", appmodule: "appmoduleid", role: "roleid" };
+const PK: Record<string, string> = {
+	systemuser: "systemuserid",
+	team: "teamid",
+	connectionrole: "connectionroleid",
+	appmodule: "appmoduleid",
+	role: "roleid",
+};
 const pk = (e: string) => PK[e];
 
 const teammembership: ManyToManyRelationship = {
@@ -40,8 +52,16 @@ describe("planManyToManyJoin", () => {
 			IntersectEntityName: "connectionroleassociation",
 		};
 		expect(planManyToManyJoin("connectionrole", "connectionroleid", rel, pk)).toEqual({
-			intersect: { name: "connectionroleassociation", from: "connectionroleid", to: "connectionroleid" },
-			target: { name: "connectionrole", from: "connectionroleid", to: "associatedconnectionroleid" },
+			intersect: {
+				name: "connectionroleassociation",
+				from: "connectionroleid",
+				to: "connectionroleid",
+			},
+			target: {
+				name: "connectionrole",
+				from: "connectionroleid",
+				to: "associatedconnectionroleid",
+			},
 		});
 	});
 
@@ -53,8 +73,16 @@ describe("planManyToManyJoin", () => {
 			Entity2IntersectAttribute: "roleid",
 			IntersectEntityName: "appmoduleroles",
 		};
-		expect(planManyToManyJoin("role", "roleid", rel, pk)?.intersect).toEqual({ name: "appmoduleroles", from: "roleid", to: "roleid" });
-		expect(planManyToManyJoin("role", "roleid", rel, pk)?.target).toEqual({ name: "appmodule", from: "appmoduleid", to: "appmoduleid" });
+		expect(planManyToManyJoin("role", "roleid", rel, pk)?.intersect).toEqual({
+			name: "appmoduleroles",
+			from: "roleid",
+			to: "roleid",
+		});
+		expect(planManyToManyJoin("role", "roleid", rel, pk)?.target).toEqual({
+			name: "appmodule",
+			from: "appmoduleid",
+			to: "appmoduleid",
+		});
 	});
 
 	it("returns undefined when the parent isn't part of the relationship", () => {
@@ -112,11 +140,17 @@ describe("planIntersectEntityJoins (#57)", () => {
 			Entity2IntersectAttribute: "entityid",
 			IntersectEntityName: "listmember",
 		};
-		const joins = planIntersectEntityJoins("listmember", [listcontact], (e) => ({ list: "listid", contact: "contactid" })[e]);
-		expect(joins.map((j) => `${j.ReferencedEntity}.${j.ReferencedAttribute} <- ${j.ReferencingAttribute}`)).toEqual([
-			"list.listid <- listid",
-			"contact.contactid <- entityid",
-		]);
+		const joins = planIntersectEntityJoins(
+			"listmember",
+			[listcontact],
+			(e) => ({ list: "listid", contact: "contactid" })[e],
+		);
+		expect(
+			joins.map(
+				(j) =>
+					`${j.ReferencedEntity}.${j.ReferencedAttribute} <- ${j.ReferencingAttribute}`,
+			),
+		).toEqual(["list.listid <- listid", "contact.contactid <- entityid"]);
 	});
 
 	it("self-referential: two joins to the same entity through different attributes", () => {
@@ -129,20 +163,35 @@ describe("planIntersectEntityJoins (#57)", () => {
 			Entity2IntersectAttribute: "kbarticleidtwo",
 			IntersectEntityName: "adx_kbarticle_kbarticle",
 		};
-		const joins = planIntersectEntityJoins("adx_kbarticle_kbarticle", [selfRef], () => "kbarticleid");
-		expect(joins.map((j) => j.ReferencingAttribute)).toEqual(["kbarticleidone", "kbarticleidtwo"]);
+		const joins = planIntersectEntityJoins(
+			"adx_kbarticle_kbarticle",
+			[selfRef],
+			() => "kbarticleid",
+		);
+		expect(joins.map((j) => j.ReferencingAttribute)).toEqual([
+			"kbarticleidone",
+			"kbarticleidtwo",
+		]);
 		expect(new Set(joins.map(relationshipKey)).size).toBe(2);
 	});
 
 	it("ignores relationships of other entities, and sides whose primary key is unknown", () => {
 		expect(planIntersectEntityJoins("systemuser", [systemuserroles], pk)).toEqual([]);
-		expect(planIntersectEntityJoins("systemuserroles", [systemuserroles], (e) => (e === "role" ? "roleid" : undefined))).toHaveLength(1);
+		expect(
+			planIntersectEntityJoins("systemuserroles", [systemuserroles], (e) =>
+				e === "role" ? "roleid" : undefined,
+			),
+		).toHaveLength(1);
 	});
 });
 
 describe("relationshipKey", () => {
 	it("is the schema name, plus the side for an intersect entity's joins", () => {
-		expect(relationshipKey({ SchemaName: "account_primary_contact" })).toBe("account_primary_contact");
-		expect(relationshipKey({ SchemaName: "systemuserroles_association", IntersectSide: 2 })).toBe("systemuserroles_association#2");
+		expect(relationshipKey({ SchemaName: "account_primary_contact" })).toBe(
+			"account_primary_contact",
+		);
+		expect(
+			relationshipKey({ SchemaName: "systemuserroles_association", IntersectSide: 2 }),
+		).toBe("systemuserroles_association#2");
 	});
 });

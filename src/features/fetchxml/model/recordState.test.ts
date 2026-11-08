@@ -90,7 +90,11 @@ describe("parseTransitionData", () => {
 	});
 
 	it("reads escaped XML and treats a missing document as no data", () => {
-		expect(parseTransitionData('&lt;allowedtransitions&gt;&lt;allowedtransition sourcestatusid="1" tostatusid="2" /&gt;&lt;/allowedtransitions&gt;')).toEqual([2]);
+		expect(
+			parseTransitionData(
+				'&lt;allowedtransitions&gt;&lt;allowedtransition sourcestatusid="1" tostatusid="2" /&gt;&lt;/allowedtransitions&gt;',
+			),
+		).toEqual([2]);
 		expect(parseTransitionData(null)).toBeUndefined();
 		expect(parseTransitionData("  ")).toBeUndefined();
 	});
@@ -98,17 +102,22 @@ describe("parseTransitionData", () => {
 
 describe("closeMessageReason / hasCloseMenu", () => {
 	it("turns Deactivate off for close-message entities and points to Close where there is one (#149)", () => {
-		expect(closeMessageReason("opportunity")).toBe("Opportunities close with Win or Lose (WinOpportunity / LoseOpportunity). Use Close.");
+		expect(closeMessageReason("opportunity")).toBe(
+			"Opportunities close with Win or Lose (WinOpportunity / LoseOpportunity). Use Close.",
+		);
 		for (const entity of ["incident", "quote", "salesorder", "invoice"]) {
 			expect(closeMessageReason(entity, "deactivate")).toMatch(/Use Close\.$/);
 			expect(hasCloseMenu(entity)).toBe(true);
 		}
-		expect(closeMessageReason("contract", "deactivate")).toMatch(/Use the model-driven app for now\.$/);
+		expect(closeMessageReason("contract", "deactivate")).toMatch(
+			/Use the model-driven app for now\.$/,
+		);
 		expect(hasCloseMenu("contract")).toBe(false);
 	});
 
 	it("keeps Activate (reopen, verified by PATCH) except for quote and contract", () => {
-		for (const entity of ["opportunity", "incident", "salesorder", "invoice"]) expect(closeMessageReason(entity, "activate")).toBeUndefined();
+		for (const entity of ["opportunity", "incident", "salesorder", "invoice"])
+			expect(closeMessageReason(entity, "activate")).toBeUndefined();
 		expect(closeMessageReason("quote", "activate")).toMatch(/Draft to Active/);
 		expect(closeMessageReason("contract", "activate")).toBeTruthy();
 	});
@@ -132,7 +141,10 @@ describe("planStateChange", () => {
 			statusLabel: "Inactive",
 			undo: { available: true, picksStatusReason: false, transitionsEnforced: false },
 		});
-		expect(planStateChange(account, "activate")).toMatchObject({ kind: "simple", target: { statecode: 0, statuscode: 1 } });
+		expect(planStateChange(account, "activate")).toMatchObject({
+			kind: "simple",
+			target: { statecode: 0, statuscode: 1 },
+		});
 	});
 
 	it("says what the way back can set (#69)", () => {
@@ -154,17 +166,32 @@ describe("planStateChange", () => {
 			],
 			enforceTransitions: false,
 		};
-		expect(stateUndo(oneActive, "deactivate")).toEqual({ available: true, picksStatusReason: false, transitionsEnforced: false });
-		expect(stateUndo(oneActive, "activate")).toEqual({ available: true, picksStatusReason: true, transitionsEnforced: false });
+		expect(stateUndo(oneActive, "deactivate")).toEqual({
+			available: true,
+			picksStatusReason: false,
+			transitionsEnforced: false,
+		});
+		expect(stateUndo(oneActive, "activate")).toEqual({
+			available: true,
+			picksStatusReason: true,
+			transitionsEnforced: false,
+		});
 		// No inactive state: Activate has no way back
-		const single: EntityStateModel = { states: [{ value: 0, label: "Active", defaultStatus: 1 }], statuses: [{ value: 1, label: "Active", state: 0 }], enforceTransitions: false };
+		const single: EntityStateModel = {
+			states: [{ value: 0, label: "Active", defaultStatus: 1 }],
+			statuses: [{ value: 1, label: "Active", state: 0 }],
+			enforceTransitions: false,
+		};
 		expect(stateUndo(single, "activate").available).toBe(false);
 	});
 
 	it("offers status reasons grouped by state for multi-state entities", () => {
 		expect(isSimpleStateModel(lead)).toBe(false);
 		const activate = planStateChange(lead, "activate", undefined, "lead");
-		expect(activate).toMatchObject({ kind: "choose", defaultTarget: { statecode: 0, statuscode: 1 } });
+		expect(activate).toMatchObject({
+			kind: "choose",
+			defaultTarget: { statecode: 0, statuscode: 1 },
+		});
 		const deactivate = planStateChange(task, "deactivate");
 		if (deactivate.kind !== "choose") throw new Error("expected choices");
 		expect(deactivate.groups.map((g) => [g.label, g.choices.map((c) => c.label)])).toEqual([
@@ -183,10 +210,21 @@ describe("planStateChange", () => {
 	});
 
 	it("says why when there's no target state", () => {
-		const single: EntityStateModel = { states: [{ value: 0, label: "Active", defaultStatus: 1 }], statuses: [{ value: 1, label: "Active", state: 0 }], enforceTransitions: false };
-		expect(planStateChange(single, "deactivate")).toEqual({ kind: "none", reason: "This entity has no inactive state." });
-		expect(stateActionUnavailableReason(single, "deactivate")).toBe("This entity has no inactive state.");
-		expect(stateActionUnavailableReason(null, "activate")).toBe("This entity has no Status (statecode) column.");
+		const single: EntityStateModel = {
+			states: [{ value: 0, label: "Active", defaultStatus: 1 }],
+			statuses: [{ value: 1, label: "Active", state: 0 }],
+			enforceTransitions: false,
+		};
+		expect(planStateChange(single, "deactivate")).toEqual({
+			kind: "none",
+			reason: "This entity has no inactive state.",
+		});
+		expect(stateActionUnavailableReason(single, "deactivate")).toBe(
+			"This entity has no inactive state.",
+		);
+		expect(stateActionUnavailableReason(null, "activate")).toBe(
+			"This entity has no Status (statecode) column.",
+		);
 		expect(stateActionUnavailableReason(account, "activate")).toBeUndefined();
 	});
 });
@@ -231,6 +269,9 @@ describe("status reason transitions", () => {
 
 describe("statePatchBody", () => {
 	it("always sets both statecode and statuscode", () => {
-		expect(statePatchBody({ statecode: 1, statuscode: 2 })).toEqual({ statecode: 1, statuscode: 2 });
+		expect(statePatchBody({ statecode: 1, statuscode: 2 })).toEqual({
+			statecode: 1,
+			statuscode: 2,
+		});
 	});
 });

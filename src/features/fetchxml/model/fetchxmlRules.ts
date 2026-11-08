@@ -99,7 +99,14 @@ const isLink = (c: Container): c is LinkEntityNode => c.type === "link-entity";
 /** Link types allowed for a link-entity inside a filter (others, or none: 0x8004111c, verified live). */
 export const FILTER_LINK_TYPES: ReadonlySet<string> = new Set(["any", "not any", "all", "not all"]);
 /** Link types that return no attributes: attribute, all-attributes and order fail with 0x80041121 (verified live). */
-export const NON_RETURNING_LINK_TYPES: ReadonlySet<string> = new Set(["exists", "in", "any", "not any", "all", "not all"]);
+export const NON_RETURNING_LINK_TYPES: ReadonlySet<string> = new Set([
+	"exists",
+	"in",
+	"any",
+	"not any",
+	"all",
+	"not all",
+]);
 
 /** Operators a `valueof` comparison accepts (filter-rows: "Limitations on column comparison filters"). */
 export const VALUEOF_OPERATORS: ReadonlySet<string> = new Set(["eq", "ne", "gt", "ge", "lt", "le"]);
@@ -175,7 +182,8 @@ export function valueofScopes(fetch: FetchNode): Map<string, ValueOfScope> {
 function orderAliasScope(order: OrderNode, scope: Scope, links: LinkEntityNode[]): AttributeNode[] {
 	if (scope.isRoot && order.entityname) {
 		const target =
-			links.find((l) => l.alias === order.entityname) ?? links.find((l) => l.name === order.entityname);
+			links.find((l) => l.alias === order.entityname) ??
+			links.find((l) => l.name === order.entityname);
 		if (target) return target.attributes;
 	}
 	return scope.container.attributes;
@@ -197,45 +205,94 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			if (attr.rowAggregate !== undefined) {
 				if (aggregate) {
 					// SQL error 4104 even with groupby; 0x8004111e without
-					push({ ...base, attribute: "rowaggregate", severity: "error", kind: "invalid",
-						message: `Count child records (rowaggregate) doesn't work in an aggregate query; Dataverse rejects '${name}'.` });
+					push({
+						...base,
+						attribute: "rowaggregate",
+						severity: "error",
+						kind: "invalid",
+						message: `Count child records (rowaggregate) doesn't work in an aggregate query; Dataverse rejects '${name}'.`,
+					});
 				} else if (!scope.isRoot) {
-					push({ ...base, attribute: "rowaggregate", severity: "error", kind: "invalid",
-						message: `Count child records (rowaggregate) only works on the root entity; inside a link-entity Dataverse fails with an internal error.` });
+					push({
+						...base,
+						attribute: "rowaggregate",
+						severity: "error",
+						kind: "invalid",
+						message: `Count child records (rowaggregate) only works on the root entity; inside a link-entity Dataverse fails with an internal error.`,
+					});
 				} else if (!attr.alias) {
-					push({ ...base, attribute: "rowaggregate", severity: "error", kind: "invalid",
-						message: `Count child records (rowaggregate) on '${name}' needs an alias; without one Dataverse fails with a SQL error.` });
+					push({
+						...base,
+						attribute: "rowaggregate",
+						severity: "error",
+						kind: "invalid",
+						message: `Count child records (rowaggregate) on '${name}' needs an alias; without one Dataverse fails with a SQL error.`,
+					});
 				}
 			}
 
 			if (aggregate) {
 				if (attr.groupby && attr.aggregate) {
-					push({ ...base, attribute: "groupby", severity: "error", kind: "invalid",
-						message: `'${name}' can't be both Group by and an aggregate (Dataverse rejects it: 0x80041137).` });
+					push({
+						...base,
+						attribute: "groupby",
+						severity: "error",
+						kind: "invalid",
+						message: `'${name}' can't be both Group by and an aggregate (Dataverse rejects it: 0x80041137).`,
+					});
 				} else if (!attr.groupby && !attr.aggregate && attr.rowAggregate === undefined) {
-					push({ ...base, severity: "error", kind: "invalid",
-						message: `In an aggregate query every attribute needs Group by or an aggregate function; Dataverse rejects '${name}' (0x8004111e).` });
+					push({
+						...base,
+						severity: "error",
+						kind: "invalid",
+						message: `In an aggregate query every attribute needs Group by or an aggregate function; Dataverse rejects '${name}' (0x8004111e).`,
+					});
 				}
 				if (!attr.alias) {
-					push({ ...base, attribute: "alias", severity: "error", kind: "invalid",
-						message: `In an aggregate query every attribute needs an alias; '${name}' has none (Dataverse rejects it: 0x8004110b).` });
+					push({
+						...base,
+						attribute: "alias",
+						severity: "error",
+						kind: "invalid",
+						message: `In an aggregate query every attribute needs an alias; '${name}' has none (Dataverse rejects it: 0x8004110b).`,
+					});
 				}
 				if (attr.dategrouping && attr.aggregate && !attr.groupby) {
-					push({ ...base, attribute: "dategrouping", severity: "info", kind: "ignored",
-						message: `Date grouping on '${name}' is ignored: it only applies to Group by.` });
+					push({
+						...base,
+						attribute: "dategrouping",
+						severity: "info",
+						kind: "ignored",
+						message: `Date grouping on '${name}' is ignored: it only applies to Group by.`,
+					});
 				}
 				if (attr.distinct && attr.aggregate !== "countcolumn") {
-					push({ ...base, attribute: "distinct", severity: "info", kind: "advice",
-						message: `'distinct' on '${name}' is only documented with the countcolumn aggregate.` });
+					push({
+						...base,
+						attribute: "distinct",
+						severity: "info",
+						kind: "advice",
+						message: `'distinct' on '${name}' is only documented with the countcolumn aggregate.`,
+					});
 				}
 			} else {
 				if (attr.aggregate) {
-					push({ ...base, attribute: "aggregate", severity: "error", kind: "invalid",
-						message: `'${name}' has aggregate="${attr.aggregate}", but the query isn't an aggregate query (Dataverse rejects it: 0x8004111a).` });
+					push({
+						...base,
+						attribute: "aggregate",
+						severity: "error",
+						kind: "invalid",
+						message: `'${name}' has aggregate="${attr.aggregate}", but the query isn't an aggregate query (Dataverse rejects it: 0x8004111a).`,
+					});
 				}
 				if (attr.groupby) {
-					push({ ...base, attribute: "groupby", severity: "error", kind: "invalid",
-						message: `'${name}' has Group by, but the query isn't an aggregate query (Dataverse rejects it: 0x8004112e).` });
+					push({
+						...base,
+						attribute: "groupby",
+						severity: "error",
+						kind: "invalid",
+						message: `'${name}' has Group by, but the query isn't an aggregate query (Dataverse rejects it: 0x8004112e).`,
+					});
 				}
 				const ignored = [
 					attr.dategrouping && "dategrouping",
@@ -243,8 +300,13 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 					attr.distinct && "distinct",
 				].filter((x): x is string => typeof x === "string");
 				if (ignored.length > 0) {
-					push({ ...base, attribute: ignored[0], severity: "info", kind: "ignored",
-						message: `${ignored.map((a) => `'${a}'`).join(", ")} on '${name}' ${ignored.length > 1 ? "are" : "is"} ignored outside aggregate queries.` });
+					push({
+						...base,
+						attribute: ignored[0],
+						severity: "info",
+						kind: "ignored",
+						message: `${ignored.map((a) => `'${a}'`).join(", ")} on '${name}' ${ignored.length > 1 ? "are" : "is"} ignored outside aggregate queries.`,
+					});
 				}
 			}
 		}
@@ -261,11 +323,23 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			if (!attr.alias) continue;
 			const key = attr.alias.toLowerCase();
 			if (seenAliases.has(key)) {
-				push({ element: "attribute", attribute: "alias", nodeId: attr.id, severity: "error", kind: "invalid",
-					message: `Alias '${attr.alias}' is used more than once (aliases are case-insensitive); Dataverse rejects it (0x80041130).` });
+				push({
+					element: "attribute",
+					attribute: "alias",
+					nodeId: attr.id,
+					severity: "error",
+					kind: "invalid",
+					message: `Alias '${attr.alias}' is used more than once (aliases are case-insensitive); Dataverse rejects it (0x80041130).`,
+				});
 			} else if (rootNames.has(key) && !(scope.isRoot && attr.name.toLowerCase() === key)) {
-				push({ element: "attribute", attribute: "alias", nodeId: attr.id, severity: "error", kind: "invalid",
-					message: `Alias '${attr.alias}' clashes with the attribute '${key}' selected without an alias; Dataverse rejects it (0x80041130).` });
+				push({
+					element: "attribute",
+					attribute: "alias",
+					nodeId: attr.id,
+					severity: "error",
+					kind: "invalid",
+					message: `Alias '${attr.alias}' clashes with the attribute '${key}' selected without an alias; Dataverse rejects it (0x80041130).`,
+				});
 			}
 			seenAliases.set(key, attr);
 		}
@@ -274,8 +348,14 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 	for (const link of links) {
 		if (!link.alias) continue;
 		if (seenLinkAliases.has(link.alias)) {
-			push({ element: "link-entity", attribute: "alias", nodeId: link.id, severity: "error", kind: "invalid",
-				message: `Link-entity alias '${link.alias}' is used more than once; Dataverse rejects it (0x80041130).` });
+			push({
+				element: "link-entity",
+				attribute: "alias",
+				nodeId: link.id,
+				severity: "error",
+				kind: "invalid",
+				message: `Link-entity alias '${link.alias}' is used more than once; Dataverse rejects it (0x80041130).`,
+			});
 		}
 		seenLinkAliases.add(link.alias);
 	}
@@ -289,12 +369,21 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 	collectEntitynames(fetch.entity.filters);
 	// Link types by placement and what they return (verified live, 2026-10-14). Joined link-entities
 	// accept all nine types, including the four the docs describe for use inside a filter.
-	const filterLinkIds = new Set(scopes.flatMap((s) => s.filters.flatMap(({ filter }) => (filter.links ?? []).map((l) => l.id))));
+	const filterLinkIds = new Set(
+		scopes.flatMap((s) =>
+			s.filters.flatMap(({ filter }) => (filter.links ?? []).map((l) => l.id)),
+		),
+	);
 	for (const link of links) {
 		const base = { element: "link-entity", nodeId: link.id } as const;
 		if (filterLinkIds.has(link.id) && !FILTER_LINK_TYPES.has(link.linkType)) {
-			push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
-				message: `A link-entity inside a filter must be any, not any, all or not all (Dataverse rejects '${link.linkType}': 0x8004111c).` });
+			push({
+				...base,
+				attribute: "link-type",
+				severity: "error",
+				kind: "invalid",
+				message: `A link-entity inside a filter must be any, not any, all or not all (Dataverse rejects '${link.linkType}': 0x8004111c).`,
+			});
 		}
 		if (NON_RETURNING_LINK_TYPES.has(link.linkType)) {
 			const returns = [
@@ -303,8 +392,13 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 				link.orders.length > 0 && "orders",
 			].filter(Boolean);
 			if (returns.length > 0) {
-				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
-					message: `A '${link.linkType}' link-entity returns no attributes, so it can't have ${returns.join(" or ")} (Dataverse rejects it: 0x80041121).` });
+				push({
+					...base,
+					attribute: "link-type",
+					severity: "error",
+					kind: "invalid",
+					message: `A '${link.linkType}' link-entity returns no attributes, so it can't have ${returns.join(" or ")} (Dataverse rejects it: 0x80041121).`,
+				});
 			}
 		}
 		// matchfirstrowusingcrossapply (verified live 2026-10-17): Dataverse rejects an order inside it, and
@@ -312,50 +406,98 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 		// entityname targets the link-entity (then Dataverse joins it normally and the alias works)
 		if (link.linkType === "matchfirstrowusingcrossapply") {
 			if (link.orders.length > 0) {
-				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
-					message: `A matchfirstrowusingcrossapply link-entity can't have orders; order by its attributes from the entity with entityname instead (Dataverse rejects it: 0x80041121).` });
+				push({
+					...base,
+					attribute: "link-type",
+					severity: "error",
+					kind: "invalid",
+					message: `A matchfirstrowusingcrossapply link-entity can't have orders; order by its attributes from the entity with entityname instead (Dataverse rejects it: 0x80041121).`,
+				});
 			}
 			const identifier = link.alias || link.name;
 			const aliased = link.attributes.filter((a) => a.alias);
 			if (aliased.length > 0 && !rootEntitynames.has(identifier)) {
-				push({ ...base, attribute: "link-type", severity: "error", kind: "invalid",
-					message: `Aliased attributes (${aliased.map((a) => a.alias).join(", ")}) in a matchfirstrowusingcrossapply link-entity fail with a SQL error (0x80044150). Remove the alias, or add a condition with entityname="${identifier}".` });
+				push({
+					...base,
+					attribute: "link-type",
+					severity: "error",
+					kind: "invalid",
+					message: `Aliased attributes (${aliased.map((a) => a.alias).join(", ")}) in a matchfirstrowusingcrossapply link-entity fail with a SQL error (0x80044150). Remove the alias, or add a condition with entityname="${identifier}".`,
+				});
 			}
 		}
 		if (link.visible !== undefined) {
-			push({ ...base, attribute: "visible", severity: "info", kind: "ignored",
-				message: `The visible attribute isn't in the FetchXML reference, and Dataverse ignores it: the results are the same with any value.` });
+			push({
+				...base,
+				attribute: "visible",
+				severity: "info",
+				kind: "ignored",
+				message: `The visible attribute isn't in the FetchXML reference, and Dataverse ignores it: the results are the same with any value.`,
+			});
 		}
 	}
 
 	// ---- orders
-	const entityNames = new Set<string>([fetch.entity.name, ...links.flatMap((l) => [l.name, l.alias ?? ""])]);
+	const entityNames = new Set<string>([
+		fetch.entity.name,
+		...links.flatMap((l) => [l.name, l.alias ?? ""]),
+	]);
 	let anyOrder = false;
 	for (const scope of scopes) {
 		for (const order of scope.container.orders) {
 			anyOrder = true;
 			const base = { element: "order", nodeId: order.id } as const;
 			if (aggregate && order.attribute) {
-				push({ ...base, attribute: "attribute", severity: "error", kind: "invalid",
-					message: `In an aggregate query, order by the attribute's alias instead of attribute '${order.attribute}' (Dataverse rejects it: 0x80041131).` });
+				push({
+					...base,
+					attribute: "attribute",
+					severity: "error",
+					kind: "invalid",
+					message: `In an aggregate query, order by the attribute's alias instead of attribute '${order.attribute}' (Dataverse rejects it: 0x80041131).`,
+				});
 			} else if (!aggregate && order.alias) {
-				push({ ...base, attribute: "alias", severity: "error", kind: "invalid",
-					message: `Ordering by alias '${order.alias}' only works in aggregate queries; use 'attribute' instead (Dataverse rejects it: 0x80041132).` });
+				push({
+					...base,
+					attribute: "alias",
+					severity: "error",
+					kind: "invalid",
+					message: `Ordering by alias '${order.alias}' only works in aggregate queries; use 'attribute' instead (Dataverse rejects it: 0x80041132).`,
+				});
 			} else if (aggregate && order.alias) {
 				const visible = orderAliasScope(order, scope, links);
 				if (!visible.some((a) => a.alias === order.alias)) {
-					const where = scope.isRoot && order.entityname ? `link-entity '${order.entityname}'` : isLink(scope.container) ? `link-entity '${scope.container.alias ?? scope.container.name}'` : "the root entity";
-					push({ ...base, attribute: "alias", severity: "error", kind: "invalid",
-						message: `Alias '${order.alias}' isn't defined on ${where}; an aggregate order can only use aliases from its own entity (Dataverse rejects it: 0x8004110a).` });
+					const where =
+						scope.isRoot && order.entityname
+							? `link-entity '${order.entityname}'`
+							: isLink(scope.container)
+								? `link-entity '${scope.container.alias ?? scope.container.name}'`
+								: "the root entity";
+					push({
+						...base,
+						attribute: "alias",
+						severity: "error",
+						kind: "invalid",
+						message: `Alias '${order.alias}' isn't defined on ${where}; an aggregate order can only use aliases from its own entity (Dataverse rejects it: 0x8004110a).`,
+					});
 				}
 			}
 			if (order.entityname) {
 				if (!scope.isRoot) {
-					push({ ...base, attribute: "entityname", severity: "error", kind: "invalid",
-						message: `'entityname' isn't allowed on an order inside a link-entity (Dataverse rejects it: 0x80041108). Move the order to the root entity.` });
+					push({
+						...base,
+						attribute: "entityname",
+						severity: "error",
+						kind: "invalid",
+						message: `'entityname' isn't allowed on an order inside a link-entity (Dataverse rejects it: 0x80041108). Move the order to the root entity.`,
+					});
 				} else if (!entityNames.has(order.entityname)) {
-					push({ ...base, attribute: "entityname", severity: "error", kind: "invalid",
-						message: `No link-entity has the alias or name '${order.entityname}' (Dataverse rejects it: 0x80041108).` });
+					push({
+						...base,
+						attribute: "entityname",
+						severity: "error",
+						kind: "invalid",
+						message: `No link-entity has the alias or name '${order.entityname}' (Dataverse rejects it: 0x80041108).`,
+					});
 				}
 			}
 		}
@@ -368,30 +510,60 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 		fetch.options.returnTotalRecordCount && "returntotalrecordcount",
 	].filter((x): x is string => typeof x === "string");
 	if (fetch.options.top !== undefined && paging.length > 0) {
-		push({ element: "fetch", attribute: "top", nodeId: fetch.id, severity: "error", kind: "invalid",
-			message: `'top' can't be used with ${paging.map((p) => `'${p}'`).join(", ")} (Dataverse rejects it: 0x80040203). Use either top or paging.` });
+		push({
+			element: "fetch",
+			attribute: "top",
+			nodeId: fetch.id,
+			severity: "error",
+			kind: "invalid",
+			message: `'top' can't be used with ${paging.map((p) => `'${p}'`).join(", ")} (Dataverse rejects it: 0x80040203). Use either top or paging.`,
+		});
 	}
 	for (const [name, value] of [
 		["top", fetch.options.top],
 		["count", fetch.options.count],
 	] as const) {
 		if (value !== undefined && value > 5000) {
-			push({ element: "fetch", attribute: name, nodeId: fetch.id, severity: "info", kind: "advice",
-				message: `'${name}' is ${value}, but Dataverse returns at most 5,000 rows per request.` });
+			push({
+				element: "fetch",
+				attribute: name,
+				nodeId: fetch.id,
+				severity: "info",
+				kind: "advice",
+				message: `'${name}' is ${value}, but Dataverse returns at most 5,000 rows per request.`,
+			});
 		}
 	}
 	if (fetch.options.page !== undefined && fetch.options.page < 1) {
-		push({ element: "fetch", attribute: "page", nodeId: fetch.id, severity: "error", kind: "invalid",
-			message: `Page number must be 1 or more (Dataverse rejects page ${fetch.options.page}: 0x80040203).` });
+		push({
+			element: "fetch",
+			attribute: "page",
+			nodeId: fetch.id,
+			severity: "error",
+			kind: "invalid",
+			message: `Page number must be 1 or more (Dataverse rejects page ${fetch.options.page}: 0x80040203).`,
+		});
 	}
 	if (fetch.options.aggregateLimit !== undefined) {
 		if (!aggregate) {
-			push({ element: "fetch", attribute: "aggregatelimit", nodeId: fetch.id, severity: "info", kind: "ignored",
-				message: `'aggregatelimit' is ignored: the query isn't an aggregate query.` });
+			push({
+				element: "fetch",
+				attribute: "aggregatelimit",
+				nodeId: fetch.id,
+				severity: "info",
+				kind: "ignored",
+				message: `'aggregatelimit' is ignored: the query isn't an aggregate query.`,
+			});
 		} else if (anyOrder) {
 			// Undocumented platform behaviour, reproduced on every table tried
-			push({ element: "fetch", attribute: "aggregatelimit", nodeId: fetch.id, severity: "error", kind: "invalid",
-				message: `Dataverse returns a SQL error when an aggregate query with 'aggregatelimit' also has an order. Remove the order or the limit.` });
+			push({
+				element: "fetch",
+				attribute: "aggregatelimit",
+				nodeId: fetch.id,
+				severity: "error",
+				kind: "invalid",
+				message: `Dataverse returns a SQL error when an aggregate query with 'aggregatelimit' also has an order. Remove the order or the limit.`,
+			});
 		}
 	}
 
@@ -404,39 +576,78 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			if (filter.hint === "union") {
 				unionFilters.push({ filter, depth });
 				if (filter.conjunction !== "or") {
-					push({ ...base, attribute: "hint", severity: "error", kind: "invalid",
-						message: `The union hint only works on an 'or' filter (Dataverse rejects it: 0x80041122).` });
+					push({
+						...base,
+						attribute: "hint",
+						severity: "error",
+						kind: "invalid",
+						message: `The union hint only works on an 'or' filter (Dataverse rejects it: 0x80041122).`,
+					});
 				} else if (depth > 3) {
-					push({ ...base, attribute: "hint", severity: "info", kind: "ignored",
-						message: `The union hint is more than three filter levels deep, so Dataverse ignores it.` });
+					push({
+						...base,
+						attribute: "hint",
+						severity: "info",
+						kind: "ignored",
+						message: `The union hint is more than three filter levels deep, so Dataverse ignores it.`,
+					});
 				}
 			}
-			if (filter.overrideQuickFindRecordLimitEnabled && filter.overrideQuickFindRecordLimitDisabled) {
-				push({ ...base, attribute: "overridequickfindrecordlimitenabled", severity: "info", kind: "advice",
-					message: `Both quick find record limit overrides are set; which one applies isn't documented. Keep one.` });
+			if (
+				filter.overrideQuickFindRecordLimitEnabled &&
+				filter.overrideQuickFindRecordLimitDisabled
+			) {
+				push({
+					...base,
+					attribute: "overridequickfindrecordlimitenabled",
+					severity: "info",
+					kind: "advice",
+					message: `Both quick find record limit overrides are set; which one applies isn't documented. Keep one.`,
+				});
 			}
 			// valueof (verified live): only eq/ne/gt/ge/lt/le compare two attributes (others: 0x80048415);
 			// operators without a value ignore it; "x.attr" must be reachable (valueofScopes; 0x80040216).
 			for (const condition of filter.conditions) {
 				if (condition.valueof === undefined || condition.valueof === "") continue;
-				const cbase = { element: "condition", attribute: "valueof", nodeId: condition.id } as const;
+				const cbase = {
+					element: "condition",
+					attribute: "valueof",
+					nodeId: condition.id,
+				} as const;
 				if (!operatorRequiresValue(condition.operator)) {
-					push({ ...cbase, severity: "info", kind: "ignored",
-						message: `Dataverse ignores valueof here: the '${condition.operator}' operator doesn't compare to a value.` });
+					push({
+						...cbase,
+						severity: "info",
+						kind: "ignored",
+						message: `Dataverse ignores valueof here: the '${condition.operator}' operator doesn't compare to a value.`,
+					});
 					continue;
 				}
 				if (!VALUEOF_OPERATORS.has(condition.operator)) {
-					push({ ...cbase, severity: "error", kind: "invalid",
-						message: `Comparing to another attribute only works with eq, ne, gt, ge, lt or le (Dataverse rejects '${condition.operator}': 0x80048415).` });
+					push({
+						...cbase,
+						severity: "error",
+						kind: "invalid",
+						message: `Comparing to another attribute only works with eq, ne, gt, ge, lt or le (Dataverse rejects '${condition.operator}': 0x80048415).`,
+					});
 				}
 				const dot = condition.valueof.indexOf(".");
 				const qualifier = dot > 0 ? condition.valueof.slice(0, dot) : undefined;
 				const scope = reach.get(condition.id);
-				if (qualifier && scope && qualifier !== scope.rootName && !scope.aliases.includes(qualifier)) {
-					push({ ...cbase, severity: "error", kind: "invalid",
+				if (
+					qualifier &&
+					scope &&
+					qualifier !== scope.rootName &&
+					!scope.aliases.includes(qualifier)
+				) {
+					push({
+						...cbase,
+						severity: "error",
+						kind: "invalid",
 						message: scope.laterAliases.includes(qualifier)
 							? `'${qualifier}' is joined after this link-entity (or inside it), so this filter can't refer to it. Compare from the root entity's filter instead (Dataverse rejects it: 0x80040216).`
-							: `'${qualifier}' isn't the alias of a joined link-entity. To compare to another entity's attribute, give its link-entity an alias and use alias.attribute (Dataverse rejects it: 0x80040216).` });
+							: `'${qualifier}' isn't the alias of a joined link-entity. To compare to another entity's attribute, give its link-entity an alias and use alias.attribute (Dataverse rejects it: 0x80040216).`,
+					});
 				}
 			}
 			// Value shape per operator (verified live 2026-10-15, #87). A condition the user is still
@@ -444,18 +655,38 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			// say what's missing, as the parser does, instead of judging the value of an unknown operator.
 			for (const condition of filter.conditions) {
 				if (!condition.attribute) {
-					push({ element: "condition", attribute: "attribute", nodeId: condition.id, severity: "error", kind: "invalid",
-						message: "Choose an attribute: a condition needs one (Dataverse rejects it without one)." });
+					push({
+						element: "condition",
+						attribute: "attribute",
+						nodeId: condition.id,
+						severity: "error",
+						kind: "invalid",
+						message:
+							"Choose an attribute: a condition needs one (Dataverse rejects it without one).",
+					});
 				}
 				if (!condition.operator) {
-					push({ element: "condition", attribute: "operator", nodeId: condition.id, severity: "error", kind: "invalid",
-						message: "Choose an operator: a condition needs one (Dataverse rejects it without one)." });
+					push({
+						element: "condition",
+						attribute: "operator",
+						nodeId: condition.id,
+						severity: "error",
+						kind: "invalid",
+						message:
+							"Choose an operator: a condition needs one (Dataverse rejects it without one).",
+					});
 					continue;
 				}
 				const issue = conditionValueIssue(condition);
 				if (issue) {
-					push({ element: "condition", attribute: "value", nodeId: condition.id, severity: issue.severity, kind: issue.severity === "error" ? "invalid" : "ignored",
-						message: issue.message });
+					push({
+						element: "condition",
+						attribute: "value",
+						nodeId: condition.id,
+						severity: issue.severity,
+						kind: issue.severity === "error" ? "invalid" : "ignored",
+						message: issue.message,
+					});
 				}
 			}
 			// condition/@aggregate isn't in the condition reference. Verified live: Dataverse runs the
@@ -463,22 +694,39 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 			// FetchXML has no HAVING and removing it doesn't change the results.
 			for (const condition of filter.conditions) {
 				if (condition.aggregate) {
-					push({ element: "condition", attribute: "aggregate", nodeId: condition.id, severity: "info", kind: "ignored",
-						message: `Dataverse ignores aggregate="${condition.aggregate}" on a condition: it compares each record's ${condition.attribute} value, not an aggregate result. FetchXML can't filter on aggregate values.` });
+					push({
+						element: "condition",
+						attribute: "aggregate",
+						nodeId: condition.id,
+						severity: "info",
+						kind: "ignored",
+						message: `Dataverse ignores aggregate="${condition.aggregate}" on a condition: it compares each record's ${condition.attribute} value, not an aggregate result. FetchXML can't filter on aggregate values.`,
+					});
 				}
 			}
 		}
 	}
 	for (const { filter } of unionFilters.slice(1)) {
-		push({ element: "filter", attribute: "hint", nodeId: filter.id, severity: "error", kind: "invalid",
-			message: `Only one filter per query can use the union hint (Dataverse rejects it: 0x80041122).` });
+		push({
+			element: "filter",
+			attribute: "hint",
+			nodeId: filter.id,
+			severity: "error",
+			kind: "invalid",
+			message: `Only one filter per query can use the union hint (Dataverse rejects it: 0x80041122).`,
+		});
 	}
 	// The reference allows one <filter> per entity / link-entity; Dataverse accepts more and combines
 	// them with 'and' (verified live), so this is advice only (#94).
 	for (const scope of scopes) {
 		for (const filter of scope.container.filters.slice(1)) {
-			push({ element: "filter", nodeId: filter.id, severity: "info", kind: "advice",
-				message: `${scope.container.name} has more than one filter; the FetchXML reference allows one. Dataverse combines them with 'and' — consider nesting them in one filter.` });
+			push({
+				element: "filter",
+				nodeId: filter.id,
+				severity: "info",
+				kind: "advice",
+				message: `${scope.container.name} has more than one filter; the FetchXML reference allows one. Dataverse combines them with 'and' — consider nesting them in one filter.`,
+			});
 		}
 	}
 
@@ -489,8 +737,10 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 }
 
 const isWholeNumber = (v: unknown): boolean =>
-	(typeof v === "number" && Number.isInteger(v)) || (typeof v === "string" && /^-?\d+$/.test(v.trim()));
-const isFourDigitYear = (v: unknown): boolean => isWholeNumber(v) && Number(v) >= 1000 && Number(v) <= 9999;
+	(typeof v === "number" && Number.isInteger(v)) ||
+	(typeof v === "string" && /^-?\d+$/.test(v.trim()));
+const isFourDigitYear = (v: unknown): boolean =>
+	isWholeNumber(v) && Number(v) >= 1000 && Number(v) <= 9999;
 const isEmptyValue = (v: unknown): boolean => v === undefined || v === null || v === "";
 
 /**
@@ -502,7 +752,9 @@ const isEmptyValue = (v: unknown): boolean => v === undefined || v === null || v
  * - in / not-in / contain-values need at least one <value> (0x80040203);
  * - operators without a value ignore one.
  */
-export function conditionValueIssue(condition: ConditionNode): { severity: RuleSeverity; message: string } | undefined {
+export function conditionValueIssue(
+	condition: ConditionNode,
+): { severity: RuleSeverity; message: string } | undefined {
 	const op = condition.operator;
 	const value = condition.value;
 	const values = Array.isArray(value) ? value : undefined;
@@ -510,29 +762,82 @@ export function conditionValueIssue(condition: ConditionNode): { severity: RuleS
 		case "none":
 			return isEmptyValue(value) || (values && values.length === 0)
 				? undefined
-				: { severity: "info", message: `Dataverse ignores the value: the '${op}' operator doesn't take one.` };
+				: {
+						severity: "info",
+						message: `Dataverse ignores the value: the '${op}' operator doesn't take one.`,
+					};
 		case "single":
 			if (condition.valueof) return undefined;
-			if (values) return { severity: "error", message: `The '${op}' operator takes one value in the value attribute, not <value> elements (Dataverse rejects it: 0x8004111e).` };
-			return isEmptyValue(value) ? { severity: "error", message: `The '${op}' operator needs a value (Dataverse rejects it without one: 0x8004111e).` } : undefined;
+			if (values)
+				return {
+					severity: "error",
+					message: `The '${op}' operator takes one value in the value attribute, not <value> elements (Dataverse rejects it: 0x8004111e).`,
+				};
+			return isEmptyValue(value)
+				? {
+						severity: "error",
+						message: `The '${op}' operator needs a value (Dataverse rejects it without one: 0x8004111e).`,
+					}
+				: undefined;
 		case "integer":
-			if (values || isEmptyValue(value)) return { severity: "error", message: `The '${op}' operator needs a whole number above 0 in the value attribute (0x8004111e).` };
-			if (!isWholeNumber(value)) return { severity: "error", message: `The '${op}' operator needs a whole number, not '${String(value)}' (Dataverse rejects it: 0x80041139).` };
-			return Number(value) < 1 ? { severity: "error", message: `The '${op}' operator needs a number above 0 (Dataverse rejects it: 0x80040203).` } : undefined;
+			if (values || isEmptyValue(value))
+				return {
+					severity: "error",
+					message: `The '${op}' operator needs a whole number above 0 in the value attribute (0x8004111e).`,
+				};
+			if (!isWholeNumber(value))
+				return {
+					severity: "error",
+					message: `The '${op}' operator needs a whole number, not '${String(value)}' (Dataverse rejects it: 0x80041139).`,
+				};
+			return Number(value) < 1
+				? {
+						severity: "error",
+						message: `The '${op}' operator needs a number above 0 (Dataverse rejects it: 0x80040203).`,
+					}
+				: undefined;
 		case "year":
-			if (values || isEmptyValue(value)) return { severity: "error", message: `The '${op}' operator needs a fiscal year in the value attribute (0x8004111e).` };
-			return isFourDigitYear(value) ? undefined : { severity: "error", message: `The '${op}' operator needs a four-digit fiscal year, not '${String(value)}' (Dataverse rejects it: 0x80040203).` };
+			if (values || isEmptyValue(value))
+				return {
+					severity: "error",
+					message: `The '${op}' operator needs a fiscal year in the value attribute (0x8004111e).`,
+				};
+			return isFourDigitYear(value)
+				? undefined
+				: {
+						severity: "error",
+						message: `The '${op}' operator needs a four-digit fiscal year, not '${String(value)}' (Dataverse rejects it: 0x80040203).`,
+					};
 		case "two":
 			return values && values.length === 2 && values.every((v) => !isEmptyValue(v))
 				? undefined
-				: { severity: "error", message: `The '${op}' operator needs exactly two <value> elements (Dataverse rejects it: 0x80041106).` };
+				: {
+						severity: "error",
+						message: `The '${op}' operator needs exactly two <value> elements (Dataverse rejects it: 0x80041106).`,
+					};
 		case "fiscalPeriodYear":
-			if (!values || values.length !== 2) return { severity: "error", message: `The '${op}' operator needs two <value> elements, the period and the year (Dataverse rejects it: 0x80041106).` };
-			if (!isWholeNumber(values[0]) || Number(values[0]) < 1) return { severity: "error", message: `The fiscal period for '${op}' must be a whole number from 1.` };
-			return isFourDigitYear(values[1]) ? undefined : { severity: "error", message: `The fiscal year for '${op}' must be a four-digit year.` };
+			if (!values || values.length !== 2)
+				return {
+					severity: "error",
+					message: `The '${op}' operator needs two <value> elements, the period and the year (Dataverse rejects it: 0x80041106).`,
+				};
+			if (!isWholeNumber(values[0]) || Number(values[0]) < 1)
+				return {
+					severity: "error",
+					message: `The fiscal period for '${op}' must be a whole number from 1.`,
+				};
+			return isFourDigitYear(values[1])
+				? undefined
+				: {
+						severity: "error",
+						message: `The fiscal year for '${op}' must be a four-digit year.`,
+					};
 		case "multiple":
 			return values && values.length > 0
 				? undefined
-				: { severity: "error", message: `The '${op}' operator needs at least one <value> element (Dataverse rejects a value attribute or no value: 0x80040203).` };
+				: {
+						severity: "error",
+						message: `The '${op}' operator needs at least one <value> element (Dataverse rejects a value attribute or no value: 0x80040203).`,
+					};
 	}
 }

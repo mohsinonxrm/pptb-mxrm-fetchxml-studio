@@ -29,7 +29,9 @@ describe("describeScope", () => {
 	});
 
 	it("passes worded scopes through", () => {
-		expect(describeScope({ kind: "text", text: "A new personal view" })).toBe("A new personal view");
+		expect(describeScope({ kind: "text", text: "A new personal view" })).toBe(
+			"A new personal view",
+		);
 	});
 });
 
@@ -40,9 +42,21 @@ describe("requiresTypedConfirmation", () => {
 	});
 
 	it("asks above the threshold and when the total is unknown", () => {
-		expect(requiresTypedConfirmation("Dev", { kind: "records", count: TYPE_TO_CONFIRM_RECORD_THRESHOLD })).toBe(false);
-		expect(requiresTypedConfirmation("Dev", { kind: "records", count: TYPE_TO_CONFIRM_RECORD_THRESHOLD + 1 })).toBe(true);
-		expect(requiresTypedConfirmation(undefined, { kind: "allMatching", loadedCount: 3 })).toBe(true);
+		expect(
+			requiresTypedConfirmation("Dev", {
+				kind: "records",
+				count: TYPE_TO_CONFIRM_RECORD_THRESHOLD,
+			}),
+		).toBe(false);
+		expect(
+			requiresTypedConfirmation("Dev", {
+				kind: "records",
+				count: TYPE_TO_CONFIRM_RECORD_THRESHOLD + 1,
+			}),
+		).toBe(true);
+		expect(requiresTypedConfirmation(undefined, { kind: "allMatching", loadedCount: 3 })).toBe(
+			true,
+		);
 		expect(requiresTypedConfirmation("UAT", { kind: "text", text: "A view" })).toBe(false);
 	});
 

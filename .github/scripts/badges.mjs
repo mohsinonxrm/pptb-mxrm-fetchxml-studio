@@ -15,7 +15,8 @@ const widthOf = (text) =>
 		return w + 7.5;
 	}, 0);
 
-const escapeXml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const escapeXml = (text) =>
+	text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** One flat badge: grey label, coloured message (dark text on light colours) */
 export function badgeSvg(label, message, color, { darkText = false } = {}) {
@@ -36,7 +37,9 @@ export function badgeSvg(label, message, color, { darkText = false } = {}) {
 		`<g clip-path="url(#r)"><rect width="${lw}" height="20" fill="#555"/><rect x="${lw}" width="${mw}" height="20" fill="${color}"/><rect width="${w}" height="20" fill="url(#s)"/></g>` +
 		`<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">` +
 		text(lw * 5, label, "#fff", "#010101") +
-		(darkText ? text(lw * 10 + mw * 5, message, "#333", "#ccc") : text(lw * 10 + mw * 5, message, "#fff", "#010101")) +
+		(darkText
+			? text(lw * 10 + mw * 5, message, "#333", "#ccc")
+			: text(lw * 10 + mw * 5, message, "#fff", "#010101")) +
 		`</g></svg>\n`
 	);
 }
@@ -53,7 +56,8 @@ export function repositoryOf(pkg) {
 }
 
 /** Where the README links a badge: the file on main, as raw.githubusercontent.com serves it */
-export const badgeUrl = (pkg, file) => `https://raw.githubusercontent.com/${repositoryOf(pkg)}/refs/heads/main/assets/badges/${file}`;
+export const badgeUrl = (pkg, file) =>
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/refs/heads/main/assets/badges/${file}`;
 
 /**
  * Every README badge, from package.json: the file name, its alt text and the SVG. The order is the
@@ -69,14 +73,49 @@ export function badges(pkg) {
 	const minApi = pkg.features?.minAPI;
 	const list = [
 		// Pre-releases yellow, releases blue, as Command Bar Studio's version badge
-		{ file: "version.svg", alt: "Version", link: `https://www.npmjs.com/package/${pkg.name}`, svg: badgeSvg("version", version, version.includes("-") ? "#dfb317" : "#007ec6") },
+		{
+			file: "version.svg",
+			alt: "Version",
+			link: `https://www.npmjs.com/package/${pkg.name}`,
+			svg: badgeSvg("version", version, version.includes("-") ? "#dfb317" : "#007ec6"),
+		},
 	];
-	if (minApi) list.push({ file: "pptb.svg", alt: `Power Platform ToolBox ${minApi} or later`, svg: badgeSvg("Power Platform ToolBox", `≥ ${minApi}`, "#742774") });
-	if (pptbTypes) list.push({ file: "pptb-types.svg", alt: `@pptb/types ${pptbTypes}`, svg: badgeSvg("@pptb/types", pptbTypes, "#007ec6") });
-	if (react) list.push({ file: "react.svg", alt: `React ${react}`, svg: badgeSvg("React", react, "#61DAFB", { darkText: true }) });
-	if (typescript) list.push({ file: "typescript.svg", alt: `TypeScript ${typescript}`, svg: badgeSvg("TypeScript", typescript, "#3178C6") });
-	if (fluent) list.push({ file: "fluent-ui.svg", alt: `Fluent UI v${fluent}`, svg: badgeSvg("Fluent UI", `v${fluent}`, "#0078D4") });
-	if (pkg.license) list.push({ file: "license.svg", alt: `License ${pkg.license}`, svg: badgeSvg("license", pkg.license, "#97ca00") });
+	if (minApi)
+		list.push({
+			file: "pptb.svg",
+			alt: `Power Platform ToolBox ${minApi} or later`,
+			svg: badgeSvg("Power Platform ToolBox", `≥ ${minApi}`, "#742774"),
+		});
+	if (pptbTypes)
+		list.push({
+			file: "pptb-types.svg",
+			alt: `@pptb/types ${pptbTypes}`,
+			svg: badgeSvg("@pptb/types", pptbTypes, "#007ec6"),
+		});
+	if (react)
+		list.push({
+			file: "react.svg",
+			alt: `React ${react}`,
+			svg: badgeSvg("React", react, "#61DAFB", { darkText: true }),
+		});
+	if (typescript)
+		list.push({
+			file: "typescript.svg",
+			alt: `TypeScript ${typescript}`,
+			svg: badgeSvg("TypeScript", typescript, "#3178C6"),
+		});
+	if (fluent)
+		list.push({
+			file: "fluent-ui.svg",
+			alt: `Fluent UI v${fluent}`,
+			svg: badgeSvg("Fluent UI", `v${fluent}`, "#0078D4"),
+		});
+	if (pkg.license)
+		list.push({
+			file: "license.svg",
+			alt: `License ${pkg.license}`,
+			svg: badgeSvg("license", pkg.license, "#97ca00"),
+		});
 	return list;
 }
 

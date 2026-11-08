@@ -15,10 +15,16 @@ function toolIcon(): Plugin {
 		name: "fxs-tool-icon",
 		apply: "build",
 		generateBundle() {
-			const { version } = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+			const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
+				version: string;
+			};
 			const isPrerelease = version.includes("-");
 			const source = isPrerelease ? "icons/icon-insider.svg" : "icons/icon.svg";
-			this.emitFile({ type: "asset", fileName: "icons/icon.svg", source: readFileSync(source, "utf8") });
+			this.emitFile({
+				type: "asset",
+				fileName: "icons/icon.svg",
+				source: readFileSync(source, "utf8"),
+			});
 		},
 	};
 }
@@ -36,7 +42,11 @@ function monacoDompurify(): Plugin {
 		name: "fxs-monaco-dompurify",
 		enforce: "pre",
 		async resolveId(source, importer, options) {
-			if (!importer || !/[\\/]monaco-editor[\\/]esm[\\/]vs[\\/]base[\\/]browser[\\/]/.test(importer)) return null;
+			if (
+				!importer ||
+				!/[\\/]monaco-editor[\\/]esm[\\/]vs[\\/]base[\\/]browser[\\/]/.test(importer)
+			)
+				return null;
 			if (!/(^|[\\/])dompurify[\\/]dompurify\.js$/.test(source)) return null;
 			// Resolved from Monaco's folder: its own (overridden) dompurify dependency
 			return this.resolve("dompurify", importer, { ...options, skipSelf: true });
@@ -78,7 +88,9 @@ export default defineConfig(async ({ command, mode }) => ({
 	plugins: [react(), toolIcon(), monacoDompurify(), ...(await devHarness(command, mode))],
 	// The tool's version, for "Copy details" when a panel fails (#185)
 	define: {
-		__FXS_VERSION__: JSON.stringify((JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version),
+		__FXS_VERSION__: JSON.stringify(
+			(JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version,
+		),
 	},
 	optimizeDeps: {
 		// Pre-bundle monaco-editor so Vite doesn't try to transform its deep

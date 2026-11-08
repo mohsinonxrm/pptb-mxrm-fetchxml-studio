@@ -24,7 +24,9 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 	const styles = useEditorStyles();
 	const isOr = node.conjunction === "or";
 	const anyQuickFind =
-		!!node.isQuickFindFields || !!node.overrideQuickFindRecordLimitEnabled || !!node.overrideQuickFindRecordLimitDisabled;
+		!!node.isQuickFindFields ||
+		!!node.overrideQuickFindRecordLimitEnabled ||
+		!!node.overrideQuickFindRecordLimitDisabled;
 	const recordLimit =
 		node.overrideQuickFindRecordLimitEnabled && node.overrideQuickFindRecordLimitDisabled
 			? ""
@@ -41,7 +43,12 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 				<SectionHeading>Filter</SectionHeading>
 				<InfoField
 					label="Match"
-					info={<Info text="Whether all conditions (and) or any condition (or) must be true." href={DOCS.filter} />}
+					info={
+						<Info
+							text="Whether all conditions (and) or any condition (or) must be true."
+							href={DOCS.filter}
+						/>
+					}
 				>
 					<Dropdown
 						value={isOr ? "Any condition (or)" : "All conditions (and)"}
@@ -59,7 +66,11 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 						checked={!!node.hint}
 						disabled={unionBlocked}
 						onChange={(checked) => onUpdate({ hint: checked ? "union" : undefined })}
-						hint={unionBlocked ? "Only one filter per query can use the union hint, and another filter has it." : undefined}
+						hint={
+							unionBlocked
+								? "Only one filter per query can use the union hint, and another filter has it."
+								: undefined
+						}
 						validation={findingFor(findings, "hint")}
 						info={
 							<Info
@@ -77,7 +88,9 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 					<InfoCheckbox
 						label="Quick find filter"
 						checked={!!node.isQuickFindFields}
-						onChange={(checked) => onUpdate({ isQuickFindFields: checked ? true : undefined })}
+						onChange={(checked) =>
+							onUpdate({ isQuickFindFields: checked ? true : undefined })
+						}
 						info={
 							<Info
 								text="Runs this filter as a quick find search, the pattern behind the search box in views. Dataverse applies the quick find record limit to it."
@@ -100,13 +113,21 @@ export function FilterEditor({ node, unionElsewhere, findings, onUpdate }: Filte
 								value={recordLimit}
 								onChange={(_, data) =>
 									onUpdate({
-										overrideQuickFindRecordLimitEnabled: data.value === "apply" ? true : undefined,
-										overrideQuickFindRecordLimitDisabled: data.value === "bypass" ? true : undefined,
+										overrideQuickFindRecordLimitEnabled:
+											data.value === "apply" ? true : undefined,
+										overrideQuickFindRecordLimitDisabled:
+											data.value === "bypass" ? true : undefined,
 									})
 								}
 							>
-								<Radio value="default" label="Use the environment setting (default)" />
-								<Radio value="apply" label="Always apply the 10,000-record limit (testing)" />
+								<Radio
+									value="default"
+									label="Use the environment setting (default)"
+								/>
+								<Radio
+									value="apply"
+									label="Always apply the 10,000-record limit (testing)"
+								/>
 								<Radio value="bypass" label="Bypass the limit (testing)" />
 							</RadioGroup>
 						</InfoField>
