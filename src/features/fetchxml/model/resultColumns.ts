@@ -32,7 +32,10 @@ export interface ResultAttributeInfo {
 }
 
 /** Attribute metadata by entity and attribute logical name (undefined while it's loading) */
-export type ResultAttributeLookup = (entityName: string, attributeName: string) => ResultAttributeInfo | undefined;
+export type ResultAttributeLookup = (
+	entityName: string,
+	attributeName: string,
+) => ResultAttributeInfo | undefined;
 
 export interface ResultColumn {
 	/** Property name in the rows */
@@ -49,7 +52,8 @@ const CROSS_APPLY = "matchfirstrowusingcrossapply";
 /** The rows' data keys (annotations left out), in the order they're first seen */
 export function rowKeys(rows: readonly Record<string, unknown>[]): string[] {
 	const keys = new Set<string>();
-	for (const row of rows) for (const key of Object.keys(row)) if (!key.includes("@")) keys.add(key);
+	for (const row of rows)
+		for (const key of Object.keys(row)) if (!key.includes("@")) keys.add(key);
 	return [...keys];
 }
 
@@ -97,7 +101,8 @@ export function resultColumns(
 		const info = getAttribute?.(container.name, attribute.name);
 		if (column.isRoot) {
 			const lookupKey = `_${attribute.name}_value`;
-			if (info?.AttributeType) return LOOKUP_TYPES.has(info.AttributeType) ? lookupKey : attribute.name;
+			if (info?.AttributeType)
+				return LOOKUP_TYPES.has(info.AttributeType) ? lookupKey : attribute.name;
 			return seenSet.has(lookupKey) ? lookupKey : attribute.name;
 		}
 		if ((container as LinkEntityNode).linkType === CROSS_APPLY) {
@@ -106,14 +111,19 @@ export function resultColumns(
 			if (info?.SchemaName) return info.SchemaName;
 			// The logical name is the schema name in lowercase:
 			// https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.metadata.attributemetadata.logicalname
-			const found = seen.find((k) => !k.includes(".") && !claimed.has(k) && k.toLowerCase() === attribute.name);
+			const found = seen.find(
+				(k) => !k.includes(".") && !claimed.has(k) && k.toLowerCase() === attribute.name,
+			);
 			if (found) return found;
 		}
 		return column.key;
 	};
 
 	// Root columns come first, so a cross-apply key never takes a root attribute's key
-	const ran = executed && executed !== fetch ? new Set(resultColumns(executed, rows, getAttribute).map((c) => c.key)) : undefined;
+	const ran =
+		executed && executed !== fetch
+			? new Set(resultColumns(executed, rows, getAttribute).map((c) => c.key))
+			: undefined;
 	for (const column of collectQueryColumns(fetch)) {
 		if (!column.isRoot && noColumns.has(column.container.id)) continue;
 		const key = keyOf(column);
@@ -124,7 +134,9 @@ export function resultColumns(
 	// All-attributes columns: whatever the rows have for those entities
 	const rootAll = !!fetch.entity.allAttributes?.enabled || fetch.entity.attributes.length === 0;
 	const aliases = joinedLinkAliases(fetch);
-	const allLinks = links.filter((l) => l.returnsColumns && l.link.allAttributes?.enabled).map((l) => l.link);
+	const allLinks = links
+		.filter((l) => l.returnsColumns && l.link.allAttributes?.enabled)
+		.map((l) => l.link);
 	// Cross-apply links too: filtered by entityname, they return "alias.attribute" keys
 	const linkPrefixes = allLinks.map((l) => `${aliases.get(l.id)}.`);
 	// Cross-apply keys are schema names; root and link-entity keys are logical names (all lowercase)
@@ -144,7 +156,10 @@ export function resultColumns(
  * Layout cells use the query's column keys, so a column also matches by its attribute's key
  * (_name_value and cross-apply schema names), and an all-attributes _name_value by the name.
  */
-export function orderByLayout(columns: ResultColumn[], config: LayoutXmlConfig | null | undefined): ResultColumn[] {
+export function orderByLayout(
+	columns: ResultColumn[],
+	config: LayoutXmlConfig | null | undefined,
+): ResultColumn[] {
 	if (!config || config.columns.length === 0) return columns;
 	const index = new Map<string, number>();
 	config.columns.forEach((c, i) => {

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0-beta.1] - 2026-11-07
+
 ### ✨ Added
 
 - **Scope chip: where Entities come from, in one button (#227).** A chip heads the left pane and always shows the current scope (`Contoso › Sales Core v1.2.0` with `+N` for more, `All entities`, or a **Choose scope** button when nothing is picked). Its popover holds the scope settings: Show entities from (Publisher → solution, Solution only, All entities), Publishers and Solutions tag pickers, and Advanced Find only. Changes apply right away. A first-run tip points at the chip, once per environment. It replaces the Publishers / Solutions comboboxes, the collapsible Query scope header (#25) and the Entity source and Advanced Find only settings. Same design as Dataverse Request Studio and Command Bar Studio.
@@ -93,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI and repo:** CI fails on high or critical runtime vulnerabilities (#72); grouped weekly Dependabot updates into `dev` with a 14-day cooldown (#76); `CONTRIBUTING.md` and the PR template (#80); README CI and license badges.
 - **Shortcut registry and matcher, not used yet (#186).** `src/app/shortcuts/registry.ts` holds the shortcut table (Run, Save, Keyboard shortcuts, Undo, Redo, plus the keys handled locally), `matches()`, `formatKeys()`, `isEditableTarget()` and the keys PPTB reserves. Nothing listens to it yet. A test keeps the README's Keyboard shortcuts table in step with it.
 - **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
+- **The code is formatted with Prettier, and CI checks it (#205).** One formatting-only commit applies `.prettierrc` (tabs, 100 columns) to the 200-odd files that didn't match. It's listed in `.git-blame-ignore-revs`, so `git blame` skips it. `npm run format:check` now runs in CI, after lint. Captured test data (`__fixtures__`) and Markdown are left as written. The built bundle is unchanged apart from where JSX text breaks its spaces (`"Advisories "` → `"Advisories"` + `" "`), which renders the same.
+- **App flow tests wait longer under load.** A wait still returns as soon as its condition holds, but the limits are now 15 s per wait and 2 minutes per test (were 4 s and 1 minute), after 8 flow tests failed once in a busy full run.
 
 ## [1.5.0] - 2026-11-07
 

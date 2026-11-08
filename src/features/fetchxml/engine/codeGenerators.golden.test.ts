@@ -10,7 +10,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { LEARN_FETCHXML_EXAMPLES } from "../model/__fixtures__/learnFetchXml";
-import { generateFxsSyncCode, generatePowerAutomateSpec, type FxsSyncFormat } from "./fetchxmlCodeGenerators";
+import {
+	generateFxsSyncCode,
+	generatePowerAutomateSpec,
+	type FxsSyncFormat,
+} from "./fetchxmlCodeGenerators";
 
 const ORG_URL = "https://contoso.crm.dynamics.com";
 const FORMATS: FxsSyncFormat[] = ["csharp-fetchexpr", "javascript", "pac", "webapi"];
@@ -47,7 +51,8 @@ describe("Power Automate List rows spec", () => {
 // The Code panel passes the entity set name from metadata when it has it (CodePanel.tsx), which
 // wins over the plural derived from the entity name
 describe("with the entity set name from metadata", () => {
-	const xml = "<fetch top='5'><entity name='adminsettingsentity'><attribute name='name'/></entity></fetch>";
+	const xml =
+		"<fetch top='5'><entity name='adminsettingsentity'><attribute name='name'/></entity></fetch>";
 	it("Web API uses it in the URL", () => {
 		const code = generateFxsSyncCode("webapi", xml, "new_admin_settings_entities", ORG_URL);
 		expect(code).toContain("/api/data/v9.2/new_admin_settings_entities?fetchXml=");
@@ -55,7 +60,9 @@ describe("with the entity set name from metadata", () => {
 	});
 	it("Power Automate uses it as the table name", () => {
 		const spec = generatePowerAutomateSpec(xml, "new_admin_settings_entities");
-		expect(spec.fields.find((f) => f.label === "Table name")?.value).toBe("new_admin_settings_entities");
+		expect(spec.fields.find((f) => f.label === "Table name")?.value).toBe(
+			"new_admin_settings_entities",
+		);
 		expect(spec).toMatchSnapshot();
 	});
 });

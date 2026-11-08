@@ -86,40 +86,63 @@ import {
 } from "@fluentui/react-icons";
 import type { NodeRole, TreeIconName, TreeIconStyle } from "../../model/treeIcons";
 
-const ICONS: Record<TreeIconName, { regular: FluentIcon; filled: FluentIcon; color?: FluentIcon }> = {
-	Code: { regular: Code20Regular, filled: Code20Filled, color: Code20Color },
-	Table: { regular: Table20Regular, filled: Table20Filled, color: Table20Color },
-	TableLink: { regular: TableLink20Regular, filled: TableLink20Filled },
-	ColumnTriple: { regular: ColumnTriple20Regular, filled: ColumnTriple20Filled },
-	Filter: { regular: Filter20Regular, filled: Filter20Filled },
-	MathSymbols: { regular: MathSymbols20Regular, filled: MathSymbols20Filled },
-	ArrowSortUpLines: { regular: ArrowSortUpLines20Regular, filled: ArrowSortUpLines20Filled },
-	ArrowSortDownLines: { regular: ArrowSortDownLines20Regular, filled: ArrowSortDownLines20Filled },
-	TextT: { regular: TextT20Regular, filled: TextT20Filled },
-	TextAlignLeft: { regular: TextAlignLeft20Regular, filled: TextAlignLeft20Filled },
-	NumberSymbol: { regular: NumberSymbol20Regular, filled: NumberSymbol20Filled },
-	DecimalArrowRight: { regular: DecimalArrowRight20Regular, filled: DecimalArrowRight20Filled },
-	Money: { regular: Money20Regular, filled: Money20Filled },
-	ToggleLeft: { regular: ToggleLeft20Regular, filled: ToggleLeft20Filled },
-	CalendarClock: { regular: CalendarClock20Regular, filled: CalendarClock20Filled, color: CalendarClock20Color },
-	RadioButton: { regular: RadioButton20Regular, filled: RadioButton20Filled },
-	MultiselectLtr: { regular: MultiselectLtr20Regular, filled: MultiselectLtr20Filled },
-	Status: { regular: Status20Regular, filled: Status20Filled },
-	TagCircle: { regular: TagCircle20Regular, filled: TagCircle20Filled },
-	TableSearch: { regular: TableSearch20Regular, filled: TableSearch20Filled },
-	BuildingPeople: { regular: BuildingPeople20Regular, filled: BuildingPeople20Filled, color: BuildingPeople20Color },
-	PeopleTeam: { regular: PeopleTeam20Regular, filled: PeopleTeam20Filled, color: PeopleTeam20Color },
-	PeopleList: { regular: PeopleList20Regular, filled: PeopleList20Filled, color: PeopleList20Color },
-	Key: { regular: Key20Regular, filled: Key20Filled },
-	KeyMultiple: { regular: KeyMultiple20Regular, filled: KeyMultiple20Filled },
-	Tag: { regular: Tag20Regular, filled: Tag20Filled },
-	Image: { regular: Image20Regular, filled: Image20Filled, color: Image20Color },
-	Attach: { regular: Attach20Regular, filled: Attach20Filled },
-	ShieldLock: { regular: ShieldLock20Regular, filled: ShieldLock20Filled },
-	CalendarSettings: { regular: CalendarSettings20Regular, filled: CalendarSettings20Filled },
-	Shapes: { regular: Shapes20Regular, filled: Shapes20Filled },
-	TextColumnOne: { regular: TextColumnOne20Regular, filled: TextColumnOne20Filled },
-};
+const ICONS: Record<TreeIconName, { regular: FluentIcon; filled: FluentIcon; color?: FluentIcon }> =
+	{
+		Code: { regular: Code20Regular, filled: Code20Filled, color: Code20Color },
+		Table: { regular: Table20Regular, filled: Table20Filled, color: Table20Color },
+		TableLink: { regular: TableLink20Regular, filled: TableLink20Filled },
+		ColumnTriple: { regular: ColumnTriple20Regular, filled: ColumnTriple20Filled },
+		Filter: { regular: Filter20Regular, filled: Filter20Filled },
+		MathSymbols: { regular: MathSymbols20Regular, filled: MathSymbols20Filled },
+		ArrowSortUpLines: { regular: ArrowSortUpLines20Regular, filled: ArrowSortUpLines20Filled },
+		ArrowSortDownLines: {
+			regular: ArrowSortDownLines20Regular,
+			filled: ArrowSortDownLines20Filled,
+		},
+		TextT: { regular: TextT20Regular, filled: TextT20Filled },
+		TextAlignLeft: { regular: TextAlignLeft20Regular, filled: TextAlignLeft20Filled },
+		NumberSymbol: { regular: NumberSymbol20Regular, filled: NumberSymbol20Filled },
+		DecimalArrowRight: {
+			regular: DecimalArrowRight20Regular,
+			filled: DecimalArrowRight20Filled,
+		},
+		Money: { regular: Money20Regular, filled: Money20Filled },
+		ToggleLeft: { regular: ToggleLeft20Regular, filled: ToggleLeft20Filled },
+		CalendarClock: {
+			regular: CalendarClock20Regular,
+			filled: CalendarClock20Filled,
+			color: CalendarClock20Color,
+		},
+		RadioButton: { regular: RadioButton20Regular, filled: RadioButton20Filled },
+		MultiselectLtr: { regular: MultiselectLtr20Regular, filled: MultiselectLtr20Filled },
+		Status: { regular: Status20Regular, filled: Status20Filled },
+		TagCircle: { regular: TagCircle20Regular, filled: TagCircle20Filled },
+		TableSearch: { regular: TableSearch20Regular, filled: TableSearch20Filled },
+		BuildingPeople: {
+			regular: BuildingPeople20Regular,
+			filled: BuildingPeople20Filled,
+			color: BuildingPeople20Color,
+		},
+		PeopleTeam: {
+			regular: PeopleTeam20Regular,
+			filled: PeopleTeam20Filled,
+			color: PeopleTeam20Color,
+		},
+		PeopleList: {
+			regular: PeopleList20Regular,
+			filled: PeopleList20Filled,
+			color: PeopleList20Color,
+		},
+		Key: { regular: Key20Regular, filled: Key20Filled },
+		KeyMultiple: { regular: KeyMultiple20Regular, filled: KeyMultiple20Filled },
+		Tag: { regular: Tag20Regular, filled: Tag20Filled },
+		Image: { regular: Image20Regular, filled: Image20Filled, color: Image20Color },
+		Attach: { regular: Attach20Regular, filled: Attach20Filled },
+		ShieldLock: { regular: ShieldLock20Regular, filled: ShieldLock20Filled },
+		CalendarSettings: { regular: CalendarSettings20Regular, filled: CalendarSettings20Filled },
+		Shapes: { regular: Shapes20Regular, filled: Shapes20Filled },
+		TextColumnOne: { regular: TextColumnOne20Regular, filled: TextColumnOne20Filled },
+	};
 
 /** Role colours: Fluent palette tokens, with tuned light, dark and high-contrast values */
 const ROLE_COLOR: Record<NodeRole, string> = {
@@ -136,7 +159,15 @@ const useStyles = makeStyles({
 	highContrastOnly: { display: "none", "@media (forced-colors: active)": { display: "inline" } },
 });
 
-export function TreeNodeIcon({ role, icon, iconStyle }: { role: NodeRole; icon: TreeIconName; iconStyle: TreeIconStyle }) {
+export function TreeNodeIcon({
+	role,
+	icon,
+	iconStyle,
+}: {
+	role: NodeRole;
+	icon: TreeIconName;
+	iconStyle: TreeIconStyle;
+}) {
 	const styles = useStyles();
 	const id = useId();
 	const { regular: Regular, filled: Filled, color: Color } = ICONS[icon];

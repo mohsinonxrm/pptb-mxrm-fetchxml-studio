@@ -19,7 +19,14 @@ import { useBuilder } from "../../../../state/builderContext";
 import { AttributePicker } from "../../../../../../shared/components/AttributePicker";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoCheckbox, InfoField, LeftoverSetting, SectionHeading, type Validation } from "../fields";
+import {
+	Info,
+	InfoCheckbox,
+	InfoField,
+	LeftoverSetting,
+	SectionHeading,
+	type Validation,
+} from "../fields";
 import { findingFor, worst } from "../ruleFindings";
 import { useAttributeTypeInfo, useEntityInfo } from "../useEditorMetadata";
 import { MetadataLoadWarning } from "../MetadataLoadWarning";
@@ -78,11 +85,14 @@ export function AttributeEditor({
 	useEffect(() => setAggregatePending(false), [node.id]);
 
 	// Renaming an alias also updates the orders that sort by it, so the rename doesn't break them
-	const ordersUsingAlias = node.alias ? findOrdersUsingAlias(fetchQuery, container, node.alias) : [];
+	const ordersUsingAlias = node.alias
+		? findOrdersUsingAlias(fetchQuery, container, node.alias)
+		: [];
 	const handleAliasChange = (raw: string) => {
 		const alias = sanitizeAlias(raw) || undefined;
 		if (node.alias && alias) {
-			for (const order of findOrdersUsingAlias(fetchQuery, container, node.alias)) updateNode(order.id, { alias });
+			for (const order of findOrdersUsingAlias(fetchQuery, container, node.alias))
+				updateNode(order.id, { alias });
 		}
 		onUpdate({ alias });
 	};
@@ -92,7 +102,9 @@ export function AttributeEditor({
 		<InfoField
 			label="Attribute"
 			required
-			info={<Info text="The logical name of the attribute to return." href={DOCS.attribute} />}
+			info={
+				<Info text="The logical name of the attribute to return." href={DOCS.attribute} />
+			}
 		>
 			<AttributePicker
 				entityLogicalName={entityName}
@@ -127,7 +139,8 @@ export function AttributeEditor({
 	if (!isAggregateQuery) {
 		const isPrimaryKey = !!node.name && node.name === primaryId;
 		const showCountChildren =
-			node.rowAggregate !== undefined || (isRootEntity && isPrimaryKey && entityInfo.isHierarchical !== false);
+			node.rowAggregate !== undefined ||
+			(isRootEntity && isPrimaryKey && entityInfo.isHierarchical !== false);
 		let countChildrenValidation: Validation = findingFor(findings, "rowaggregate");
 		if (!countChildrenValidation && node.rowAggregate !== undefined) {
 			if (entityInfo.isHierarchical === false) {
@@ -142,13 +155,45 @@ export function AttributeEditor({
 				};
 			}
 		}
-		const leftovers: { text: string; field: keyof AttributeNode; validation: NonNullable<Validation> }[] = [];
-		const ignored = (text: string): NonNullable<Validation> => ({ state: "none", message: text });
-		if (node.groupby) leftovers.push({ text: "Group by", field: "groupby", validation: findingFor(findings, "groupby") ?? ignored("") });
-		if (node.aggregate) leftovers.push({ text: `Aggregate: ${node.aggregate}`, field: "aggregate", validation: findingFor(findings, "aggregate") ?? ignored("") });
-		if (node.dategrouping) leftovers.push({ text: `Date grouping: ${node.dategrouping}`, field: "dategrouping", validation: ignored("Ignored outside aggregate queries.") });
-		if (node.usertimezone !== undefined) leftovers.push({ text: "Time zone", field: "usertimezone", validation: ignored("Ignored outside aggregate queries.") });
-		if (node.distinct) leftovers.push({ text: "Unique values only", field: "distinct", validation: ignored("Ignored outside aggregate queries.") });
+		const leftovers: {
+			text: string;
+			field: keyof AttributeNode;
+			validation: NonNullable<Validation>;
+		}[] = [];
+		const ignored = (text: string): NonNullable<Validation> => ({
+			state: "none",
+			message: text,
+		});
+		if (node.groupby)
+			leftovers.push({
+				text: "Group by",
+				field: "groupby",
+				validation: findingFor(findings, "groupby") ?? ignored(""),
+			});
+		if (node.aggregate)
+			leftovers.push({
+				text: `Aggregate: ${node.aggregate}`,
+				field: "aggregate",
+				validation: findingFor(findings, "aggregate") ?? ignored(""),
+			});
+		if (node.dategrouping)
+			leftovers.push({
+				text: `Date grouping: ${node.dategrouping}`,
+				field: "dategrouping",
+				validation: ignored("Ignored outside aggregate queries."),
+			});
+		if (node.usertimezone !== undefined)
+			leftovers.push({
+				text: "Time zone",
+				field: "usertimezone",
+				validation: ignored("Ignored outside aggregate queries."),
+			});
+		if (node.distinct)
+			leftovers.push({
+				text: "Unique values only",
+				field: "distinct",
+				validation: ignored("Ignored outside aggregate queries."),
+			});
 
 		return (
 			<div className={styles.container}>
@@ -166,8 +211,14 @@ export function AttributeEditor({
 						<InfoCheckbox
 							label="Count child records"
 							checked={node.rowAggregate !== undefined}
-							onChange={(checked) => onUpdate({ rowAggregate: checked ? "CountChildren" : undefined })}
-							hint={node.rowAggregate !== undefined ? "Returns the number of hierarchical child records in the alias attribute." : undefined}
+							onChange={(checked) =>
+								onUpdate({ rowAggregate: checked ? "CountChildren" : undefined })
+							}
+							hint={
+								node.rowAggregate !== undefined
+									? "Returns the number of hierarchical child records in the alias attribute."
+									: undefined
+							}
 							validation={countChildrenValidation}
 							info={
 								<Info
@@ -189,7 +240,11 @@ export function AttributeEditor({
 								validation={
 									leftover.validation.message
 										? leftover.validation
-										: { state: "error", message: "The query isn't an aggregate query, so Dataverse rejects this." }
+										: {
+												state: "error",
+												message:
+													"The query isn't an aggregate query, so Dataverse rejects this.",
+											}
 								}
 								onRemove={() => onUpdate({ [leftover.field]: undefined })}
 							/>
@@ -202,17 +257,34 @@ export function AttributeEditor({
 
 	// ---------------------------------------------------------------- aggregate query
 	const bothRoles = !!node.groupby && !!node.aggregate;
-	const role = bothRoles ? "" : node.groupby ? "groupby" : node.aggregate || aggregatePending ? "aggregate" : "";
+	const role = bothRoles
+		? ""
+		: node.groupby
+			? "groupby"
+			: node.aggregate || aggregatePending
+				? "aggregate"
+				: "";
 	const canGroup = !caps || caps.groupby;
-	const allowedFunctions = AGGREGATE_FUNCTIONS.filter((fn) => !caps || caps.functions.includes(fn));
+	const allowedFunctions = AGGREGATE_FUNCTIONS.filter(
+		(fn) => !caps || caps.functions.includes(fn),
+	);
 	const canAggregate = allowedFunctions.length > 0;
-	const functionUnsupported = !!node.aggregate && !!typeInfo && !allowedFunctions.includes(node.aggregate);
+	const functionUnsupported =
+		!!node.aggregate && !!typeInfo && !allowedFunctions.includes(node.aggregate);
 
 	const roleValidation = worst(
 		findingFor(findings, undefined, "groupby"),
-		node.groupby && !canGroup ? { state: "error", message: caps?.reason ?? "Dataverse can't group by this attribute." } : undefined,
+		node.groupby && !canGroup
+			? {
+					state: "error",
+					message: caps?.reason ?? "Dataverse can't group by this attribute.",
+				}
+			: undefined,
 		!role && !bothRoles && !canGroup && !canAggregate
-			? { state: "error", message: `${caps?.reason} Remove this attribute from the aggregate query.` }
+			? {
+					state: "error",
+					message: `${caps?.reason} Remove this attribute from the aggregate query.`,
+				}
 			: undefined,
 	);
 	const functionValidation: Validation = !node.aggregate
@@ -226,7 +298,11 @@ export function AttributeEditor({
 	const dateGroupingRelevant = role === "groupby" && (isDateTime || typeUnknown);
 	const dateGroupingValidation: Validation =
 		role === "groupby" && isDateTime && !node.dategrouping
-			? { state: "error", message: "Choose a date part. Dataverse can't group a DateTime attribute without one (0x80041135)." }
+			? {
+					state: "error",
+					message:
+						"Choose a date part. Dataverse can't group a DateTime attribute without one (0x80041135).",
+				}
 			: undefined;
 	const dateGroupingIgnored = node.dategrouping !== undefined && !dateGroupingRelevant;
 
@@ -245,19 +321,42 @@ export function AttributeEditor({
 					label="Role"
 					required
 					validation={roleValidation}
-					info={<Info text="Group by makes a group per distinct value. Aggregate calculates a value for each group." href={DOCS.aggregate} />}
+					info={
+						<Info
+							text="Group by makes a group per distinct value. Aggregate calculates a value for each group."
+							href={DOCS.aggregate}
+						/>
+					}
 				>
 					<RadioGroup
 						layout="horizontal"
 						value={role}
 						onChange={(_, data) => {
 							setAggregatePending(data.value === "aggregate");
-							if (data.value === "groupby") onUpdate({ groupby: true, aggregate: undefined, distinct: undefined });
-							else onUpdate({ groupby: undefined, dategrouping: undefined, usertimezone: undefined });
+							if (data.value === "groupby")
+								onUpdate({
+									groupby: true,
+									aggregate: undefined,
+									distinct: undefined,
+								});
+							else
+								onUpdate({
+									groupby: undefined,
+									dategrouping: undefined,
+									usertimezone: undefined,
+								});
 						}}
 					>
-						<Radio value="groupby" label="Group by" disabled={!canGroup && !node.groupby} />
-						<Radio value="aggregate" label="Aggregate" disabled={!canAggregate && !node.aggregate} />
+						<Radio
+							value="groupby"
+							label="Group by"
+							disabled={!canGroup && !node.groupby}
+						/>
+						<Radio
+							value="aggregate"
+							label="Aggregate"
+							disabled={!canAggregate && !node.aggregate}
+						/>
 					</RadioGroup>
 				</InfoField>
 
@@ -267,7 +366,11 @@ export function AttributeEditor({
 							label="Function"
 							required
 							validation={functionValidation}
-							hint={caps && allowedFunctions.length < AGGREGATE_FUNCTIONS.length ? "Only functions this attribute type supports are listed." : undefined}
+							hint={
+								caps && allowedFunctions.length < AGGREGATE_FUNCTIONS.length
+									? "Only functions this attribute type supports are listed."
+									: undefined
+							}
 							info={
 								<Info
 									text="Count records counts every record; Count values counts records where this attribute has a value."
@@ -279,9 +382,15 @@ export function AttributeEditor({
 								placeholder="Choose a function"
 								value={node.aggregate ? FUNCTION_LABELS[node.aggregate] : ""}
 								selectedOptions={node.aggregate ? [node.aggregate] : []}
-								onOptionSelect={(_, data) => onUpdate({ aggregate: data.optionValue })}
+								onOptionSelect={(_, data) =>
+									onUpdate({ aggregate: data.optionValue })
+								}
 							>
-								{functionUnsupported && node.aggregate && <Option value={node.aggregate}>{FUNCTION_LABELS[node.aggregate]}</Option>}
+								{functionUnsupported && node.aggregate && (
+									<Option value={node.aggregate}>
+										{FUNCTION_LABELS[node.aggregate]}
+									</Option>
+								)}
 								{allowedFunctions.map((fn) => (
 									<Option key={fn} value={fn}>
 										{FUNCTION_LABELS[fn]}
@@ -293,9 +402,16 @@ export function AttributeEditor({
 							<InfoCheckbox
 								label="Unique values only"
 								checked={!!node.distinct}
-								onChange={(checked) => onUpdate({ distinct: checked ? true : undefined })}
+								onChange={(checked) =>
+									onUpdate({ distinct: checked ? true : undefined })
+								}
 								validation={findingFor(findings, "distinct")}
-								info={<Info text="With Count values, counts each distinct value once." href={DOCS.aggregateDistinct} />}
+								info={
+									<Info
+										text="With Count values, counts each distinct value once."
+										href={DOCS.aggregateDistinct}
+									/>
+								}
 							/>
 						)}
 					</>
@@ -306,14 +422,26 @@ export function AttributeEditor({
 						label="Date grouping"
 						required={isDateTime}
 						validation={dateGroupingValidation}
-						info={<Info text="The part of the date to group by." href={DOCS.aggregateDateGrouping} />}
+						info={
+							<Info
+								text="The part of the date to group by."
+								href={DOCS.aggregateDateGrouping}
+							/>
+						}
 					>
 						<Dropdown
 							placeholder="Choose a date part"
-							value={DATE_PARTS.find(([value]) => value === node.dategrouping)?.[1] ?? ""}
+							value={
+								DATE_PARTS.find(([value]) => value === node.dategrouping)?.[1] ?? ""
+							}
 							selectedOptions={node.dategrouping ? [node.dategrouping] : []}
 							onOptionSelect={(_, data) =>
-								onUpdate({ dategrouping: data.optionValue === NO_DATE_PART ? undefined : data.optionValue })
+								onUpdate({
+									dategrouping:
+										data.optionValue === NO_DATE_PART
+											? undefined
+											: data.optionValue,
+								})
 							}
 						>
 							{typeUnknown && <Option value={NO_DATE_PART}>None</Option>}
@@ -328,7 +456,11 @@ export function AttributeEditor({
 				{dateGroupingIgnored && (
 					<LeftoverSetting
 						text={`Date grouping: ${node.dategrouping}`}
-						validation={{ state: "warning", message: "Ignored: date grouping only applies to Group by on DateTime attributes." }}
+						validation={{
+							state: "warning",
+							message:
+								"Ignored: date grouping only applies to Group by on DateTime attributes.",
+						}}
 						onRemove={() => onUpdate({ dategrouping: undefined })}
 					/>
 				)}
@@ -346,7 +478,14 @@ export function AttributeEditor({
 						<RadioGroup
 							value={node.usertimezone === false ? "utc" : "user"}
 							onChange={(_, data) =>
-								onUpdate({ usertimezone: data.value === "utc" ? false : node.usertimezone === true ? true : undefined })
+								onUpdate({
+									usertimezone:
+										data.value === "utc"
+											? false
+											: node.usertimezone === true
+												? true
+												: undefined,
+								})
 							}
 						>
 							<Radio value="user" label="User's time zone (default)" />
@@ -358,7 +497,12 @@ export function AttributeEditor({
 				{node.rowAggregate !== undefined && (
 					<LeftoverSetting
 						text="Count child records"
-						validation={findingFor(findings, "rowaggregate") ?? { state: "error", message: "Doesn't work in an aggregate query." }}
+						validation={
+							findingFor(findings, "rowaggregate") ?? {
+								state: "error",
+								message: "Doesn't work in an aggregate query.",
+							}
+						}
 						onRemove={() => onUpdate({ rowAggregate: undefined })}
 					/>
 				)}

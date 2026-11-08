@@ -9,9 +9,12 @@ import path from "node:path";
 const dist = process.argv[2] ?? "dist";
 // The version Monaco resolves: its own dependency, as the override set it. Monaco's folder is
 // found on disk: 0.57's `exports` map hides monaco-editor/package.json.
-const fromMonaco = createRequire(path.join(process.cwd(), "node_modules", "monaco-editor", "package.json"));
+const fromMonaco = createRequire(
+	path.join(process.cwd(), "node_modules", "monaco-editor", "package.json"),
+);
 let dir = path.dirname(fromMonaco.resolve("dompurify"));
-while (!statSync(path.join(dir, "package.json"), { throwIfNoEntry: false })) dir = path.dirname(dir);
+while (!statSync(path.join(dir, "package.json"), { throwIfNoEntry: false }))
+	dir = path.dirname(dir);
 const installed = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")).version;
 
 const files = [];
@@ -27,7 +30,9 @@ walk(dist);
 // DOMPurify sets `version` then `removed` on its instance; minified: e.version="3.4.17",e.removed=[]
 const found = new Map();
 for (const f of files) {
-	for (const m of readFileSync(f, "utf8").matchAll(/\.version\s*=\s*["'](\d+\.\d+\.\d+)["']\s*,\s*\w+\.removed\s*=\s*\[\]/g)) {
+	for (const m of readFileSync(f, "utf8").matchAll(
+		/\.version\s*=\s*["'](\d+\.\d+\.\d+)["']\s*,\s*\w+\.removed\s*=\s*\[\]/g,
+	)) {
 		const key = path.relative(dist, f);
 		found.set(key, [...(found.get(key) ?? []), m[1]]);
 	}

@@ -22,7 +22,9 @@ export function totalCountText(
 	loadedRows: number,
 ): string | undefined {
 	if (totalRecordCount === undefined || totalRecordCount < 0) return undefined;
-	return limitExceeded ? `${format(Math.max(totalRecordCount, loadedRows))}+ total` : `${format(totalRecordCount)} total`;
+	return limitExceeded
+		? `${format(Math.max(totalRecordCount, loadedRows))}+ total`
+		: `${format(totalRecordCount)} total`;
 }
 
 /** The unfiltered entity total from RetrieveTotalRecordCount, worded so it isn't read as the query's count. */
