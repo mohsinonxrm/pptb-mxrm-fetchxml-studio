@@ -9,7 +9,21 @@ import { BulkDeleteDialog } from "./BulkDeleteDialog";
 import { DeleteConfirmDialog, type DeleteConfirmDialogProps } from "./DeleteConfirmDialog";
 import { WorkflowPickerDialog, type WorkflowPickerDialogProps } from "./WorkflowPickerDialog";
 import type { WorkflowInfo } from "../../api/pptbClient";
-import { button, cleanup, click, deferred, dialogInput, dialogText, flush, installHost, isDisabled, removeHost, render, scopeField, typeInto } from "../../../../shared/testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	deferred,
+	dialogInput,
+	dialogText,
+	flush,
+	installHost,
+	isDisabled,
+	removeHost,
+	render,
+	scopeField,
+	typeInto,
+} from "../../../../shared/testing/ui";
 
 afterEach(() => {
 	cleanup();
@@ -30,7 +44,13 @@ const deleteProps = (over: Partial<DeleteConfirmDialogProps> = {}): DeleteConfir
 
 describe("Delete record dialog", () => {
 	it("names the environment, the entity and the scope, and says it can't be undone", async () => {
-		installHost({ connection: { name: "CRM279420", url: "https://org382cc706.crm.dynamics.com/", environment: "Dev" } });
+		installHost({
+			connection: {
+				name: "CRM279420",
+				url: "https://org382cc706.crm.dynamics.com/",
+				environment: "Dev",
+			},
+		});
 		await render(createElement(DeleteConfirmDialog, deleteProps()));
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
@@ -118,7 +138,9 @@ describe("Bulk delete dialog", () => {
 		);
 		const text = dialogText();
 		expect(text).toContain("CRM279420");
-		expect(scopeField("Scope")).toBe("Every record the query matches (4 records when the query last ran)");
+		expect(scopeField("Scope")).toBe(
+			"Every record the query matches (4 records when the query last ran)",
+		);
 		expect(text).toContain("cannot be undone");
 		expect(text).toContain("Type contact to confirm");
 		const submit = () => button("Submit bulk delete");
@@ -126,9 +148,11 @@ describe("Bulk delete dialog", () => {
 
 		await typeInto(dialogInput(), "contact");
 		expect(isDisabled(submit())).toBe(true);
-		const understand = [...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')].find((c) =>
-			/I understand/.test(c.closest("label, div")?.textContent ?? ""),
-		);
+		const understand = [
+			...document.querySelectorAll<HTMLInputElement>(
+				'[role="dialog"] input[type="checkbox"]',
+			),
+		].find((c) => /I understand/.test(c.closest("label, div")?.textContent ?? ""));
 		await click(understand);
 		expect(isDisabled(submit())).toBe(false);
 	});
@@ -159,15 +183,28 @@ describe("Bulk delete dialog", () => {
 });
 
 const workflow = (id: string, name: string): WorkflowInfo =>
-	({ workflowid: id, name, primaryentity: "contact", category: 0, type: 1, statuscode: 2, mode: 0 }) as WorkflowInfo;
+	({
+		workflowid: id,
+		name,
+		primaryentity: "contact",
+		category: 0,
+		type: 1,
+		statuscode: 2,
+		mode: 0,
+	}) as WorkflowInfo;
 
-const workflowProps = (over: Partial<WorkflowPickerDialogProps> = {}): WorkflowPickerDialogProps => ({
+const workflowProps = (
+	over: Partial<WorkflowPickerDialogProps> = {},
+): WorkflowPickerDialogProps => ({
 	open: true,
 	recordCount: 1,
 	entityDisplayName: "Contact",
 	entityLogicalName: "contact",
 	onClose: () => {},
-	onFetchWorkflows: async () => [workflow("w1", "Reset Security Stamp"), workflow("w2", "Second flow")],
+	onFetchWorkflows: async () => [
+		workflow("w1", "Reset Security Stamp"),
+		workflow("w2", "Second flow"),
+	],
 	onExecute: async () => ({ succeeded: 1, failed: 0, errors: [] }),
 	...over,
 });
@@ -187,7 +224,15 @@ describe("Run workflow dialog", () => {
 		installHost();
 		const run = deferred<{ succeeded: number; failed: number; errors: string[] }>();
 		const onExecute = vi.fn((_workflow: WorkflowInfo, _onProgress: unknown) => run.promise);
-		await render(createElement(WorkflowPickerDialog, workflowProps({ preSelectedWorkflow: workflow("w1", "Reset Security Stamp"), onExecute })));
+		await render(
+			createElement(
+				WorkflowPickerDialog,
+				workflowProps({
+					preSelectedWorkflow: workflow("w1", "Reset Security Stamp"),
+					onExecute,
+				}),
+			),
+		);
 		expect(isDisabled(button("Run workflow"))).toBe(false);
 
 		await click(button("Run workflow"));
@@ -202,7 +247,15 @@ describe("Run workflow dialog", () => {
 
 	it("asks for the entity name before running on more than 100 records", async () => {
 		installHost();
-		await render(createElement(WorkflowPickerDialog, workflowProps({ recordCount: 150, preSelectedWorkflow: workflow("w1", "Reset Security Stamp") })));
+		await render(
+			createElement(
+				WorkflowPickerDialog,
+				workflowProps({
+					recordCount: 150,
+					preSelectedWorkflow: workflow("w1", "Reset Security Stamp"),
+				}),
+			),
+		);
 		expect(isDisabled(button("Run workflow"))).toBe(true);
 		await typeInto(dialogInput(), "contact");
 		expect(isDisabled(button("Run workflow"))).toBe(false);

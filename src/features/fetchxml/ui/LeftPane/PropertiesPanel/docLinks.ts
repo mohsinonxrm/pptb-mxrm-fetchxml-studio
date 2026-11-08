@@ -42,7 +42,8 @@ export const DOCS = {
 	wildcards: `${DATA_PLATFORM}/wildcard-characters?tabs=fetchxml`,
 	wildcardLiterals: `${DATA_PLATFORM}/wildcard-characters?tabs=fetchxml#search-for-strings-that-contain-wildcard-characters`,
 	choices: `${DATA_PLATFORM}/multi-select-picklist#query-data-from-choices`,
-	dataRetention: "https://learn.microsoft.com/power-apps/maker/data-platform/data-retention-overview",
+	dataRetention:
+		"https://learn.microsoft.com/power-apps/maker/data-platform/data-retention-overview",
 	reportPrefiltering:
 		"https://learn.microsoft.com/dynamics365/customerengagement/on-premises/analytics/improve-report-performance-by-using-filters?view=op-9-1",
 } as const;

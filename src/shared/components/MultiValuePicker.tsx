@@ -108,7 +108,9 @@ export function MultiValuePicker({
 	};
 
 	const handlePicklistChange: TagPickerProps["onOptionSelect"] = (_, data) => {
-		const selected = data.selectedOptions.map((opt) => parseInt(opt, 10)).filter((n) => !isNaN(n));
+		const selected = data.selectedOptions
+			.map((opt) => parseInt(opt, 10))
+			.filter((n) => !isNaN(n));
 
 		// Update local state immediately for controlled component behavior
 		setSelectedValues(data.selectedOptions);
@@ -118,7 +120,9 @@ export function MultiValuePicker({
 	};
 
 	if (isPicklist) {
-		const availableOptions = options.filter((opt) => !selectedValues.includes(String(opt.value)));
+		const availableOptions = options.filter(
+			(opt) => !selectedValues.includes(String(opt.value)),
+		);
 
 		return (
 			<div className={styles.container}>

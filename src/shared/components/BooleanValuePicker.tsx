@@ -62,8 +62,10 @@ export function BooleanValuePicker({
 				}
 
 				// TwoOptions attributes have TrueOption and FalseOption
-				const trueLabel = attr.OptionSet.TrueOption?.Label?.UserLocalizedLabel?.Label || "Yes";
-				const falseLabel = attr.OptionSet.FalseOption?.Label?.UserLocalizedLabel?.Label || "No";
+				const trueLabel =
+					attr.OptionSet.TrueOption?.Label?.UserLocalizedLabel?.Label || "Yes";
+				const falseLabel =
+					attr.OptionSet.FalseOption?.Label?.UserLocalizedLabel?.Label || "No";
 
 				setOptions([
 					{ value: true, label: trueLabel, displayText: `${trueLabel} - true` },
@@ -131,10 +133,9 @@ export function BooleanValuePicker({
 		setQuery(ev.target.value);
 	};
 
-	const handleOptionSelect: NonNullable<React.ComponentProps<typeof Combobox>["onOptionSelect"]> = (
-		_ev,
-		data
-	) => {
+	const handleOptionSelect: NonNullable<
+		React.ComponentProps<typeof Combobox>["onOptionSelect"]
+	> = (_ev, data) => {
 		if (!data.optionValue) {
 			// Clear button clicked
 			setQuery("");

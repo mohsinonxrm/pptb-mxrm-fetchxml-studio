@@ -14,12 +14,19 @@ const settingsApi = () => (typeof window === "undefined" ? undefined : window.to
 /** The stored map, or an empty one when the stored value isn't one */
 const dismissedMap = (value: unknown): Record<string, true> =>
 	value && typeof value === "object" && !Array.isArray(value)
-		? Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([, v]) => v === true)) as Record<string, true>
+		? (Object.fromEntries(
+				Object.entries(value as Record<string, unknown>).filter(([, v]) => v === true),
+			) as Record<string, true>)
 		: {};
 
 /** @returns `ready` once the stored value is read; `dismissed` for this environment; `dismiss()` */
 export function useScopeTip(): { ready: boolean; dismissed: boolean; dismiss: () => void } {
-	const [state, setState] = useState<{ ready: boolean; dismissed: boolean; envKey: string; stored: Record<string, true> }>({
+	const [state, setState] = useState<{
+		ready: boolean;
+		dismissed: boolean;
+		envKey: string;
+		stored: Record<string, true>;
+	}>({
 		ready: false,
 		dismissed: false,
 		envKey: "",
@@ -38,7 +45,12 @@ export function useScopeTip(): { ready: boolean; dismissed: boolean; dismiss: ()
 				if (!mounted) return;
 				const stored = dismissedMap(value);
 				const envKey = environmentKey(connection?.url);
-				setState({ ready: true, dismissed: !!envKey && stored[envKey] === true, envKey, stored });
+				setState({
+					ready: true,
+					dismissed: !!envKey && stored[envKey] === true,
+					envKey,
+					stored,
+				});
 			})
 			.catch(() => mounted && setState((s) => ({ ...s, ready: true })));
 		return () => {
@@ -52,7 +64,9 @@ export function useScopeTip(): { ready: boolean; dismissed: boolean; dismiss: ()
 				const stored = { ...s.stored, [s.envKey]: true as const };
 				settingsApi()
 					?.set?.(SCOPE_TIP_DISMISSED_KEY, stored)
-					.catch((err: unknown) => console.warn("Failed to remember the dismissed scope tip:", err));
+					.catch((err: unknown) =>
+						console.warn("Failed to remember the dismissed scope tip:", err),
+					);
 				return { ...s, dismissed: true, stored };
 			}
 			return { ...s, dismissed: true };

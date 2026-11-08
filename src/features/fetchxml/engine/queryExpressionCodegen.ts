@@ -43,9 +43,18 @@ import {
  * @returns   C# code string using `Microsoft.Xrm.Sdk.Query` types.
  */
 export function generateCSharpQueryExpression(qe: QeQueryExpression): string {
-	const props: Lines[] = [assign("ColumnSet", emitColumnSet(qe.ColumnSet ?? { AllColumns: false }))];
-	if (qe.Criteria && hasFilterContent(qe.Criteria)) props.push(assign("Criteria", emitFilter(qe.Criteria)));
-	if (qe.LinkEntities?.length) props.push(collection("LinkEntities", qe.LinkEntities.map((le) => emitLinkEntity(le))));
+	const props: Lines[] = [
+		assign("ColumnSet", emitColumnSet(qe.ColumnSet ?? { AllColumns: false })),
+	];
+	if (qe.Criteria && hasFilterContent(qe.Criteria))
+		props.push(assign("Criteria", emitFilter(qe.Criteria)));
+	if (qe.LinkEntities?.length)
+		props.push(
+			collection(
+				"LinkEntities",
+				qe.LinkEntities.map((le) => emitLinkEntity(le)),
+			),
+		);
 	if (qe.Orders?.length) props.push(collection("Orders", qe.Orders.map(emitOrder)));
 	if (qe.TopCount != null) props.push([`TopCount = ${qe.TopCount}`]);
 	if (qe.Distinct) props.push(["Distinct = true"]);
@@ -72,11 +81,18 @@ export function generateCSharpQueryExpression(qe: QeQueryExpression): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function emitColumnSet(cs: QeColumnSet): Lines {
-	const columns = cs.Columns?.length ? `new ColumnSet(${cs.Columns.map(csString).join(", ")})` : undefined;
+	const columns = cs.Columns?.length
+		? `new ColumnSet(${cs.Columns.map(csString).join(", ")})`
+		: undefined;
 	// Aliased columns and aggregates: AttributeExpressions, next to any plain columns (both come back
 	// for <attribute name="a"/><attribute name="b" alias="x"/>), with AllColumns left false
 	if (cs.AttributeExpressions?.length) {
-		return block(columns ?? "new ColumnSet", [collection("AttributeExpressions", cs.AttributeExpressions.map(emitAttributeExpression))]);
+		return block(columns ?? "new ColumnSet", [
+			collection(
+				"AttributeExpressions",
+				cs.AttributeExpressions.map(emitAttributeExpression),
+			),
+		]);
 	}
 	if (cs.AllColumns) return ["new ColumnSet(true)"];
 	return [columns ?? "new ColumnSet()"];
@@ -87,13 +103,18 @@ const hasColumns = (cs: QeColumnSet | null | undefined): cs is QeColumnSet =>
 	!!cs && (cs.AllColumns || !!cs.Columns?.length || !!cs.AttributeExpressions?.length);
 
 function emitAttributeExpression(ae: QeXrmAttributeExpression): Lines {
-	const args = [csString(ae.AttributeName), enumRef("XrmAggregateType", ae.AggregateType ?? 0, XRM_AGGREGATE_TYPE)];
+	const args = [
+		csString(ae.AttributeName),
+		enumRef("XrmAggregateType", ae.AggregateType ?? 0, XRM_AGGREGATE_TYPE),
+	];
 	if (ae.Alias) args.push(csString(ae.Alias));
 	const props: Lines[] = [];
 	if (ae.HasGroupBy) props.push(["HasGroupBy = true"]);
 	const grouping = ae.DateTimeGrouping;
 	if (grouping != null && grouping !== 0 && grouping !== "None") {
-		props.push([`DateTimeGrouping = ${enumRef("XrmDateTimeGrouping", grouping, XRM_DATETIME_GROUPING)}`]);
+		props.push([
+			`DateTimeGrouping = ${enumRef("XrmDateTimeGrouping", grouping, XRM_DATETIME_GROUPING)}`,
+		]);
 	}
 	return block(`new XrmAttributeExpression(${args.join(", ")})`, props);
 }
@@ -104,27 +125,39 @@ function emitAttributeExpression(ae: QeXrmAttributeExpression): Lines {
 
 function emitFilter(filter: QeFilterExpression): Lines {
 	const props: Lines[] = [];
-	if (filter.Conditions?.length) props.push(collection("Conditions", filter.Conditions.map(emitCondition)));
+	if (filter.Conditions?.length)
+		props.push(collection("Conditions", filter.Conditions.map(emitCondition)));
 	if (filter.Filters?.length) props.push(collection("Filters", filter.Filters.map(emitFilter)));
 	if (filter.AnyAllFilterLinkEntity) {
-		props.push(assign("AnyAllFilterLinkEntity", emitLinkEntity(filter.AnyAllFilterLinkEntity, true)));
+		props.push(
+			assign("AnyAllFilterLinkEntity", emitLinkEntity(filter.AnyAllFilterLinkEntity, true)),
+		);
 	}
 	if (filter.FilterHint) props.push([`FilterHint = ${csString(filter.FilterHint)}`]);
 	if (filter.IsQuickFindFilter) props.push(["IsQuickFindFilter = true"]);
-	return block(`new FilterExpression(${enumRef("LogicalOperator", filter.FilterOperator, LOGICAL_OPERATOR)})`, props);
+	return block(
+		`new FilterExpression(${enumRef("LogicalOperator", filter.FilterOperator, LOGICAL_OPERATOR)})`,
+		props,
+	);
 }
 
 function emitCondition(cond: QeConditionExpression): Lines {
 	const args: string[] = [];
 	if (cond.EntityName) args.push(csString(cond.EntityName));
-	args.push(csString(cond.AttributeName), enumRef("ConditionOperator", cond.Operator, CONDITION_OPERATOR));
+	args.push(
+		csString(cond.AttributeName),
+		enumRef("ConditionOperator", cond.Operator, CONDITION_OPERATOR),
+	);
 	// The API returns no values for operators that take none (Null, ThisYear, EqualUserId, …)
 	const values = cond.Values ?? [];
 
 	if (cond.CompareColumns && values.length > 0) {
 		// The values are other columns' names
 		const columns = values.map((v) => csString(String(unwrapValue(v).value)));
-		args.push("compareColumns: true", columns.length === 1 ? columns[0] : `new object[] { ${columns.join(", ")} }`);
+		args.push(
+			"compareColumns: true",
+			columns.length === 1 ? columns[0] : `new object[] { ${columns.join(", ")} }`,
+		);
 	} else if (values.length === 1) {
 		const value = formatValue(values[0]);
 		// A bare null matches the object, object[] and ICollection overloads alike
@@ -148,14 +181,27 @@ function emitCondition(cond: QeConditionExpression): Lines {
  */
 function emitLinkEntity(le: QeLinkEntity | QeAnyAllFilterLinkEntity, anyAllFilter = false): Lines {
 	const joinOp = enumRef("JoinOperator", le.JoinOperator ?? 0, JOIN_OPERATOR);
-	const head = `new LinkEntity(${[le.LinkFromEntityName, le.LinkToEntityName, le.LinkFromAttributeName, le.LinkToAttributeName]
+	const head = `new LinkEntity(${[
+		le.LinkFromEntityName,
+		le.LinkToEntityName,
+		le.LinkFromAttributeName,
+		le.LinkToAttributeName,
+	]
 		.map(csString)
 		.join(", ")}, ${joinOp})`;
 	const props: Lines[] = [];
 	if (le.EntityAlias) props.push([`EntityAlias = ${csString(le.EntityAlias)}`]);
-	if (!anyAllFilter && hasColumns(le.Columns)) props.push(assign("Columns", emitColumnSet(le.Columns)));
-	if (le.LinkCriteria && hasFilterContent(le.LinkCriteria)) props.push(assign("LinkCriteria", emitFilter(le.LinkCriteria)));
-	if (le.LinkEntities?.length) props.push(collection("LinkEntities", le.LinkEntities.map((child) => emitLinkEntity(child))));
+	if (!anyAllFilter && hasColumns(le.Columns))
+		props.push(assign("Columns", emitColumnSet(le.Columns)));
+	if (le.LinkCriteria && hasFilterContent(le.LinkCriteria))
+		props.push(assign("LinkCriteria", emitFilter(le.LinkCriteria)));
+	if (le.LinkEntities?.length)
+		props.push(
+			collection(
+				"LinkEntities",
+				le.LinkEntities.map((child) => emitLinkEntity(child)),
+			),
+		);
 	if (le.Orders?.length) props.push(collection("Orders", le.Orders.map(emitOrder)));
 	return block(head, props);
 }
@@ -244,7 +290,8 @@ function formatValue(v: unknown): string {
 	// digits ("00123", a 20-digit code): only the API's type turns it into a number.
 	if (typeof value === "boolean") return value ? "true" : "false";
 	if (typeof value === "number") return Number.isFinite(value) ? text : csString(text);
-	if (typeof value === "string") return GUID.test(value) && !type ? `new Guid(${csString(value)})` : csString(value);
+	if (typeof value === "string")
+		return GUID.test(value) && !type ? `new Guid(${csString(value)})` : csString(value);
 	// Typed as object, like a lone null, so it can't bind to the params object[] overload
 	return `(object)null /* ${JSON.stringify(value).replace(/\*\//g, "* /")} */`;
 }
@@ -261,7 +308,13 @@ export function csString(s: string): string {
 		else if (ch === "\t") out += "\\t";
 		else if (ch === "\0") out += "\\0";
 		// Other control characters, and the characters C# treats as line breaks
-		else if (code < 0x20 || code === 0x7f || code === 0x85 || code === 0x2028 || code === 0x2029) {
+		else if (
+			code < 0x20 ||
+			code === 0x7f ||
+			code === 0x85 ||
+			code === 0x2028 ||
+			code === 0x2029
+		) {
 			out += `\\u${code.toString(16).padStart(4, "0")}`;
 		} else out += ch;
 	}
@@ -272,7 +325,11 @@ export function csString(s: string): string {
  * An enum member, e.g. ConditionOperator.Equal. The Web API returns names; a number is looked up
  * in the SDK's numbering, and an unknown one is written as a cast so the code still compiles.
  */
-function enumRef(enumName: string, v: number | string | null | undefined, map: Record<number, string>): string {
+function enumRef(
+	enumName: string,
+	v: number | string | null | undefined,
+	map: Record<number, string>,
+): string {
 	if (typeof v === "string" && /^[A-Za-z][A-Za-z0-9]*$/.test(v)) return `${enumName}.${v}`;
 	if (typeof v === "number") return map[v] ? `${enumName}.${map[v]}` : `(${enumName})${v}`;
 	return `${enumName}.${map[0]}`;

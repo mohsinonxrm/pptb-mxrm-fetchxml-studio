@@ -14,7 +14,11 @@ function tree(xml: string): FetchNode {
 	return result.fetchNode;
 }
 
-const ACCOUNT = { objectTypeCode: 1, primaryIdAttribute: "accountid", primaryNameAttribute: "name" };
+const ACCOUNT = {
+	objectTypeCode: 1,
+	primaryIdAttribute: "accountid",
+	primaryNameAttribute: "name",
+};
 
 /** A query whose first column is a lookup, then a link-entity column */
 const QUERY = tree(`<fetch><entity name="account">
@@ -30,7 +34,11 @@ function grid(xml: string) {
 
 describe("buildViewLayoutXml (#93)", () => {
 	it("uses the primary name attribute for jump, not the first column", () => {
-		const xml = buildViewLayoutXml(generateLayoutFromFetchXml(QUERY, "accountid"), QUERY, ACCOUNT);
+		const xml = buildViewLayoutXml(
+			generateLayoutFromFetchXml(QUERY, "accountid"),
+			QUERY,
+			ACCOUNT,
+		);
 		const { grid: g, row } = grid(xml);
 		expect(g.getAttribute("jump")).toBe("name");
 		expect(g.getAttribute("object")).toBe("1");
@@ -60,14 +68,20 @@ describe("buildViewLayoutXml (#93)", () => {
 	});
 
 	it("leaves jump out when the Entity has no primary name attribute", () => {
-		const xml = buildViewLayoutXml(null, QUERY, { objectTypeCode: 1, primaryIdAttribute: "accountid" });
+		const xml = buildViewLayoutXml(null, QUERY, {
+			objectTypeCode: 1,
+			primaryIdAttribute: "accountid",
+		});
 		expect(grid(xml).grid.hasAttribute("jump")).toBe(false);
 	});
 });
 
 describe("generateLayoutXml (#93)", () => {
 	it("never writes a made-up row id", () => {
-		const xml = generateLayoutXml({ gridName: "resultset", columns: [{ name: "name", width: 100 }] });
+		const xml = generateLayoutXml({
+			gridName: "resultset",
+			columns: [{ name: "name", width: 100 }],
+		});
 		expect(grid(xml).row.hasAttribute("id")).toBe(false);
 	});
 
@@ -79,7 +93,10 @@ describe("generateLayoutXml (#93)", () => {
 	});
 
 	it("escapes attribute values", () => {
-		const xml = generateLayoutXml({ gridName: "resultset", columns: [{ name: 'a"b', width: 100 }] });
+		const xml = generateLayoutXml({
+			gridName: "resultset",
+			columns: [{ name: 'a"b', width: 100 }],
+		});
 		expect(xml).toContain('name="a&quot;b"');
 	});
 });

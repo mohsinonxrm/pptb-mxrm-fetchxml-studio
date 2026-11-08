@@ -6,7 +6,8 @@
 import { badgeMarkdown, badges } from "./badges.mjs";
 
 /** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N: the shapes release.yml publishes */
-export const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(beta|rc)\.(0|[1-9]\d*))?$/;
+export const VERSION_PATTERN =
+	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(beta|rc)\.(0|[1-9]\d*))?$/;
 
 export const isPrerelease = (version) => version.includes("-");
 
@@ -17,13 +18,21 @@ export function changelogSections(changelog) {
 	for (const line of lines) {
 		// `## [name]`, `## [name] - YYYY-MM-DD`, and anything after the date (`(stable)`, `[YANKED]`)
 		const heading = /^## \[([^\]]+)\](.*)$/.exec(line);
-		if (heading) sections.push({ name: heading[1], date: /^\s+-\s+(\S+)/.exec(heading[2])?.[1], body: [] });
+		if (heading)
+			sections.push({
+				name: heading[1],
+				date: /^\s+-\s+(\S+)/.exec(heading[2])?.[1],
+				body: [],
+			});
 		else if (sections.length > 0) sections[sections.length - 1].body.push(line);
 	}
 	return sections.map((s) => ({ ...s, body: s.body.join("\n").trim() }));
 }
 
-const isIsoDate = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") && !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) && new Date(`${date}T00:00:00Z`).toISOString().startsWith(date);
+const isIsoDate = (date) =>
+	/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") &&
+	!Number.isNaN(Date.parse(`${date}T00:00:00Z`)) &&
+	new Date(`${date}T00:00:00Z`).toISOString().startsWith(date);
 
 /**
  * Problems with the release metadata, or [] when it's consistent.
@@ -51,24 +60,38 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) 
 			`CHANGELOG.md's newest release section is [${released?.name}], not [${version}]. Rename [Unreleased] to \`## [${version}] - YYYY-MM-DD\` and add an empty [Unreleased] above it.`,
 		);
 	} else {
-		if (!isIsoDate(released.date)) problems.push(`CHANGELOG.md's [${version}] section needs a date: \`## [${version}] - YYYY-MM-DD\`.`);
-		if (!/^\s*- /m.test(released.body)) problems.push(`CHANGELOG.md's [${version}] section has no entries.`);
+		if (!isIsoDate(released.date))
+			problems.push(
+				`CHANGELOG.md's [${version}] section needs a date: \`## [${version}] - YYYY-MM-DD\`.`,
+			);
+		if (!/^\s*- /m.test(released.body))
+			problems.push(`CHANGELOG.md's [${version}] section has no entries.`);
 	}
 	const duplicates = sections.filter((s) => s.name === version).length;
 	if (duplicates > 1) problems.push(`CHANGELOG.md has ${duplicates} [${version}] sections.`);
 	// README badges: files in assets/badges/ generated from package.json, linked from the README
 	// (PPTB's README viewer blocks img.shields.io)
-	const stale = badges(pkg).filter(({ file, svg }) => badgeFiles?.[file] !== svg).map(({ file }) => file);
-	if (stale.length > 0) problems.push(`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`);
+	const stale = badges(pkg)
+		.filter(({ file, svg }) => badgeFiles?.[file] !== svg)
+		.map(({ file }) => file);
+	if (stale.length > 0)
+		problems.push(
+			`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`,
+		);
 	const missing = badgeMarkdown(pkg).filter((line) => !readme.includes(line));
-	if (missing.length > 0) problems.push(`README.md doesn't show these badges: ${missing.join(" ")}`);
+	if (missing.length > 0)
+		problems.push(`README.md doesn't show these badges: ${missing.join(" ")}`);
 	// An image (or <img>) from shields.io; a mention in the text is fine
-	if (/(\]\(|src=["']?)https?:\/\/img\.shields\.io/.test(readme)) problems.push("README.md uses img.shields.io, which PPTB's README viewer blocks: use the badges in assets/badges/.");
+	if (/(\]\(|src=["']?)https?:\/\/img\.shields\.io/.test(readme))
+		problems.push(
+			"README.md uses img.shields.io, which PPTB's README viewer blocks: use the badges in assets/badges/.",
+		);
 	return problems;
 }
 
 /** The icon the build must bundle at dist/icons/icon.svg (vite.config.ts toolIcon) */
-export const expectedIconSource = (version) => (isPrerelease(version) ? "icons/icon-insider.svg" : "icons/icon.svg");
+export const expectedIconSource = (version) =>
+	isPrerelease(version) ? "icons/icon-insider.svg" : "icons/icon.svg";
 
 /**
  * The GitHub Release notes: a line on the channel and the PPTB requirement, then the version's
@@ -91,8 +114,13 @@ export function releaseNotes({ pkg, changelog, distTag, repository }) {
 		lead = `**${name} ${version}**, a support release published to npm \`${distTag}\`. The current release is on npm \`latest\`.`;
 	}
 	const parts = [lead];
-	if (minApi) parts.push(`> ⚠️ **Requires Power Platform ToolBox ${minApi} or later** (\`minAPI\` ${minApi}).`);
+	if (minApi)
+		parts.push(
+			`> ⚠️ **Requires Power Platform ToolBox ${minApi} or later** (\`minAPI\` ${minApi}).`,
+		);
 	parts.push(section.body);
-	parts.push(`See [CHANGELOG.md](https://github.com/${repository}/blob/v${version}/CHANGELOG.md) for earlier versions.`);
+	parts.push(
+		`See [CHANGELOG.md](https://github.com/${repository}/blob/v${version}/CHANGELOG.md) for earlier versions.`,
+	);
 	return `${parts.join("\n\n")}\n`;
 }

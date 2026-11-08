@@ -41,7 +41,11 @@ export function formattedText(record: Record<string, unknown>, sourceCol: string
 }
 
 /** A cell's text: as the grid shows it, or its raw value */
-export function cellText(record: Record<string, unknown>, column: CopyColumn, mode: CopyValueMode = "shown"): string {
+export function cellText(
+	record: Record<string, unknown>,
+	column: CopyColumn,
+	mode: CopyValueMode = "shown",
+): string {
 	return mode === "raw" || column.showsRaw
 		? rawText(record, column.sourceCol)
 		: formattedText(record, column.sourceCol);
@@ -84,19 +88,28 @@ export function rowsToTsv(
 ): string {
 	const cols = copyColumnsFor(columns, mode);
 	const header = cols.map((c) => tsvField(spreadsheetSafe(c.header))).join("\t");
-	const lines = records.map((r) => cols.map((c) => tsvField(safeCellText(r, c, mode))).join("\t"));
+	const lines = records.map((r) =>
+		cols.map((c) => tsvField(safeCellText(r, c, mode))).join("\t"),
+	);
 	return [header, ...lines].join("\n");
 }
 
 /** A cell's text for pasting into a spreadsheet (#208) */
-const safeCellText = (record: Record<string, unknown>, column: CopyColumn, mode: CopyValueMode): string =>
-	spreadsheetSafe(cellText(record, column, mode), record[column.sourceCol]);
+const safeCellText = (
+	record: Record<string, unknown>,
+	column: CopyColumn,
+	mode: CopyValueMode,
+): string => spreadsheetSafe(cellText(record, column, mode), record[column.sourceCol]);
 
 /**
  * One column's values, one per line, no header (e.g. to paste into an "in" condition). Copied
  * exactly, like a single cell: an apostrophe would end up in the condition's values.
  */
-export function columnToText(records: Record<string, unknown>[], column: CopyColumn, mode: CopyValueMode = "shown"): string {
+export function columnToText(
+	records: Record<string, unknown>[],
+	column: CopyColumn,
+	mode: CopyValueMode = "shown",
+): string {
 	return records.map((r) => tsvField(cellText(r, column, mode))).join("\n");
 }
 

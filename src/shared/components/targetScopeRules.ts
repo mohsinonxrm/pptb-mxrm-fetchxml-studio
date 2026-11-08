@@ -41,8 +41,10 @@ export function describeScope(scope: TargetScopeKind): string {
 			const base = "Every record the query matches";
 			const loaded = scope.loadedCount;
 			if (!loaded) return base;
-			if (scope.moreRecords === true) return `${base} (more than the ${records(loaded)} loaded)`;
-			if (scope.moreRecords === false) return `${base} (${records(loaded)} when the query last ran)`;
+			if (scope.moreRecords === true)
+				return `${base} (more than the ${records(loaded)} loaded)`;
+			if (scope.moreRecords === false)
+				return `${base} (${records(loaded)} when the query last ran)`;
 			return `${base} (${records(loaded)} loaded; there may be more)`;
 		}
 	}
@@ -52,7 +54,10 @@ export function describeScope(scope: TargetScopeKind): string {
  * Whether the user types the entity logical name before the action (#69): on a Production
  * connection, for more than TYPE_TO_CONFIRM_RECORD_THRESHOLD records, and when the total is unknown.
  */
-export function requiresTypedConfirmation(environment: string | undefined, scope: TargetScopeKind): boolean {
+export function requiresTypedConfirmation(
+	environment: string | undefined,
+	scope: TargetScopeKind,
+): boolean {
 	if (isProductionEnvironment(environment)) return true;
 	if (scope.kind === "records") return scope.count > TYPE_TO_CONFIRM_RECORD_THRESHOLD;
 	return scope.kind === "allMatching";

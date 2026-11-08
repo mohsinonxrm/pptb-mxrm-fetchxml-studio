@@ -16,7 +16,9 @@ beforeEach(() => {
 	vi.spyOn(console, "log").mockImplementation(() => {});
 	vi.spyOn(console, "error").mockImplementation(() => {});
 	api = {
-		queryData: vi.fn(async () => ({ value: [{ savedqueryid: OLD_DEFAULT, name: "All Territories" }] })),
+		queryData: vi.fn(async () => ({
+			value: [{ savedqueryid: OLD_DEFAULT, name: "All Territories" }],
+		})),
 		update: vi.fn(async () => undefined),
 	};
 	(window as unknown as { dataverseAPI: Api }).dataverseAPI = api;
@@ -68,6 +70,8 @@ describe("clearOtherDefaultPublicViews (#307)", () => {
 		const query = api.queryData.mock.calls[0][0] as string;
 		expect(query).toContain("returnedtypecode eq 'o''brien'");
 		expect(query).toContain(`savedqueryid ne ${NEW_VIEW}`);
-		await expect(clearOtherDefaultPublicViews("territory", "not-a-guid) or (1 eq 1")).rejects.toThrow(/Not a view ID/);
+		await expect(
+			clearOtherDefaultPublicViews("territory", "not-a-guid) or (1 eq 1"),
+		).rejects.toThrow(/Not a view ID/);
 	});
 });

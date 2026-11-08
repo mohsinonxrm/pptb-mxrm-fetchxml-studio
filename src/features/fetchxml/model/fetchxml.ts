@@ -25,14 +25,18 @@ function formatValueForFetchXml(val: unknown): string {
 		// String() is exact and round-trips (0.12345678901234 used to be cut to 10 places, #181);
 		// only scientific notation (1e-12, 1e21) is written out in full
 		const text = String(val);
-		return /e/i.test(text) ? val.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 }) : text;
+		return /e/i.test(text)
+			? val.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 20 })
+			: text;
 	}
 	return String(val);
 }
 
 /** Attributes kept verbatim from parsed FetchXML (#90): unknown, namespaced, legacy. */
 function extraAttrs(extra: ExtraAttributes | undefined): string[] {
-	return extra ? Object.entries(extra).map(([name, value]) => `${name}="${escapeXmlAttr(value)}"`) : [];
+	return extra
+		? Object.entries(extra).map(([name, value]) => `${name}="${escapeXmlAttr(value)}"`)
+		: [];
 }
 
 /**
@@ -52,7 +56,8 @@ export function generateFetchXml(fetchNode: FetchNode): string {
 	if (fetchNode.options.aggregate) fetchAttrs.push('aggregate="true"');
 	if (fetchNode.options.distinct) fetchAttrs.push('distinct="true"');
 	if (fetchNode.options.top !== undefined) fetchAttrs.push(`top="${fetchNode.options.top}"`);
-	if (fetchNode.options.count !== undefined) fetchAttrs.push(`count="${fetchNode.options.count}"`);
+	if (fetchNode.options.count !== undefined)
+		fetchAttrs.push(`count="${fetchNode.options.count}"`);
 	if (fetchNode.options.page !== undefined) fetchAttrs.push(`page="${fetchNode.options.page}"`);
 	if (fetchNode.options.returnTotalRecordCount) fetchAttrs.push('returntotalrecordcount="true"');
 	if (fetchNode.options.noLock) fetchAttrs.push('no-lock="true"');
@@ -92,7 +97,9 @@ function generateEntity(entity: EntityNode, indent: number): string[] {
 	// Documented form for report prefiltering: "You must set the value of the enableprefiltering parameter to 1"
 	if (entity.enablePrefiltering) entityAttrs.push('enableprefiltering="1"');
 	if (entity.prefilterParameterName)
-		entityAttrs.push(`prefilterparametername="${escapeXmlAttr(entity.prefilterParameterName)}"`);
+		entityAttrs.push(
+			`prefilterparametername="${escapeXmlAttr(entity.prefilterParameterName)}"`,
+		);
 	entityAttrs.push(...extraAttrs(entity.extraAttributes));
 	lines.push(`${spaces}<entity ${entityAttrs.join(" ")}>`);
 
@@ -136,7 +143,15 @@ function generateAllAttributes(_allAttr: AllAttributesNode, indent: number): str
 
 /** Documented values (FetchXML attribute reference); anything else is never written (#88). */
 const AGGREGATES: ReadonlySet<string> = new Set(AGGREGATE_FUNCTIONS);
-const DATE_GROUPINGS: ReadonlySet<string> = new Set(["day", "week", "month", "quarter", "year", "fiscal-period", "fiscal-year"]);
+const DATE_GROUPINGS: ReadonlySet<string> = new Set([
+	"day",
+	"week",
+	"month",
+	"quarter",
+	"year",
+	"fiscal-period",
+	"fiscal-year",
+]);
 
 /**
  * Generate attribute element
@@ -146,7 +161,8 @@ function generateAttribute(attr: AttributeNode, indent: number): string[] {
 	const attrs: string[] = [`name="${escapeXmlAttr(attr.name)}"`];
 
 	if (attr.alias) attrs.push(`alias="${escapeXmlAttr(attr.alias)}"`);
-	if (attr.aggregate && AGGREGATES.has(attr.aggregate)) attrs.push(`aggregate="${attr.aggregate}"`);
+	if (attr.aggregate && AGGREGATES.has(attr.aggregate))
+		attrs.push(`aggregate="${attr.aggregate}"`);
 	if (attr.groupby) attrs.push('groupby="true"');
 	if (attr.dategrouping && DATE_GROUPINGS.has(attr.dategrouping))
 		attrs.push(`dategrouping="${attr.dategrouping}"`);
@@ -186,8 +202,10 @@ function generateFilter(filter: FilterNode, indent: number): string[] {
 	if (filter.hint) attrs.push(`hint="${escapeXmlAttr(filter.hint)}"`);
 	// Quick find flags use the documented "1" form
 	if (filter.isQuickFindFields) attrs.push('isquickfindfields="1"');
-	if (filter.overrideQuickFindRecordLimitEnabled) attrs.push('overridequickfindrecordlimitenabled="1"');
-	if (filter.overrideQuickFindRecordLimitDisabled) attrs.push('overridequickfindrecordlimitdisabled="1"');
+	if (filter.overrideQuickFindRecordLimitEnabled)
+		attrs.push('overridequickfindrecordlimitenabled="1"');
+	if (filter.overrideQuickFindRecordLimitDisabled)
+		attrs.push('overridequickfindrecordlimitdisabled="1"');
 	attrs.push(...extraAttrs(filter.extraAttributes));
 
 	lines.push(`${spaces}<filter ${attrs.join(" ")}>`);
@@ -248,7 +266,9 @@ function generateCondition(condition: ConditionNode, indent: number): string[] {
 					const text = formatValueForFetchXml(val);
 					// The value's own attributes (uiname, uitype) as they were parsed (#181)
 					const own = extraAttrs(condition.valueAttributes?.[text]);
-					lines.push(`${spaces}  <value${own.length ? ` ${own.join(" ")}` : ""}>${escapeXmlText(text)}</value>`);
+					lines.push(
+						`${spaces}  <value${own.length ? ` ${own.join(" ")}` : ""}>${escapeXmlText(text)}</value>`,
+					);
 				}
 			});
 			lines.push(`${spaces}</condition>`);

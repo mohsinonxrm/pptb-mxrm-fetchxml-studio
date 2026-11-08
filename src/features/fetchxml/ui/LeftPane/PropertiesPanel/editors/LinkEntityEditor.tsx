@@ -40,28 +40,51 @@ import { useBuilder } from "../../../../state/builderContext";
 import { collectLinkEntityAliases, generateUniqueAlias } from "../../../../model/aliasUtils";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
-import { Info, InfoCheckbox, InfoField, LeftoverSetting, SectionHeading, type Validation } from "../fields";
+import {
+	Info,
+	InfoCheckbox,
+	InfoField,
+	LeftoverSetting,
+	SectionHeading,
+	type Validation,
+} from "../fields";
 import { findingFor } from "../ruleFindings";
 
 /** Descriptions follow the link-entity reference and filter-rows (including the inverted all / not all). */
 const LINK_TYPES: Record<LinkType, { label: string; description: string }> = {
 	inner: { label: "Inner", description: "Default. Only records with a matching related record." },
 	outer: { label: "Outer", description: "Also records without a matching related record." },
-	exists: { label: "Exists", description: "Like inner, using EXISTS: each record once, no related attributes." },
-	in: { label: "In", description: "Like inner, using IN: each record once, no related attributes." },
+	exists: {
+		label: "Exists",
+		description: "Like inner, using EXISTS: each record once, no related attributes.",
+	},
+	in: {
+		label: "In",
+		description: "Like inner, using IN: each record once, no related attributes.",
+	},
 	matchfirstrowusingcrossapply: {
 		label: "Match first row",
 		description: "Like inner, matching only one related record: each record once.",
 	},
-	any: { label: "Any", description: "Records with at least one related record matching this link-entity's filter." },
-	"not any": { label: "Not any", description: "Records with no related record matching this link-entity's filter." },
+	any: {
+		label: "Any",
+		description: "Records with at least one related record matching this link-entity's filter.",
+	},
+	"not any": {
+		label: "Not any",
+		description: "Records with no related record matching this link-entity's filter.",
+	},
 	all: {
 		label: "All",
-		description: "Records with related records, none of which match the filter. Invert the filter to require every related record to match.",
+		description:
+			"Records with related records, none of which match the filter. Invert the filter to require every related record to match.",
 	},
 	"not all": { label: "Not all", description: "The same as Any, despite the name." },
 	// Kept when parsed, not offered: not in the reference, but Dataverse accepts it
-	natural: { label: "Natural", description: "Not in the FetchXML reference; Dataverse accepts it." },
+	natural: {
+		label: "Natural",
+		description: "Not in the FetchXML reference; Dataverse accepts it.",
+	},
 };
 const JOIN_TYPES: LinkType[] = ["inner", "outer", "exists", "in", "matchfirstrowusingcrossapply"];
 const RELATED_TYPES: LinkType[] = ["any", "not any", "all", "not all"];
@@ -77,7 +100,13 @@ interface LinkEntityEditorProps {
 	onUpdate: (updates: Record<string, unknown>) => void;
 }
 
-export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, onUpdate }: LinkEntityEditorProps) {
+export function LinkEntityEditor({
+	node,
+	parentEntityName,
+	inFilter,
+	findings,
+	onUpdate,
+}: LinkEntityEditorProps) {
 	const styles = useEditorStyles();
 	const { addLinkEntityWithConfig, fetchQuery } = useBuilder();
 	const [pendingLinkType, setPendingLinkType] = useState<LinkType | null>(null);
@@ -91,11 +120,14 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 	useEffect(() => setUseRelationshipPicker(shouldShowPicker), [node.id, shouldShowPicker]);
 
 	const returned = [
-		node.attributes.length > 0 && `${node.attributes.length} attribute${node.attributes.length === 1 ? "" : "s"}`,
+		node.attributes.length > 0 &&
+			`${node.attributes.length} attribute${node.attributes.length === 1 ? "" : "s"}`,
 		node.allAttributes?.enabled && "all attributes",
-		node.orders.length > 0 && `${node.orders.length} sort${node.orders.length === 1 ? "" : "s"}`,
+		node.orders.length > 0 &&
+			`${node.orders.length} sort${node.orders.length === 1 ? "" : "s"}`,
 	].filter((x): x is string => !!x);
-	const returnedCount = node.attributes.length + (node.allAttributes?.enabled ? 1 : 0) + node.orders.length;
+	const returnedCount =
+		node.attributes.length + (node.allAttributes?.enabled ? 1 : 0) + node.orders.length;
 
 	const handleLinkTypeChange = (linkType: LinkType) => {
 		if (NON_RETURNING_LINK_TYPES.has(linkType) && returned.length > 0) {
@@ -109,7 +141,12 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 		if (pendingLinkType) {
 			onUpdate(
 				removeReturned
-					? { linkType: pendingLinkType, attributes: [], allAttributes: undefined, orders: [] }
+					? {
+							linkType: pendingLinkType,
+							attributes: [],
+							allAttributes: undefined,
+							orders: [],
+						}
 					: { linkType: pendingLinkType },
 			);
 		}
@@ -124,9 +161,12 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 	const applyManyToMany = async (relationship: RelationshipOption) => {
 		setRelationshipError(null);
 		try {
-			if (!relationship.intersectEntity) throw new Error("the relationship has no intersect entity.");
+			if (!relationship.intersectEntity)
+				throw new Error("the relationship has no intersect entity.");
 			const target =
-				relationship.referencingEntity === parentEntityName ? relationship.referencedEntity : relationship.referencingEntity;
+				relationship.referencingEntity === parentEntityName
+					? relationship.referencedEntity
+					: relationship.referencingEntity;
 			const [parentMetadata, targetMetadata] = await Promise.all([
 				loadEntityMetadata(parentEntityName),
 				loadEntityMetadata(target),
@@ -143,7 +183,8 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 				},
 				() => targetMetadata.PrimaryIdAttribute,
 			);
-			if (!join) throw new Error(`${parentEntityName} isn't part of ${relationship.schemaName}.`);
+			if (!join)
+				throw new Error(`${parentEntityName} isn't part of ${relationship.schemaName}.`);
 			onUpdate({
 				name: join.intersect.name,
 				from: join.intersect.from,
@@ -152,7 +193,14 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 				alias: undefined,
 				relationshipType: "NN",
 			});
-			addLinkEntityWithConfig(node.id, join.target.name, join.target.from, join.target.to, "inner", "NN");
+			addLinkEntityWithConfig(
+				node.id,
+				join.target.name,
+				join.target.from,
+				join.target.to,
+				"inner",
+				"NN",
+			);
 			setUseRelationshipPicker(false);
 		} catch (error) {
 			setRelationshipError(
@@ -166,8 +214,17 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 			void applyManyToMany(relationship);
 			return;
 		}
-		debugLog("linkEntityEditor", "Relationship selected:", { nodeId: node.id, parentEntityName, relationship });
-		const updates: Record<string, unknown> = { name: "", from: "", to: "", relationshipType: relationship.type };
+		debugLog("linkEntityEditor", "Relationship selected:", {
+			nodeId: node.id,
+			parentEntityName,
+			relationship,
+		});
+		const updates: Record<string, unknown> = {
+			name: "",
+			from: "",
+			to: "",
+			relationshipType: relationship.type,
+		};
 
 		// from = the related entity's attribute, to = the parent's attribute
 		if (relationship.type === "1N") {
@@ -192,7 +249,12 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 			}
 		}
 		// A new link-entity's placeholder alias ("new_entity…") becomes one for the related entity
-		if (node.alias?.startsWith("new_entity") && typeof updates.name === "string" && updates.name && fetchQuery) {
+		if (
+			node.alias?.startsWith("new_entity") &&
+			typeof updates.name === "string" &&
+			updates.name &&
+			fetchQuery
+		) {
 			const otherAliases = collectLinkEntityAliases(fetchQuery);
 			otherAliases.delete(node.alias);
 			updates.alias = generateUniqueAlias(updates.name, otherAliases);
@@ -215,12 +277,14 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 		!node.from && !node.to
 			? {
 					state: "warning",
-					message: "Neither attribute is set: Dataverse uses the system many-to-many relationship between the entities, and fails (0x80041102) if there isn't one.",
+					message:
+						"Neither attribute is set: Dataverse uses the system many-to-many relationship between the entities, and fails (0x80041102) if there isn't one.",
 				}
 			: !node.from || !node.to
 				? {
 						state: "warning",
-						message: "Set both attributes. With only one, Dataverse tries to work out the other from the relationship definitions.",
+						message:
+							"Set both attributes. With only one, Dataverse tries to work out the other from the relationship definitions.",
 					}
 				: undefined;
 
@@ -234,7 +298,8 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 						hint={
 							loadIssue?.kind === "names" ? (
 								<>
-									Showing logical names: display names couldn't be loaded ({loadIssue.message}).{" "}
+									Showing logical names: display names couldn't be loaded (
+									{loadIssue.message}).{" "}
 									<Link as="button" onClick={loadIssue.retry}>
 										Retry
 									</Link>
@@ -260,7 +325,12 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 										}
 									: undefined
 						}
-						info={<Info text={`The relationships of ${parentEntityName}.`} href={DOCS.joinTables} />}
+						info={
+							<Info
+								text={`The relationships of ${parentEntityName}.`}
+								href={DOCS.joinTables}
+							/>
+						}
 					>
 						<RelationshipPicker
 							entityLogicalName={parentEntityName}
@@ -278,8 +348,20 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 				<InfoField
 					label="Entity"
 					required
-					validation={!node.name ? { state: "error", message: "Enter the logical name of the related entity." } : undefined}
-					info={<Info text="The logical name of the related entity." href={DOCS.linkEntity} />}
+					validation={
+						!node.name
+							? {
+									state: "error",
+									message: "Enter the logical name of the related entity.",
+								}
+							: undefined
+					}
+					info={
+						<Info
+							text="The logical name of the related entity."
+							href={DOCS.linkEntity}
+						/>
+					}
 				>
 					<Input
 						className={styles.mono}
@@ -329,22 +411,43 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 				<InfoField
 					label="Link type"
 					validation={findingFor(findings, "link-type")}
-					hint={inFilter ? "Inside a filter, a link-entity checks related records and returns nothing." : undefined}
-					info={<Info text={LINK_TYPES[node.linkType]?.description ?? "How the related records are matched."} href={DOCS.linkEntity} />}
+					hint={
+						inFilter
+							? "Inside a filter, a link-entity checks related records and returns nothing."
+							: undefined
+					}
+					info={
+						<Info
+							text={
+								LINK_TYPES[node.linkType]?.description ??
+								"How the related records are matched."
+							}
+							href={DOCS.linkEntity}
+						/>
+					}
 				>
 					<Dropdown
 						value={LINK_TYPES[node.linkType]?.label ?? node.linkType}
 						selectedOptions={[node.linkType]}
-						onOptionSelect={(_, data) => data.optionValue && handleLinkTypeChange(data.optionValue as LinkType)}
+						onOptionSelect={(_, data) =>
+							data.optionValue && handleLinkTypeChange(data.optionValue as LinkType)
+						}
 					>
 						{!offered.includes(node.linkType) &&
-							linkTypeOption(node.linkType, inFilter ? "Not allowed inside a filter" : undefined)}
+							linkTypeOption(
+								node.linkType,
+								inFilter ? "Not allowed inside a filter" : undefined,
+							)}
 						{inFilter ? (
 							RELATED_TYPES.map((t) => linkTypeOption(t))
 						) : (
 							<>
-								<OptionGroup label="Join">{JOIN_TYPES.map((t) => linkTypeOption(t))}</OptionGroup>
-								<OptionGroup label="Filter on related records">{RELATED_TYPES.map((t) => linkTypeOption(t))}</OptionGroup>
+								<OptionGroup label="Join">
+									{JOIN_TYPES.map((t) => linkTypeOption(t))}
+								</OptionGroup>
+								<OptionGroup label="Filter on related records">
+									{RELATED_TYPES.map((t) => linkTypeOption(t))}
+								</OptionGroup>
 							</>
 						)}
 					</Dropdown>
@@ -363,7 +466,9 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 					<Input
 						className={styles.mono}
 						value={node.alias ?? ""}
-						onChange={(_, data) => onUpdate({ alias: sanitizeAlias(data.value) || undefined })}
+						onChange={(_, data) =>
+							onUpdate({ alias: sanitizeAlias(data.value) || undefined })
+						}
 						placeholder="e.g. parent_account"
 					/>
 				</InfoField>
@@ -385,28 +490,43 @@ export function LinkEntityEditor({ node, parentEntityName, inFilter, findings, o
 						text={`Visible: ${node.visible}`}
 						validation={{
 							state: "none",
-							message: findingFor(findings, "visible")?.message ?? "Dataverse ignores visible.",
+							message:
+								findingFor(findings, "visible")?.message ??
+								"Dataverse ignores visible.",
 						}}
 						onRemove={() => onUpdate({ visible: undefined })}
 					/>
 				)}
 			</div>
 
-			<Dialog modalType="alert" open={pendingLinkType !== null} onOpenChange={(_, data) => !data.open && setPendingLinkType(null)}>
+			<Dialog
+				modalType="alert"
+				open={pendingLinkType !== null}
+				onOpenChange={(_, data) => !data.open && setPendingLinkType(null)}
+			>
 				<DialogSurface>
 					<DialogBody>
-						<DialogTitle>Change the link type to {pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""}?</DialogTitle>
+						<DialogTitle>
+							Change the link type to{" "}
+							{pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""}?
+						</DialogTitle>
 						<DialogContent>
-							The {pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""} link type returns no attributes, so
-							Dataverse rejects this link-entity&apos;s {returned.join(" and ")}. Remove {returnedCount === 1 ? "it" : "them"}{" "}
+							The {pendingLinkType ? LINK_TYPES[pendingLinkType].label : ""} link type
+							returns no attributes, so Dataverse rejects this link-entity&apos;s{" "}
+							{returned.join(" and ")}. Remove {returnedCount === 1 ? "it" : "them"}{" "}
 							now? Its filters and nested link-entities are kept.
 						</DialogContent>
 						<DialogActions position="start">
-							<Button onClick={() => confirmLinkTypeChange(false)}>Change only</Button>
+							<Button onClick={() => confirmLinkTypeChange(false)}>
+								Change only
+							</Button>
 						</DialogActions>
 						<DialogActions position="end">
 							<Button onClick={() => setPendingLinkType(null)}>Cancel</Button>
-							<Button appearance="primary" onClick={() => confirmLinkTypeChange(true)}>
+							<Button
+								appearance="primary"
+								onClick={() => confirmLinkTypeChange(true)}
+							>
 								Change and remove
 							</Button>
 						</DialogActions>

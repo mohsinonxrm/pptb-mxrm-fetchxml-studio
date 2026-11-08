@@ -283,4 +283,3 @@ export type OperatorType =
 	| "not-under"
 	| "above"
 	| "eq-or-above";
-

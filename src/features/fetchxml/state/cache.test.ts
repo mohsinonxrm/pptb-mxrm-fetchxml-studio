@@ -4,7 +4,8 @@ import type { EntityMetadata, PublisherWithSolutions } from "../api/pptbClient";
 
 // #66: everything in the metadata cache belongs to one connection
 
-const entity = (name: string) => ({ LogicalName: name, EntitySetName: `${name}s` }) as EntityMetadata;
+const entity = (name: string) =>
+	({ LogicalName: name, EntitySetName: `${name}s` }) as EntityMetadata;
 
 beforeEach(() => {
 	vi.spyOn(console, "log").mockImplementation(() => {});
