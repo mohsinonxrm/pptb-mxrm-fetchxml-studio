@@ -20,6 +20,8 @@ import type {
 import { validateQueryRules } from "../../model/fetchxmlRules";
 import {
 	collectAllFilters,
+	findLinkEntityParent,
+	isPlaceholderLinkEntity,
 	findNodeContainer,
 	findParentEntityForNode,
 } from "../../model/treeUtils";
@@ -63,6 +65,17 @@ interface PropertiesPanelProps {
 	selectedNode: SelectedNode;
 	fetchQuery: FetchNode | null;
 	onNodeUpdate: (nodeId: NodeId, updates: Record<string, unknown>) => void;
+}
+
+/**
+ * The entity a link-entity joins from, for its relationship and To pickers. Empty while that parent
+ * is a link-entity still at its Add placeholder, so the pickers wait instead of asking Dataverse
+ * about a `new_entity` table (#345).
+ */
+function linkParentEntityName(fetchQuery: FetchNode, linkId: NodeId): string {
+	const parent = findLinkEntityParent(fetchQuery, linkId);
+	if (!parent) return fetchQuery.entity.name;
+	return parent.type === "link-entity" && isPlaceholderLinkEntity(parent) ? "" : parent.name;
 }
 
 export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: PropertiesPanelProps) {
@@ -170,10 +183,7 @@ export function PropertiesPanel({ selectedNode, fetchQuery, onNodeUpdate }: Prop
 				return (
 					<LinkEntityEditor
 						node={selectedNode}
-						parentEntityName={
-							findParentEntityForNode(fetchQuery, selectedNode.id) ??
-							fetchQuery.entity.name
-						}
+						parentEntityName={linkParentEntityName(fetchQuery, selectedNode.id)}
 						inFilter={collectAllFilters(fetchQuery).some((f) =>
 							f.links?.some((l) => l.id === selectedNode.id),
 						)}
