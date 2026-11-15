@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-15
+
+Hotfix for 1.5.0: building queries with nested link-entities (#345), and the README on the Power Platform ToolBox details page (#348).
+
 ### 🔧 Fixed
 
 - **A link-entity inside another link-entity lists the right relationships (#345).** Its relationship picker, To attribute and many-to-many join used the root Entity, or for deeper links the grandparent's alias, instead of the link-entity it sits in. They now use the parent link-entity's logical name, including for link-entities in a link-entity's filter (any / not any / all / not all).
