@@ -2,8 +2,8 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-[![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
-[![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml)
+![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)
+![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)
 ![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb.svg)
 ![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb-types.svg)
 ![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/react.svg)
@@ -90,7 +90,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
   - **Condition on a large text attribute**: multiline text, or text with a maximum length over 850 characters, which is too long to index — whatever the operator.
   - **Condition on a calculated or formula attribute**: calculated for every record, so the query is slow and may be throttled. Rollup attributes are stored and aren't reported.
   - **Paging without a unique order**: a paged query (`count` / `page`, or results that are paged through scrolling or Retrieve All) whose orders don't include the primary key, so records can repeat or go missing between pages ([order rows › ordering and paging](https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/order-rows#ordering-and-paging)). The quick fix **Add {primary key} as the last order** adds the order in the tree. When link-entities have orders, Dataverse applies them after the entity's orders, so the fix isn't offered and the advice explains why. With no order at all, Dataverse orders by the primary key itself, so there's nothing to report.
-- **Check with Dataverse** — On demand only, the tab sends the FetchXML you're looking at (the editor's text in editor mode) to Dataverse's [`ValidateFetchXmlExpression`](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/validatefetchxmlexpression). Findings Dataverse also reports get **Dataverse agrees**; anything only Dataverse reports gets a **From Dataverse** row quoting its message. The result stays until the next check. Once the query changes, its findings are hidden and not counted until you check again, since they could describe a query Dataverse never saw; the status line still says when it was checked. It reads only; nothing is saved. It needs a connection. Values with an apostrophe, `&`, `#`, `%` or `+` are sent intact.
+- **Check with Dataverse** — On demand only, the tab sends the FetchXML you're looking at (the editor's text in editor mode) to Dataverse's [ValidateFetchXmlExpression](https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/validatefetchxmlexpression). Findings Dataverse also reports get **Dataverse agrees**; anything only Dataverse reports gets a **From Dataverse** row quoting its message. The result stays until the next check. Once the query changes, its findings are hidden and not counted until you check again, since they could describe a query Dataverse never saw; the status line still says when it was checked. It reads only; nothing is saved. It needs a connection. Values with an apostrophe, `&`, `#`, `%` or `+` are sent intact.
 
 ### 📥 Load & Save Views
 - **Load system/personal views** — Browse and load existing Dataverse views of every query type. Personal views shared with you show "Shared by {owner}", and system views show their type or "Default view"
@@ -198,7 +198,7 @@ Nothing else writes to Dataverse:
 - Connection to a Dataverse environment
 
 ### Installation
-FetchXML Studio is available as a tool in Power Platform ToolBox. In Power Platform ToolBox, open **Tools Marketplace**, search for *FetchXML Studio* and install it. The package is published on npm as [`@mohsinonxrm/pptb-fetchxml-studio`](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio).
+FetchXML Studio is available as a tool in Power Platform ToolBox. In Power Platform ToolBox, open **Tools Marketplace**, search for *FetchXML Studio* and install it. The package is published on npm as `@mohsinonxrm/pptb-fetchxml-studio` ([npm](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)).
 
 ### Quick start
 1. In Power Platform ToolBox, open **Installed Tools** and select **FetchXML Studio**. Choose a Dataverse connection when it asks.

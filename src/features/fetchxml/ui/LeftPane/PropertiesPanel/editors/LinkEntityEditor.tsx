@@ -8,7 +8,7 @@
  * are fine with every type.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
 	Button,
 	Dialog,
@@ -38,6 +38,7 @@ import { planManyToManyJoin } from "../../../../model/manyToMany";
 import { loadEntityMetadata } from "../../../../api/dataverseMetadata";
 import { useBuilder } from "../../../../state/builderContext";
 import { collectLinkEntityAliases, generateUniqueAlias } from "../../../../model/aliasUtils";
+import { findLinkAliasReferences, type LinkAliasReference } from "../../../../model/treeUtils";
 import { DOCS } from "../docLinks";
 import { useEditorStyles } from "../editorStyles";
 import {
@@ -100,6 +101,10 @@ interface LinkEntityEditorProps {
 	onUpdate: (updates: Record<string, unknown>) => void;
 }
 
+/** Shown while the link-entity this one sits in has no entity yet (#345) */
+const PARENT_NOT_SET =
+	"Set up the link-entity this one is inside first: pick its relationship or enter its entity.";
+
 export function LinkEntityEditor({
 	node,
 	parentEntityName,
@@ -108,7 +113,32 @@ export function LinkEntityEditor({
 	onUpdate,
 }: LinkEntityEditorProps) {
 	const styles = useEditorStyles();
-	const { addLinkEntityWithConfig, fetchQuery } = useBuilder();
+	const { addLinkEntityWithConfig, fetchQuery, updateNode } = useBuilder();
+	// The conditions and orders that use this link-entity's alias, taken when an alias edit starts:
+	// they follow the rename by node, even if the alias briefly matches another one while typing
+	const aliasReferences = useRef<LinkAliasReference[] | null>(null);
+
+	/** Points the references taken above at the new alias; with no alias they keep the old one (flagged) */
+	const renameAliasReferences = (references: LinkAliasReference[], alias: string | undefined) => {
+		if (!alias) return;
+		for (const ref of references) {
+			updateNode(
+				ref.nodeId,
+				ref.field === "valueof"
+					? { valueof: `${alias}.${ref.attribute}` }
+					: { entityname: alias },
+			);
+		}
+	};
+
+	const handleAliasChange = (value: string) => {
+		const alias = sanitizeAlias(value) || undefined;
+		aliasReferences.current ??= node.alias
+			? findLinkAliasReferences(fetchQuery, node.id, node.alias)
+			: [];
+		onUpdate({ alias });
+		renameAliasReferences(aliasReferences.current, alias);
+	};
 	const [pendingLinkType, setPendingLinkType] = useState<LinkType | null>(null);
 	const [relationshipError, setRelationshipError] = useState<string | null>(null);
 	// The picker couldn't load relationships or their display names (#201)
@@ -259,7 +289,12 @@ export function LinkEntityEditor({
 			otherAliases.delete(node.alias);
 			updates.alias = generateUniqueAlias(updates.name, otherAliases);
 		}
+		const references =
+			typeof updates.alias === "string" && node.alias
+				? findLinkAliasReferences(fetchQuery, node.id, node.alias)
+				: [];
 		onUpdate(updates);
+		renameAliasReferences(references, updates.alias as string | undefined);
 		setUseRelationshipPicker(false);
 	};
 
@@ -290,13 +325,15 @@ export function LinkEntityEditor({
 
 	return (
 		<div className={styles.container}>
-			{useRelationshipPicker && parentEntityName && (
+			{useRelationshipPicker && (
 				<div className={styles.section}>
 					<SectionHeading>Relationship</SectionHeading>
 					<InfoField
 						label="Relationship"
 						hint={
-							loadIssue?.kind === "names" ? (
+							!parentEntityName ? (
+								PARENT_NOT_SET
+							) : loadIssue?.kind === "names" ? (
 								<>
 									Showing logical names: display names couldn't be loaded (
 									{loadIssue.message}).{" "}
@@ -327,7 +364,7 @@ export function LinkEntityEditor({
 						}
 						info={
 							<Info
-								text={`The relationships of ${parentEntityName}.`}
+								text={`The relationships of ${parentEntityName || "the link-entity this one is inside"}.`}
 								href={DOCS.joinTables}
 							/>
 						}
@@ -337,6 +374,7 @@ export function LinkEntityEditor({
 							onChange={handleRelationshipSelect}
 							onLoadIssue={setLoadIssue}
 							placeholder="Select a relationship…"
+							disabled={!parentEntityName}
 						/>
 					</InfoField>
 				</div>
@@ -392,6 +430,7 @@ export function LinkEntityEditor({
 
 				<InfoField
 					label="To attribute"
+					hint={parentEntityName ? undefined : PARENT_NOT_SET}
 					info={
 						<Info
 							text={`The ${parentEntityName || "parent"} attribute that matches the From attribute. Not technically required, but usually set.`}
@@ -466,9 +505,10 @@ export function LinkEntityEditor({
 					<Input
 						className={styles.mono}
 						value={node.alias ?? ""}
-						onChange={(_, data) =>
-							onUpdate({ alias: sanitizeAlias(data.value) || undefined })
-						}
+						onChange={(_, data) => handleAliasChange(data.value)}
+						onBlur={() => {
+							aliasReferences.current = null;
+						}}
 						placeholder="e.g. parent_account"
 					/>
 				</InfoField>
