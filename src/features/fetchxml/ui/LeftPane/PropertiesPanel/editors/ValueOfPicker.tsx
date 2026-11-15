@@ -23,6 +23,12 @@ interface ValueOfPickerProps {
 	rootEntityName: string;
 	/** The entity the condition is on (its link-entity, or the one named by entityname) */
 	effectiveEntityName: string;
+	/**
+	 * The condition is on the root record itself (a root filter, no entityname), so "same record"
+	 * already means the root. A link-entity to the root's own entity (self-join) is another record,
+	 * so the root is still offered there.
+	 */
+	onRootRecord: boolean;
 	/** What this condition can reach (valueofScopes) */
 	scope: ValueOfScope | undefined;
 	/** Alias that means the same record as "same record" (not listed twice) */
@@ -46,6 +52,7 @@ export function ValueOfPicker({
 	fetchQuery,
 	rootEntityName,
 	effectiveEntityName,
+	onRootRecord,
 	scope,
 	sameAlias,
 	valueof,
@@ -64,7 +71,7 @@ export function ValueOfPicker({
 				entityName: effectiveEntityName,
 			},
 		];
-		if (rootEntityName && rootEntityName !== effectiveEntityName) {
+		if (rootEntityName && !onRootRecord) {
 			list.push({
 				value: rootEntityName,
 				label: `${rootEntityName} (root entity)`,
@@ -97,7 +104,15 @@ export function ValueOfPicker({
 			});
 		}
 		return list;
-	}, [fetchQuery, rootEntityName, effectiveEntityName, scope, sameAlias, parsed.qualifier]);
+	}, [
+		fetchQuery,
+		rootEntityName,
+		effectiveEntityName,
+		onRootRecord,
+		scope,
+		sameAlias,
+		parsed.qualifier,
+	]);
 
 	const [selected, setSelected] = useState<string>(parsed.qualifier ?? SAME);
 	// Follow external changes (Parse to Tree, undo)

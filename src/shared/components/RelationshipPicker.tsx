@@ -254,7 +254,11 @@ export function RelationshipPicker({
 			selectedOptions={selectedId ? [selectedId] : []}
 			onOptionSelect={onOptionSelect}
 			onChange={(ev) => setQuery(ev.target.value)}
-			placeholder={relationships.length === 0 ? "No relationships found" : placeholder}
+			placeholder={
+				relationships.length === 0 && entityLogicalName
+					? "No relationships found"
+					: placeholder
+			}
 			disabled={disabled || relationships.length === 0}
 			clearable
 		>
