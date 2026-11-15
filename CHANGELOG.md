@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AppShell: root entity metadata loading moved into `useRootEntityMetadata` (#301)
 - AppShell: record actions moved into `useRecordActions` (#301)
 - AppShell: query execution and paging moved into `useQueryExecution` (#301)
+- AppShell: the query carried over a connection change, the tool-to-tool prefill and loading a view moved into `useLaunchPrefill` (#301)
 
 ## [1.6.0-beta.2] - 2026-11-07
 
