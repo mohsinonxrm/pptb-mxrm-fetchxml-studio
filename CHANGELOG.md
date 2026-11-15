@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AppShell: record actions moved into `useRecordActions` (#301)
 - AppShell: query execution and paging moved into `useQueryExecution` (#301)
 - AppShell: the query carried over a connection change, the tool-to-tool prefill and loading a view moved into `useLaunchPrefill` (#301)
+- AppShell: keeping the column config in step with the query, and building the view's LayoutXML, moved into `useViewLayout` (#301)
 
 ## [1.6.0-beta.3] - 2026-11-15
 

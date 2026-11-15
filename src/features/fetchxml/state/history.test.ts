@@ -280,7 +280,7 @@ describe("merging", () => {
 	});
 
 	it("keeps typing one step when the layout sync runs after each keystroke", () => {
-		// UPDATE_NODE sets layoutNeedsSync; an AppShell effect then dispatches SYNC_LAYOUT_WITH_FETCHXML
+		// UPDATE_NODE sets layoutNeedsSync; useViewLayout's effect (AppShell) then dispatches SYNC_LAYOUT_WITH_FETCHXML
 		let h = createHistory(snap(""));
 		let text = "";
 		for (let i = 0; i < 5; i++) {

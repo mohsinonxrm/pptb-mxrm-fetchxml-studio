@@ -18,6 +18,7 @@ import { useRootEntityMetadata } from "./hooks/useRootEntityMetadata";
 import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecordActions";
 import { useQueryExecution } from "./hooks/useQueryExecution";
 import { useLaunchPrefill, type ConnectionCarryOver } from "./hooks/useLaunchPrefill";
+import { useViewLayout } from "./hooks/useViewLayout";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
@@ -54,7 +55,6 @@ import {
 	type NewCondition,
 } from "../features/fetchxml/model/columnFilters";
 import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
-import { buildViewLayoutXml } from "../features/fetchxml/model/layoutxml";
 import {
 	countQuickFindPlaceholders,
 	toQuickFindSearchValue,
@@ -358,53 +358,15 @@ function AppContent({
 	});
 	const { queryResult, executeError, pagingRef, handleExecuteRef } = queryExecution;
 
-	// Sync layout with FetchXML when needed (e.g., after adding/removing attributes)
-	// Also sync when columnConfig is null but there are attributes (ensures columns button works)
-	const { syncLayoutWithFetchXml } = builder; // stable: builder actions are created once (#65)
-	useEffect(() => {
-		const hasAttributes = (builder.fetchQuery?.entity?.attributes?.length ?? 0) > 0;
-		const needsSync = builder.layoutNeedsSync || (hasAttributes && !builder.columnConfig);
-
-		if (needsSync && builder.fetchQuery) {
-			// Build attribute type map from metadata for better column widths
-			// Use root entity's attribute metadata
-			const attributeTypeMap = new Map<string, string>();
-			const rootEntityName = builder.fetchQuery.entity?.name;
-			if (attributeMetadata && rootEntityName) {
-				const rootEntityAttrs = attributeMetadata.get(rootEntityName);
-				rootEntityAttrs?.forEach((attr, name) => {
-					attributeTypeMap.set(name, attr.AttributeType || "");
-				});
-			}
-			syncLayoutWithFetchXml(attributeTypeMap, entityMetadata?.PrimaryIdAttribute);
-		}
-	}, [
-		builder.layoutNeedsSync,
-		builder.fetchQuery,
-		builder.columnConfig,
-		attributeMetadata,
-		entityMetadata,
-		syncLayoutWithFetchXml,
-	]);
+	// The column config kept in step with the query, and its LayoutXML (#301). Here, so the sync
+	// effect keeps its place among the effects.
+	const { layoutXml } = useViewLayout({ builder, attributeMetadata, entityMetadata });
 
 	// Quick find views keep {0} in their conditions (#142): a test value is needed to execute them
 	const quickFindPlaceholderCount = useMemo(
 		() => countQuickFindPlaceholders(fetchXml),
 		[fetchXml],
 	);
-
-	// Generate LayoutXML from column config for saving
-	const layoutXml = useMemo(() => {
-		if (!builder.fetchQuery || !entityMetadata) {
-			return "";
-		}
-		// object, row id and jump from the root Entity's metadata (#93)
-		return buildViewLayoutXml(builder.columnConfig, builder.fetchQuery, {
-			objectTypeCode: entityMetadata.ObjectTypeCode,
-			primaryIdAttribute: entityMetadata.PrimaryIdAttribute,
-			primaryNameAttribute: entityMetadata.PrimaryNameAttribute,
-		});
-	}, [builder.columnConfig, builder.fetchQuery, entityMetadata]);
 
 	const resultsExport = useResultsExport({
 		loadedView: builder.loadedView,

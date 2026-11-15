@@ -23,7 +23,7 @@
  *     remove columns, add related columns, editor-mode sync before Execute / Save / Send) run
  *     between `beginTransaction` and `commitTransaction` (in a `finally`), so they are one step.
  *   - **skip, keeping redo, not ending a merge** (`{ keepRedo: true, endsMerge: false }`):
- *     SYNC_LAYOUT_WITH_FETCHXML. Every UPDATE_NODE sets `layoutNeedsSync`, and an AppShell effect
+ *     SYNC_LAYOUT_WITH_FETCHXML. Every UPDATE_NODE sets `layoutNeedsSync`, and useViewLayout's effect (AppShell)
  *     dispatches the sync after the render, so ending the merge would make each keystroke its own
  *     step, and clearing redo would kill redo after every undo. Keeping redo is safe because the
  *     sync only derives `columnConfig` from the query: redo replaces the whole `columnConfig` with
