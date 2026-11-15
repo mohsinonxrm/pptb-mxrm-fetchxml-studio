@@ -27,7 +27,9 @@ function recordRelationshipRequests(): string[] {
 	installHost({
 		dataverseAPI: {
 			queryData: async (query: unknown) => {
-				const match = /^EntityDefinitions\(LogicalName='([^']+)'\)\/\w+Relationships/.exec(String(query));
+				const match = /^EntityDefinitions\(LogicalName='([^']+)'\)\/\w+Relationships/.exec(
+					String(query),
+				);
 				if (match) tables.push(match[1]);
 				return { value: [] };
 			},
@@ -41,7 +43,11 @@ let builder: BuilderContextValue;
 function Harness() {
 	const b = useBuilder();
 	builder = b;
-	return createElement(PropertiesPanel, { selectedNode: b.selectedNode, fetchQuery: b.fetchQuery, onNodeUpdate: b.updateNode });
+	return createElement(PropertiesPanel, {
+		selectedNode: b.selectedNode,
+		fetchQuery: b.fetchQuery,
+		onNodeUpdate: b.updateNode,
+	});
 }
 
 async function loadAndSelect(xml: string, pick: (fetch: FetchNode) => { id: string }) {
@@ -52,7 +58,9 @@ async function loadAndSelect(xml: string, pick: (fetch: FetchNode) => { id: stri
 }
 
 /** The link-entity editor's Alias input */
-const aliasInput = () => document.querySelector<HTMLInputElement>('input[placeholder="e.g. parent_account"]') ?? undefined;
+const aliasInput = () =>
+	document.querySelector<HTMLInputElement>('input[placeholder="e.g. parent_account"]') ??
+	undefined;
 
 describe("link-entity under a link-entity that isn't set up yet (#345)", () => {
 	const xml = `<fetch>
@@ -67,7 +75,9 @@ describe("link-entity under a link-entity that isn't set up yet (#345)", () => {
 		const tables = recordRelationshipRequests();
 		await loadAndSelect(xml, (fetch) => fetch.entity.links[0].links[0]);
 		expect(tables).not.toContain("new_entity");
-		expect(document.body.textContent).toContain("Set up the link-entity this one is inside first");
+		expect(document.body.textContent).toContain(
+			"Set up the link-entity this one is inside first",
+		);
 	});
 
 	it("still offers the root's relationships for the top-level placeholder", async () => {
@@ -140,7 +150,12 @@ describe("compare to the root entity (ValueOfPicker)", () => {
 				rootEntityName: "account",
 				effectiveEntityName: "account",
 				onRootRecord,
-				scope: { rootName: "account", aliases: ["parent"], selfAlias: "parent", laterAliases: [] },
+				scope: {
+					rootName: "account",
+					aliases: ["parent"],
+					selfAlias: "parent",
+					laterAliases: [],
+				},
 				sameAlias: "parent",
 				valueof: "account.name",
 				compatibleTypes: ["String"],
@@ -151,13 +166,17 @@ describe("compare to the root entity (ValueOfPicker)", () => {
 	it("offers the root from a self-join (a link-entity to the root's own entity)", async () => {
 		installHost();
 		await renderPicker(false);
-		expect(document.querySelector('button[role="combobox"]')?.textContent).toContain("(root entity)");
+		expect(document.querySelector('button[role="combobox"]')?.textContent).toContain(
+			"(root entity)",
+		);
 	});
 
 	it("doesn't list the root twice for a condition on the root record", async () => {
 		installHost();
 		await renderPicker(true);
-		expect(document.querySelector('button[role="combobox"]')?.textContent).not.toContain("(root entity)");
+		expect(document.querySelector('button[role="combobox"]')?.textContent).not.toContain(
+			"(root entity)",
+		);
 	});
 });
 
@@ -169,7 +188,9 @@ describe("a condition's entityname naming a link-entity by its logical name (#34
 		installHost({
 			dataverseAPI: {
 				queryData: async (query: unknown) => {
-					const match = /^EntityDefinitions\(LogicalName='([^']+)'\)\/Attributes/.exec(String(query));
+					const match = /^EntityDefinitions\(LogicalName='([^']+)'\)\/Attributes/.exec(
+						String(query),
+					);
 					if (match) tables.push(match[1]);
 					return { value: [] };
 				},
@@ -187,6 +208,8 @@ describe("a condition's entityname naming a link-entity by its logical name (#34
 		);
 		expect(tables).toContain("account");
 		expect(tables).not.toContain("contact");
-		expect(document.querySelector('button[role="combobox"]')?.textContent).toContain("a (account)");
+		expect(document.querySelector('button[role="combobox"]')?.textContent).toContain(
+			"a (account)",
+		);
 	});
 });
