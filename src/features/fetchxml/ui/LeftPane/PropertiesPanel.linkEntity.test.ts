@@ -160,3 +160,33 @@ describe("compare to the root entity (ValueOfPicker)", () => {
 		expect(document.querySelector('button[role="combobox"]')?.textContent).not.toContain("(root entity)");
 	});
 });
+
+describe("a condition's entityname naming a link-entity by its logical name (#345, verified live)", () => {
+	it("loads that link-entity's attributes, not the root's", async () => {
+		clearMetadataCache();
+		metadataCache.clear();
+		const tables: string[] = [];
+		installHost({
+			dataverseAPI: {
+				queryData: async (query: unknown) => {
+					const match = /^EntityDefinitions\(LogicalName='([^']+)'\)\/Attributes/.exec(String(query));
+					if (match) tables.push(match[1]);
+					return { value: [] };
+				},
+			},
+		});
+		await loadAndSelect(
+			`<fetch>
+				<entity name="contact">
+					<attribute name="fullname" />
+					<filter><condition entityname="account" attribute="fax" operator="null" /></filter>
+					<link-entity name="account" from="accountid" to="parentcustomerid" link-type="outer" alias="a" />
+				</entity>
+			</fetch>`,
+			(fetch) => fetch.entity.filters[0].conditions[0],
+		);
+		expect(tables).toContain("account");
+		expect(tables).not.toContain("contact");
+		expect(document.querySelector('button[role="combobox"]')?.textContent).toContain("a (account)");
+	});
+});

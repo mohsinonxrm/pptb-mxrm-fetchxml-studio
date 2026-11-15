@@ -72,8 +72,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	const linkEntityReferences = useMemo(() => collectLinkEntityReferences(fetchQuery), [fetchQuery]);
 	// entityname applies to conditions in the root entity's filters (filters on link-entity, after the join)
 	const isInRootFilter = useMemo(() => isConditionInRootEntityFilter(fetchQuery, node.id), [fetchQuery, node.id]);
+	// The alias, or the logical name of exactly one joined link-entity (both verified live, #345)
+	const byName = linkEntityReferences.filter((r) => r.entityName === node.entityname);
 	const entityTarget = node.entityname
-		? linkEntityReferences.find((r) => r.identifier === node.entityname)
+		? (linkEntityReferences.find((r) => r.identifier === node.entityname) ?? (byName.length === 1 ? byName[0] : undefined))
 		: undefined;
 	const effectiveEntityName = isInRootFilter && entityTarget ? entityTarget.entityName : entityName;
 
@@ -257,7 +259,9 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 								<Option value={node.entityname} text={node.entityname}>
 									<span className={styles.optionText}>
 										{node.entityname}
-										<span className={styles.optionSecondary}>Not a link-entity in this query</span>
+										<span className={styles.optionSecondary}>
+											{node.entityname === fetchQuery.entity.name ? "The root entity" : "Not a link-entity in this query"}
+										</span>
 									</span>
 								</Option>
 							)}
