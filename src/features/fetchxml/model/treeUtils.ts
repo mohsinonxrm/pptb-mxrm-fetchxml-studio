@@ -182,6 +182,96 @@ export function findParentEntityForNode(
 }
 
 /**
+ * The entity or link-entity a link-entity joins from: the one whose links, or whose filter's
+ * links (any / not any / all / not all), hold it. Null when the link-entity isn't in the query.
+ */
+export function findLinkEntityParent(
+	fetchNode: FetchNode | null,
+	linkId: NodeId,
+): EntityNode | LinkEntityNode | null {
+	if (!fetchNode?.entity) return null;
+	const inFilter = (filter: FilterNode, owner: EntityNode | LinkEntityNode): EntityNode | LinkEntityNode | null => {
+		for (const sub of filter.subfilters) {
+			const found = inFilter(sub, owner);
+			if (found) return found;
+		}
+		for (const link of filter.links ?? []) {
+			if (link.id === linkId) return owner;
+			const found = inContainer(link);
+			if (found) return found;
+		}
+		return null;
+	};
+	const inContainer = (container: EntityNode | LinkEntityNode): EntityNode | LinkEntityNode | null => {
+		for (const filter of container.filters) {
+			const found = inFilter(filter, container);
+			if (found) return found;
+		}
+		for (const link of container.links) {
+			if (link.id === linkId) return container;
+			const found = inContainer(link);
+			if (found) return found;
+		}
+		return null;
+	};
+	return inContainer(fetchNode.entity);
+}
+
+/**
+ * A link-entity still as Add > Link-entity inserted it (entity `new_entity`, from `id_field`,
+ * to `parent_id_field`): it has no real entity yet, so nothing can be loaded for it (#345).
+ */
+export function isPlaceholderLinkEntity(link: LinkEntityNode): boolean {
+	return link.name === "new_entity" && link.from === "id_field" && link.to === "parent_id_field";
+}
+
+/** A condition or order that refers to a link-entity by its alias */
+export interface LinkAliasReference {
+	nodeId: NodeId;
+	/** `entityname` (condition or order), or the qualifier of a condition's `valueof` */
+	field: "entityname" | "valueof";
+	/** For valueof: the attribute after "alias." */
+	attribute?: string;
+}
+
+/**
+ * The conditions (entityname, valueof "alias.attribute") and orders (entityname) anywhere in the
+ * query that refer to a link-entity by its alias, so renaming the alias can update them, as Parse
+ * to tree does for corrected aliases. Empty when the alias doesn't name that link-entity alone (a
+ * duplicate alias, or the root entity's name): those references can't be told apart.
+ */
+export function findLinkAliasReferences(
+	fetchNode: FetchNode | null,
+	linkId: NodeId,
+	alias: string,
+): LinkAliasReference[] {
+	if (!fetchNode?.entity || !alias || alias === fetchNode.entity.name) return [];
+	if (collectAllLinkEntities(fetchNode).some((l) => l.id !== linkId && l.alias === alias)) return [];
+	const refs: LinkAliasReference[] = [];
+	for (const filter of collectAllFilters(fetchNode)) {
+		for (const condition of filter.conditions) {
+			if (condition.entityname === alias) refs.push({ nodeId: condition.id, field: "entityname" });
+			if (condition.valueof?.startsWith(`${alias}.`)) {
+				refs.push({ nodeId: condition.id, field: "valueof", attribute: condition.valueof.slice(alias.length + 1) });
+			}
+		}
+	}
+	const visitContainer = (container: EntityNode | LinkEntityNode) => {
+		for (const order of container.orders) {
+			if (order.entityname === alias) refs.push({ nodeId: order.id, field: "entityname" });
+		}
+		container.links.forEach(visitContainer);
+		container.filters.forEach(visitFilter);
+	};
+	const visitFilter = (filter: FilterNode) => {
+		filter.subfilters.forEach(visitFilter);
+		filter.links?.forEach(visitContainer);
+	};
+	visitContainer(fetchNode.entity);
+	return refs;
+}
+
+/**
  * Entities referenced by a query, used to drive metadata loading.
  */
 export interface QueryEntities {

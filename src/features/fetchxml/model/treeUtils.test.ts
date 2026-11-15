@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findParentEntityForNode, getQueryEntities } from "./treeUtils";
+import {
+	findLinkAliasReferences,
+	findLinkEntityParent,
+	findParentEntityForNode,
+	getQueryEntities,
+	isPlaceholderLinkEntity,
+} from "./treeUtils";
 import { parseFetchXml } from "./fetchxmlParser";
 
 // Query from issue #54: the link-entity name sorts alphabetically before the root.
@@ -89,5 +95,90 @@ describe("findParentEntityForNode (#345)", () => {
 		expect(parentOf(fetch.entity.attributes[0].id)).toBe("account");
 		expect(parentOf(contact.attributes[0].id)).toBe("contact");
 		expect(parentOf(owner.attributes[0].id)).toBe("systemuser");
+	});
+});
+
+describe("findLinkEntityParent (#345)", () => {
+	const fetch = parseFetchXml(`<fetch>
+  <entity name="account">
+    <link-entity name="contact" from="contactid" to="primarycontactid" alias="pc">
+      <link-entity name="systemuser" from="systemuserid" to="owninguser" alias="owner" />
+      <filter>
+        <filter>
+          <link-entity name="task" from="regardingobjectid" to="contactid" link-type="any" alias="t">
+            <link-entity name="systemuser" from="systemuserid" to="ownerid" alias="towner" />
+          </link-entity>
+        </filter>
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>`).fetchNode!;
+	const contact = fetch.entity.links[0];
+	const task = contact.filters[0].subfilters[0].links[0];
+
+	it("finds the entity or link-entity a link-entity joins from", () => {
+		expect(findLinkEntityParent(fetch, contact.id)).toBe(fetch.entity);
+		expect(findLinkEntityParent(fetch, contact.links[0].id)).toBe(contact);
+	});
+
+	it("finds the owner of a filter's link-entity, and the parent of a link-entity inside it", () => {
+		expect(findLinkEntityParent(fetch, task.id)).toBe(contact);
+		expect(findLinkEntityParent(fetch, task.links[0].id)).toBe(task);
+	});
+
+	it("returns null for a node that isn't a link-entity in the query", () => {
+		expect(findLinkEntityParent(fetch, "missing")).toBeNull();
+		expect(findLinkEntityParent(null, contact.id)).toBeNull();
+	});
+});
+
+describe("isPlaceholderLinkEntity (#345)", () => {
+	const linkOf = (attrs: string) =>
+		parseFetchXml(`<fetch><entity name="account"><link-entity ${attrs} /></entity></fetch>`).fetchNode!.entity
+			.links[0];
+
+	it("is true only for the link-entity Add > Link-entity inserts", () => {
+		expect(isPlaceholderLinkEntity(linkOf('name="new_entity" from="id_field" to="parent_id_field" alias="new_entity"'))).toBe(true);
+	});
+
+	it("is false once any part is set, including a real table called new_entity", () => {
+		expect(isPlaceholderLinkEntity(linkOf('name="contact" from="id_field" to="parent_id_field"'))).toBe(false);
+		expect(isPlaceholderLinkEntity(linkOf('name="new_entity" from="new_entityid" to="new_entityid"'))).toBe(false);
+	});
+});
+
+describe("findLinkAliasReferences", () => {
+	const fetch = parseFetchXml(`<fetch>
+  <entity name="contact">
+    <order entityname="acct" attribute="name" />
+    <filter>
+      <condition entityname="acct" attribute="fax" operator="null" />
+      <condition attribute="fullname" operator="eq" valueof="acct.name" />
+      <condition entityname="other" attribute="fullname" operator="not-null" />
+    </filter>
+    <link-entity name="account" from="accountid" to="parentcustomerid" link-type="outer" alias="acct">
+      <filter>
+        <condition attribute="name" operator="eq" valueof="acct.fax" />
+      </filter>
+    </link-entity>
+    <link-entity name="systemuser" from="systemuserid" to="owninguser" link-type="outer" alias="other" />
+  </entity>
+</fetch>`).fetchNode!;
+	const acct = fetch.entity.links[0];
+	const [entityCondition, valueofCondition] = fetch.entity.filters[0].conditions;
+
+	it("finds conditions (entityname, valueof qualifier) and orders that use the alias", () => {
+		expect(findLinkAliasReferences(fetch, acct.id, "acct")).toEqual([
+			{ nodeId: entityCondition.id, field: "entityname" },
+			{ nodeId: valueofCondition.id, field: "valueof", attribute: "name" },
+			{ nodeId: acct.filters[0].conditions[0].id, field: "valueof", attribute: "fax" },
+			{ nodeId: fetch.entity.orders[0].id, field: "entityname" },
+		]);
+	});
+
+	it("finds nothing when the alias doesn't name that link-entity alone", () => {
+		expect(findLinkAliasReferences(fetch, acct.id, "other")).toEqual([]);
+		expect(findLinkAliasReferences(fetch, acct.id, "contact")).toEqual([]);
+		expect(findLinkAliasReferences(fetch, acct.id, "")).toEqual([]);
 	});
 });

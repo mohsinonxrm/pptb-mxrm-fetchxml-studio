@@ -469,6 +469,7 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 							fetchQuery={fetchQuery}
 							rootEntityName={fetchQuery.entity.name}
 							effectiveEntityName={effectiveEntityName}
+							onRootRecord={isInRootFilter && !entityTarget}
 							scope={valueofScope}
 							sameAlias={isInRootFilter ? node.entityname : valueofScope?.selfAlias}
 							valueof={node.valueof ?? ""}
