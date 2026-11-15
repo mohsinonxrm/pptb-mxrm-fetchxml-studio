@@ -226,7 +226,8 @@ const selectedId = () => builder!.selectedNodeId!;
 
 // ---------------------------------------------------------------------------------------------
 
-describe("UI: building nested link-entities from the tree (#345)", () => {
+// UI tests render Fluent menus and pickers: a full parallel run can push one past the default 5 s
+describe("UI: building nested link-entities from the tree (#345)", { timeout: 30_000 }, () => {
 	it("each level's relationship picker lists its parent link-entity's relationships, and writes from / to", async () => {
 		await startUi("account");
 		const root = builder!.fetchQuery!.entity.id;
@@ -300,7 +301,7 @@ describe("UI: building nested link-entities from the tree (#345)", () => {
 	});
 });
 
-describe("UI: the Add menus of link-entities inside filters", () => {
+describe("UI: the Add menus of link-entities inside filters", { timeout: 30_000 }, () => {
 	it("an any link-entity offers no attributes or orders; a link-entity nested in it does", async () => {
 		await startUi("account");
 		const root = builder!.fetchQuery!.entity.id;

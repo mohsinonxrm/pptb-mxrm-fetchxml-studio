@@ -218,11 +218,13 @@ export function findLinkEntityParent(
 }
 
 /**
- * A link-entity still as Add > Link-entity inserted it (entity `new_entity`, from `id_field`,
- * to `parent_id_field`): it has no real entity yet, so nothing can be loaded for it (#345).
+ * A link-entity Add > Link-entity inserted (entity `new_entity`, from `id_field`, to
+ * `parent_id_field`) whose entity isn't set yet: still `new_entity` with from or to still at its
+ * placeholder (picking only the To attribute doesn't make it a table). Nothing can be loaded for it
+ * (#345). A real `new_entity` table with real from / to isn't a placeholder.
  */
 export function isPlaceholderLinkEntity(link: LinkEntityNode): boolean {
-	return link.name === "new_entity" && link.from === "id_field" && link.to === "parent_id_field";
+	return link.name === "new_entity" && (link.from === "id_field" || link.to === "parent_id_field");
 }
 
 /** A condition or order that refers to a link-entity by its alias */

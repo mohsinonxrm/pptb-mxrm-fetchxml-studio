@@ -72,8 +72,12 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 	const linkEntityReferences = useMemo(() => collectLinkEntityReferences(fetchQuery), [fetchQuery]);
 	// entityname applies to conditions in the root entity's filters (filters on link-entity, after the join)
 	const isInRootFilter = useMemo(() => isConditionInRootEntityFilter(fetchQuery, node.id), [fetchQuery, node.id]);
-	// The alias, or the logical name of exactly one joined link-entity (both verified live, #345)
-	const byName = linkEntityReferences.filter((r) => r.entityName === node.entityname);
+	// The alias, or the logical name of exactly one joined link-entity (both verified live, #345).
+	// The root entity's own name means the root, as the entityname rule reads it.
+	const byName =
+		node.entityname === fetchQuery.entity.name
+			? []
+			: linkEntityReferences.filter((r) => r.entityName === node.entityname);
 	const entityTarget = node.entityname
 		? (linkEntityReferences.find((r) => r.identifier === node.entityname) ?? (byName.length === 1 ? byName[0] : undefined))
 		: undefined;
@@ -242,8 +246,10 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 					>
 						<Dropdown
 							value={entityLabel}
-							selectedOptions={[node.entityname ?? THIS_ENTITY]}
-							onOptionSelect={(_, data) =>
+							selectedOptions={[entityTarget?.identifier ?? node.entityname ?? THIS_ENTITY]}
+							onOptionSelect={(_, data) => {
+								// The same link-entity (perhaps named by its logical name): nothing changes
+								if (data.optionValue === (entityTarget?.identifier ?? node.entityname ?? THIS_ENTITY)) return;
 								// The attribute belongs to the chosen entity, so start over
 								onUpdate({
 									entityname: data.optionValue === THIS_ENTITY ? undefined : data.optionValue,
@@ -251,8 +257,8 @@ export function ConditionEditor({ node, entityName, fetchQuery, findings, onUpda
 									operator: undefined,
 									value: undefined,
 									valueof: undefined,
-								})
-							}
+								});
+							}}
 						>
 							<Option value={THIS_ENTITY}>{`This entity (${entityName})`}</Option>
 							{node.entityname && !entityTarget && (
