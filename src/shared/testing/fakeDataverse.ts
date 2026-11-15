@@ -41,6 +41,12 @@ export interface FakeDataverseOptions {
 	views?: FakeView[];
 	/** Called before each FetchXML page is answered; a test can await a gate here to hold a page */
 	beforePage?: (page: number, entity: string) => Promise<void> | void;
+	/**
+	 * Page FetchXML like a query Dataverse returns no paging cookie for (sorted by a link-entity
+	 * attribute, or distinct): the annotation has an empty pagingcookie and a pagenumber that stays at
+	 * 2, and later pages are asked for by page number only (a request with a paging-cookie fails)
+	 */
+	simplePaging?: boolean;
 }
 
 /** The connection URL renderApp's host stub reports */
@@ -169,6 +175,10 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		if (view) fetch.page = view.page;
 		if (!table || table.logicalName !== fetch.entity)
 			throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
+		if (options.simplePaging && fetch.pagingCookie !== null) {
+			pagingErrors.push(`page ${fetch.page}: paging-cookie sent, but none was issued`);
+			throw new Error("0x80040203: Invalid paging cookie.");
+		}
 		if (!view && fetch.page > 1) {
 			const expected = issuedCookies.get(cookieKey(fetch.entity, fetch.page));
 			if (expected !== undefined && fetch.pagingCookie !== expected) {
@@ -199,6 +209,13 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		});
 		const more = start + fetch.count < rows.length;
 		if (!more) return { value: pageRows };
+		if (options.simplePaging)
+			return {
+				value: pageRows,
+				"@Microsoft.Dynamics.CRM.fetchxmlpagingcookie":
+					'<cookie pagenumber="2" pagingcookie="" istracking="False" />',
+				"@Microsoft.Dynamics.CRM.morerecords": true,
+			};
 		const last = pageRows[pageRows.length - 1]?.[table.primaryId];
 		const first = pageRows[0]?.[table.primaryId];
 		const cookie = `<cookie page="${fetch.page}"><${table.primaryId} last="{${String(last).toUpperCase()}}" first="{${String(first).toUpperCase()}}" /></cookie>`;

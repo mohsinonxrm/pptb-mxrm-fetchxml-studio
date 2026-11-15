@@ -16,6 +16,7 @@ import { useSplitters } from "./hooks/useSplitters";
 import { useResultsExport } from "./hooks/useResultsExport";
 import { useRootEntityMetadata } from "./hooks/useRootEntityMetadata";
 import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecordActions";
+import { useQueryExecution } from "./hooks/useQueryExecution";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
@@ -40,10 +41,6 @@ import { DeleteConfirmDialog } from "../features/fetchxml/ui/Dialogs/DeleteConfi
 import { BulkDeleteDialog } from "../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
 import { WorkflowPickerDialog } from "../features/fetchxml/ui/Dialogs/WorkflowPickerDialog";
 import {
-	executeFetchXml,
-	executeNextLink,
-	executeSystemView,
-	executePersonalView,
 	whoAmI,
 	isDataverseAvailable,
 	resolveEntitySet,
@@ -52,27 +49,7 @@ import {
 import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
 import { CloseRecordsDialog } from "../features/fetchxml/ui/Dialogs/CloseRecordsDialog";
 import type { LoadedViewInfo } from "../features/fetchxml/api/pptbClient";
-import { generateFetchXml, addPagingToFetchXml } from "../features/fetchxml/model/fetchxml";
-import {
-	advancePaging,
-	hasNextPage,
-	readFetchPagingOptions,
-	retrieveAllLimitReached,
-	RETRIEVE_ALL_LIMIT_MESSAGE,
-	type PagingNotice,
-	type PagingState,
-} from "../features/fetchxml/api/paging";
-import type { FetchXmlResult } from "../features/fetchxml/api/pptbClient";
-import { formatDataverseError } from "../features/fetchxml/api/dataverseErrors";
-import {
-	DATAVERSE_DEFAULT_PAGE_SIZE,
-	fetchPageWithRecovery,
-} from "../features/fetchxml/api/pageRecovery";
-import {
-	LONG_RUNNING_RETRY,
-	withThrottleRetry,
-	type ThrottleRetryOptions,
-} from "../features/fetchxml/api/throttleRetry";
+import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import { debugLog } from "../shared/utils/debug";
 import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
 import {
@@ -86,28 +63,20 @@ import {
 	type NewCondition,
 } from "../features/fetchxml/model/columnFilters";
 import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
-import type { FetchNode } from "../features/fetchxml/model/nodes";
 import { buildViewLayoutXml } from "../features/fetchxml/model/layoutxml";
 import {
-	applyQuickFindValue,
 	countQuickFindPlaceholders,
 	getViewLoadNotice,
-	isUnmodifiedView,
 	toQuickFindSearchValue,
 } from "../features/fetchxml/model/savedViews";
 import type { SavedViewDetails } from "../features/fetchxml/ui/Dialogs/SaveViewDialog";
 import { QuickFindTestValue } from "../features/fetchxml/ui/RightPane/QuickFindTestValue";
-import type { QueryResult } from "../features/fetchxml/ui/RightPane/ResultsGrid";
 import { SettingsDrawer } from "../features/fetchxml/ui/Settings/SettingsDrawer";
 import { usePersistedSettings } from "../shared/hooks/usePersistedSettings";
 import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
-import { holdClose } from "../features/fetchxml/api/host";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
-
-const SIMPLE_PAGING_MESSAGE =
-	"Dataverse didn't return a paging cookie for this query (for example, it's sorted by a link-entity attribute or uses distinct), so pages are fetched with page numbers only. Microsoft recommends paging cookies; this works, but is slower for large result sets.";
 
 // ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
 // but tokens will automatically update when FluentProvider theme changes
@@ -422,48 +391,9 @@ function AppContent({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [launch.loading, launch.context]);
 
-	// State for query execution
-	const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-	const [isExecuting, setIsExecuting] = useState(false);
-	const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-	// Paging for infinite scroll / Retrieve All (#58, #60). The ref is what the async page loops read
-	// (no stale closures); the state mirrors it for rendering.
-	const pagingRef = useRef<PagingState | null>(null);
-	const [pagingState, setPagingStateValue] = useState<PagingState | null>(null);
-	const setPaging = (next: PagingState | null) => {
-		pagingRef.current = next;
-		setPagingStateValue(next);
-	};
-	// What happened to paging that the user should know about: a failed page, Stop, simple paging
-	const [pagingNotice, setPagingNotice] = useState<PagingNotice | null>(null);
-	// Run tokens (#60): results from an older execution, or pages from a stopped loop, are dropped.
-	// resultRun changes with every execution and when the results are cleared (entity change, view,
-	// New); pageRun also changes on Stop, which keeps the loaded rows.
-	const resultRunRef = useRef(0);
-	const pageRunRef = useRef(0);
-	// Rows loaded for the current results, for Retrieve All's limit (#183)
-	const loadedRowsRef = useRef(0);
-	// While a Retrieve All page waits to retry because Dataverse is throttling: the wait (#183)
-	const [pagingWaitSeconds, setPagingWaitSeconds] = useState<number | undefined>(undefined);
-	// Unmounting (e.g. the connection changed, #66) stops page loops still running for these results
-	useEffect(
-		() => () => {
-			resultRunRef.current++;
-			pageRunRef.current++;
-		},
-		[],
-	);
-
-	// Execution error (e.g. Dataverse API error surfaced to user)
-	const [executeError, setExecuteError] = useState<string | undefined>();
-
 	// Quick find test value (#142): replaces {0} in the executed FetchXML only
 	const [quickFindValue, setQuickFindValue] = useState("");
 	const [quickFindAddPercent, setQuickFindAddPercent] = useState(true);
-
-	// Entity node of the tree the current results were produced for (see the clearing effect below)
-	const resultEntityIdRef = useRef<string | undefined>(undefined);
 
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
@@ -513,24 +443,20 @@ function AppContent({
 		loadRelationships,
 	});
 
-	// Clear query results when the fetch query structure changes (entity change, view clear, etc.)
-	// We use the entity node id as a proxy - it changes when entity is re-selected or view is cleared.
-	// Results produced for the new tree are kept: an editor-mode Execute loads the editor's FetchXML
-	// into the tree and runs it straight away, and a fast response can arrive first (#102).
-	useEffect(() => {
-		const entityId = builder.fetchQuery?.entity?.id;
-		if (entityId !== undefined && entityId === resultEntityIdRef.current) return;
-		// Pages still loading for the old results must not bring them back (#60)
-		resultRunRef.current++;
-		pageRunRef.current++;
-		setQueryResult(null);
-		setPaging(null);
-		setPagingNotice(null);
-		setIsLoadingMore(false);
-		setPagingWaitSeconds(undefined);
-		// A first page still loading for the old results is dropped, so it can't end the spinner
-		setIsExecuting(false);
-	}, [builder.fetchQuery?.entity?.id]);
+	// Generate FetchXML from builder state — exactly what the user built, nothing injected (#59).
+	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
+	const quickFindSearchValue = toQuickFindSearchValue(quickFindValue, quickFindAddPercent);
+
+	// Running the query and paging its results (#301). Here, so clearing the results on an entity
+	// change keeps its place among the effects.
+	const queryExecution = useQueryExecution({
+		fetchQuery: builder.fetchQuery,
+		fetchXml,
+		quickFindSearchValue,
+		loadedView: builder.loadedView,
+		retrieveAllRecords: builder.retrieveAllRecords,
+	});
+	const { queryResult, executeError, pagingRef, handleExecuteRef } = queryExecution;
 
 	// Sync layout with FetchXML when needed (e.g., after adding/removing attributes)
 	// Also sync when columnConfig is null but there are attributes (ensures columns button works)
@@ -561,15 +487,11 @@ function AppContent({
 		syncLayoutWithFetchXml,
 	]);
 
-	// Generate FetchXML from builder state — exactly what the user built, nothing injected (#59).
-	const fetchXml = builder.fetchQuery ? generateFetchXml(builder.fetchQuery) : "";
-
 	// Quick find views keep {0} in their conditions (#142): a test value is needed to execute them
 	const quickFindPlaceholderCount = useMemo(
 		() => countQuickFindPlaceholders(fetchXml),
 		[fetchXml],
 	);
-	const quickFindSearchValue = toQuickFindSearchValue(quickFindValue, quickFindAddPercent);
 
 	// Generate LayoutXML from column config for saving
 	const layoutXml = useMemo(() => {
@@ -627,199 +549,6 @@ function AppContent({
 		debugLog("app", `✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
 	};
 
-	/**
-	 * Execute the tree's query and handle Retrieve All if enabled.
-	 * @param synced - in editor mode the editor's FetchXML is loaded into the tree first (#102);
-	 *   the new tree and its XML are passed here because builder state updates on the next render.
-	 */
-	const handleExecute = async (synced?: { xml: string; fetchQuery: FetchNode }) => {
-		const query = synced?.fetchQuery ?? builder.fetchQuery;
-		const builtXml = synced?.xml ?? fetchXml;
-		if (!builtXml) return;
-		// Quick find views (#142): the test value replaces {0} in the FetchXML that runs (and its later
-		// pages); the tree, the editor and saved views keep {0}. Without a value nothing runs: the
-		// test value field asks for one.
-		// https://learn.microsoft.com/power-apps/developer/data-platform/quick-find
-		const hasQuickFindPlaceholders = countQuickFindPlaceholders(builtXml) > 0;
-		if (hasQuickFindPlaceholders && !quickFindSearchValue) return;
-		const xmlToExecute = hasQuickFindPlaceholders
-			? applyQuickFindValue(builtXml, quickFindSearchValue)
-			: builtXml;
-
-		// A new run: anything still loading for the previous one is dropped (#60)
-		const run = ++resultRunRef.current;
-		pageRunRef.current++;
-
-		setIsExecuting(true);
-		setIsLoadingMore(false);
-		setPagingWaitSeconds(undefined);
-		setQueryResult(null);
-		setPaging(null);
-		setPagingNotice(null);
-		setExecuteError(undefined);
-
-		resultEntityIdRef.current = query?.entity.id;
-
-		const startTime = performance.now();
-		const entityLogicalName = query?.entity.name;
-		const retrieveAll = builder.retrieveAllRecords;
-
-		// Paging follows the FetchXML that runs, not the tree (#60). Microsoft: don't page a query that
-		// uses top; Dataverse applies the limit.
-		const options = readFetchPagingOptions(xmlToExecute);
-		const hasTopLimit = options.top !== undefined;
-
-		try {
-			// Determine execution method based on loaded view state. A synced editor query
-			// replaced the tree (and cleared the loaded view), so it always runs as FetchXML.
-			let result: FetchXmlResult | undefined;
-			// Set when the first page needed a smaller count (#183); later pages keep it
-			let firstPageShrunkTo: PagingState | undefined;
-			const loadedView = synced ? null : builder.loadedView;
-			let useViewExecution = false;
-
-			// A quick find view runs as FetchXML with the test value: by ID it would run with {0} as
-			// stored, which matches nothing (verified live, #142)
-			if (loadedView && !hasQuickFindPlaceholders) {
-				if (isUnmodifiedView(xmlToExecute, loadedView.originalFetchXml)) {
-					useViewExecution = true;
-					debugLog(
-						"app",
-						`📋 Executing ${loadedView.type} view "${loadedView.name}" via ${
-							loadedView.type === "system" ? "savedQuery" : "userQuery"
-						}=${loadedView.id}`,
-					);
-
-					// Retried after service protection errors like every page (#183, #96); a view's page
-					// size is Dataverse's, so it can't be made smaller
-					if (loadedView.type === "system") {
-						result = await withThrottleRetry(() =>
-							executeSystemView(loadedView.entitySetName, loadedView.id),
-						);
-					} else {
-						result = await withThrottleRetry(() =>
-							executePersonalView(loadedView.entitySetName, loadedView.id),
-						);
-					}
-				}
-			}
-
-			// If not using view execution (either no view, view was modified, or editor override), use FetchXML
-			if (!result) {
-				debugLog(
-					"app",
-					synced
-						? "✏️ Executing editor FetchXML (loaded into the tree)"
-						: hasQuickFindPlaceholders
-							? "🔎 Executing quick find FetchXML with the test value"
-							: loadedView
-								? `📝 View "${loadedView.name}" was modified - executing its FetchXML`
-								: "📡 Executing FetchXML query",
-				);
-				// The first page gets the same recovery as later pages (#183): retried after service
-				// protection errors (#96), and requested again with half the count when it's over the
-				// PPTB host's 16 MB response limit (#68). That is the common case: a 5,000-row first page
-				// of a wide Entity. Without a count, Dataverse's default page size (5,000) is the starting
-				// point; queries with top or aggregate can't take a count, so they only get the retry.
-				const canShrink = !hasTopLimit && query?.options?.aggregate !== true;
-				const firstPageState: PagingState = {
-					mode: "fetchxml",
-					xml: xmlToExecute,
-					pageSize: canShrink
-						? (options.count ?? DATAVERSE_DEFAULT_PAGE_SIZE)
-						: undefined,
-					currentPage: (options.page ?? 1) - 1,
-					nextPage: options.page ?? 1,
-					moreRecords: true,
-					isRetrieveAllInProgress: false,
-					retrieveAll: false,
-				};
-				const { result: firstPageResult, state: fetchedFirst } =
-					await fetchPageWithRecovery(
-						firstPageState,
-						// Unchanged, the query runs as written; after a halving, with the smaller count
-						(s) =>
-							s.pageSize === firstPageState.pageSize
-								? executeFetchXml(xmlToExecute)
-								: executeFetchXml(
-										addPagingToFetchXml(
-											xmlToExecute,
-											s.nextPage,
-											undefined,
-											s.pageSize,
-										),
-									),
-						{
-							onShrink: (s) =>
-								debugLog(
-									"app",
-									`First page too large: retrying with count ${s.pageSize}`,
-								),
-						},
-					);
-				result = firstPageResult;
-				if (fetchedFirst.pageSize !== firstPageState.pageSize)
-					firstPageShrunkTo = fetchedFirst;
-			}
-			if (run !== resultRunRef.current) return; // superseded while the first page was loading
-
-			const executionTimeMs = Math.round(performance.now() - startTime);
-			const moreRecords =
-				!hasTopLimit && hasNextPage(useViewExecution ? "view" : "fetchxml", result);
-			const firstPage = options.page ?? 1;
-
-			loadedRowsRef.current = result.records.length;
-			setQueryResult({
-				query,
-				rows: result.records.map((record) => ({ ...record })),
-				totalRecordCount: result.totalRecordCount,
-				totalRecordCountLimitExceeded: result.totalRecordCountLimitExceeded,
-				moreRecords,
-				pagingCookie: result.pagingCookie,
-				entityLogicalName,
-				executionTimeMs,
-			});
-			setPaging({
-				mode: useViewExecution ? "view" : "fetchxml",
-				xml: xmlToExecute,
-				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
-				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
-				fullPageSize:
-					options.count === undefined && moreRecords ? result.records.length : undefined,
-				// After a smaller first page (#183), paging continues from the page it was fetched as
-				currentPage: firstPageShrunkTo?.nextPage ?? firstPage,
-				nextPage: (firstPageShrunkTo?.nextPage ?? firstPage) + 1,
-				pagingCookie: result.pagingCookie,
-				nextLink: result.nextLink,
-				moreRecords,
-				isRetrieveAllInProgress: retrieveAll && moreRecords,
-				retrieveAll,
-			});
-			setIsExecuting(false);
-
-			if (retrieveAll && moreRecords) await loadAllPages(run);
-		} catch (error) {
-			if (run !== resultRunRef.current) return;
-			console.error("Failed to execute FetchXML:", error);
-			// Documented Dataverse errors get actionable text; Dataverse's own message follows (#96)
-			setExecuteError(
-				formatDataverseError(
-					error,
-					"An unexpected error occurred while executing the query.",
-				),
-			);
-			setQueryResult({ query, rows: [] });
-			setIsExecuting(false);
-		}
-	};
-
-	// The latest handleExecute, for callbacks that re-run the query after an await (record deletes):
-	// they call the current version instead of listing a function that changes every render (#65)
-	const handleExecuteRef = useRef(handleExecute);
-	useLayoutEffect(() => {
-		handleExecuteRef.current = handleExecute;
-	});
-
 	// Column filters from the results grid (#23): they change the query, which then runs again.
 	// Running waits for the change to commit, so it runs the new query.
 	const columnFilters = useMemo(
@@ -829,7 +558,7 @@ function AppContent({
 	const [columnFilterRunRequest, setColumnFilterRunRequest] = useState(0);
 	useEffect(() => {
 		if (columnFilterRunRequest > 0) void handleExecuteRef.current();
-	}, [columnFilterRunRequest]);
+	}, [columnFilterRunRequest, handleExecuteRef]);
 	const { addColumnFilter, removeColumnFilter, clearColumnFilters } = builder; // stable (#65)
 	const handleAddColumnFilter = useCallback(
 		(condition: NewCondition) => {
@@ -847,185 +576,6 @@ function AppContent({
 		},
 		[columnFilters.length, clearColumnFilters, removeColumnFilter],
 	);
-
-	/**
-	 * Fetch the page after `state` (#58, #60): saved views follow @odata.nextLink; FetchXML sets page,
-	 * the decoded paging cookie (when Dataverse returned one) and the executed query's own count.
-	 */
-	const fetchNextPage = async (
-		state: PagingState,
-		retry?: ThrottleRetryOptions,
-	): Promise<{ result: FetchXmlResult; next: PagingState }> => {
-		// Retried after service protection errors (#96); a page over the host's 16 MB limit is
-		// requested again with half the count, which later pages keep (#68)
-		const { result, state: fetched } = await fetchPageWithRecovery(
-			state,
-			(s) =>
-				s.mode === "view"
-					? executeNextLink(s.nextLink ?? "")
-					: executeFetchXml(
-							addPagingToFetchXml(s.xml, s.nextPage, s.pagingCookie, s.pageSize),
-						),
-			{
-				retry,
-				onShrink: (s) =>
-					debugLog(
-						"app",
-						`Page too large: retrying page ${s.nextPage} with count ${s.pageSize}`,
-					),
-			},
-		);
-		return { result, next: advancePaging(fetched, result) };
-	};
-
-	/** Add a fetched page to the results of run `run` (ignored if the results changed meanwhile). */
-	const appendPage = (
-		run: number,
-		state: PagingState,
-		result: FetchXmlResult,
-		next: PagingState,
-	) => {
-		if (run !== resultRunRef.current) return false;
-		loadedRowsRef.current += result.records.length;
-		setQueryResult((prev) =>
-			prev
-				? {
-						...prev,
-						rows: prev.rows.concat(result.records),
-						moreRecords: next.moreRecords,
-						pagingCookie: next.pagingCookie,
-					}
-				: prev,
-		);
-		// A page loaded, so an earlier failure or Stop notice no longer applies. A FetchXML page
-		// requested without a cookie means Dataverse returned none for this query: say so once.
-		const simple: PagingNotice | null =
-			state.mode === "fetchxml" && !state.pagingCookie
-				? { kind: "simple", message: SIMPLE_PAGING_MESSAGE }
-				: null;
-		setPagingNotice((prev) =>
-			prev && prev.kind !== "error" && prev.kind !== "stopped" && prev.kind !== "limit"
-				? prev
-				: simple,
-		);
-		return true;
-	};
-
-	/**
-	 * Retrieve All: fetch the remaining pages one after another (#60). Stops when there are no more
-	 * pages, when Stop is pressed (pageRun changes), when the results change (resultRun changes) or
-	 * at RETRIEVE_ALL_ROW_LIMIT rows (#183). Throttled pages get the long back-off, with the wait in
-	 * the status line (#183).
-	 */
-	const loadAllPages = async (run: number) => {
-		const pageRun = ++pageRunRef.current;
-		const isCurrent = () => run === resultRunRef.current && pageRun === pageRunRef.current;
-		let state = pagingRef.current;
-		if (!state) return;
-		state = { ...state, isRetrieveAllInProgress: true, retrieveAll: true };
-		setIsLoadingMore(true);
-		setPaging(state);
-		// The host warns before the tab closes while Retrieve All runs (#70)
-		const releaseClose = holdClose();
-		const retry: ThrottleRetryOptions = {
-			...LONG_RUNNING_RETRY,
-			// Stop or new results during a wait: the page isn't fetched again
-			shouldContinue: isCurrent,
-			onRetry: ({ delayMs }) => {
-				if (isCurrent()) setPagingWaitSeconds(Math.ceil(delayMs / 1000));
-			},
-		};
-		try {
-			while (state?.moreRecords) {
-				if (retrieveAllLimitReached(loadedRowsRef.current)) {
-					// Further pages load one at a time from here, as after Stop
-					state = { ...state, isRetrieveAllInProgress: false, retrieveAll: false };
-					setPaging(state);
-					setPagingNotice({ kind: "limit", message: RETRIEVE_ALL_LIMIT_MESSAGE });
-					debugLog(
-						"app",
-						`Retrieve All stopped at ${loadedRowsRef.current} rows (limit)`,
-					);
-					return;
-				}
-				const { result, next } = await fetchNextPage(state, retry);
-				if (!isCurrent()) return;
-				setPagingWaitSeconds(undefined);
-				appendPage(run, state, result, next);
-				state = { ...next, isRetrieveAllInProgress: next.moreRecords };
-				setPaging(state);
-			}
-			debugLog("app", "✅ Retrieve All complete");
-		} catch (error) {
-			if (!isCurrent()) return;
-			console.error("Failed during Retrieve All:", error);
-			setPagingNotice({
-				kind: "error",
-				page: state?.nextPage,
-				message: formatDataverseError(error), // (#96)
-			});
-		} finally {
-			releaseClose();
-			if (isCurrent()) {
-				setPagingWaitSeconds(undefined);
-				setIsLoadingMore(false);
-				if (pagingRef.current)
-					setPaging({ ...pagingRef.current, isRetrieveAllInProgress: false });
-			}
-		}
-	};
-
-	/** Stop Retrieve All (#60): the page in flight is discarded; the loaded rows stay. */
-	const handleStopRetrieveAll = () => {
-		const state = pagingRef.current;
-		if (!state?.isRetrieveAllInProgress) return;
-		pageRunRef.current++;
-		setIsLoadingMore(false);
-		setPagingWaitSeconds(undefined);
-		// Further pages load one at a time from here (scrolling, or Retry after a failed page)
-		setPaging({ ...state, isRetrieveAllInProgress: false, retrieveAll: false });
-		setPagingNotice({ kind: "stopped", message: "" });
-	};
-
-	/**
-	 * Load more records (for infinite scroll when Retrieve All is OFF)
-	 */
-	const handleLoadMore = async () => {
-		const state = pagingRef.current;
-		if (!state || !state.moreRecords || state.isRetrieveAllInProgress || isLoadingMore) return;
-
-		const run = resultRunRef.current;
-		const pageRun = ++pageRunRef.current;
-		const isCurrent = () => run === resultRunRef.current && pageRun === pageRunRef.current;
-		setIsLoadingMore(true);
-
-		try {
-			const { result, next } = await fetchNextPage(state);
-			if (!isCurrent()) return;
-			appendPage(run, state, result, next);
-			setPaging(next);
-			debugLog("app", `✅ Page ${next.currentPage} loaded: ${result.records.length} records`);
-		} catch (error) {
-			if (!isCurrent()) return;
-			console.error("Failed to load more records:", error);
-			setPagingNotice({
-				kind: "error",
-				page: state.nextPage,
-				message: formatDataverseError(error), // (#96)
-			});
-		} finally {
-			if (isCurrent()) setIsLoadingMore(false);
-		}
-	};
-
-	/** Retry the page that failed: continue Retrieve All, or load the one page (#60). */
-	const handleRetryPaging = () => {
-		setPagingNotice(null);
-		const state = pagingRef.current;
-		if (!state) return;
-		if (state.retrieveAll) void loadAllPages(resultRunRef.current);
-		else void handleLoadMore();
-	};
 
 	// The record actions: their dialogs, the selection, and why each action is off (#301)
 	const recordActions = useRecordActions({
@@ -1179,9 +729,9 @@ function AppContent({
 					xml={fetchXml}
 					layoutXml={layoutXml}
 					result={queryResult}
-					isExecuting={isExecuting}
-					isLoadingMore={isLoadingMore}
-					onExecute={handleExecute}
+					isExecuting={queryExecution.isExecuting}
+					isLoadingMore={queryExecution.isLoadingMore}
+					onExecute={queryExecution.execute}
 					onExport={resultsExport.exportToExcel}
 					onExportLocal={resultsExport.exportLocal}
 					canExport={resultsExport.canExport}
@@ -1189,7 +739,7 @@ function AppContent({
 					exportError={resultsExport.exportStatus.error}
 					onDismissExportError={resultsExport.dismissExportError}
 					executeError={executeError}
-					onDismissExecuteError={() => setExecuteError(undefined)}
+					onDismissExecuteError={queryExecution.dismissExecuteError}
 					exportDisabledReason={resultsExport.exportDisabledReason}
 					onParseToTree={builder.loadFetchXml}
 					isCallee={launch.isCallee}
@@ -1202,13 +752,13 @@ function AppContent({
 					onAddOrder={builder.addOrder}
 					columnConfig={builder.columnConfig}
 					onColumnResize={builder.updateColumnWidth}
-					onLoadMore={handleLoadMore}
-					pagingNotice={pagingNotice}
-					pagingWaitSeconds={pagingWaitSeconds}
-					isRetrieveAllInProgress={pagingState?.isRetrieveAllInProgress ?? false}
-					onStopRetrieveAll={handleStopRetrieveAll}
-					onRetryPaging={handleRetryPaging}
-					onDismissPagingNotice={() => setPagingNotice(null)}
+					onLoadMore={queryExecution.loadMore}
+					pagingNotice={queryExecution.pagingNotice}
+					pagingWaitSeconds={queryExecution.pagingWaitSeconds}
+					isRetrieveAllInProgress={queryExecution.isRetrieveAllInProgress}
+					onStopRetrieveAll={queryExecution.stopRetrieveAll}
+					onRetryPaging={queryExecution.retryPaging}
+					onDismissPagingNotice={queryExecution.dismissPagingNotice}
 					entityDisplayName={
 						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
 						entityMetadata?.LogicalName
@@ -1225,7 +775,7 @@ function AppContent({
 								addPercent={quickFindAddPercent}
 								onAddPercentChange={setQuickFindAddPercent}
 								searchValue={quickFindSearchValue}
-								disabled={isExecuting}
+								disabled={queryExecution.isExecuting}
 							/>
 						) : undefined
 					}
