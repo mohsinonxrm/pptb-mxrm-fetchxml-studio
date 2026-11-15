@@ -9,6 +9,7 @@ import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	cleanup,
+	deferred,
 	flush,
 	installHost,
 	removeHost,
@@ -162,17 +163,23 @@ describe("the tool-to-tool prefill (#197)", () => {
 
 	it("calls the current onViewApplied when a view arrives after later renders", async () => {
 		connect();
+		// Hold the view read open, so the prefill finishes after a render with a new callback
+		const gate = deferred<void>();
+		const queryData = host.dataverseAPI.queryData;
+		host.dataverseAPI.queryData = async (query: unknown) => {
+			if (String(query).startsWith("savedqueries")) await gate.promise;
+			return queryData(query);
+		};
 		const first = vi.fn();
 		const current = vi.fn();
 		await fresh({
 			onViewApplied: first,
-			launch: { loading: true, isCallee: false, context: null },
-		});
-		await show({
-			onViewApplied: current,
 			launch: launchedWith({ viewRef: { entityLogicalName: "savedquery", id: VIEW_ID } }),
 		});
-		await flush();
+		await show({ onViewApplied: current });
+		expect(builder.fetchQuery).toBeNull();
+		gate.resolve();
+		await flush(6);
 		expect(rootEntity()).toBe("account");
 		expect(first).not.toHaveBeenCalled();
 		expect(current).toHaveBeenCalledTimes(1);
@@ -180,8 +187,12 @@ describe("the tool-to-tool prefill (#197)", () => {
 
 	it("isn't applied again after a connection change (the carry-over outlives the remount)", async () => {
 		connect();
-		const carryOver: ConnectionCarryOver = { prefillConsumed: true };
+		const carryOver: ConnectionCarryOver = { prefillConsumed: false };
 		await fresh({ carryOver, launch: launchedWith({ entityLogicalName: "account" }) });
+		expect(rootEntity()).toBe("account");
+		// AppShell remounts the builder and AppContent for the new connection, with the same carry-over
+		cleanup();
+		await show();
 		expect(builder.fetchQuery).toBeNull();
 	});
 
@@ -212,9 +223,13 @@ describe("the tool-to-tool prefill (#197)", () => {
 
 	it("says when the FetchXML it's given can't be parsed", async () => {
 		connect();
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		await fresh({ launch: launchedWith({ fetchXml: "<fetch><entity" }) });
 		expect(builder.fetchQuery).toBeNull();
+		expect(error).toHaveBeenCalledWith(
+			"T2T prefill: failed to parse incoming FetchXML:",
+			expect.anything(),
+		);
 		expect(host.notifications).toEqual([
 			{
 				title: "Could not load incoming query",
@@ -222,6 +237,22 @@ describe("the tool-to-tool prefill (#197)", () => {
 				type: "error",
 			},
 		]);
+	});
+
+	it("logs a prefill that fails, without throwing", async () => {
+		connect();
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const toolbox = (window as unknown as { toolboxAPI: { utils: Record<string, unknown> } })
+			.toolboxAPI;
+		toolbox.utils.showNotification = async () => {
+			throw new Error("Notifications unavailable");
+		};
+		await fresh({ launch: launchedWith({ fetchXml: "<fetch><entity" }) });
+		await flush();
+		expect(error).toHaveBeenCalledWith(
+			"T2T prefill: failed to load launch context:",
+			expect.objectContaining({ message: "Notifications unavailable" }),
+		);
 	});
 
 	it("opens a view by viewRef as Load view does: entity set, layout, execution by ID, overwrite", async () => {
@@ -252,7 +283,7 @@ describe("the tool-to-tool prefill (#197)", () => {
 
 	it("says when the view doesn't exist", async () => {
 		connect([]);
-		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		await fresh({
 			launch: launchedWith({ viewRef: { entityLogicalName: "userquery", id: VIEW_ID } }),
 		});
@@ -265,6 +296,10 @@ describe("the tool-to-tool prefill (#197)", () => {
 		});
 		expect(host.notifications[0].body).toContain("personal view");
 		expect(host.notifications[0].body).toContain(VIEW_ID);
+		expect(warn).toHaveBeenCalledWith(
+			"T2T prefill: the view couldn't be opened:",
+			expect.objectContaining({ kind: "viewUnavailable", id: VIEW_ID }),
+		);
 	});
 
 	it("says when the view's entity has no entity set name", async () => {
@@ -351,8 +386,9 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 		expect(host.notifications).toEqual([]);
 	});
 
-	it("says when the tree changed the view's query", async () => {
+	it("says when the tree changed the view's query (a warning, not an error)", async () => {
 		connect();
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		await fresh();
 		await act(async () =>
 			latest.applyLoadedView(
@@ -366,6 +402,7 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 			title: "View loaded with changes",
 			type: "warning",
 		});
+		expect(error).not.toHaveBeenCalled();
 	});
 
 	it("says when the view's FetchXML can't be parsed, and logs it", async () => {
