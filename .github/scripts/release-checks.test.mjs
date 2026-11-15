@@ -102,9 +102,10 @@ describe("badges / expectedIconSource / changelogSections", () => {
 			["license.svg", "License AGPL-3.0-only"],
 		]);
 		expect(badgeUrl(pkg, "react.svg")).toBe("https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/react.svg");
-		// The version badge links to npm and has no version in its alt text, so a release changes only the SVG
+		// The version badge has no version in its alt text, so a release changes only the SVG; and it
+		// isn't a link, which ToolBox's README renderer would show as raw Markdown (#348)
 		expect(badgeMarkdown(pkg)[0]).toBe(
-			"[![Version](https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@scope/tool)",
+			"![Version](https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/version.svg)",
 		);
 	});
 

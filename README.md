@@ -2,7 +2,7 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-[![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)
+![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)
 ![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb.svg)
 ![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb-types.svg)
 ![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/react.svg)
@@ -185,7 +185,7 @@ Nothing else writes to Dataverse:
 - Connection to a Dataverse environment
 
 ### Installation
-FetchXML Studio is available as a tool in Power Platform ToolBox. Install it from the tool gallery or load as a custom tool. The package is published on npm as [`@mohsinonxrm/pptb-fetchxml-studio`](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio).
+FetchXML Studio is available as a tool in Power Platform ToolBox. Install it from the tool gallery or load as a custom tool. The package is published on npm as `@mohsinonxrm/pptb-fetchxml-studio` ([npm](https://www.npmjs.com/package/@mohsinonxrm/pptb-fetchxml-studio)).
 
 ## 🛠️ Development
 

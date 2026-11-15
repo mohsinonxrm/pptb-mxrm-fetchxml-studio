@@ -295,8 +295,34 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 		}
 	}
 
+	// Link-entities a root condition or order can name with entityname: the joined ones, at any depth.
+	// A link-entity in a filter (any / not any / all / not all) is a subquery, so it can't be named, nor
+	// anything inside it (verified live 2026-11-14: 0x80041108 "not found").
+	const joinedLinks: LinkEntityNode[] = [];
+	const collectJoined = (container: Container) =>
+		container.links.forEach((l) => {
+			joinedLinks.push(l);
+			collectJoined(l);
+		});
+	collectJoined(fetch.entity);
+	const filterLinkNames = new Set(links.filter((l) => !joinedLinks.includes(l)).flatMap((l) => [l.name, l.alias ?? ""]));
+	/** Why an entityname can't be resolved, or undefined when it can (verified live 2026-11-14, #345) */
+	const unknownEntityname = (name: string): string | undefined => {
+		// The root entity, a joined link-entity's alias, or the logical name of exactly one joined link-entity
+		if (name === fetch.entity.name || joinedLinks.some((l) => l.alias === name)) return undefined;
+		const named = joinedLinks.filter((l) => l.name === name).length;
+		if (named === 1) return undefined;
+		if (named > 1) return `More than one link-entity is '${name}': use the alias of the one you mean (Dataverse rejects it: 0x80041108).`;
+		if (filterLinkNames.has(name)) return `'${name}' is a link-entity inside a filter (any / not any / all / not all), which can't be referred to from outside it (Dataverse rejects it: 0x80041108).`;
+		const lower = name.toLowerCase();
+		const differentCase = [fetch.entity.name, ...joinedLinks.flatMap((l) => [l.alias ?? "", l.name])].find((n) => n && n.toLowerCase() === lower);
+		return differentCase
+			? `No link-entity has the alias or name '${name}'; names are case-sensitive, did you mean '${differentCase}'? (Dataverse rejects it: 0x80041108).`
+			: `No link-entity has the alias or name '${name}' (Dataverse rejects it: 0x80041108).`;
+	};
+
 	// ---- orders
-	const entityNames = new Set<string>([fetch.entity.name, ...links.flatMap((l) => [l.name, l.alias ?? ""])]);
+	const entityNames = new Set<string>([fetch.entity.name, ...joinedLinks.flatMap((l) => [l.name, l.alias ?? ""])]);
 	let anyOrder = false;
 	for (const scope of scopes) {
 		for (const order of scope.container.orders) {
@@ -322,7 +348,9 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 						message: `'entityname' isn't allowed on an order inside a link-entity (Dataverse rejects it: 0x80041108). Move the order to the root entity.` });
 				} else if (!entityNames.has(order.entityname)) {
 					push({ ...base, attribute: "entityname", severity: "error", kind: "invalid",
-						message: `No link-entity has the alias or name '${order.entityname}' (Dataverse rejects it: 0x80041108).` });
+						message: filterLinkNames.has(order.entityname)
+							? `'${order.entityname}' is a link-entity inside a filter (any / not any / all / not all), which can't be referred to from outside it (Dataverse rejects it: 0x80041108).`
+							: `No link-entity has the alias or name '${order.entityname}' (Dataverse rejects it: 0x80041108).` });
 				}
 			}
 		}
@@ -404,6 +432,18 @@ export function validateQueryRules(fetch: FetchNode): RuleFinding[] {
 						message: scope.laterAliases.includes(qualifier)
 							? `'${qualifier}' is joined after this link-entity (or inside it), so this filter can't refer to it. Compare from the root entity's filter instead (Dataverse rejects it: 0x80040216).`
 							: `'${qualifier}' isn't the alias of a joined link-entity. To compare to another entity's attribute, give its link-entity an alias and use alias.attribute (Dataverse rejects it: 0x80040216).` });
+				}
+			}
+			// entityname (verified live 2026-11-14, #345): only a condition in the root entity's filters can
+			// use it, naming the root entity or a joined link-entity (unknownEntityname). Inside a link-entity's
+			// filter Dataverse rejects any entityname, even the link-entity's own (0x80041108).
+			for (const condition of filter.conditions) {
+				if (!condition.entityname) continue;
+				const message = scope.isRoot
+					? unknownEntityname(condition.entityname)
+					: `'entityname' isn't allowed on a condition inside a link-entity (Dataverse rejects it: 0x80041108). Remove it, or move the condition to the root entity's filter.`;
+				if (message) {
+					push({ element: "condition", attribute: "entityname", nodeId: condition.id, severity: "error", kind: "invalid", message });
 				}
 			}
 			// Value shape per operator (verified live 2026-10-15, #87). A condition the user is still

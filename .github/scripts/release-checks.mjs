@@ -60,8 +60,13 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) 
 	// (PPTB's README viewer blocks img.shields.io)
 	const stale = badges(pkg).filter(({ file, svg }) => badgeFiles?.[file] !== svg).map(({ file }) => file);
 	if (stale.length > 0) problems.push(`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`);
-	const missing = badgeMarkdown(pkg).filter((line) => !readme.includes(line));
-	if (missing.length > 0) problems.push(`README.md doesn't show these badges: ${missing.join(" ")}`);
+	// Each badge on a line of its own: an image inside a link shows as raw Markdown in PPTB (#348)
+	const readmeLines = new Set(readme.split(/\r?\n/).map((l) => l.trim()));
+	const missing = badgeMarkdown(pkg).filter((line) => !readmeLines.has(line));
+	if (missing.length > 0) problems.push(`README.md doesn't show these badges, each on a line of its own: ${missing.join(" ")}`);
+	// A link whose text is an image or code: PPTB's README viewer shows it as raw Markdown (#348)
+	const formattedLinks = readme.match(/\[(!\[[^\]]*\]\([^)]*\)|`[^`\]]*`)\]\([^)]*\)/g) ?? [];
+	if (formattedLinks.length > 0) problems.push(`README.md has links around an image or code, which PPTB's README viewer shows as raw Markdown: ${formattedLinks.join(" ")}`);
 	// An image (or <img>) from shields.io; a mention in the text is fine
 	if (/(\]\(|src=["']?)https?:\/\/img\.shields\.io/.test(readme)) problems.push("README.md uses img.shields.io, which PPTB's README viewer blocks: use the badges in assets/badges/.");
 	return problems;

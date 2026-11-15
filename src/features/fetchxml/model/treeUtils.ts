@@ -103,7 +103,8 @@ export function isConditionInRootEntityFilter(
 }
 
 /**
- * Finds the parent entity or link-entity for a given node ID.
+ * Finds the parent entity or link-entity for a given node ID: the logical name of the entity or
+ * link-entity that holds it. For a link-entity, that's the one it joins from (#345).
  *
  * @param fetchNode - The FetchNode to search in
  * @param nodeId - The ID of the node to find the parent for
@@ -140,11 +141,11 @@ export function findParentEntityForNode(
 			if (result) return result;
 		}
 
-		// Check in nested link-entities
-		const currentName = entity.type === "link-entity" ? entity.alias || entity.name : entity.name;
+		// Check in nested link-entities: a link-entity's own children belong to it, so recurse with
+		// its logical name (never its alias, which isn't a table) (#345)
 		for (const link of entity.links) {
 			if (link.id === targetId) return parentName;
-			const result = findInEntity(link, targetId, currentName);
+			const result = findInEntity(link, targetId, link.name);
 			if (result) return result;
 		}
 
@@ -163,6 +164,13 @@ export function findParentEntityForNode(
 			if (result) return result;
 		}
 
+		// Link-entities in a filter (any / not any / all / not all) join from the filter's entity
+		for (const link of filter.links ?? []) {
+			if (link.id === targetId) return parentName;
+			const result = findInEntity(link, targetId, link.name);
+			if (result) return result;
+		}
+
 		return null;
 	}
 
@@ -171,6 +179,98 @@ export function findParentEntityForNode(
 	if (fetchNode.entity.id === nodeId) return fetchNode.entity.name;
 
 	return findInEntity(fetchNode.entity, nodeId, fetchNode.entity.name);
+}
+
+/**
+ * The entity or link-entity a link-entity joins from: the one whose links, or whose filter's
+ * links (any / not any / all / not all), hold it. Null when the link-entity isn't in the query.
+ */
+export function findLinkEntityParent(
+	fetchNode: FetchNode | null,
+	linkId: NodeId,
+): EntityNode | LinkEntityNode | null {
+	if (!fetchNode?.entity) return null;
+	const inFilter = (filter: FilterNode, owner: EntityNode | LinkEntityNode): EntityNode | LinkEntityNode | null => {
+		for (const sub of filter.subfilters) {
+			const found = inFilter(sub, owner);
+			if (found) return found;
+		}
+		for (const link of filter.links ?? []) {
+			if (link.id === linkId) return owner;
+			const found = inContainer(link);
+			if (found) return found;
+		}
+		return null;
+	};
+	const inContainer = (container: EntityNode | LinkEntityNode): EntityNode | LinkEntityNode | null => {
+		for (const filter of container.filters) {
+			const found = inFilter(filter, container);
+			if (found) return found;
+		}
+		for (const link of container.links) {
+			if (link.id === linkId) return container;
+			const found = inContainer(link);
+			if (found) return found;
+		}
+		return null;
+	};
+	return inContainer(fetchNode.entity);
+}
+
+/**
+ * A link-entity Add > Link-entity inserted (entity `new_entity`, from `id_field`, to
+ * `parent_id_field`) whose entity isn't set yet: still `new_entity` with from or to still at its
+ * placeholder (picking only the To attribute doesn't make it a table). Nothing can be loaded for it
+ * (#345). A real `new_entity` table with real from / to isn't a placeholder.
+ */
+export function isPlaceholderLinkEntity(link: LinkEntityNode): boolean {
+	return link.name === "new_entity" && (link.from === "id_field" || link.to === "parent_id_field");
+}
+
+/** A condition or order that refers to a link-entity by its alias */
+export interface LinkAliasReference {
+	nodeId: NodeId;
+	/** `entityname` (condition or order), or the qualifier of a condition's `valueof` */
+	field: "entityname" | "valueof";
+	/** For valueof: the attribute after "alias." */
+	attribute?: string;
+}
+
+/**
+ * The conditions (entityname, valueof "alias.attribute") and orders (entityname) anywhere in the
+ * query that refer to a link-entity by its alias, so renaming the alias can update them, as Parse
+ * to tree does for corrected aliases. Empty when the alias doesn't name that link-entity alone (a
+ * duplicate alias, or the root entity's name): those references can't be told apart.
+ */
+export function findLinkAliasReferences(
+	fetchNode: FetchNode | null,
+	linkId: NodeId,
+	alias: string,
+): LinkAliasReference[] {
+	if (!fetchNode?.entity || !alias || alias === fetchNode.entity.name) return [];
+	if (collectAllLinkEntities(fetchNode).some((l) => l.id !== linkId && l.alias === alias)) return [];
+	const refs: LinkAliasReference[] = [];
+	for (const filter of collectAllFilters(fetchNode)) {
+		for (const condition of filter.conditions) {
+			if (condition.entityname === alias) refs.push({ nodeId: condition.id, field: "entityname" });
+			if (condition.valueof?.startsWith(`${alias}.`)) {
+				refs.push({ nodeId: condition.id, field: "valueof", attribute: condition.valueof.slice(alias.length + 1) });
+			}
+		}
+	}
+	const visitContainer = (container: EntityNode | LinkEntityNode) => {
+		for (const order of container.orders) {
+			if (order.entityname === alias) refs.push({ nodeId: order.id, field: "entityname" });
+		}
+		container.links.forEach(visitContainer);
+		container.filters.forEach(visitFilter);
+	};
+	const visitFilter = (filter: FilterNode) => {
+		filter.subfilters.forEach(visitFilter);
+		filter.links?.forEach(visitContainer);
+	};
+	visitContainer(fetchNode.entity);
+	return refs;
 }
 
 /**

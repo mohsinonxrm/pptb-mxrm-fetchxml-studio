@@ -313,3 +313,48 @@ describe("condition value shapes (#87, verified live 2026-10-15)", () => {
 		]);
 	});
 });
+
+describe("entityname on conditions and orders (#345, verified live 2026-11-14)", () => {
+	const CT = (inner: string) => `<fetch top="1"><entity name="contact"><attribute name="fullname" />${inner}</entity></fetch>`;
+	const AC = (attrs = ` alias="acct"`, inner = "") =>
+		`<link-entity name="account" from="accountid" to="parentcustomerid" link-type="outer"${attrs}>${inner}</link-entity>`;
+	const AC2 = (attrs = "") => `<link-entity name="account" from="primarycontactid" to="contactid" link-type="outer"${attrs} />`;
+	const COND = (entityname: string, attribute = "name") =>
+		`<filter><condition entityname="${entityname}" attribute="${attribute}" operator="not-null" /></filter>`;
+	const SU = `<link-entity name="systemuser" from="systemuserid" to="owninguser" link-type="outer" alias="owner" />`;
+	const ANY = (inner = "") =>
+		`<filter><link-entity name="task" from="regardingobjectid" to="contactid" link-type="any" alias="t">${inner}</link-entity></filter>`;
+	const entitynameFindings = (xml: string) =>
+		// Rule findings only: the Query Advisor also notes (as advice) that sorting by a link-entity is slower
+		validateQueryRules(parseFetchXml(xml).fetchNode!).filter((f) => f.attribute === "entityname" && f.kind === "invalid");
+
+	it.each([
+		["a joined link-entity's alias", CT(`${COND("acct")}${AC()}`)],
+		["the logical name of an aliased link-entity", CT(`${COND("account")}${AC(` alias="a"`)}`)],
+		["the logical name of an unaliased link-entity", CT(`${COND("account")}${AC("")}`)],
+		["the root entity's logical name", CT(`${COND("contact", "fullname")}${AC()}`)],
+		["a nested link-entity's alias", CT(`${COND("owner", "fullname")}${AC(` alias="acct"`, SU)}`)],
+		["a condition in a root sub-filter", CT(`<filter type="or">${COND("acct")}</filter>${AC()}`)],
+		["an order naming the root entity", CT(`<order entityname="contact" attribute="fullname" />${AC()}`)],
+	])("accepts %s", (_, xml) => {
+		expect(entitynameFindings(xml)).toEqual([]);
+	});
+
+	it.each([
+		["a name no link-entity has", CT(`${COND("nope")}${AC()}`), "No link-entity has the alias or name 'nope'"],
+		["an alias in a different case", CT(`${COND("ACCT")}${AC()}`), "did you mean 'acct'"],
+		["a logical name two link-entities share (both aliased)", CT(`${COND("account")}${AC(` alias="a"`)}${AC2(` alias="b"`)}`), "More than one link-entity is 'account'"],
+		["a logical name two link-entities share (one nested)", CT(`${COND("account")}${AC("", '<link-entity name="account" from="accountid" to="parentaccountid" link-type="outer" />')}`), "More than one link-entity is 'account'"],
+		["a link-entity inside a filter, from a root condition", CT(`${COND("t", "subject")}${ANY()}`), "inside a filter"],
+		["a link-entity inside a filter, from a root order", CT(`<order entityname="t" attribute="subject" />${ANY()}`), "inside a filter"],
+		["a condition in a link-entity's filter naming another link-entity", CT(AC(` alias="a"`, `${COND("owner", "fullname")}${SU}`)), "isn't allowed on a condition inside a link-entity"],
+		["a condition in a link-entity's filter naming that link-entity", CT(AC(` alias="a"`, COND("a"))), "isn't allowed on a condition inside a link-entity"],
+		["a condition in an any link-entity's filter naming an outer link-entity", CT(`${AC(` alias="pc"`)}${ANY(COND("pc", "fullname"))}`), "isn't allowed on a condition inside a link-entity"],
+	])("rejects %s (0x80041108)", (_, xml, message) => {
+		const findings = entitynameFindings(xml);
+		expect(findings).toHaveLength(1);
+		expect(findings[0].severity).toBe("error");
+		expect(findings[0].message).toContain(message);
+		expect(findings[0].message).toContain("0x80041108");
+	});
+});
