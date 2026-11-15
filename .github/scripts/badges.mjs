@@ -69,7 +69,7 @@ export function badges(pkg) {
 	const minApi = pkg.features?.minAPI;
 	const list = [
 		// Pre-releases yellow, releases blue, as Command Bar Studio's version badge
-		{ file: "version.svg", alt: "Version", link: `https://www.npmjs.com/package/${pkg.name}`, svg: badgeSvg("version", version, version.includes("-") ? "#dfb317" : "#007ec6") },
+		{ file: "version.svg", alt: "Version", svg: badgeSvg("version", version, version.includes("-") ? "#dfb317" : "#007ec6") },
 	];
 	if (minApi) list.push({ file: "pptb.svg", alt: `Power Platform ToolBox ${minApi} or later`, svg: badgeSvg("Power Platform ToolBox", `≥ ${minApi}`, "#742774") });
 	if (pptbTypes) list.push({ file: "pptb-types.svg", alt: `@pptb/types ${pptbTypes}`, svg: badgeSvg("@pptb/types", pptbTypes, "#007ec6") });
@@ -81,8 +81,9 @@ export function badges(pkg) {
 }
 
 /**
- * The README's badge lines, one image per line. The version badge's alt text has no version and it
- * links to npm, so a release changes only the SVG (`npm run badges`), not the README.
+ * The README's badge lines, one image per line. The version badge's alt text has no version, so a
+ * release changes only the SVG (`npm run badges`), not the README. No badge is a link: Power
+ * Platform ToolBox's README renderer shows an image inside a link as raw Markdown (#348).
  */
 export const badgeMarkdown = (pkg) =>
 	badges(pkg).map((b) => {

@@ -78,6 +78,12 @@ describe("link-entity under a link-entity that isn't set up yet (#345)", () => {
 		expect(document.body.textContent).toContain(
 			"Set up the link-entity this one is inside first",
 		);
+		// The picker waits; it doesn't claim the parent has no relationships
+		const picker = document.querySelector<HTMLInputElement>(
+			'input[role="combobox"][placeholder^="Select a relationship"]',
+		);
+		expect(picker?.disabled).toBe(true);
+		expect(document.querySelector('input[placeholder="No relationships found"]')).toBeNull();
 	});
 
 	it("still offers the root's relationships for the top-level placeholder", async () => {
