@@ -67,6 +67,30 @@ const accountXml = (count?: number) =>
 
 const VIEW_ID = "00000000-0000-0000-0000-00000000a001";
 
+/** A system view of accounts, two rows a page, and the same view loaded into the builder */
+const systemView: FakeView = {
+	id: VIEW_ID,
+	name: "Active accounts",
+	entity: "account",
+	fetchxml: accountXml(2),
+	layoutxml: "",
+	type: "system",
+};
+const loadedSystemView: LoadedViewState = {
+	id: VIEW_ID,
+	type: "system",
+	originalFetchXml: accountXml(2),
+	entitySetName: "accounts",
+	name: "Active accounts",
+};
+
+/** A quick find query: {0} is replaced by the test value (#142) */
+const QUICK_FIND =
+	"<fetch><entity name='account'><attribute name='name'/><filter><condition attribute='name' operator='like' value='{0}'/></filter></entity></fetch>";
+
+/** Fails like a page over the PPTB host's 16 MB response limit (#68) */
+const TOO_LARGE = "Dataverse response exceeds the maximum size of 16 MB";
+
 let dataverse: ReturnType<typeof createFakeDataverse>;
 let closeHolds: { prevented: number; released: number };
 
@@ -208,16 +232,20 @@ describe("useQueryExecution: the first page", () => {
 		expect(latest.queryResult).toBeNull();
 	});
 
-	it("runs the synced editor query instead of the tree (#102)", async () => {
-		await show();
+	it("runs the synced editor query instead of the tree, as FetchXML even with a loaded view (#102)", async () => {
+		// The view is unmodified: without the editor, it would run by its ID
+		cleanup();
+		connect({ views: [systemView] });
+		await show({ fetchXml: accountXml(2), loadedView: loadedSystemView });
 		await run(() => latest.execute({ xml: accountXml(2), fetchQuery: tree() }));
 		expect(pageRequests()).toEqual([accountXml(2)]);
+		expect(dataverse.calls.some((c) => c.includes("savedQuery="))).toBe(false);
+		expect(latest.pagingRef.current?.mode).toBe("fetchxml");
 		expect(rows()).toBe(2);
 	});
 
 	it("needs a quick find value for {0}, and puts it in the FetchXML that runs (#142)", async () => {
-		const quickFind =
-			"<fetch><entity name='account'><attribute name='name'/><filter><condition attribute='name' operator='like' value='{0}'/></filter></entity></fetch>";
+		const quickFind = QUICK_FIND;
 		await show({ fetchXml: quickFind });
 		await run(() => latest.execute());
 		expect(pageRequests()).toEqual([]);
@@ -227,25 +255,27 @@ describe("useQueryExecution: the first page", () => {
 		expect(pageRequests()).toEqual([quickFind.replace("{0}", "Acc%")]);
 	});
 
-	it("runs an unmodified loaded view by its ID, and pages with its nextLink (#93)", async () => {
-		const view: FakeView = {
-			id: VIEW_ID,
-			name: "Active accounts",
-			entity: "account",
-			fetchxml: accountXml(2),
-			layoutxml: "",
-			type: "system",
-		};
+	it("runs a quick find view as FetchXML with the value, never by its ID (#142)", async () => {
 		cleanup();
-		connect({ views: [view] });
-		const loadedView: LoadedViewState = {
-			id: VIEW_ID,
-			type: "system",
-			originalFetchXml: accountXml(2),
-			entitySetName: "accounts",
-			name: "Active accounts",
-		};
-		await show({ fetchXml: accountXml(2), loadedView });
+		connect({ views: [{ ...systemView, fetchxml: QUICK_FIND }] });
+		const loadedView = { ...loadedSystemView, originalFetchXml: QUICK_FIND };
+		await show({ fetchXml: QUICK_FIND, loadedView, quickFindSearchValue: "Acc%" });
+		await run(() => latest.execute());
+		expect(pageRequests()).toEqual([QUICK_FIND.replace("{0}", "Acc%")]);
+
+		// Even when the FetchXML that runs matches the stored view's (a value of "{0}"): by its ID
+		// the view would run with {0} as stored
+		await show({ quickFindSearchValue: "{0}" });
+		await run(() => latest.execute());
+		expect(pageRequests()).toEqual([QUICK_FIND.replace("{0}", "Acc%"), QUICK_FIND]);
+		expect(dataverse.calls.some((c) => c.includes("savedQuery="))).toBe(false);
+		expect(latest.pagingRef.current?.mode).toBe("fetchxml");
+	});
+
+	it("runs an unmodified loaded view by its ID, and pages with its nextLink (#93)", async () => {
+		cleanup();
+		connect({ views: [systemView] });
+		await show({ fetchXml: accountXml(2), loadedView: loadedSystemView });
 		await run(() => latest.execute());
 		expect(dataverse.calls).toContain(`queryData accounts?savedQuery=${VIEW_ID}`);
 		expect(pageRequests()).toEqual([]);
@@ -263,6 +293,64 @@ describe("useQueryExecution: the first page", () => {
 		await show({ fetchXml: accountXml(3) });
 		await run(() => latest.execute());
 		expect(pageRequests()).toEqual([accountXml(3)]);
+	});
+
+	it("runs an unmodified personal view by its ID with userQuery (#93)", async () => {
+		cleanup();
+		connect({ views: [{ ...systemView, type: "personal" }] });
+		await show({
+			fetchXml: accountXml(2),
+			loadedView: { ...loadedSystemView, type: "personal" },
+		});
+		await run(() => latest.execute());
+		expect(dataverse.calls).toContain(`queryData accounts?userQuery=${VIEW_ID}`);
+		expect(dataverse.calls.some((c) => c.includes("savedQuery="))).toBe(false);
+		expect(rows()).toBe(2);
+
+		await run(() => latest.loadMore());
+		expect(dataverse.calls).toContain(`queryData accounts?userQuery=${VIEW_ID}&$skiptoken=2`);
+		expect(rows()).toBe(4);
+	});
+
+	it("with top, there are no more records, even when Dataverse says there are", async () => {
+		cleanup();
+		connect({ tables: sampleTables(5003) });
+		const top =
+			"<fetch top='3'><entity name='account'><attribute name='name'/></entity></fetch>";
+		await show({ fetchXml: top, retrieveAllRecords: true });
+		await run(() => latest.execute());
+		// The fake ignores top and says there are more rows; Dataverse applies the limit
+		expect(rows()).toBe(5000);
+		expect(latest.queryResult?.moreRecords).toBe(false);
+		expect(latest.pagingRef.current?.moreRecords).toBe(false);
+		expect(latest.isRetrieveAllInProgress).toBe(false);
+		await run(() => latest.loadMore());
+		expect(pageRequests()).toHaveLength(1);
+		expect(closeHolds.prevented).toBe(0);
+	});
+
+	it("keeps Dataverse's page size as fullPageSize only when the query sets no count and has more pages (#68)", async () => {
+		cleanup();
+		connect({ tables: sampleTables(5003) });
+		await show();
+		await run(() => latest.execute());
+		expect(rows()).toBe(5000);
+		expect(latest.pagingRef.current?.fullPageSize).toBe(5000);
+		expect(latest.pagingRef.current?.pageSize).toBeUndefined();
+
+		// With a count
+		await show({ fetchXml: accountXml(2) });
+		await run(() => latest.execute());
+		expect(latest.pagingRef.current?.fullPageSize).toBeUndefined();
+		expect(latest.pagingRef.current?.pageSize).toBe(2);
+
+		// Without a count, but no more pages
+		cleanup();
+		connect();
+		await show({ fetchXml: accountXml() });
+		await run(() => latest.execute());
+		expect(latest.queryResult?.moreRecords).toBe(false);
+		expect(latest.pagingRef.current?.fullPageSize).toBeUndefined();
 	});
 
 	it("asks again with half the count when the first page is over the host's 16 MB limit (#68)", async () => {
@@ -284,6 +372,98 @@ describe("useQueryExecution: the first page", () => {
 		expect(rows()).toBe(5);
 		expect(latest.pagingRef.current?.pageSize).toBe(2500);
 		expect(latest.executeError).toBeUndefined();
+	});
+
+	it("after a smaller first page, the next page is page 2 at the smaller count (#183)", async () => {
+		let failed = false;
+		cleanup();
+		connect({
+			tables: sampleTables(2600),
+			beforePage: () => {
+				if (failed) return;
+				failed = true;
+				throw new Error(TOO_LARGE);
+			},
+		});
+		await show();
+		await run(() => latest.execute());
+		const retried = pageRequests()[1];
+		expect(fetchAttribute(retried, "page")).toBe("1");
+		expect(fetchAttribute(retried, "count")).toBe("2500");
+		expect(rows()).toBe(2500);
+		expect(latest.queryResult?.moreRecords).toBe(true);
+
+		await run(() => latest.loadMore());
+		const page2 = pageRequests()[2];
+		expect(fetchAttribute(page2, "page")).toBe("2");
+		expect(fetchAttribute(page2, "count")).toBe("2500");
+		expect(fetchAttribute(page2, "paging-cookie")).toContain("<cookie page=");
+		expect(rows()).toBe(2600);
+		expect(latest.queryResult?.moreRecords).toBe(false);
+		expect(dataverse.pagingErrors).toEqual([]);
+	});
+
+	it("after a smaller first page that started past page 1, paging continues from the page it was fetched as (#183)", async () => {
+		let failed = false;
+		cleanup();
+		connect({
+			tables: sampleTables(1000),
+			beforePage: () => {
+				if (failed) return;
+				failed = true;
+				throw new Error(TOO_LARGE);
+			},
+		});
+		const fromPage2 =
+			"<fetch count='200' page='2'><entity name='account'><attribute name='name'/></entity></fetch>";
+		await show({ fetchXml: fromPage2 });
+		await run(() => latest.execute());
+		// Page 2 at 200 rows starts where page 3 at 100 does
+		const retried = pageRequests()[1];
+		expect(fetchAttribute(retried, "page")).toBe("3");
+		expect(fetchAttribute(retried, "count")).toBe("100");
+		expect(latest.queryResult?.rows[0]).toMatchObject({ name: "Account 201" });
+		expect(rows()).toBe(100);
+
+		await run(() => latest.loadMore());
+		const next = pageRequests()[2];
+		expect(fetchAttribute(next, "page")).toBe("4");
+		expect(fetchAttribute(next, "count")).toBe("100");
+		expect(latest.queryResult?.rows[100]).toMatchObject({ name: "Account 301" });
+		expect(dataverse.pagingErrors).toEqual([]);
+	});
+
+	it("doesn't make the first page smaller for a query with top", async () => {
+		const top =
+			"<fetch top='10'><entity name='account'><attribute name='name'/></entity></fetch>";
+		cleanup();
+		connect({
+			beforePage: () => {
+				throw new Error(TOO_LARGE);
+			},
+		});
+		await show({ fetchXml: top });
+		await run(() => latest.execute());
+		expect(pageRequests()).toEqual([top]);
+		expect(latest.executeError).toMatch(/exceeds the maximum size/);
+	});
+
+	it("doesn't make the first page smaller for an aggregate query", async () => {
+		const aggregate =
+			"<fetch aggregate='true'><entity name='account'><attribute name='name' alias='n' aggregate='count'/></entity></fetch>";
+		cleanup();
+		connect({
+			beforePage: () => {
+				throw new Error(TOO_LARGE);
+			},
+		});
+		await show({
+			fetchXml: aggregate,
+			fetchQuery: { ...tree(), options: { aggregate: true } } as FetchNode,
+		});
+		await run(() => latest.execute());
+		expect(pageRequests()).toEqual([aggregate]);
+		expect(latest.executeError).toMatch(/exceeds the maximum size/);
 	});
 });
 
@@ -341,7 +521,9 @@ describe("useQueryExecution: paging and Load more (#58, #60)", () => {
 		// The next page is page 3, not Dataverse's pagenumber hint (which stays at 2)
 		await run(() => latest.loadMore());
 		expect(fetchAttribute(pageRequests()[2], "page")).toBe("3");
+		expect(fetchAttribute(pageRequests()[2], "paging-cookie")).toBeNull();
 		expect(rows()).toBe(5);
+		expect(dataverse.pagingErrors).toEqual([]);
 		expect(latest.pagingNotice).toEqual({ kind: "simple", message: SIMPLE_PAGING_MESSAGE });
 
 		await run(() => latest.dismissPagingNotice());

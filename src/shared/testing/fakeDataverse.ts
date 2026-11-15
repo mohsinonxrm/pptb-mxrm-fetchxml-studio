@@ -44,7 +44,7 @@ export interface FakeDataverseOptions {
 	/**
 	 * Page FetchXML like a query Dataverse returns no paging cookie for (sorted by a link-entity
 	 * attribute, or distinct): the annotation has an empty pagingcookie and a pagenumber that stays at
-	 * 2, and later pages are asked for by page number only
+	 * 2, and later pages are asked for by page number only (a request with a paging-cookie fails)
 	 */
 	simplePaging?: boolean;
 }
@@ -175,6 +175,10 @@ export function createFakeDataverse(tables: FakeTable[], options: FakeDataverseO
 		if (view) fetch.page = view.page;
 		if (!table || table.logicalName !== fetch.entity)
 			throw new Error(`0x80060888: Resource not found for the segment '${set}'.`);
+		if (options.simplePaging && fetch.pagingCookie !== null) {
+			pagingErrors.push(`page ${fetch.page}: paging-cookie sent, but none was issued`);
+			throw new Error("0x80040203: Invalid paging cookie.");
+		}
 		if (!view && fetch.page > 1) {
 			const expected = issuedCookies.get(cookieKey(fetch.entity, fetch.page));
 			if (expected !== undefined && fetch.pagingCookie !== expected) {
