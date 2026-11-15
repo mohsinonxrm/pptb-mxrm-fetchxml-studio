@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0-beta.3] - 2026-11-15
+
 ### 🔧 Fixed
 
 - **The 1.5.1 hotfix, merged forward from `main` (#345, #348).** A link-entity inside another link-entity lists its parent link-entity's relationships and attributes, and waits for a parent that isn't set up yet; renaming an alias updates the conditions and orders that use it; "Compare to" offers the root entity from a self-join; an `entityname` Dataverse can't resolve is flagged; the condition editor finds a link-entity named by its logical name; and the README renders on the Power Platform ToolBox details page. Details under [1.5.1].
