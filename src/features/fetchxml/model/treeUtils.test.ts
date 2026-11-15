@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getQueryEntities } from "./treeUtils";
+import { findParentEntityForNode, getQueryEntities } from "./treeUtils";
 import { parseFetchXml } from "./fetchxmlParser";
 
 // Query from issue #54: the link-entity name sorts alphabetically before the root.
@@ -53,5 +53,45 @@ describe("getQueryEntities", () => {
 
 	it("handles an empty query", () => {
 		expect(getQueryEntities(null)).toEqual({ rootEntityName: null, entityNames: [], key: "" });
+	});
+});
+
+describe("findParentEntityForNode (#345)", () => {
+	const fetch = parseFetchXml(`<fetch>
+  <entity name="account">
+    <attribute name="name" />
+    <link-entity name="contact" from="contactid" to="primarycontactid" alias="pc">
+      <attribute name="fullname" />
+      <link-entity name="systemuser" from="systemuserid" to="owninguser" alias="owner">
+        <attribute name="fullname" />
+        <link-entity name="businessunit" from="businessunitid" to="businessunitid" alias="bu" />
+      </link-entity>
+      <filter>
+        <link-entity name="task" from="regardingobjectid" to="contactid" link-type="any" alias="t" />
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>`).fetchNode!;
+	const contact = fetch.entity.links[0];
+	const owner = contact.links[0];
+	const parentOf = (id: string) => findParentEntityForNode(fetch, id);
+
+	it("gives a top-level link-entity the root entity", () => {
+		expect(parentOf(contact.id)).toBe("account");
+	});
+
+	it("gives a nested link-entity the link-entity it sits in, by logical name", () => {
+		expect(parentOf(owner.id)).toBe("contact");
+		expect(parentOf(owner.links[0].id)).toBe("systemuser");
+	});
+
+	it("gives a link-entity in a link-entity's filter that link-entity", () => {
+		expect(parentOf(contact.filters[0].links[0].id)).toBe("contact");
+	});
+
+	it("gives attributes the entity or link-entity that holds them", () => {
+		expect(parentOf(fetch.entity.attributes[0].id)).toBe("account");
+		expect(parentOf(contact.attributes[0].id)).toBe("contact");
+		expect(parentOf(owner.attributes[0].id)).toBe("systemuser");
 	});
 });

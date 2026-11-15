@@ -103,7 +103,8 @@ export function isConditionInRootEntityFilter(
 }
 
 /**
- * Finds the parent entity or link-entity for a given node ID.
+ * Finds the parent entity or link-entity for a given node ID: the logical name of the entity or
+ * link-entity that holds it. For a link-entity, that's the one it joins from (#345).
  *
  * @param fetchNode - The FetchNode to search in
  * @param nodeId - The ID of the node to find the parent for
@@ -140,12 +141,11 @@ export function findParentEntityForNode(
 			if (result) return result;
 		}
 
-		// Check in nested link-entities
-		const currentName =
-			entity.type === "link-entity" ? entity.alias || entity.name : entity.name;
+		// Check in nested link-entities: a link-entity's own children belong to it, so recurse with
+		// its logical name (never its alias, which isn't a table) (#345)
 		for (const link of entity.links) {
 			if (link.id === targetId) return parentName;
-			const result = findInEntity(link, targetId, currentName);
+			const result = findInEntity(link, targetId, link.name);
 			if (result) return result;
 		}
 
@@ -161,6 +161,13 @@ export function findParentEntityForNode(
 
 		for (const subfilter of filter.subfilters) {
 			const result = findInFilter(subfilter, targetId, parentName);
+			if (result) return result;
+		}
+
+		// Link-entities in a filter (any / not any / all / not all) join from the filter's entity
+		for (const link of filter.links ?? []) {
+			if (link.id === targetId) return parentName;
+			const result = findInEntity(link, targetId, link.name);
 			if (result) return result;
 		}
 
