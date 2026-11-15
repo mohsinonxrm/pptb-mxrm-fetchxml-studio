@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AppShell: query execution and paging moved into `useQueryExecution` (#301)
 - AppShell: the query carried over a connection change, the tool-to-tool prefill and loading a view moved into `useLaunchPrefill` (#301)
 
+## [1.6.0-beta.3] - 2026-11-15
+
+### 🔧 Fixed
+
+- **The 1.5.1 hotfix, merged forward from `main` (#345, #348).** A link-entity inside another link-entity lists its parent link-entity's relationships and attributes, and waits for a parent that isn't set up yet; renaming an alias updates the conditions and orders that use it; "Compare to" offers the root entity from a self-join; an `entityname` Dataverse can't resolve is flagged; the condition editor finds a link-entity named by its logical name; and the README renders on the Power Platform ToolBox details page. Details under [1.5.1].
+
 ## [1.6.0-beta.2] - 2026-11-07
 
 ### 🔧 Changed
@@ -128,6 +134,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **App flow tests before the AppShell split (#189, #301).** The whole tool runs against an in-memory Dataverse and a stubbed ToolBox host. The tests cover: a query launched by another tool and run, paging and Retrieve all, Stop, a query Dataverse rejects, a view opened by `viewRef` (run by its id) or missing, and deleting a selected row. They read only what the user sees, so they keep passing while AppShell moves into hooks.
 - **The code is formatted with Prettier, and CI checks it (#205).** One formatting-only commit applies `.prettierrc` (tabs, 100 columns) to the 200-odd files that didn't match. It's listed in `.git-blame-ignore-revs`, so `git blame` skips it. `npm run format:check` now runs in CI, after lint. Captured test data (`__fixtures__`) and Markdown are left as written. The built bundle is unchanged apart from where JSX text breaks its spaces (`"Advisories "` → `"Advisories"` + `" "`), which renders the same.
 - **App flow tests wait longer under load.** A wait still returns as soon as its condition holds, but the limits are now 15 s per wait and 2 minutes per test (were 4 s and 1 minute), after 8 flow tests failed once in a busy full run.
+
+## [1.5.1] - 2026-11-15
+
+Hotfix for 1.5.0: building queries with nested link-entities (#345), and the README on the Power Platform ToolBox details page (#348).
+
+### 🔧 Fixed
+
+- **A link-entity inside another link-entity lists the right relationships (#345).** Its relationship picker, To attribute and many-to-many join used the root Entity, or for deeper links the grandparent's alias, instead of the link-entity it sits in. They now use the parent link-entity's logical name, including for link-entities in a link-entity's filter (any / not any / all / not all).
+- **A link-entity under one that isn't set up yet waits for it (#345).** Its relationship picker and To attribute used to ask Dataverse about the placeholder table `new_entity` and show a load error. They now wait, with a hint to set up the link-entity it's inside first.
+- **Renaming a link-entity's alias updates the conditions and orders that use it.** Conditions (`entityname`, and `valueof` "alias.attribute") and orders (`entityname`) used to keep the old alias, so the query failed in Dataverse. They now follow the rename, even when the alias briefly matches another one while you type. Clearing the alias leaves them flagged until you enter a new one.
+- **"Compare to" offers the root entity from a self-join.** A condition in a link-entity to the root's own entity (for example account → parent account) couldn't pick "account (root entity)", because the two had the same logical name.
+- **A condition's `entityname` that Dataverse can't resolve is flagged.** It used to pass Validate and fail on Run (0x80041108). Verified live: inside a link-entity's filter any `entityname` is rejected; in the root entity's filters it must name the root entity, a joined link-entity's alias, or the logical name of exactly one joined link-entity (case-sensitive). A link-entity inside a filter (any / not any / all / not all) can't be named by a condition or an order.
+- **The condition editor finds a link-entity named by its logical name.** `entityname="account"` with `<link-entity name="account" alias="a">` (which Dataverse accepts) used to load the root entity's attributes and say "Not a link-entity in this query". The root entity's own name now shows as such.
+- **The README renders correctly on the Power Platform ToolBox details page (#348).** The Version badge and the npm package name were links with an image or code inside, which ToolBox's README renderer shows as raw Markdown.
 
 ## [1.5.0] - 2026-11-07
 
