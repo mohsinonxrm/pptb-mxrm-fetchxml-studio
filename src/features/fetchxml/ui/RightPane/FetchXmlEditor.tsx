@@ -116,7 +116,7 @@ const useStyles = makeStyles({
 
 interface Message {
 	id: number;
-	intent: "success" | "warning" | "error" | "info";
+	intent: "warning" | "error" | "info";
 	title: string;
 	/** Text, or a list of findings rendered as bullets */
 	body: string | ParseIssueItem[];

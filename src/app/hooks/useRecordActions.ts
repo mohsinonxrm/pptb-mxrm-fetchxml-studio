@@ -527,7 +527,10 @@ export function useRecordActions({
 			if (!envUrl) {
 				console.error("Failed to get environment URL");
 				notify.error({
-					title: "Couldn't copy the record URL",
+					title:
+						recordIds.length === 1
+							? "Couldn't copy the record URL"
+							: "Couldn't copy the record URLs",
 					body: "The connection's environment URL isn't available.",
 				});
 				return;

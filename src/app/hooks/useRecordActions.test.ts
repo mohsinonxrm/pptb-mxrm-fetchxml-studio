@@ -528,6 +528,9 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		expect(toasts()[1]).toMatch(
 			/^Couldn't copy the record URL\. Dismiss.*environment URL isn't available/,
 		);
+
+		await run(() => latest.copyRecordUrl([accountId(1), accountId(2)]));
+		expect(toasts()[2]).toMatch(/^Couldn't copy the record URLs\. Dismiss/);
 	});
 
 	it("does nothing with no records", async () => {

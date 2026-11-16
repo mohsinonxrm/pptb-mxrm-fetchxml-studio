@@ -21,6 +21,7 @@ import { PowerAutomatePane } from "../../features/fetchxml/ui/RightPane/PowerAut
 import { CodePanel } from "../../features/fetchxml/ui/RightPane/CodePanel";
 import { FetchXmlEditor } from "../../features/fetchxml/ui/RightPane/FetchXmlEditor";
 import { BulkDeleteDialog } from "../../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
+import { parseFetchXml } from "../../features/fetchxml/model/fetchxmlParser";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -52,10 +53,17 @@ beforeEach(() => {
 	};
 });
 
+/** jsdom's own navigator.clipboard (none), put back after a test replaces it */
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+const setBrowserClipboard = (clipboard: Partial<Clipboard>) =>
+	Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
+
 afterEach(() => {
 	cleanup();
 	removeHost();
 	vi.restoreAllMocks();
+	if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+	else delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
 /** Makes both clipboards fail: the ToolBox's, then the browser's fallback */
@@ -66,10 +74,7 @@ const breakClipboard = () => {
 	utils.copyToClipboard = async () => {
 		throw new Error("denied");
 	};
-	Object.defineProperty(navigator, "clipboard", {
-		configurable: true,
-		value: { writeText: async () => Promise.reject(new Error("denied")) },
-	});
+	setBrowserClipboard({ writeText: async () => Promise.reject(new Error("denied")) });
 };
 
 describe("copy buttons", () => {
@@ -211,6 +216,62 @@ describe("the FetchXML editor", () => {
 		await editorMode();
 		await click(button("Reset"));
 		expect(toasts()).toEqual(["Reverted to the FetchXML from the tree."]);
+		expect(bars()).toEqual([]);
+	});
+
+	it("Paste is a toast, and a clipboard it can't read says so", async () => {
+		const onEditorStateChange = vi.fn();
+		setBrowserClipboard({ readText: async () => "<fetch><entity name='contact'/></fetch>" });
+		await render(
+			createElement(FetchXmlEditor, {
+				xml: "<fetch><entity name='account'/></fetch>",
+				onEditorStateChange,
+			}),
+		);
+		await editorMode();
+		await click(button("Paste"));
+		expect(onEditorStateChange).toHaveBeenLastCalledWith(
+			true,
+			"<fetch><entity name='contact'/></fetch>",
+		);
+		expect(toasts()).toEqual(["Pasted from the clipboard."]);
+
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		setBrowserClipboard({ readText: async () => Promise.reject(new Error("denied")) });
+		await click(button("Paste"));
+		expect(toasts()[1]).toMatch(/^Couldn't read the clipboard\./);
+		expect(bars()).toEqual([]);
+	});
+
+	it("Parse to tree: a toast, and editor mode ends", async () => {
+		const onEditorStateChange = vi.fn();
+		await render(
+			createElement(FetchXmlEditor, {
+				xml: "<fetch><entity name='account'><attribute name='name'/></entity></fetch>",
+				onParseToTree: (xml: string) => parseFetchXml(xml),
+				onEditorStateChange,
+			}),
+		);
+		await editorMode();
+		await click(button("Parse to tree"));
+		expect(toasts()).toEqual(["Loaded into the tree."]);
+		expect(onEditorStateChange).toHaveBeenLastCalledWith(false, "");
+		expect(bars()).toEqual([]);
+	});
+
+	it("Editor updated: a toast when the tree replaces the editor's FetchXML", async () => {
+		const xml = "<fetch><entity name='account'><attribute name='name'/></entity></fetch>";
+		await render(createElement(FetchXmlEditor, { xml, replaceRequest: null }));
+		await editorMode();
+		await render(
+			createElement(FetchXmlEditor, {
+				xml,
+				replaceRequest: { xml: "<fetch><entity name='contact'/></fetch>", id: 1 },
+			}),
+		);
+		expect(toasts()).toEqual([
+			"Editor updated. The editor now shows the FetchXML that was loaded into the tree, with the changes you confirmed..",
+		]);
 		expect(bars()).toEqual([]);
 	});
 });
