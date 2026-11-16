@@ -4,7 +4,12 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { runViewSaveSteps, viewSaveSteps, type ViewSaveStep } from "../../model/viewSaveSteps";
+import {
+	publishedAfterClose,
+	runViewSaveSteps,
+	viewSaveSteps,
+	type ViewSaveStep,
+} from "../../model/viewSaveSteps";
 import {
 	Dialog,
 	DialogSurface,
@@ -70,6 +75,7 @@ import {
 } from "../../model/savedViews";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
+import { useNotify } from "../../../../shared/feedback/useNotify";
 
 const useStyles = makeStyles({
 	surface: {
@@ -198,6 +204,8 @@ export interface SaveViewDialogLoadedView {
 export interface SavedViewDetails {
 	description?: string;
 	isDefault?: boolean;
+	/** System views: whether the view was published, so apps show it; undefined for personal views (#277) */
+	published?: boolean;
 }
 
 /** A message ending with a full stop, so the next sentence reads on (#180) */
@@ -266,6 +274,7 @@ export function SaveViewDialog({
 	loadedView,
 }: SaveViewDialogProps) {
 	const styles = useStyles();
+	const { notify } = useNotify();
 
 	// Form state
 	const [name, setName] = useState("");
@@ -613,12 +622,14 @@ export function SaveViewDialog({
 		if (isSaving) return;
 		if (partialSave) {
 			setPartialSave(null);
-			onSaveComplete(
-				partialSave.viewId,
-				partialSave.viewType,
-				partialSave.name,
-				partialSave.details,
-			);
+			// Closed before the remaining steps ran: not published if publishing was one of them
+			onSaveComplete(partialSave.viewId, partialSave.viewType, partialSave.name, {
+				...partialSave.details,
+				published: publishedAfterClose(
+					partialSave.details.published,
+					partialSave.remaining,
+				),
+			});
 			return;
 		}
 		onClose();
@@ -728,13 +739,15 @@ export function SaveViewDialog({
 			const details: SavedViewDetails = {
 				description: savedDescription || undefined,
 				isDefault: viewType === "system" ? setAsDefault || isAlreadyDefault : undefined,
+				published: viewType === "system" ? shouldPublish : undefined,
 			};
-			// Reported once the view is saved, whether or not the later steps finish (#307)
+			// Reported once the view is saved, whether or not the later steps finish (#307). A sticky
+			// warning toast: the dialog closes on success, and the user needs to act on it (#277).
 			if (defaultsNotCleared.length > 0) {
-				void window.toolboxAPI?.utils?.showNotification?.({
+				notify.warning({
 					title: "Another view is still a default view",
 					body: defaultViewsNotClearedMessage(name.trim(), defaultsNotCleared),
-					type: "warning",
+					timeout: "sticky",
 				});
 			}
 			const failed = await runViewSaveSteps(steps, (step) =>
@@ -777,6 +790,7 @@ export function SaveViewDialog({
 		showDefaultOption,
 		makeDefault,
 		isAlreadyDefault,
+		notify,
 	]);
 
 	// Save a copy of a view the user can't overwrite: Save as, named after it (#142)

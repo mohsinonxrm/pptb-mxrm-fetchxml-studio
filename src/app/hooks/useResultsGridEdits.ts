@@ -26,6 +26,7 @@ import {
 	type NewCondition,
 } from "../../features/fetchxml/model/columnFilters";
 import { toAttributeTypeInfo } from "../../features/fetchxml/model/attributeCapabilities";
+import { useNotify } from "../../shared/feedback/useNotify";
 
 export interface ResultsGridEditsInputs {
 	/** The query builder (its actions are stable, #65) */
@@ -61,6 +62,7 @@ export function useResultsGridEdits({
 	handleExecuteRef,
 }: ResultsGridEditsInputs): ResultsGridEdits {
 	const { fetchQuery, columnConfig } = builder;
+	const { notify } = useNotify();
 	// stable: builder actions are created once (#65)
 	const {
 		addColumnFilter: addFilterCondition,
@@ -239,16 +241,13 @@ export function useResultsGridEdits({
 				metadata ? toAttributeTypeInfo(metadata) : undefined,
 			);
 			if ("reason" in plan) {
-				void window.toolboxAPI?.utils?.showNotification?.({
-					title: "Can't sort by this column",
-					body: plan.reason,
-					type: "warning",
-				});
+				// A warning toast: the user just asked for it, here (#277)
+				notify.warning({ title: "Can't sort by this column", body: plan.reason });
 				return;
 			}
 			setSort(plan, data.direction === "descending", data.isMultiSort);
 		},
-		[fetchQuery, attributeMetadata, setSort],
+		[fetchQuery, attributeMetadata, setSort, notify],
 	);
 
 	return {

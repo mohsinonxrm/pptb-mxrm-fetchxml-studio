@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { runViewSaveSteps, viewSaveSteps, type ViewSaveStep } from "./viewSaveSteps";
+import {
+	publishedAfterClose,
+	runViewSaveSteps,
+	viewSaveSteps,
+	type ViewSaveStep,
+} from "./viewSaveSteps";
 
 describe("Save View follow-up steps (#180)", () => {
 	it("adds to the solution before publishing, and only the steps asked for", () => {
@@ -44,5 +49,18 @@ describe("Save View follow-up steps (#180)", () => {
 		});
 		expect(retry).toBeNull();
 		expect(ran).toEqual(["solution", "publish", "publish"]); // the solution step ran once
+	});
+});
+
+describe("published after closing a partial save (#277)", () => {
+	it("a system view meant to be published is, unless publishing was left undone", () => {
+		expect(publishedAfterClose(true, [])).toBe(true);
+		expect(publishedAfterClose(true, ["solution"])).toBe(true);
+		expect(publishedAfterClose(true, ["publish"])).toBe(false);
+		expect(publishedAfterClose(true, ["solution", "publish"])).toBe(false);
+	});
+	it("not meant to be published stays unpublished; a personal view has no answer", () => {
+		expect(publishedAfterClose(false, [])).toBe(false);
+		expect(publishedAfterClose(undefined, ["publish"])).toBeUndefined();
 	});
 });

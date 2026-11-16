@@ -14,6 +14,7 @@ import {
 	installHost,
 	removeHost,
 	render,
+	toasts,
 	type HostStub,
 } from "../../shared/testing/ui";
 import {
@@ -35,6 +36,7 @@ import {
 	type LaunchPrefill,
 	type LaunchPrefillInputs,
 } from "./useLaunchPrefill";
+import { useTreeNotice, type TreeNoticeInput } from "./useTreeNotice";
 
 afterEach(() => {
 	cleanup();
@@ -45,10 +47,22 @@ afterEach(() => {
 let builder: BuilderContextValue;
 let latest: LaunchPrefill;
 
-type ProbeProps = Omit<LaunchPrefillInputs, "builder">;
-function Probe(props: ProbeProps) {
+/** The MessageBar above the tree (#277): what it shows now */
+let notice: TreeNoticeInput | null;
+
+type ProbeProps = Omit<LaunchPrefillInputs, "builder" | "showTreeNotice"> & {
+	/** Replaces the real tree notice's show */
+	showTreeNotice?: LaunchPrefillInputs["showTreeNotice"];
+};
+function Probe({ showTreeNotice, ...props }: ProbeProps) {
 	builder = useBuilder();
-	latest = useLaunchPrefill({ ...props, builder });
+	const tree = useTreeNotice(builder.fetchQuery?.entity.id);
+	notice = tree.notice;
+	latest = useLaunchPrefill({
+		...props,
+		builder,
+		showTreeNotice: showTreeNotice ?? tree.show,
+	});
 	return null;
 }
 
@@ -221,7 +235,7 @@ describe("the tool-to-tool prefill (#197)", () => {
 		expect(host.notifications).toEqual([]);
 	});
 
-	it("says when the FetchXML it's given can't be parsed", async () => {
+	it("says when the FetchXML it's given can't be parsed: an error bar above the tree", async () => {
 		connect();
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		await fresh({ launch: launchedWith({ fetchXml: "<fetch><entity" }) });
@@ -230,28 +244,32 @@ describe("the tool-to-tool prefill (#197)", () => {
 			"T2T prefill: failed to parse incoming FetchXML:",
 			expect.anything(),
 		);
-		expect(host.notifications).toEqual([
-			{
-				title: "Could not load incoming query",
-				body: "The tool that launched FetchXML Studio sent a query that couldn't be parsed.",
-				type: "error",
-			},
-		]);
+		expect(notice).toEqual({
+			intent: "error",
+			title: "Couldn't load the incoming query",
+			body: "The tool that launched FetchXML Studio sent a query that couldn't be parsed.",
+		});
+		// In the app, not a host notification (#277, owner decision 2)
+		expect(host.notifications).toEqual([]);
+
+		// It stays until a query starts
+		await act(async () => builder.setEntity("account"));
+		expect(notice).toBeNull();
 	});
 
 	it("logs a prefill that fails, without throwing", async () => {
 		connect();
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		const toolbox = (window as unknown as { toolboxAPI: { utils: Record<string, unknown> } })
-			.toolboxAPI;
-		toolbox.utils.showNotification = async () => {
-			throw new Error("Notifications unavailable");
-		};
-		await fresh({ launch: launchedWith({ fetchXml: "<fetch><entity" }) });
+		await fresh({
+			launch: launchedWith({ fetchXml: "<fetch><entity" }),
+			showTreeNotice: () => {
+				throw new Error("Notices unavailable");
+			},
+		});
 		await flush();
 		expect(error).toHaveBeenCalledWith(
 			"T2T prefill: failed to load launch context:",
-			expect.objectContaining({ message: "Notifications unavailable" }),
+			expect.objectContaining({ message: "Notices unavailable" }),
 		);
 	});
 
@@ -289,17 +307,29 @@ describe("the tool-to-tool prefill (#197)", () => {
 		});
 		await flush();
 		expect(builder.fetchQuery).toBeNull();
-		expect(host.notifications).toHaveLength(1);
-		expect(host.notifications[0]).toMatchObject({
-			title: "Couldn't open the view",
-			type: "error",
-		});
-		expect(host.notifications[0].body).toContain("personal view");
-		expect(host.notifications[0].body).toContain(VIEW_ID);
+		expect(notice).toMatchObject({ intent: "error", title: "Couldn't open the view" });
+		expect(notice?.body).toContain("personal view");
+		expect(notice?.body).toContain(VIEW_ID);
+		expect(host.notifications).toEqual([]);
 		expect(warn).toHaveBeenCalledWith(
 			"T2T prefill: the view couldn't be opened:",
 			expect.objectContaining({ kind: "viewUnavailable", id: VIEW_ID }),
 		);
+	});
+
+	it("a view whose FetchXML can't be parsed is a launch failure: the error bar, not a toast", async () => {
+		connect([{ ...activeAccounts, fetchxml: "<fetch><entity name='account'>" }]);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		await fresh({
+			launch: launchedWith({ viewRef: { entityLogicalName: "savedquery", id: VIEW_ID } }),
+		});
+		await flush();
+		expect(builder.fetchQuery).toBeNull();
+		expect(notice).toMatchObject({ intent: "error", title: "Couldn't load the view" });
+		expect(notice?.body).toContain('"Active accounts"');
+		expect(toasts()).toEqual([]);
+		expect(host.notifications).toEqual([]);
+		expect(error).toHaveBeenCalledWith("Failed to parse view FetchXML:", expect.anything());
 	});
 
 	it("says when the view's entity has no entity set name", async () => {
@@ -319,9 +349,9 @@ describe("the tool-to-tool prefill (#197)", () => {
 		await flush();
 		expect(builder.fetchQuery).toBeNull();
 		expect(onViewApplied).not.toHaveBeenCalled();
-		expect(host.notifications).toHaveLength(1);
-		expect(host.notifications[0].title).toBe("Couldn't open the view");
-		expect(host.notifications[0].body).toContain("account has no entity set name in metadata.");
+		expect(notice?.title).toBe("Couldn't open the view");
+		expect(notice?.body).toContain("account has no entity set name in metadata.");
+		expect(host.notifications).toEqual([]);
 	});
 
 	it("says when reading the view's entity fails", async () => {
@@ -334,8 +364,8 @@ describe("the tool-to-tool prefill (#197)", () => {
 		});
 		await flush();
 		expect(builder.fetchQuery).toBeNull();
-		expect(host.notifications).toHaveLength(1);
-		expect(host.notifications[0].body).toContain("Metadata unavailable");
+		expect(notice?.body).toContain("Metadata unavailable");
+		expect(host.notifications).toEqual([]);
 	});
 });
 
@@ -386,7 +416,7 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 		expect(host.notifications).toEqual([]);
 	});
 
-	it("says when the tree changed the view's query (a warning, not an error)", async () => {
+	it("says when the tree changed the view's query: a warning bar above the tree, until the next load", async () => {
 		connect();
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		await fresh();
@@ -397,15 +427,19 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 				}),
 			),
 		);
-		expect(host.notifications).toHaveLength(1);
-		expect(host.notifications[0]).toMatchObject({
-			title: "View loaded with changes",
-			type: "warning",
-		});
+		expect(notice).toMatchObject({ intent: "warning", title: "View loaded with changes" });
+		expect(notice?.body).toContain('"My accounts"');
+		expect(host.notifications).toEqual([]);
 		expect(error).not.toHaveBeenCalled();
+
+		// An edit keeps it; the next load clears it
+		await act(async () => builder.addAttributeByName(builder.fetchQuery!.entity.id, "revenue"));
+		expect(notice?.title).toBe("View loaded with changes");
+		await act(async () => latest.applyLoadedView(viewInfo()));
+		expect(notice).toBeNull();
 	});
 
-	it("says when the view's FetchXML can't be parsed, and logs it", async () => {
+	it("says when the view's FetchXML can't be parsed (a sticky error toast), and logs it", async () => {
 		connect();
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		const onViewApplied = vi.fn();
@@ -415,11 +449,9 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 				viewInfo({ originalFetchXml: "<fetch><entity name='account'>" }),
 			),
 		);
-		expect(host.notifications).toHaveLength(1);
-		expect(host.notifications[0]).toMatchObject({
-			title: "Could not load view",
-			type: "error",
-		});
+		expect(toasts()).toEqual([expect.stringMatching(/^Couldn't load the view\. Dismiss/)]);
+		expect(notice).toBeNull();
+		expect(host.notifications).toEqual([]);
 		expect(error).toHaveBeenCalledWith("Failed to parse view FetchXML:", expect.anything());
 		// The quick find value belonged to the previous view either way
 		expect(onViewApplied).toHaveBeenCalledTimes(1);

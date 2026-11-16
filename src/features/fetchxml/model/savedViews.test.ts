@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseFetchXml } from "./fetchxmlParser";
 import { generateFetchXml } from "./fetchxml";
 import {
+	savedViewToast,
 	applyQuickFindValue,
 	canOverwriteView,
 	canSetDefaultView,
@@ -356,5 +357,20 @@ describe("defaultViewsNotClearedMessage (#307)", () => {
 		expect(
 			defaultViewsNotClearedMessage("FXS view", [{ id: "abc", name: "", error: "E." }]),
 		).toContain('"abc" is still marked as the default too');
+	});
+});
+
+describe("the toast after Save view (#277)", () => {
+	it("names the view", () => {
+		expect(savedViewToast("Active accounts", true)).toEqual({
+			title: 'Saved "Active accounts"',
+		});
+		expect(savedViewToast("My accounts", undefined)).toEqual({ title: 'Saved "My accounts"' });
+	});
+	it("says when a system view isn't published yet", () => {
+		expect(savedViewToast("Active accounts", false)).toEqual({
+			title: 'Saved "Active accounts"',
+			body: "Not published yet: apps show it after you publish.",
+		});
 	});
 });

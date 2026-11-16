@@ -15,6 +15,7 @@ import {
 	isDisabled,
 	removeHost,
 	render,
+	toasts,
 } from "../../../../shared/testing/ui";
 
 const ME = "11111111-1111-1111-1111-111111111111";
@@ -33,6 +34,11 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 	getUnmanagedSolutions: vi.fn(async () => []),
 	getDefaultPublicView: vi.fn(async () => null),
 	getSolutionLabel: vi.fn(async () => null),
+	validateSavedQuery: vi.fn(async () => undefined),
+	updateSavedQuery: vi.fn(async () => undefined),
+	clearOtherDefaultPublicViews: vi.fn(async () => [
+		{ id: "44444444-4444-4444-4444-444444444444", name: "Old default", error: "Access denied" },
+	]),
 }));
 
 const { SaveViewDialog } = await import("./SaveViewDialog");
@@ -138,5 +144,39 @@ describe("Save view: overwriting your own view (#69)", () => {
 		expect(text).toContain('The personal view "My contacts" (overwritten)');
 		expect(text).toContain("There's no undo: the view's current definition is replaced.");
 		expect(isDisabled(button("Save"))).toBe(false);
+	});
+});
+
+describe("Save view: a default view that couldn't be cleared (#307, #277)", () => {
+	it("is a warning toast that stays, not a host notification; the view is reported unpublished", async () => {
+		const host = installHost({ connection: { name: "CRM279420" } });
+		const onSaveComplete = vi.fn();
+		await render(
+			createElement(SaveViewDialog, {
+				...props({
+					id: VIEW,
+					type: "system",
+					name: "Active contacts",
+					queryType: 0,
+					isCustomizable: true,
+					isManaged: false,
+					isDefault: true,
+				}),
+				onSaveComplete,
+			}),
+		);
+		await flush();
+		await click(button(/^Save/));
+		await flush(10);
+		expect(onSaveComplete).toHaveBeenCalledWith(
+			VIEW,
+			"system",
+			"Active contacts",
+			expect.objectContaining({ published: false }),
+		);
+		expect(toasts()).toEqual([
+			expect.stringMatching(/^Another view is still a default view\. Dismiss.*Old default/),
+		]);
+		expect(host.notifications).toEqual([]);
 	});
 });

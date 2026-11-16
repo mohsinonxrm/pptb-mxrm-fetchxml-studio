@@ -62,6 +62,8 @@ import { ParseChangesDialog } from "./ParseChangesDialog";
 import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
+import { useNotify } from "../../../../shared/feedback/useNotify";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
 import {
@@ -174,24 +176,37 @@ const useStyles = makeStyles({
  * is a plain "go back" affordance and resolves the caller's promise with null. Only
  * an explicit returnData() call carries the query back — which is what this does.
  */
-function ReturnFetchXmlButton({ getCurrentXml }: { getCurrentXml: () => string }) {
+export function ReturnFetchXmlButton({ getCurrentXml }: { getCurrentXml: () => string }) {
 	const [isReturning, setIsReturning] = useState(false);
+	const { notify } = useNotify();
+	const copy = useCopy();
 
+	// A failure is a sticky error toast with Try again and Copy FetchXML, so the query isn't lost
+	// (#277, owner decision 4)
 	const handleReturn = useCallback(async () => {
 		setIsReturning(true);
+		const xml = getCurrentXml();
 		try {
-			await returnFetchXmlToInvokingTool(getCurrentXml());
+			await returnFetchXmlToInvokingTool(xml);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			await window.toolboxAPI?.utils?.showNotification?.({
-				title: "Cannot return FetchXML",
+			notify.error({
+				title: "Couldn't return the FetchXML",
 				body: message,
-				type: "error",
+				action: { label: "Try again", onClick: () => void handleReturnRef.current() },
+				secondaryAction: {
+					label: "Copy FetchXML",
+					onClick: () => void copy(xml, "FetchXML"),
+				},
 			});
 		} finally {
 			setIsReturning(false);
 		}
-	}, [getCurrentXml]);
+	}, [getCurrentXml, notify, copy]);
+	const handleReturnRef = useRef(handleReturn);
+	useEffect(() => {
+		handleReturnRef.current = handleReturn;
+	}, [handleReturn]);
 
 	return (
 		<Tooltip

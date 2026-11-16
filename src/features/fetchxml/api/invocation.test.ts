@@ -38,7 +38,6 @@ describe("a view another tool opens FetchXML Studio with (#197)", () => {
 		).toEqual({
 			title: "Couldn't open the view",
 			body: `The tool that launched FetchXML Studio asked for a personal view (${id}) that doesn't exist or that you can't read.`,
-			type: "error",
 		});
 	});
 

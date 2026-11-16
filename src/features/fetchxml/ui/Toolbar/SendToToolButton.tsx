@@ -12,6 +12,7 @@
  */
 
 import { useCallback } from "react";
+import { useNotify } from "../../../../shared/feedback/useNotify";
 import {
 	Button,
 	Menu,
@@ -62,6 +63,7 @@ export function SendToToolButton({
 }: SendToToolButtonProps) {
 	const styles = useStyles();
 	const { sync, editorHasContent } = useEditorSync();
+	const { notify } = useNotify();
 
 	const handleSend = useCallback(
 		async (targetToolId: string) => {
@@ -82,14 +84,12 @@ export function SendToToolButton({
 				// A rapid second launch is rejected by the host's one-at-a-time guard;
 				// that's benign, so don't nag the user about it.
 				if (/already in progress/i.test(message)) return;
-				await window.toolboxAPI?.utils?.showNotification?.({
-					title: "Cannot open tool",
-					body: message,
-					type: "error",
-				});
+				// In the app's Toaster: it's about something the user started here (#277)
+				const tool = tools.find((t) => t.id === targetToolId)?.name ?? "the tool";
+				notify.error({ title: `Couldn't open ${tool}`, body: message });
 			});
 		},
-		[fetchXml, entityLogicalName, sync],
+		[fetchXml, entityLogicalName, sync, tools, notify],
 	);
 
 	// With content in the editor, sending is available even before the tree has a query

@@ -291,7 +291,7 @@ export function getViewLoadNotice(viewName: string, result: ParseResult): ViewLo
 	if (!result.success) {
 		const reason = result.errors[0]?.message;
 		return {
-			title: "Could not load view",
+			title: "Couldn't load the view",
 			body: `The FetchXML of "${viewName}" couldn't be parsed${reason ? `: ${reason}` : "."}`,
 			type: "error",
 		};
@@ -306,4 +306,20 @@ export function getViewLoadNotice(viewName: string, result: ParseResult): ViewLo
 		body: `The tree can't represent everything in "${viewName}". ${list} Saving the view saves these changes.`,
 		type: "warning",
 	};
+}
+
+/**
+ * The toast after Save view (#277, owner decision 5): it names the view, and says when a system
+ * view isn't published yet, so apps don't show it. The Publish action comes with #278's Save menu.
+ */
+export function savedViewToast(
+	viewName: string,
+	published: boolean | undefined,
+): { title: string; body?: string } {
+	return published === false
+		? {
+				title: `Saved "${viewName}"`,
+				body: "Not published yet: apps show it after you publish.",
+			}
+		: { title: `Saved "${viewName}"` };
 }

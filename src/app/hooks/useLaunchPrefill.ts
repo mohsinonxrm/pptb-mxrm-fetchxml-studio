@@ -18,6 +18,8 @@ import { generateFetchXml } from "../../features/fetchxml/model/fetchxml";
 import { getViewLoadNotice } from "../../features/fetchxml/model/savedViews";
 import type { BuilderContextValue } from "../../features/fetchxml/state/builderContext";
 import type { LaunchContextState } from "../../shared/hooks/useLaunchContext";
+import { useNotify } from "../../shared/feedback/useNotify";
+import type { TreeNotice } from "./useTreeNotice";
 
 /**
  * What outlives a connection change (#66): AppContent is remounted for the new connection, so
@@ -41,6 +43,8 @@ export interface LaunchPrefillInputs {
 	launch: LaunchContextState;
 	/** After a view is loaded: a quick find test value belongs to the view it was entered for (#142) */
 	onViewApplied: () => void;
+	/** Shows a MessageBar above the tree for the query with this root node (useTreeNotice, #277) */
+	showTreeNotice: TreeNotice["show"];
 }
 
 export interface LaunchPrefill {
@@ -53,7 +57,13 @@ export function useLaunchPrefill({
 	carryOver,
 	launch,
 	onViewApplied,
+	showTreeNotice,
 }: LaunchPrefillInputs): LaunchPrefill {
+	const { notify } = useNotify();
+	// A launch that couldn't be loaded: an error bar above the empty tree, until a query starts or New
+	// (#277, owner decision 2; host notifications are only for the connection change now)
+	const showLaunchError = (notice: { title: string; body: string }) =>
+		showTreeNotice({ intent: "error", title: notice.title, body: notice.body }, undefined);
 	// After a connection change (#66): load the query the previous session had, once
 	useEffect(() => {
 		const fetchXml = carryOver.fetchXml;
@@ -93,10 +103,10 @@ export function useLaunchPrefill({
 				}
 
 				// A view: loaded as Load view does, with its layout, execution by ID and Save view's
-				// overwrite; or a notification saying why it couldn't be opened (#197)
+				// overwrite; or an error bar above the tree saying why it couldn't be opened (#197, #277)
 				if (action.kind === "viewUnavailable") {
 					console.warn("T2T prefill: the view couldn't be opened:", action);
-					await window.toolboxAPI?.utils?.showNotification?.(viewPrefillNotice(action));
+					showLaunchError(viewPrefillNotice(action));
 					return;
 				}
 				if (action.kind === "view") {
@@ -109,7 +119,7 @@ export function useLaunchPrefill({
 								`${action.entityLogicalName} has no entity set name in metadata.`,
 							);
 					} catch (error) {
-						await window.toolboxAPI?.utils?.showNotification?.(
+						showLaunchError(
 							viewPrefillNotice({
 								kind: "viewUnavailable",
 								viewType: action.view.type,
@@ -119,17 +129,19 @@ export function useLaunchPrefill({
 						);
 						return;
 					}
-					applyLoadedViewRef.current(toLoadedViewInfo(action.view, entitySetName));
+					applyLoadedViewRef.current(
+						toLoadedViewInfo(action.view, entitySetName),
+						"launch",
+					);
 					return;
 				}
 
 				const result = builder.loadFetchXml(action.fetchXml);
 				if (!result.success) {
 					console.error("T2T prefill: failed to parse incoming FetchXML:", result.errors);
-					await window.toolboxAPI?.utils?.showNotification?.({
-						title: "Could not load incoming query",
+					showLaunchError({
+						title: "Couldn't load the incoming query",
 						body: "The tool that launched FetchXML Studio sent a query that couldn't be parsed.",
-						type: "error",
 					});
 				}
 			} catch (error) {
@@ -140,8 +152,12 @@ export function useLaunchPrefill({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [launch.loading, launch.context]);
 
-	/** Loads a view into the tree as Load view does: its layout, execution by ID, Save view's overwrite (#93, #142, #197) */
-	const applyLoadedView = (viewInfo: LoadedViewInfo) => {
+	/**
+	 * Loads a view into the tree as Load view does: its layout, execution by ID, Save view's overwrite
+	 * (#93, #142, #197). `source` "launch": another tool asked for it, so a view that doesn't parse is
+	 * a launch failure (the error bar above the empty tree, #277 decision 2), not a toast.
+	 */
+	const applyLoadedView = (viewInfo: LoadedViewInfo, source: "picker" | "launch" = "picker") => {
 		// Load the view's FetchXML into the tree while preserving view info
 		// Pass layoutxml for column configuration if available
 		const result = builder.loadView(
@@ -164,11 +180,18 @@ export function useLaunchPrefill({
 		);
 		// A test value belongs to the quick find view it was entered for (#142)
 		onViewApplied();
-		// Say when the view couldn't be loaded, or the tree changed its query (#93)
+		// Say when the view couldn't be loaded (a sticky error toast: the tree keeps what it had), or
+		// the tree changed its query (a warning bar above the tree, until the next load or New) (#93, #277)
 		const notice = getViewLoadNotice(viewInfo.name, result);
-		if (notice) {
-			if (!result.success) console.error("Failed to parse view FetchXML:", result.errors);
-			void window.toolboxAPI?.utils?.showNotification?.(notice);
+		if (notice?.type === "error") {
+			console.error("Failed to parse view FetchXML:", result.errors);
+			if (source === "launch") showLaunchError(notice);
+			else notify.error({ title: notice.title, body: notice.body });
+		} else if (notice) {
+			showTreeNotice(
+				{ intent: "warning", title: notice.title, body: notice.body },
+				result.fetchNode?.entity.id,
+			);
 		}
 	};
 	// The launch prefill runs once, after the first render (#197)
