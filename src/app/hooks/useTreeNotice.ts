@@ -39,8 +39,9 @@ export function useTreeNotice(currentRootId: string | undefined): TreeNotice {
 	// Another query is in the tree: the notice was about the one before
 	const stale = state !== null && state.rootId !== currentRootId;
 	useEffect(() => {
-		if (stale) setState(null);
-	}, [stale]);
+		// Against the root as it is when the update runs, so a notice shown since isn't dropped
+		if (stale) setState((s) => (s && s.rootId !== currentRootId ? null : s));
+	}, [stale, currentRootId]);
 
 	return { notice: state && !stale ? state.notice : null, show, dismiss };
 }

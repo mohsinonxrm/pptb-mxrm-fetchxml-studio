@@ -77,13 +77,29 @@ describe("Return FetchXML", () => {
 		]);
 		expect(host.notifications).toEqual([]);
 
+		// Copy FetchXML keeps the query, and closes the toast
 		await click(toastButton("Copy FetchXML"));
 		expect(copied).toEqual([XML]);
+		await flush(5);
+		expect(toastButton("Copy FetchXML")).toBeUndefined();
 
-		await render(createElement(ReturnFetchXmlButton, { getCurrentXml: () => XML }));
+		// Try again returns it again; failing again raises the toast again
 		await click(button("Return FetchXML"));
+		expect(invocation.returnData).toHaveBeenCalledTimes(2);
+		invocation.returnData.mockImplementationOnce(async () =>
+			Promise.reject(new Error("Still closed")),
+		);
 		await click(toastButton("Try again"));
+		await flush(5);
 		expect(invocation.returnData).toHaveBeenCalledTimes(3);
+		expect(toasts().at(-1)).toMatch(/^Couldn't return the FetchXML\. Dismiss.*Still closed/);
+
+		// Try again that works says nothing more
+		invocation.returnData.mockImplementationOnce(async () => undefined);
+		await click(toastButton("Try again"));
+		await flush(5);
+		expect(invocation.returnData).toHaveBeenCalledTimes(4);
+		expect(toastButton("Try again")).toBeUndefined();
 	});
 });
 

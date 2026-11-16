@@ -103,7 +103,7 @@ export function useLaunchPrefill({
 				}
 
 				// A view: loaded as Load view does, with its layout, execution by ID and Save view's
-				// overwrite; or a notification saying why it couldn't be opened (#197)
+				// overwrite; or an error bar above the tree saying why it couldn't be opened (#197, #277)
 				if (action.kind === "viewUnavailable") {
 					console.warn("T2T prefill: the view couldn't be opened:", action);
 					showLaunchError(viewPrefillNotice(action));
@@ -129,7 +129,10 @@ export function useLaunchPrefill({
 						);
 						return;
 					}
-					applyLoadedViewRef.current(toLoadedViewInfo(action.view, entitySetName));
+					applyLoadedViewRef.current(
+						toLoadedViewInfo(action.view, entitySetName),
+						"launch",
+					);
 					return;
 				}
 
@@ -149,8 +152,12 @@ export function useLaunchPrefill({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [launch.loading, launch.context]);
 
-	/** Loads a view into the tree as Load view does: its layout, execution by ID, Save view's overwrite (#93, #142, #197) */
-	const applyLoadedView = (viewInfo: LoadedViewInfo) => {
+	/**
+	 * Loads a view into the tree as Load view does: its layout, execution by ID, Save view's overwrite
+	 * (#93, #142, #197). `source` "launch": another tool asked for it, so a view that doesn't parse is
+	 * a launch failure (the error bar above the empty tree, #277 decision 2), not a toast.
+	 */
+	const applyLoadedView = (viewInfo: LoadedViewInfo, source: "picker" | "launch" = "picker") => {
 		// Load the view's FetchXML into the tree while preserving view info
 		// Pass layoutxml for column configuration if available
 		const result = builder.loadView(
@@ -178,7 +185,8 @@ export function useLaunchPrefill({
 		const notice = getViewLoadNotice(viewInfo.name, result);
 		if (notice?.type === "error") {
 			console.error("Failed to parse view FetchXML:", result.errors);
-			notify.error({ title: notice.title, body: notice.body });
+			if (source === "launch") showLaunchError(notice);
+			else notify.error({ title: notice.title, body: notice.body });
 		} else if (notice) {
 			showTreeNotice(
 				{ intent: "warning", title: notice.title, body: notice.body },

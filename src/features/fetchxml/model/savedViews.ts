@@ -291,7 +291,7 @@ export function getViewLoadNotice(viewName: string, result: ParseResult): ViewLo
 	if (!result.success) {
 		const reason = result.errors[0]?.message;
 		return {
-			title: "Could not load view",
+			title: "Couldn't load the view",
 			body: `The FetchXML of "${viewName}" couldn't be parsed${reason ? `: ${reason}` : "."}`,
 			type: "error",
 		};

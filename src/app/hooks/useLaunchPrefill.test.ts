@@ -317,6 +317,21 @@ describe("the tool-to-tool prefill (#197)", () => {
 		);
 	});
 
+	it("a view whose FetchXML can't be parsed is a launch failure: the error bar, not a toast", async () => {
+		connect([{ ...activeAccounts, fetchxml: "<fetch><entity name='account'>" }]);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		await fresh({
+			launch: launchedWith({ viewRef: { entityLogicalName: "savedquery", id: VIEW_ID } }),
+		});
+		await flush();
+		expect(builder.fetchQuery).toBeNull();
+		expect(notice).toMatchObject({ intent: "error", title: "Couldn't load the view" });
+		expect(notice?.body).toContain('"Active accounts"');
+		expect(toasts()).toEqual([]);
+		expect(host.notifications).toEqual([]);
+		expect(error).toHaveBeenCalledWith("Failed to parse view FetchXML:", expect.anything());
+	});
+
 	it("says when the view's entity has no entity set name", async () => {
 		const tables = sampleTables(3).map((t) =>
 			t.logicalName === "account" ? { ...t, entitySetName: "" } : t,
@@ -434,7 +449,7 @@ describe("applyLoadedView (#93, #142, #197)", () => {
 				viewInfo({ originalFetchXml: "<fetch><entity name='account'>" }),
 			),
 		);
-		expect(toasts()).toEqual([expect.stringMatching(/^Could not load view\. Dismiss/)]);
+		expect(toasts()).toEqual([expect.stringMatching(/^Couldn't load the view\. Dismiss/)]);
 		expect(notice).toBeNull();
 		expect(host.notifications).toEqual([]);
 		expect(error).toHaveBeenCalledWith("Failed to parse view FetchXML:", expect.anything());

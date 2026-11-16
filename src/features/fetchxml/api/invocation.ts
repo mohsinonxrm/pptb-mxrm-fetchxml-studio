@@ -202,18 +202,19 @@ export async function resolveLaunchPrefill(
 }
 
 /**
- * The notification for a view another tool asked for that couldn't be opened (#197): not found or
- * not readable, or Dataverse's error. The id is cut short if it's long: it isn't always a GUID.
+ * What the error bar above the tree says for a view another tool asked for that couldn't be opened
+ * (#197, #277): not found or not readable, or Dataverse's error. The id is cut short if it's long: it
+ * isn't always a GUID.
  */
 export function viewPrefillNotice(
 	action: Extract<LaunchPrefillAction, { kind: "viewUnavailable" }>,
-): { title: string; body: string; type: "error" } {
+): { title: string; body: string } {
 	const id = action.id.length > 60 ? `${action.id.slice(0, 57)}…` : action.id;
 	const body =
 		action.error === undefined
 			? `The tool that launched FetchXML Studio asked for a ${action.viewType} view (${id}) that doesn't exist or that you can't read.`
 			: `The tool that launched FetchXML Studio asked for a ${action.viewType} view, but Dataverse returned an error: ${formatDataverseError(action.error)}`;
-	return { title: "Couldn't open the view", body, type: "error" };
+	return { title: "Couldn't open the view", body };
 }
 
 /** Return data to the invoking tool. No-op when this tool was not launched via T2T. */

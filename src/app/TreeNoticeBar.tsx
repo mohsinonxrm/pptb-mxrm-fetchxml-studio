@@ -37,7 +37,8 @@ export function TreeNoticeBar({
 	if (!notice) return null;
 	return (
 		<MessageBar intent={notice.intent} layout="multiline" className={styles.bar}>
-			<MessageBarBody className={styles.body}>
+			{/* Focusable, so a long list can be scrolled with the keyboard */}
+			<MessageBarBody className={styles.body} tabIndex={0}>
 				<MessageBarTitle>{notice.title}</MessageBarTitle>
 				{notice.body}
 			</MessageBarBody>
