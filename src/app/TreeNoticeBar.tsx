@@ -18,6 +18,8 @@ import type { TreeNoticeInput } from "./hooks/useTreeNotice";
 const useStyles = makeStyles({
 	bar: {
 		flexShrink: 0,
+		// Lined up with the Entity picker above it (12px either side)
+		marginInline: tokens.spacingHorizontalM,
 		marginBottom: tokens.spacingVerticalS,
 	},
 	body: {
