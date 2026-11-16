@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AppShell: the query carried over a connection change, the tool-to-tool prefill and loading a view moved into `useLaunchPrefill` (#301)
 - AppShell: keeping the column config in step with the query, and building the view's LayoutXML, moved into `useViewLayout` (#301)
 - AppShell: the results grid's edits to the query (column filters, reordering, removing and adding columns, related columns, sorting by a column) moved into `useResultsGridEdits`, with tests for the first time (#301)
+- AppShell: its styles moved into `AppShell.styles.ts`, and the record actions' five dialogs into `RecordActionDialogs` (#301)
 
 ## [1.6.0-beta.3] - 2026-11-15
 

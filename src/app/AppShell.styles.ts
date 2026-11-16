@@ -1,0 +1,127 @@
+/**
+ * AppShell's styles (#301): the panes, splitters and toolbars around the builder and the results.
+ */
+import { makeStyles, tokens } from "@fluentui/react-components";
+
+// ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
+// but tokens will automatically update when FluentProvider theme changes
+// because Fluent UI v9 uses CSS variables under the hood
+export const useStyles = makeStyles({
+	root: {
+		// The theme background covers the whole tool; without it, surfaces with no background of
+		// their own showed the page's white canvas in dark mode (#67). (Not on the FluentProvider:
+		// Fluent copies its className onto portal containers.)
+		backgroundColor: tokens.colorNeutralBackground1,
+		color: tokens.colorNeutralForeground1,
+		display: "flex",
+		flexDirection: "row",
+		height: "100%",
+		width: "100%",
+		overflow: "hidden",
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+	},
+	leftPane: {
+		display: "flex",
+		flexDirection: "column",
+		overflow: "hidden",
+		minWidth: "300px",
+		maxWidth: "800px",
+		height: "100%",
+	},
+	leftPaneTop: {
+		display: "flex",
+		flexDirection: "column",
+		overflow: "hidden",
+		minHeight: 0, // Important for flex child with overflow
+	},
+	horizontalResizeHandle: {
+		height: "6px",
+		cursor: "ns-resize",
+		backgroundColor: tokens.colorNeutralBackground3,
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		position: "relative",
+		flexShrink: 0,
+		":hover": {
+			backgroundColor: tokens.colorNeutralBackground3Hover,
+		},
+		":active": {
+			backgroundColor: tokens.colorBrandBackgroundPressed,
+		},
+	},
+	horizontalGrip: {
+		fontSize: "10px",
+		color: tokens.colorNeutralForeground3,
+		userSelect: "none",
+		pointerEvents: "none",
+		display: "flex",
+		gap: "3px",
+		alignItems: "center",
+	},
+	verticalResizeHandle: {
+		width: "6px",
+		cursor: "ew-resize",
+		backgroundColor: tokens.colorNeutralBackground3,
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		position: "relative",
+		flexShrink: 0,
+		":hover": {
+			backgroundColor: tokens.colorNeutralBackground3Hover,
+		},
+		":active": {
+			backgroundColor: tokens.colorBrandBackgroundPressed,
+		},
+	},
+	verticalGrip: {
+		fontSize: "10px",
+		color: tokens.colorNeutralForeground3,
+		userSelect: "none",
+		pointerEvents: "none",
+		display: "flex",
+		flexDirection: "column",
+		gap: "2px",
+		lineHeight: "0.5",
+	},
+	leftPaneBottom: {
+		display: "flex",
+		flexDirection: "column",
+		minHeight: "100px",
+		overflow: "hidden",
+		minWidth: 0, // Important for flex child with overflow
+	},
+	propertiesContent: {
+		flex: 1,
+		overflow: "hidden",
+	},
+	rightPane: {
+		flex: 1,
+		display: "flex",
+		flexDirection: "column",
+		overflow: "hidden",
+		minWidth: 0,
+	},
+	toolbar: {
+		padding: "12px 16px",
+		borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+		display: "flex",
+		gap: "8px",
+		alignItems: "center",
+		flexShrink: 0,
+	},
+	placeholder: {
+		padding: "16px",
+		color: tokens.colorNeutralForeground3,
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		height: "100%",
+	},
+});
