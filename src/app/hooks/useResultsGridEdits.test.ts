@@ -515,3 +515,19 @@ describe("sorting by a column", () => {
 		expect(notify).not.toHaveBeenCalled();
 	});
 });
+
+describe("running the query", () => {
+	it("runs only for column filters: the other edits leave running to the user", async () => {
+		await fresh();
+		await load(WITH_CONTACT);
+		await act_(() => edits.reorderColumns([...builder.columnConfig!.columns].reverse()));
+		await act_(() => edits.addColumn("revenue"));
+		await act_(() => edits.addRelatedColumns([related(CONTACTS, "1N", "lastname")]));
+		await act_(() =>
+			edits.sortByColumn({ columnId: "name", direction: "ascending", isMultiSort: false }),
+		);
+		await act_(() => edits.removeColumns(["revenue"]));
+		expect(xml()).toContain('<order attribute="name"');
+		expect(run).not.toHaveBeenCalled();
+	});
+});
