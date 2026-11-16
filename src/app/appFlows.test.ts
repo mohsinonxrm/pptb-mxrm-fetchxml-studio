@@ -267,15 +267,19 @@ describe("app: opening a view from another tool", () => {
 				views: [activeAccounts],
 				launch: { viewRef: { id: missing, entityLogicalName: "savedquery" } },
 			});
-			await app.waitFor(() => app.notifications.length > 0);
-			expect(app.notifications[0]).toMatchObject({
-				title: "Couldn't open the view",
-				type: "error",
-			});
-			expect(app.notifications[0].body).toContain(missing);
-			// Usable: nothing loaded, and a new query can start
+			// An error bar above the empty tree, not a host notification (#277, owner decision 2)
+			const bar = () =>
+				[...document.querySelectorAll<HTMLElement>(".fui-MessageBar")].find((b) =>
+					b.textContent?.includes("Couldn't open the view"),
+				);
+			await app.waitFor(() => bar() !== undefined);
+			expect(bar()?.textContent).toContain(missing);
+			expect(app.notifications).toEqual([]);
+			// Usable: nothing loaded, and a new query can start; New clears the bar
 			expect(app.dataverse.calls.some((c) => /\?(fetchXml|savedQuery)=/.test(c))).toBe(false);
 			expect(isDisabled(button("New", document))).toBe(false);
+			await click(button("New", document));
+			expect(bar()).toBeUndefined();
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,

@@ -5,7 +5,7 @@
  */
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { cleanup, render } from "../../shared/testing/ui";
+import { cleanup, render, toasts } from "../../shared/testing/ui";
 import { BuilderProvider } from "../../features/fetchxml/state/builderStore";
 import { useBuilder, type BuilderContextValue } from "../../features/fetchxml/state/builderContext";
 import type {
@@ -448,7 +448,7 @@ describe("sorting by a column", () => {
 		await load(WITH_CONTACT);
 		await sort("pc.fullname", "ascending");
 		expect(orders()).toEqual([{ attribute: "fullname", entityname: "pc", descending: false }]);
-		expect(notify).not.toHaveBeenCalled();
+		expect(toasts()).toEqual([]);
 	});
 
 	it("says why it can't sort by a root column Dataverse can't sort", async () => {
@@ -458,11 +458,11 @@ describe("sorting by a column", () => {
 		);
 		await sort("categories", "ascending");
 		expect(orders()).toEqual([]);
-		expect(notify).toHaveBeenCalledWith({
-			title: "Can't sort by this column",
-			body: expect.stringContaining("multi-select"),
-			type: "warning",
-		});
+		// A warning toast in the app, not a host notification (#277)
+		expect(toasts()).toEqual([
+			expect.stringMatching(/^Can't sort by this column\. .*multi-select/),
+		]);
+		expect(notify).not.toHaveBeenCalled();
 	});
 
 	it("checks a link-entity column against its own entity's metadata", async () => {
@@ -470,9 +470,9 @@ describe("sorting by a column", () => {
 		await load(WITH_CONTACT);
 		await sort("pc.hobbies", "ascending");
 		expect(orders()).toEqual([]);
-		expect(notify).toHaveBeenCalledWith(
-			expect.objectContaining({ body: expect.stringContaining("multi-select") }),
-		);
+		expect(toasts()).toEqual([
+			expect.stringMatching(/^Can't sort by this column\. .*multi-select/),
+		]);
 	});
 
 	it("sorts a column with no metadata", async () => {
@@ -492,7 +492,7 @@ describe("sorting by a column", () => {
 		await show({ attributeMetadata: METADATA });
 		await sort("categories", "ascending");
 		expect(orders()).toEqual([]);
-		expect(notify).toHaveBeenCalledTimes(1);
+		expect(toasts()).toHaveLength(1);
 	});
 
 	it("says why it can't sort by a column that isn't in the query", async () => {
@@ -500,11 +500,9 @@ describe("sorting by a column", () => {
 		await load(ACCOUNT_XML);
 		await sort("nothere", "ascending");
 		expect(orders()).toEqual([]);
-		expect(notify).toHaveBeenCalledWith({
-			title: "Can't sort by this column",
-			body: "This column isn't an attribute of the query.",
-			type: "warning",
-		});
+		expect(toasts()).toEqual([
+			"Can't sort by this column. This column isn't an attribute of the query..",
+		]);
 	});
 
 	it("does nothing without a query", async () => {
@@ -512,7 +510,7 @@ describe("sorting by a column", () => {
 		await fresh({ override: { setSort } });
 		await sort("name", "ascending");
 		expect(setSort).not.toHaveBeenCalled();
-		expect(notify).not.toHaveBeenCalled();
+		expect(toasts()).toEqual([]);
 	});
 });
 

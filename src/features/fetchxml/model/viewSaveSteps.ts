@@ -33,3 +33,14 @@ export async function runViewSaveSteps(
 	}
 	return null;
 }
+
+/**
+ * Whether a system view counts as published once the dialog closes after a partial save (#277): it
+ * was meant to be, and publishing wasn't one of the steps left undone. Undefined for personal views.
+ */
+export function publishedAfterClose(
+	published: boolean | undefined,
+	remaining: readonly ViewSaveStep[],
+): boolean | undefined {
+	return published === undefined ? undefined : published && !remaining.includes("publish");
+}

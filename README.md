@@ -98,7 +98,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Save to Dataverse** — Save your queries as new personal or system views, or update existing ones.
   - Before overwriting a shared personal view, your write access is checked; without it you get **Save a copy…**.
   - Overwriting a managed system view warns first.
-  - Public system views can be **set as the default view**. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise (saving a view that's already the default clears any other default too); if one can't be cleared, a notification names it.
+  - Public system views can be **set as the default view**. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise (saving a view that's already the default clears any other default too); if one can't be cleared, a warning names it. After saving, a toast names the view, and says when a system view isn't published yet.
   - The description is pre-filled.
 - **Solution-aware** — Add views to solutions during save
 
@@ -434,7 +434,7 @@ FetchXML Studio declares a PPTB [Inter-Tool Invocation](https://github.com/Power
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `fetchXml` | `string` | One of these three | Full serialized FetchXML query string. The root entity is parsed from this. |
-| `viewRef` | `object` | One of these three | EntityReference to an existing view. The view opens as **Load view** opens it: its FetchXML, its column layout, execution by ID while unchanged, and **Save** offering to overwrite it. If it doesn't exist, you can't read it, or Dataverse returns an error, a notification says so. |
+| `viewRef` | `object` | One of these three | EntityReference to an existing view. The view opens as **Load view** opens it: its FetchXML, its column layout, execution by ID while unchanged, and **Save** offering to overwrite it. If it doesn't exist, you can't read it, or Dataverse returns an error, a message above the tree says so; it stays until a query starts or you press **New**. A query that can't be parsed is reported the same way. |
 | `entityLogicalName` | `string` | One of these three | Root entity logical name (e.g. `"account"`). Starts a fresh query on that entity. **Ignored when `fetchXml` is present** — the root entity is then derived from the FetchXML, since a mismatched value would break this metadata-driven tool's lookups. |
 | `viewRef.id` | `string` (uuid) | Required if viewRef | GUID of the view record |
 | `viewRef.entityLogicalName` | `"savedquery"` \| `"userquery"` | Required if viewRef | Dataverse entity logical name — `savedquery` = system/public view, `userquery` = personal view |

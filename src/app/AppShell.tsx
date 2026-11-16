@@ -13,6 +13,8 @@ import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecord
 import { useQueryExecution } from "./hooks/useQueryExecution";
 import { useLaunchPrefill, type ConnectionCarryOver } from "./hooks/useLaunchPrefill";
 import { useViewLayout } from "./hooks/useViewLayout";
+import { useTreeNotice } from "./hooks/useTreeNotice";
+import { TreeNoticeBar } from "./TreeNoticeBar";
 import { useStyles } from "./AppShell.styles";
 import { RecordActionDialogs } from "./RecordActionDialogs";
 import { useResultsGridEdits } from "./hooks/useResultsGridEdits";
@@ -31,11 +33,13 @@ import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
 import { NotifyProvider } from "../shared/feedback/NotifyProvider";
+import { useNotify } from "../shared/feedback/useNotify";
 import { PaneErrorBoundary, ToolErrorBoundary } from "../shared/components/ErrorBoundary";
 import { whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import { debugLog } from "../shared/utils/debug";
 import {
+	savedViewToast,
 	countQuickFindPlaceholders,
 	toQuickFindSearchValue,
 } from "../features/fetchxml/model/savedViews";
@@ -138,6 +142,7 @@ function AppContent({
 }) {
 	const styles = useStyles();
 	const builder = useBuilder();
+	const { notify } = useNotify();
 	const { loadAttributes, loadEntityMetadata, loadRelationships } = useLazyMetadata();
 
 	// Tool-to-Tool (T2T) launch context: detected once, shared across the app.
@@ -153,11 +158,15 @@ function AppContent({
 	const [quickFindAddPercent, setQuickFindAddPercent] = useState(true);
 
 	// The query carried over a connection change, the launch prefill and loading a view (#301)
+	// A MessageBar above the tree about the query in it: a launch that couldn't be loaded, a view
+	// loaded with changes (#277)
+	const treeNotice = useTreeNotice(builder.fetchQuery?.entity.id);
 	const { applyLoadedView } = useLaunchPrefill({
 		builder,
 		carryOver,
 		launch,
 		onViewApplied: () => setQuickFindValue(""),
+		showTreeNotice: treeNotice.show,
 	});
 
 	// Settings drawer state
@@ -274,6 +283,9 @@ function AppContent({
 			});
 		}
 		debugLog("app", `✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
+		// Says the view was saved, and when a system view isn't published yet (#277, owner decision 5;
+		// the Publish action comes with #278's Save menu)
+		notify.success(savedViewToast(viewName, details.published));
 	};
 
 	// The results grid's edits to the query: column filters, columns and sorting (#301). Here, so the
@@ -306,7 +318,10 @@ function AppContent({
 						<EntitySelector
 							selectedEntity={builder.fetchQuery?.entity.name || null}
 							onEntityChange={builder.setEntity}
-							onNewQuery={builder.newQuery}
+							onNewQuery={() => {
+								treeNotice.dismiss();
+								builder.newQuery();
+							}}
 							entityScopeMode={displaySettings.entityScopeMode}
 							onEntityScopeModeChange={(entityScopeMode) =>
 								setDisplaySettings({ ...displaySettings, entityScopeMode })
@@ -318,6 +333,7 @@ function AppContent({
 							onViewLoad={applyLoadedView}
 						/>
 					</PaneErrorBoundary>
+					<TreeNoticeBar notice={treeNotice.notice} onDismiss={treeNotice.dismiss} />
 					{builder.fetchQuery ? (
 						<PaneErrorBoundary
 							where="Query tree"

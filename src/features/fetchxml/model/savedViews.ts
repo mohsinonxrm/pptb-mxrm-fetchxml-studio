@@ -307,3 +307,19 @@ export function getViewLoadNotice(viewName: string, result: ParseResult): ViewLo
 		type: "warning",
 	};
 }
+
+/**
+ * The toast after Save view (#277, owner decision 5): it names the view, and says when a system
+ * view isn't published yet, so apps don't show it. The Publish action comes with #278's Save menu.
+ */
+export function savedViewToast(
+	viewName: string,
+	published: boolean | undefined,
+): { title: string; body?: string } {
+	return published === false
+		? {
+				title: `Saved "${viewName}"`,
+				body: "Not published yet: apps show it after you publish.",
+			}
+		: { title: `Saved "${viewName}"` };
+}
