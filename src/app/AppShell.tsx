@@ -2,7 +2,7 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
 	FluentProvider,
 	webLightTheme,
@@ -19,9 +19,9 @@ import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecord
 import { useQueryExecution } from "./hooks/useQueryExecution";
 import { useLaunchPrefill, type ConnectionCarryOver } from "./hooks/useLaunchPrefill";
 import { useViewLayout } from "./hooks/useViewLayout";
+import { useResultsGridEdits } from "./hooks/useResultsGridEdits";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
-import type { RelatedEntityColumn } from "../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
 import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
@@ -43,18 +43,6 @@ import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
 import { CloseRecordsDialog } from "../features/fetchxml/ui/Dialogs/CloseRecordsDialog";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import { debugLog } from "../shared/utils/debug";
-import { NON_RETURNING_LINK_TYPES } from "../features/fetchxml/model/fetchxmlRules";
-import {
-	planRemoveColumns,
-	planSortByColumn,
-	resolveColumn,
-} from "../features/fetchxml/model/queryColumns";
-import { relationshipKey } from "../features/fetchxml/model/manyToMany";
-import {
-	columnFilterConditions,
-	type NewCondition,
-} from "../features/fetchxml/model/columnFilters";
-import { toAttributeTypeInfo } from "../features/fetchxml/model/attributeCapabilities";
 import {
 	countQuickFindPlaceholders,
 	toQuickFindSearchValue,
@@ -411,33 +399,9 @@ function AppContent({
 		debugLog("app", `✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
 	};
 
-	// Column filters from the results grid (#23): they change the query, which then runs again.
-	// Running waits for the change to commit, so it runs the new query.
-	const columnFilters = useMemo(
-		() => columnFilterConditions(builder.fetchQuery, builder.columnFilterId),
-		[builder.fetchQuery, builder.columnFilterId],
-	);
-	const [columnFilterRunRequest, setColumnFilterRunRequest] = useState(0);
-	useEffect(() => {
-		if (columnFilterRunRequest > 0) void handleExecuteRef.current();
-	}, [columnFilterRunRequest, handleExecuteRef]);
-	const { addColumnFilter, removeColumnFilter, clearColumnFilters } = builder; // stable (#65)
-	const handleAddColumnFilter = useCallback(
-		(condition: NewCondition) => {
-			addColumnFilter(condition);
-			setColumnFilterRunRequest((n) => n + 1);
-		},
-		[addColumnFilter],
-	);
-	const handleRemoveColumnFilters = useCallback(
-		(conditionIds: string[]) => {
-			if (conditionIds.length === 0) return;
-			if (conditionIds.length === columnFilters.length) clearColumnFilters();
-			else conditionIds.forEach((id) => removeColumnFilter(id));
-			setColumnFilterRunRequest((n) => n + 1);
-		},
-		[columnFilters.length, clearColumnFilters, removeColumnFilter],
-	);
+	// The results grid's edits to the query: column filters, columns and sorting (#301). Here, so the
+	// effect that runs the query after a filter change keeps its place among the effects.
+	const gridEdits = useResultsGridEdits({ builder, attributeMetadata, handleExecuteRef });
 
 	// The record actions: their dialogs, the selection, and why each action is off (#301)
 	const recordActions = useRecordActions({
@@ -636,142 +600,14 @@ function AppContent({
 							/>
 						) : undefined
 					}
-					onReorderColumns={(columns) => {
-						// Set the column config with new order
-						if (builder.columnConfig) {
-							builder.setColumnConfig({
-								...builder.columnConfig,
-								columns,
-							});
-						}
-					}}
-					onRemoveColumns={(columnKeys) => {
-						// Each column maps to its attribute (root or link-entity, aliased or not); sorts on a
-						// removed alias and outer link-entities left empty go too (queryColumns.ts, #114)
-						if (!builder.fetchQuery) return;
-						const plan = planRemoveColumns(builder.fetchQuery, columnKeys);
-						plan.removeNodeIds.forEach((id) => builder.removeNode(id));
-					}}
-					onAddColumn={(attributeName) => {
-						// Add the attribute to the root entity
-						if (builder.fetchQuery?.entity.id) {
-							builder.addAttributeByName(builder.fetchQuery.entity.id, attributeName);
-						}
-					}}
-					onAddRelatedColumns={(relatedColumns: RelatedEntityColumn[]) => {
-						// Add related entity columns - this requires creating link-entities
-						if (!builder.fetchQuery?.entity.id) return;
-
-						// Group by relationship to create link-entities
-						const byRelationship = new Map<string, RelatedEntityColumn[]>();
-						for (const col of relatedColumns) {
-							// An intersect entity's two joins share a schema name (#57)
-							const key = relationshipKey(col.relationship);
-							if (!byRelationship.has(key)) {
-								byRelationship.set(key, []);
-							}
-							byRelationship.get(key)!.push(col);
-						}
-
-						// For each relationship, find or create link-entity and add attributes
-						for (const [, cols] of byRelationship) {
-							const rel = cols[0].relationship;
-							const relType = cols[0].relationshipType;
-
-							let fromAttr: string;
-							let toAttr: string;
-							let relatedEntity: string;
-							let linkType: "inner" | "outer";
-							let relTypeForBuilder: "N1" | "1N";
-
-							if (relType === "N1") {
-								// For N:1 (Many-to-One) lookup relationships:
-								// - ReferencingAttribute = FK on current entity (e.g., primarycontactid on account)
-								// - ReferencedAttribute = PK on related entity (e.g., contactid on contact)
-								// In FetchXML link-entity:
-								// - from = attribute on the LINKED entity (the PK)
-								// - to = attribute on the PARENT entity (the FK)
-								fromAttr = rel.ReferencedAttribute; // PK on linked (contact.contactid)
-								toAttr = rel.ReferencingAttribute; // FK on parent (account.primarycontactid)
-								relatedEntity = rel.ReferencedEntity; // contact
-								linkType = "outer"; // N:1 typically use outer join to not filter parent records
-								relTypeForBuilder = "N1";
-							} else {
-								// For 1:N (One-to-Many) relationships:
-								// - ReferencingEntity = the related entity (the "many" side that has the FK)
-								// - ReferencedEntity = the current entity (the "one" side)
-								// - ReferencingAttribute = FK on the related entity
-								// - ReferencedAttribute = PK on the current entity
-								// In FetchXML link-entity:
-								// - from = FK on the LINKED entity (the FK to parent)
-								// - to = PK on the PARENT entity
-								fromAttr = rel.ReferencingAttribute; // FK on linked entity
-								toAttr = rel.ReferencedAttribute; // PK on parent (e.g., accountid)
-								relatedEntity = rel.ReferencingEntity; // The related entity (e.g., contact)
-								linkType = "outer"; // 1:N use outer join to include parent records without children
-								relTypeForBuilder = "1N";
-							}
-
-							// Reuse a link-entity for this relationship, unless its type returns no attributes
-							// (exists / in / any / not any / all / not all reject them: 0x80041121)
-							const existingLinkEntity = builder.fetchQuery.entity.links.find(
-								(le) =>
-									le.from === fromAttr &&
-									le.to === toAttr &&
-									le.name === relatedEntity &&
-									!NON_RETURNING_LINK_TYPES.has(le.linkType),
-							);
-
-							let linkEntityId: string;
-
-							if (existingLinkEntity) {
-								linkEntityId = existingLinkEntity.id;
-							} else {
-								// Create the link-entity with config - returns the ID immediately
-								linkEntityId = builder.addLinkEntityWithConfig(
-									builder.fetchQuery.entity.id,
-									relatedEntity,
-									fromAttr,
-									toAttr,
-									linkType,
-									relTypeForBuilder,
-								);
-							}
-
-							// Add attributes to the link-entity using the ID
-							for (const col of cols) {
-								builder.addAttributeByName(linkEntityId, col.attribute.LogicalName);
-							}
-						}
-					}}
-					columnFilters={columnFilters}
-					onAddColumnFilter={handleAddColumnFilter}
-					onRemoveColumnFilters={handleRemoveColumnFilters}
-					onSortChange={(data) => {
-						// The column maps to the right <order>: alias in aggregate queries, entityname for
-						// link-entity columns, nothing for types Dataverse can't sort (queryColumns.ts, #114)
-						if (!builder.fetchQuery) return;
-						const column = resolveColumn(builder.fetchQuery, data.columnId);
-						const metadata = column
-							? attributeMetadata
-									?.get(column.container.name)
-									?.get(column.attribute.name)
-							: undefined;
-						const plan = planSortByColumn(
-							builder.fetchQuery,
-							data.columnId,
-							metadata ? toAttributeTypeInfo(metadata) : undefined,
-						);
-						if ("reason" in plan) {
-							void window.toolboxAPI?.utils?.showNotification?.({
-								title: "Can't sort by this column",
-								body: plan.reason,
-								type: "warning",
-							});
-							return;
-						}
-						builder.setSort(plan, data.direction === "descending", data.isMultiSort);
-					}}
+					onReorderColumns={gridEdits.reorderColumns}
+					onRemoveColumns={gridEdits.removeColumns}
+					onAddColumn={gridEdits.addColumn}
+					onAddRelatedColumns={gridEdits.addRelatedColumns}
+					columnFilters={gridEdits.columnFilters}
+					onAddColumnFilter={gridEdits.addColumnFilter}
+					onRemoveColumnFilters={gridEdits.removeColumnFilters}
+					onSortChange={gridEdits.sortByColumn}
 					// Record action handlers
 					onOpenRecord={recordActions.openRecord}
 					onCopyRecordUrl={recordActions.copyRecordUrl}
