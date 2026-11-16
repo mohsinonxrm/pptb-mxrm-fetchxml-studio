@@ -32,7 +32,8 @@ import {
 	ErrorCircle20Regular,
 } from "@fluentui/react-icons";
 import { formatDataverseError } from "../../api/dataverseErrors";
-import { copyText, openUrl } from "../../api/host";
+import { openUrl } from "../../api/host";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { defaultBulkDeleteJobName } from "./bulkDeleteJobName";
 
@@ -124,7 +125,7 @@ export function BulkDeleteDialog({
 	const [jobName, setJobName] = useState(() => defaultBulkDeleteJobName(entityDisplayName));
 	const [error, setError] = useState<string | null>(null);
 	const [result, setResult] = useState<{ asyncOperationId: string; jobUrl: string } | null>(null);
-	const [copied, setCopied] = useState(false);
+	const copy = useCopy();
 	const [confirmAllRecords, setConfirmAllRecords] = useState(false);
 	// Type-to-confirm for Production, more than 100 records or an unknown total (#69)
 	const [scopeConfirmed, setScopeConfirmed] = useState(false);
@@ -154,19 +155,15 @@ export function BulkDeleteDialog({
 			setState("confirm");
 			setError(null);
 			setResult(null);
-			setCopied(false);
 			setConfirmAllRecords(false);
 			onClose();
 		}
 	}, [state, onClose]);
 
 	const handleCopyUrl = useCallback(async () => {
-		// The ToolBox clipboard first, then the browser's (#70)
-		if (result?.jobUrl && (await copyText(result.jobUrl))) {
-			setCopied(true);
-			setTimeout(() => setCopied(false), 2000);
-		}
-	}, [result]);
+		// The ToolBox clipboard first, then the browser's (#70); says so in a toast (#277)
+		if (result?.jobUrl) await copy(result.jobUrl, "the job URL");
+	}, [result, copy]);
 
 	const handleOpenJob = useCallback(() => {
 		// In the connection's browser profile (#70)
@@ -303,7 +300,7 @@ export function BulkDeleteDialog({
 										icon={<Copy20Regular />}
 										onClick={handleCopyUrl}
 									>
-										{copied ? "Copied!" : "Copy URL"}
+										Copy URL
 									</Button>
 								</div>
 							)}

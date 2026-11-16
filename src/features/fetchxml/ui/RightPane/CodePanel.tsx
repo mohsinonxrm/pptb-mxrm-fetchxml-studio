@@ -38,7 +38,7 @@ import { generateCSharpQueryExpression } from "../../engine/queryExpressionCodeg
 import type { QeQueryExpression } from "../../engine/queryExpressionTypes";
 import { fetchXmlToQueryExpression, fetchXmlToSQL } from "../../api/pptbClient";
 import { loadEntityMetadata } from "../../api/dataverseMetadata";
-import { copyText } from "../../api/host";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import {
 	CONVERSION_DELAY_MS,
 	conversionKey,
@@ -158,7 +158,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const { connected, environmentUrl } = usePptbContext();
 
 	const [selectedFormat, setSelectedFormat] = useState<CodeFormat>("csharp-fetchexpr");
-	const [copied, setCopied] = useState(false);
+	const copy = useCopy();
 
 	// Dataverse conversions (C# QueryExpression, SQL): for the selected format only, after typing
 	// pauses, and once per query and environment (#199)
@@ -267,12 +267,9 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const handleCopy = useCallback(() => {
 		const code = currentCode();
 		if (!code) return;
-		void copyText(code).then((ok) => {
-			if (!ok) return;
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		});
-	}, [currentCode]);
+		// "Copied C# QueryExpression" or "Couldn't copy to the clipboard" (#277)
+		void copy(code, FORMAT_LABELS[selectedFormat]);
+	}, [currentCode, copy, selectedFormat]);
 
 	const isAsyncLoading = conversionLoading;
 
@@ -335,9 +332,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 					content={
 						selectedFormat === "powerautomate"
 							? "Use the per-field Copy buttons below"
-							: copied
-								? "Copied!"
-								: "Copy to clipboard"
+							: "Copy to clipboard"
 					}
 					relationship="label"
 				>
@@ -355,7 +350,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 						}
 						aria-label="Copy code to clipboard"
 					>
-						{copied ? "Copied!" : "Copy"}
+						Copy
 					</Button>
 				</Tooltip>
 			</div>

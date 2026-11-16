@@ -30,6 +30,7 @@ import { clearMetadataLoadErrors } from "../features/fetchxml/ui/LeftPane/Proper
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
+import { NotifyProvider } from "../shared/feedback/NotifyProvider";
 import { PaneErrorBoundary, ToolErrorBoundary } from "../shared/components/ErrorBoundary";
 import { whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
@@ -106,14 +107,22 @@ export function AppShell() {
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				<ToolErrorBoundary
-					readFetchXml={() => carryOver.current.readFetchXml?.()}
-					onRestart={restart}
-				>
-					<BuilderProvider key={`${session}-${restarts}`}>
-						<AppContent carryOver={carryOver.current} connectionKey={connectionKey} />
-					</BuilderProvider>
-				</ToolErrorBoundary>
+				{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
+				    details still toasts; above the remount, so a new session or a restart clears
+				    toasts whose actions point at the old builder */}
+				<NotifyProvider resetKey={`${session}-${restarts}`}>
+					<ToolErrorBoundary
+						readFetchXml={() => carryOver.current.readFetchXml?.()}
+						onRestart={restart}
+					>
+						<BuilderProvider key={`${session}-${restarts}`}>
+							<AppContent
+								carryOver={carryOver.current}
+								connectionKey={connectionKey}
+							/>
+						</BuilderProvider>
+					</ToolErrorBoundary>
+				</NotifyProvider>
 			</ThemeProvider>
 		</FluentProvider>
 	);

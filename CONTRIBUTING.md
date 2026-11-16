@@ -73,6 +73,12 @@ To try a build inside PPTB, load the repository folder as a local tool after
   building.
 - **Fluent UI v9 only** (`@fluentui/react-components`), following the PPTB theme in light
   and dark. PR screenshots show both themes.
+- **Feedback has three channels** (#277). A **toast** (`useNotify()` / `useCopy()` from
+  `src/shared/feedback/`) for a short confirmation or a failure the user started, named after
+  the object ("Copied 3 rows"). A **MessageBar** in the place it's about (a tab, a pane, a
+  dialog), with an action where one exists. The **Operations panel** (#296) for anything the
+  user needs after it's gone. Host notifications (`showNotification`) are only for events from
+  outside the window, such as a connection change.
 - **Wording:** follow the [style table](#ui-wording-style) below: sentence case, "…" for
   ellipses, and "Entity" / "Attribute" as the nouns. The same wording is shared with Command
   Bar Studio and Dataverse Request Studio.

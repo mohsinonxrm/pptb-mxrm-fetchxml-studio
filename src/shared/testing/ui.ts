@@ -8,6 +8,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { NotifyProvider } from "../feedback/NotifyProvider";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -71,7 +72,10 @@ function installResizeObserver(): void {
 		win.ResizeObserver = RecordingResizeObserver;
 }
 
-/** Renders the element inside a light FluentProvider; a second call re-renders the same root */
+/**
+ * Renders the element inside a light FluentProvider and the app's NotifyProvider (#277), so toasts
+ * show up in toasts(); a second call re-renders the same root
+ */
 export async function render(ui: ReactElement): Promise<void> {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	installResizeObserver();
@@ -82,16 +86,43 @@ export async function render(ui: ReactElement): Promise<void> {
 	}
 	const target = root;
 	await act(async () => {
-		target.render(createElement(FluentProvider, { theme: webLightTheme }, ui));
+		target.render(
+			createElement(
+				FluentProvider,
+				{ theme: webLightTheme },
+				createElement(NotifyProvider, null, ui),
+			),
+		);
 	});
 	await flush();
+}
+
+/**
+ * Fluent's teardown noise on a full unmount (#277): the FluentProvider's cleanup runs before its
+ * children's and disposes the window's Keyborg core, so the Toaster's own Keyborg instance (from
+ * NotifyProvider) then reports "Keyborg instance kN is being disposed incorrectly". It is a dev-only
+ * message (keyborg strips it in production) and only happens when the whole tree goes. Everything
+ * else console.error gets during the unmount still goes through.
+ */
+const KEYBORG_TEARDOWN = /^Keyborg instance \S+ is being disposed incorrectly\.$/;
+function unmountQuietly(unmount: () => void): void {
+	const original = console.error;
+	console.error = (...args: unknown[]) => {
+		if (typeof args[0] === "string" && KEYBORG_TEARDOWN.test(args[0])) return;
+		original(...args);
+	};
+	try {
+		unmount();
+	} finally {
+		console.error = original;
+	}
 }
 
 /** Unmounts and removes everything render added (and any width stub); call it in afterEach */
 export function cleanup(): void {
 	if (root) {
 		const target = root;
-		act(() => target.unmount());
+		unmountQuietly(() => act(() => target.unmount()));
 	}
 	container?.remove();
 	root = null;

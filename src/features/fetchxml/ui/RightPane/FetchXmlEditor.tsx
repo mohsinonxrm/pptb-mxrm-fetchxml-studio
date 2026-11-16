@@ -42,7 +42,8 @@ import {
 } from "../../model/fetchxmlParser";
 import type { ParseResult, ParseWarning } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
-import { copyText } from "../../api/host";
+import { useNotify } from "../../../../shared/feedback/useNotify";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
@@ -167,6 +168,10 @@ export function FetchXmlEditor({
 		changes: ParseWarning[];
 	} | null>(null);
 
+	// Short confirmations go to the app's Toaster; bars here are only for problems in this XML (#277)
+	const { notify } = useNotify();
+	const copy = useCopy();
+
 	// Get current XML value based on mode
 	const currentXml = isEditorMode ? editedXml : xml;
 
@@ -241,11 +246,10 @@ export function FetchXmlEditor({
 		if (!replaceRequest || !isEditorMode) return;
 		setEditedXml(replaceRequest.xml);
 		onEditorStateChange?.(true, replaceRequest.xml);
-		addMessage(
-			"info",
-			"Editor updated",
-			"The editor now shows the FetchXML that was loaded into the tree, with the changes you confirmed.",
-		);
+		notify.info({
+			title: "Editor updated",
+			body: "The editor now shows the FetchXML that was loaded into the tree, with the changes you confirmed.",
+		});
 		// Only a new request replaces the buffer
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [replaceRequest?.id]);
@@ -268,12 +272,8 @@ export function FetchXmlEditor({
 
 	// Copy to clipboard
 	const handleCopy = useCallback(async () => {
-		if (await copyText(currentXml)) {
-			addMessage("success", "Copied", "FetchXML copied to clipboard");
-		} else {
-			addMessage("error", "Copy failed", "Could not copy to clipboard");
-		}
-	}, [currentXml, addMessage]);
+		await copy(currentXml, "FetchXML");
+	}, [currentXml, copy]);
 
 	// Paste from clipboard
 	const handlePaste = useCallback(async () => {
@@ -282,13 +282,13 @@ export function FetchXmlEditor({
 			if (text.trim()) {
 				setEditedXml(text);
 				onEditorStateChange?.(true, text);
-				addMessage("info", "Pasted", "Content pasted from clipboard");
+				notify.info("Pasted from the clipboard");
 			}
 		} catch (err) {
 			console.error("Failed to paste:", err);
-			addMessage("error", "Paste failed", "Could not read from clipboard");
+			notify.error("Couldn't read the clipboard");
 		}
-	}, [addMessage, onEditorStateChange]);
+	}, [notify, onEditorStateChange]);
 
 	// Load from file
 	const handleLoadFile = useCallback(() => {
@@ -304,17 +304,17 @@ export function FetchXmlEditor({
 					const content = e.target?.result as string;
 					setEditedXml(content);
 					onEditorStateChange?.(true, content);
-					addMessage("info", "File loaded", `Loaded ${file.name}`);
+					notify.info(`Loaded ${file.name}`);
 				};
 				reader.onerror = () => {
-					addMessage("error", "Load failed", "Could not read file");
+					notify.error({ title: "Couldn't read the file", body: file.name });
 				};
 				reader.readAsText(file);
 			}
 			// Reset input so same file can be loaded again
 			event.target.value = "";
 		},
-		[addMessage, onEditorStateChange],
+		[notify, onEditorStateChange],
 	);
 
 	// Reset to tree-generated XML
@@ -322,8 +322,8 @@ export function FetchXmlEditor({
 		setEditedXml(xml);
 		onEditorStateChange?.(true, xml);
 		clearMessages();
-		addMessage("info", "Reset", "Reverted to tree-generated FetchXML");
-	}, [xml, clearMessages, addMessage, onEditorStateChange]);
+		notify.info("Reverted to the FetchXML from the tree");
+	}, [xml, clearMessages, notify, onEditorStateChange]);
 
 	// Validate XML
 	const handleValidate = useCallback(() => {
@@ -359,9 +359,9 @@ export function FetchXmlEditor({
 				executionErrors.some(listedInAdvisories),
 			);
 		if (blocking.length === 0 && executionErrors.length === 0) {
-			addMessage("success", "Valid", "Dataverse should accept this FetchXML.");
+			notify.success({ title: "Valid FetchXML", body: "Dataverse should accept it." });
 		}
-	}, [editedXml, clearMessages, addMessage]);
+	}, [editedXml, clearMessages, addMessage, notify]);
 
 	// Load XML into the tree. `changesConfirmed` is true when the user already reviewed the
 	// changes in the confirmation dialog, so they aren't repeated as notes.
@@ -388,17 +388,13 @@ export function FetchXmlEditor({
 			if (notes.length > 0) addMessage("info", "Notes", notes);
 			if (stillWarnings.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, stillWarnings);
 			if (stillErrors.length > 0) addMessage("error", INVALID_TITLE, stillErrors);
-			addMessage(
-				"success",
-				"Parsed into the tree",
-				"The FetchXML was loaded into the tree builder.",
-			);
+			notify.success("Loaded into the tree");
 
 			// Exit editor mode after successful parse
 			onEditorStateChange?.(false, "");
 			setIsEditorMode(false);
 		},
-		[onParseToTree, clearMessages, addMessage, onEditorStateChange],
+		[onParseToTree, clearMessages, addMessage, notify, onEditorStateChange],
 	);
 
 	// Parse to tree — confirm first when the tree would change the query
