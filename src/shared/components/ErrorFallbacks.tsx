@@ -2,7 +2,6 @@
  * What the error boundaries show (#185): variant A of the reviewed prototype
  * (.claude/mockups/error-boundary), an error MessageBar with the actions.
  */
-import { useState } from "react";
 import {
 	Accordion,
 	AccordionHeader,
@@ -25,7 +24,7 @@ import {
 	ArrowCounterclockwise20Regular,
 	Copy20Regular,
 } from "@fluentui/react-icons";
-import { copyText } from "../../features/fetchxml/api/host";
+import { useCopy } from "../feedback/useCopy";
 
 const useStyles = makeStyles({
 	pane: {
@@ -67,30 +66,27 @@ const useStyles = makeStyles({
 	},
 });
 
-/** Copies the text and says "Copied" for a moment */
+/** Copies the text and says so in a toast: "Copied {what}" (#277) */
 export function CopyButton({
 	text,
 	label,
+	what,
 	appearance,
 }: {
 	text: string;
 	label: string;
+	/** What the toast names: "Copied error details" */
+	what: string;
 	appearance?: "secondary" | "subtle";
 }) {
-	const [copied, setCopied] = useState(false);
+	const copy = useCopy();
 	return (
 		<Button
 			appearance={appearance}
 			icon={<Copy20Regular />}
-			onClick={() => {
-				void copyText(text).then((ok) => {
-					if (!ok) return;
-					setCopied(true);
-					setTimeout(() => setCopied(false), 1500);
-				});
-			}}
+			onClick={() => void copy(text, what)}
 		>
-			{copied ? "Copied" : label}
+			{label}
 		</Button>
 	);
 }
@@ -119,7 +115,7 @@ export function PaneErrorFallback({
 					<Button icon={<ArrowClockwise20Regular />} onClick={onTryAgain}>
 						Try again
 					</Button>
-					<CopyButton text={details} label="Copy details" />
+					<CopyButton text={details} label="Copy details" what="error details" />
 				</MessageBarActions>
 			</MessageBar>
 		</div>
@@ -179,8 +175,10 @@ export function ToolErrorFallback({
 					>
 						Start a new query
 					</Button>
-					{fetchXml && <CopyButton text={fetchXml} label="Copy FetchXML" />}
-					<CopyButton text={details} label="Copy details" />
+					{fetchXml && (
+						<CopyButton text={fetchXml} label="Copy FetchXML" what="FetchXML" />
+					)}
+					<CopyButton text={details} label="Copy details" what="error details" />
 				</div>
 				<Accordion collapsible>
 					<AccordionItem value="details">

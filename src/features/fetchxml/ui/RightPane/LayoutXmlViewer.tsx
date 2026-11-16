@@ -8,7 +8,7 @@ import Editor from "@monaco-editor/react";
 import type * as MonacoEditor from "monaco-editor/editor";
 import { makeStyles, Spinner, tokens, Toolbar, ToolbarButton } from "@fluentui/react-components";
 import { Copy24Regular } from "@fluentui/react-icons";
-import { copyText } from "../../api/host";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import { useTheme } from "../../../../shared/contexts/useTheme";
 
 const useStyles = makeStyles({
@@ -110,9 +110,11 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 		editorRef.current = editor;
 	}, []);
 
+	// "Copied LayoutXML" or "Couldn't copy to the clipboard" (#277)
+	const copy = useCopy();
 	const handleCopy = useCallback(async () => {
-		if (!(await copyText(formattedXml))) console.error("Failed to copy to clipboard");
-	}, [formattedXml]);
+		await copy(formattedXml, "LayoutXML");
+	}, [formattedXml, copy]);
 
 	return (
 		<div className={styles.container}>

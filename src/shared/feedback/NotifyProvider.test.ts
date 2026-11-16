@@ -14,6 +14,12 @@ import { NotifyProvider } from "./NotifyProvider";
 import { useCopy } from "./useCopy";
 import { useNotify, type NotifyApi } from "./useNotify";
 
+/** Every live region's text: render (ui.ts) wraps a NotifyProvider too, so there are two Toasters */
+const liveText = (politeness: "polite" | "assertive") =>
+	[...document.querySelectorAll(`[aria-live="${politeness}"]`)]
+		.map((r) => r.textContent ?? "")
+		.join("");
+
 let api: NotifyApi | undefined;
 
 function Probe() {
@@ -171,7 +177,7 @@ describe("NotifyProvider", () => {
 		it("announces both labels, separated", async () => {
 			await mount();
 			await show(two(vi.fn(), vi.fn()));
-			const polite = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
+			const polite = liveText("polite");
 			expect(polite).toContain("Try again. Copy FetchXML. ");
 		});
 
@@ -313,10 +319,10 @@ describe("NotifyProvider", () => {
 				action: { label: "Try again", onClick: () => undefined },
 			}),
 		);
-		const polite = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
+		const polite = liveText("polite");
 		expect(polite).toContain("The query didn't run. ");
 		expect(polite).toContain("Timeout. ");
-		expect(document.querySelector('[aria-live="assertive"]')?.textContent ?? "").toBe("");
+		expect(liveText("assertive")).toBe("");
 	});
 
 	it("dismisses the toast even when the action throws", async () => {

@@ -36,11 +36,6 @@ import {
 	TagGroup,
 	Tag,
 	SearchBox,
-	Toaster,
-	Toast,
-	ToastTitle,
-	useToastController,
-	useId,
 	type PositioningVirtualElement,
 } from "@fluentui/react-components";
 import {
@@ -104,11 +99,11 @@ import {
 	rawText,
 	rowCountLabel,
 	rowsToTsv,
-	writeClipboard,
 	type CopyColumn,
 	type CopyValueMode,
 } from "./copyResults";
 import { debugLog } from "../../../../shared/utils/debug";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -1068,8 +1063,6 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	}, [search, visibleRows, selectedItems, getRowId, handleSelectionChange]);
 
 	// ---- Copy (#50) ----
-	const toasterId = useId("results-toaster");
-	const { dispatchToast } = useToastController(toasterId);
 	const [cellMenu, setCellMenu] = useState<CellMenuState>({ open: false });
 	/** The cell with keyboard focus, for Ctrl+C */
 	const focusedCellRef = useRef<{ item: Record<string, unknown>; columnId: string } | null>(null);
@@ -1084,20 +1077,8 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		[result, selectedItems, getRowId],
 	);
 
-	const copy = useCallback(
-		async (text: string, what: string) => {
-			const ok = await writeClipboard(text);
-			dispatchToast(
-				<Toast>
-					<ToastTitle>
-						{ok ? `${what} copied` : "Couldn't copy to the clipboard"}
-					</ToastTitle>
-				</Toast>,
-				{ intent: ok ? "success" : "error", timeout: ok ? 2000 : 4000 },
-			);
-		},
-		[dispatchToast],
-	);
+	// "Copied {what}" or "Couldn't copy to the clipboard", in the app's Toaster (#277)
+	const copy = useCopy();
 
 	const copyRecords = useCallback(
 		(records: Record<string, unknown>[], mode: CopyValueMode) => {
@@ -1786,7 +1767,6 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					)}
 				</PopoverSurface>
 			</Popover>
-			<Toaster toasterId={toasterId} position="bottom-end" />
 		</div>
 	);
 });

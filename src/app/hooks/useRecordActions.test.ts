@@ -14,6 +14,7 @@ import {
 	installHost,
 	removeHost,
 	render,
+	toasts,
 	type HostStub,
 } from "../../shared/testing/ui";
 import {
@@ -508,7 +509,7 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		]);
 	});
 
-	it("opens nothing without an environment URL, and says so in the console", async () => {
+	it("opens nothing without an environment URL, and says so in a toast and the console", async () => {
 		cleanup();
 		connect({ connected: false });
 		const open = vi.spyOn(window, "open").mockImplementation(() => null);
@@ -516,9 +517,20 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		await run(() => latest.openRecord([accountId(1)]));
 		expect(open).not.toHaveBeenCalled();
 		expect(console.error).toHaveBeenCalledWith("Failed to get environment URL");
+		expect(toasts()).toEqual([
+			expect.stringMatching(
+				/^Couldn't open the record\. Dismiss.*environment URL isn't available/,
+			),
+		]);
 
 		await run(() => latest.copyRecordUrl([accountId(1)]));
 		expect(console.error).toHaveBeenCalledTimes(2);
+		expect(toasts()[1]).toMatch(
+			/^Couldn't copy the record URL\. Dismiss.*environment URL isn't available/,
+		);
+
+		await run(() => latest.copyRecordUrl([accountId(1), accountId(2)]));
+		expect(toasts()[2]).toMatch(/^Couldn't copy the record URLs\. Dismiss/);
 	});
 
 	it("does nothing with no records", async () => {
@@ -546,9 +558,13 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 				.join("\n"),
 		]);
 		expect(console.error).not.toHaveBeenCalled();
+		expect(toasts()).toEqual(["Copied 2 record URLs."]);
+
+		await run(() => latest.copyRecordUrl([accountId(1)]));
+		expect(toasts()).toEqual(["Copied 2 record URLs.", "Copied the record URL."]);
 	});
 
-	it("logs when the clipboard can't be written", async () => {
+	it("says so when the clipboard can't be written", async () => {
 		const utils = (window as unknown as { toolboxAPI: { utils: Record<string, unknown> } })
 			.toolboxAPI.utils;
 		utils.copyToClipboard = async () => {
@@ -556,7 +572,7 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		};
 		await show();
 		await run(() => latest.copyRecordUrl([accountId(1)]));
-		expect(console.error).toHaveBeenCalledWith("Failed to copy to clipboard");
+		expect(toasts()).toEqual([expect.stringContaining("Couldn't copy to the clipboard")]);
 	});
 });
 

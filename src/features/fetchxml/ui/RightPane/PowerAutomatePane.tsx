@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
 	Input,
 	Textarea,
@@ -16,8 +15,8 @@ import {
 	tokens,
 	makeStyles,
 } from "@fluentui/react-components";
-import { Copy20Regular, Checkmark20Filled, Flash20Filled } from "@fluentui/react-icons";
-import { copyText } from "../../api/host";
+import { Copy20Regular, Flash20Filled } from "@fluentui/react-icons";
+import { useCopy } from "../../../../shared/feedback/useCopy";
 import type {
 	PowerAutomateActionSpec,
 	PowerAutomateField,
@@ -58,6 +57,7 @@ export interface PowerAutomatePaneProps {
 }
 
 export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
+	const copy = useCopy();
 	const s = usePAStyles();
 	const populatedCount = spec.fields.filter((f) => f.value).length;
 	const allAsText = spec.fields
@@ -96,7 +96,7 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 						size="small"
 						appearance="outline"
 						icon={<Copy20Regular />}
-						onClick={() => void copyText(allAsText)}
+						onClick={() => void copy(allAsText, "all fields")}
 					>
 						Copy all
 					</Button>
@@ -150,15 +150,12 @@ function PARow({
 	field: PowerAutomateField;
 	styles: ReturnType<typeof usePAStyles>;
 }) {
-	const [copied, setCopied] = useState(false);
+	const copy = useCopy();
 
+	// "Copied {field}" or "Couldn't copy to the clipboard" (#277)
 	const onCopy = () => {
 		if (!field.value) return;
-		void copyText(field.value).then((ok) => {
-			if (!ok) return;
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1400);
-		});
+		void copy(field.value, field.label);
 	};
 
 	return (
@@ -208,19 +205,11 @@ function PARow({
 					size="medium"
 					appearance={field.value ? "outline" : "subtle"}
 					disabled={!field.value}
-					icon={
-						copied ? (
-							<Checkmark20Filled
-								style={{ color: tokens.colorPaletteGreenForeground1 }}
-							/>
-						) : (
-							<Copy20Regular />
-						)
-					}
+					icon={<Copy20Regular />}
 					onClick={onCopy}
 					className={styles.copyBtn}
 				>
-					{copied ? "Copied" : "Copy"}
+					Copy
 				</Button>
 			</Tooltip>
 		</div>

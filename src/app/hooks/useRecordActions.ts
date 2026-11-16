@@ -68,12 +68,13 @@ import {
 } from "../../features/fetchxml/model/deleteScope";
 import {
 	connectionGuard,
-	copyText,
 	holdClose,
 	openUrl,
 	whileHoldingClose,
 } from "../../features/fetchxml/api/host";
 import { debugLog } from "../../shared/utils/debug";
+import { useNotify } from "../../shared/feedback/useNotify";
+import { useCopy } from "../../shared/feedback/useCopy";
 
 export interface RecordActionPrivileges {
 	canDelete: boolean;
@@ -383,6 +384,9 @@ export function useRecordActions({
 	availability,
 }: RecordActionsInputs): RecordActions {
 	const { recordActionPrivileges, stateActionReasons, closeMenuItems } = availability;
+	// Copy and open-record feedback in the app's Toaster (#277)
+	const { notify } = useNotify();
+	const copy = useCopy();
 
 	// Dialog states for record actions
 	const [deleteDialogState, setDeleteDialogState] = useState<DeleteDialogState>({
@@ -495,6 +499,10 @@ export function useRecordActions({
 			const envUrl = await getEnvironmentUrl();
 			if (!envUrl) {
 				console.error("Failed to get environment URL");
+				notify.error({
+					title: "Couldn't open the record",
+					body: "The connection's environment URL isn't available.",
+				});
 				return;
 			}
 
@@ -505,11 +513,11 @@ export function useRecordActions({
 				await openUrl(url);
 			}
 		},
-		[entityLogicalName],
+		[entityLogicalName, notify],
 	);
 
 	/**
-	 * Copy record URL(s) to clipboard
+	 * Copy record URL(s) to clipboard, and say so in a toast (#277)
 	 */
 	const handleCopyRecordUrl = useCallback(
 		async (recordIds: string[]) => {
@@ -518,19 +526,25 @@ export function useRecordActions({
 			const envUrl = await getEnvironmentUrl();
 			if (!envUrl) {
 				console.error("Failed to get environment URL");
+				notify.error({
+					title:
+						recordIds.length === 1
+							? "Couldn't copy the record URL"
+							: "Couldn't copy the record URLs",
+					body: "The connection's environment URL isn't available.",
+				});
 				return;
 			}
 
 			const urls = recordIds.map((id) => buildRecordUrl(entityLogicalName, id, envUrl));
 			const textToCopy = urls.join("\n");
+			const what = urls.length === 1 ? "the record URL" : `${urls.length} record URLs`;
 
-			if (await copyText(textToCopy)) {
+			if (await copy(textToCopy, what)) {
 				debugLog("app", `📋 Copied ${urls.length} record URL(s) to clipboard`);
-			} else {
-				console.error("Failed to copy to clipboard");
 			}
 		},
-		[entityLogicalName],
+		[entityLogicalName, copy, notify],
 	);
 
 	/**
