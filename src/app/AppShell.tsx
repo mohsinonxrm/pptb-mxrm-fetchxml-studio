@@ -3,13 +3,7 @@
  */
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import {
-	FluentProvider,
-	webLightTheme,
-	webDarkTheme,
-	makeStyles,
-	tokens,
-} from "@fluentui/react-components";
+import { FluentProvider, webLightTheme, webDarkTheme } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { useSplitters } from "./hooks/useSplitters";
@@ -19,6 +13,8 @@ import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecord
 import { useQueryExecution } from "./hooks/useQueryExecution";
 import { useLaunchPrefill, type ConnectionCarryOver } from "./hooks/useLaunchPrefill";
 import { useViewLayout } from "./hooks/useViewLayout";
+import { useStyles } from "./AppShell.styles";
+import { RecordActionDialogs } from "./RecordActionDialogs";
 import { useResultsGridEdits } from "./hooks/useResultsGridEdits";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
@@ -35,12 +31,7 @@ import { BuilderProvider } from "../features/fetchxml/state/builderStore";
 import { useBuilder } from "../features/fetchxml/state/builderContext";
 import { ThemeProvider } from "../shared/contexts/ThemeContext";
 import { PaneErrorBoundary, ToolErrorBoundary } from "../shared/components/ErrorBoundary";
-import { DeleteConfirmDialog } from "../features/fetchxml/ui/Dialogs/DeleteConfirmDialog";
-import { BulkDeleteDialog } from "../features/fetchxml/ui/Dialogs/BulkDeleteDialog";
-import { WorkflowPickerDialog } from "../features/fetchxml/ui/Dialogs/WorkflowPickerDialog";
 import { whoAmI, isDataverseAvailable } from "../features/fetchxml/api/pptbClient";
-import { SetStateDialog } from "../features/fetchxml/ui/Dialogs/SetStateDialog";
-import { CloseRecordsDialog } from "../features/fetchxml/ui/Dialogs/CloseRecordsDialog";
 import { generateFetchXml } from "../features/fetchxml/model/fetchxml";
 import { debugLog } from "../shared/utils/debug";
 import {
@@ -55,129 +46,6 @@ import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
-
-// ⚠️ IMPORTANT: makeStyles must be called OUTSIDE the component
-// but tokens will automatically update when FluentProvider theme changes
-// because Fluent UI v9 uses CSS variables under the hood
-const useStyles = makeStyles({
-	root: {
-		// The theme background covers the whole tool; without it, surfaces with no background of
-		// their own showed the page's white canvas in dark mode (#67). (Not on the FluentProvider:
-		// Fluent copies its className onto portal containers.)
-		backgroundColor: tokens.colorNeutralBackground1,
-		color: tokens.colorNeutralForeground1,
-		display: "flex",
-		flexDirection: "row",
-		height: "100%",
-		width: "100%",
-		overflow: "hidden",
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-	},
-	leftPane: {
-		display: "flex",
-		flexDirection: "column",
-		overflow: "hidden",
-		minWidth: "300px",
-		maxWidth: "800px",
-		height: "100%",
-	},
-	leftPaneTop: {
-		display: "flex",
-		flexDirection: "column",
-		overflow: "hidden",
-		minHeight: 0, // Important for flex child with overflow
-	},
-	horizontalResizeHandle: {
-		height: "6px",
-		cursor: "ns-resize",
-		backgroundColor: tokens.colorNeutralBackground3,
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		position: "relative",
-		flexShrink: 0,
-		":hover": {
-			backgroundColor: tokens.colorNeutralBackground3Hover,
-		},
-		":active": {
-			backgroundColor: tokens.colorBrandBackgroundPressed,
-		},
-	},
-	horizontalGrip: {
-		fontSize: "10px",
-		color: tokens.colorNeutralForeground3,
-		userSelect: "none",
-		pointerEvents: "none",
-		display: "flex",
-		gap: "3px",
-		alignItems: "center",
-	},
-	verticalResizeHandle: {
-		width: "6px",
-		cursor: "ew-resize",
-		backgroundColor: tokens.colorNeutralBackground3,
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		position: "relative",
-		flexShrink: 0,
-		":hover": {
-			backgroundColor: tokens.colorNeutralBackground3Hover,
-		},
-		":active": {
-			backgroundColor: tokens.colorBrandBackgroundPressed,
-		},
-	},
-	verticalGrip: {
-		fontSize: "10px",
-		color: tokens.colorNeutralForeground3,
-		userSelect: "none",
-		pointerEvents: "none",
-		display: "flex",
-		flexDirection: "column",
-		gap: "2px",
-		lineHeight: "0.5",
-	},
-	leftPaneBottom: {
-		display: "flex",
-		flexDirection: "column",
-		minHeight: "100px",
-		overflow: "hidden",
-		minWidth: 0, // Important for flex child with overflow
-	},
-	propertiesContent: {
-		flex: 1,
-		overflow: "hidden",
-	},
-	rightPane: {
-		flex: 1,
-		display: "flex",
-		flexDirection: "column",
-		overflow: "hidden",
-		minWidth: 0,
-	},
-	toolbar: {
-		padding: "12px 16px",
-		borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-		display: "flex",
-		gap: "8px",
-		alignItems: "center",
-		flexShrink: 0,
-	},
-	placeholder: {
-		padding: "16px",
-		color: tokens.colorNeutralForeground3,
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		height: "100%",
-	},
-});
 
 export function AppShell() {
 	const { theme, connectionKey, connectionName } = usePptbContext();
@@ -638,79 +506,12 @@ function AppContent({
 					}
 				/>
 			</div>
-			{/* Delete Confirmation Dialog */}
-			<DeleteConfirmDialog
-				open={recordActions.deleteDialogState.open}
-				recordName={recordActions.deleteDialogState.recordName}
-				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
-					entityLogicalName ||
-					"record"
-				}
+			{/* The record actions' dialogs: Delete, Bulk delete, Run workflow, Activate / Deactivate, Close */}
+			<RecordActionDialogs
+				recordActions={recordActions}
 				entityLogicalName={entityLogicalName}
-				recordCount={recordActions.deleteDialogState.recordIds.length}
-				onClose={recordActions.dismissDeleteDialog}
-				onConfirm={recordActions.confirmDelete}
-				onProgress={recordActions.deleteProgress ?? undefined}
-			/>
-			{/* Bulk Delete Dialog */}
-			<BulkDeleteDialog
-				open={recordActions.bulkDeleteDialogState.open}
-				recordCount={recordActions.bulkDeleteDialogState.recordIds.length}
-				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
-					entityLogicalName ||
-					"records"
-				}
-				entityLogicalName={entityLogicalName}
-				isAllRecords={recordActions.bulkDeleteDialogState.isAllRecords}
-				totalViewRecords={recordActions.bulkDeleteDialogState.totalViewRecords}
+				entityMetadata={entityMetadata}
 				moreRecords={queryResult?.moreRecords}
-				onClose={recordActions.dismissBulkDeleteDialog}
-				onConfirm={recordActions.confirmBulkDelete}
-			/>
-			{/* Workflow Picker Dialog */}
-			<WorkflowPickerDialog
-				open={recordActions.workflowDialogState.open}
-				recordCount={recordActions.workflowDialogState.recordIds.length}
-				entityDisplayName={
-					entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
-					entityLogicalName ||
-					"records"
-				}
-				entityLogicalName={entityLogicalName}
-				preSelectedWorkflow={recordActions.workflowDialogState.preSelectedWorkflow}
-				onClose={recordActions.dismissWorkflowDialog}
-				onFetchWorkflows={recordActions.fetchWorkflows}
-				onExecute={(workflow, onProgress) =>
-					recordActions.executeWorkflow(
-						workflow,
-						recordActions.workflowDialogState.recordIds,
-						onProgress,
-					)
-				}
-			/>
-			{/* Activate / Deactivate Dialog (#143) */}
-			<SetStateDialog
-				open={recordActions.setStateDialogState.open}
-				action={recordActions.setStateDialogState.action}
-				recordIds={recordActions.setStateDialogState.recordIds}
-				entityLogicalName={entityLogicalName}
-				entityDisplayName={entityMetadata?.DisplayName?.UserLocalizedLabel?.Label}
-				primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
-				closeAction={recordActions.setStateDialogState.closeAction}
-				onClose={recordActions.dismissSetStateDialog}
-				onExecute={recordActions.executeStateChange}
-			/>
-			{/* Close message Dialog (#149) */}
-			<CloseRecordsDialog
-				open={recordActions.closeDialogState.open}
-				action={recordActions.closeDialogState.action}
-				recordIds={recordActions.closeDialogState.recordIds}
-				entityLogicalName={entityLogicalName}
-				entityDisplayName={entityMetadata?.DisplayName?.UserLocalizedLabel?.Label}
-				onClose={recordActions.dismissCloseDialog}
-				onExecute={recordActions.executeClose}
 			/>
 			{/* Settings Drawer */}
 			<SettingsDrawer
