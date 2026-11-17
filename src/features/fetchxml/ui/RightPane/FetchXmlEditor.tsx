@@ -4,7 +4,15 @@
  * - Editor mode: Editable with Paste, Load File, Reset, Validate, Parse to tree buttons
  */
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import {
+	useState,
+	useRef,
+	useCallback,
+	useEffect,
+	forwardRef,
+	useImperativeHandle,
+	type ForwardedRef,
+} from "react";
 import Editor from "@monaco-editor/react";
 import type * as MonacoEditor from "monaco-editor/editor";
 import {
@@ -30,7 +38,7 @@ import {
 	ArrowReset24Regular,
 	Checkmark24Regular,
 	TreeDeciduous24Regular,
-	Dismiss24Regular,
+	Dismiss16Regular,
 } from "@fluentui/react-icons";
 import { useTheme } from "../../../../shared/contexts/useTheme";
 import {
@@ -44,7 +52,17 @@ import type { ParseResult, ParseWarning } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
 import { useNotify } from "../../../../shared/feedback/useNotify";
 import { useCopy } from "../../../../shared/feedback/useCopy";
-import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
+import { ParseIssueList } from "./ParseIssueList";
+import {
+	applyCheck,
+	FULL_CHECK,
+	invalidProblem,
+	mightRejectProblem,
+	notesProblem,
+	syntaxProblem,
+	type EditorProblem,
+	type EditorProblemKey,
+} from "./editorProblems";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
 
@@ -103,7 +121,7 @@ const useStyles = makeStyles({
 	},
 	messageBarContainer: {
 		padding: tokens.spacingVerticalS,
-		borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 		maxHeight: "150px",
 		overflowY: "auto",
 		flexShrink: 0,
@@ -114,18 +132,11 @@ const useStyles = makeStyles({
 	},
 });
 
-interface Message {
-	id: number;
-	intent: "warning" | "error" | "info";
-	title: string;
-	/** Text, or a list of findings rendered as bullets */
-	body: string | ParseIssueItem[];
-	/** Validate's findings: offer "View all in Advisories" (#97) */
-	advisories?: boolean;
+/** For PreviewTabs: the editor-mode checks of Execute, Save view and Send to tool report here (#277) */
+export interface FetchXmlEditorHandle {
+	/** Replaces the bars for the keys `checked` with what the check `found` (see applyCheck) */
+	report: (checked: EditorProblemKey[], found: EditorProblem[]) => void;
 }
-
-const INVALID_TITLE = "Invalid FetchXML";
-const MIGHT_REJECT_TITLE = "Dataverse might reject this query";
 
 interface FetchXmlEditorProps {
 	xml: string;
@@ -145,23 +156,26 @@ interface FetchXmlEditorProps {
 	onViewAdvisories?: () => void;
 }
 
-export function FetchXmlEditor({
-	xml,
-	onParseToTree,
-	onEditorStateChange,
-	replaceRequest,
-	onViewAdvisories,
-}: FetchXmlEditorProps) {
+function FetchXmlEditorImpl(
+	{
+		xml,
+		onParseToTree,
+		onEditorStateChange,
+		replaceRequest,
+		onViewAdvisories,
+	}: FetchXmlEditorProps,
+	ref: ForwardedRef<FetchXmlEditorHandle>,
+) {
 	const styles = useStyles();
 	const { isDark } = useTheme();
 	const editorRef = useRef<MonacoEditor.editor.IStandaloneCodeEditor | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const messageIdRef = useRef(0);
 
 	// Editor mode state
 	const [isEditorMode, setIsEditorMode] = useState(false);
 	const [editedXml, setEditedXml] = useState("");
-	const [messages, setMessages] = useState<Message[]>([]);
+	// One bar per condition, most severe first (#277)
+	const [messages, setMessages] = useState<EditorProblem[]>([]);
 	// Parse to tree awaiting confirmation because it would change the query (#89)
 	const [pendingParse, setPendingParse] = useState<{
 		xml: string;
@@ -175,24 +189,14 @@ export function FetchXmlEditor({
 	// Get current XML value based on mode
 	const currentXml = isEditorMode ? editedXml : xml;
 
-	// Add a message
-	const addMessage = useCallback(
-		(intent: Message["intent"], title: string, body: Message["body"], advisories?: boolean) => {
-			const newMessage: Message = {
-				id: messageIdRef.current++,
-				intent,
-				title,
-				body,
-				advisories,
-			};
-			setMessages((prev) => [newMessage, ...prev].slice(0, 5)); // Keep max 5 messages
-		},
-		[],
-	);
+	// A check replaces the bars for what it checked
+	const report = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
+		setMessages((prev) => applyCheck(prev, checked, found));
+	}, []);
+	useImperativeHandle(ref, () => ({ report }), [report]);
 
-	// Dismiss a message
-	const dismissMessage = useCallback((id: number) => {
-		setMessages((prev) => prev.filter((m) => m.id !== id));
+	const dismissMessage = useCallback((key: EditorProblemKey) => {
+		setMessages((prev) => prev.filter((m) => m.key !== key));
 	}, []);
 
 	// Clear all messages
@@ -224,18 +228,16 @@ export function FetchXmlEditor({
 			return;
 		}
 		lastTreeXmlRef.current = xml;
-		setMessages((prev) =>
-			prev.some((m) => m.title === TREE_CHANGED_TITLE)
-				? prev
-				: [
-						{
-							id: messageIdRef.current++,
-							intent: "warning" as const,
-							title: TREE_CHANGED_TITLE,
-							body: "Execute, Save and Send to tool use the editor's FetchXML and will replace the tree's changes. Use Reset to take the tree's FetchXML instead.",
-						},
-						...prev,
-					].slice(0, 5),
+		report(
+			["tree-changed"],
+			[
+				{
+					key: "tree-changed",
+					intent: "warning",
+					title: TREE_CHANGED_TITLE,
+					body: "Execute, Save and Send to tool use the editor's FetchXML and will replace the tree's changes. Use Reset to take the tree's FetchXML instead.",
+				},
+			],
 		);
 		// Only tree changes drive this; the editor's own edits are compared when the tree changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,6 +265,9 @@ export function FetchXmlEditor({
 				clearMessages();
 				onEditorStateChange?.(true, xml);
 			} else {
+				// The bars were about the editor's FetchXML, which is no longer used (Parse to
+				// tree also leaves editor mode, but keeps its results)
+				clearMessages();
 				onEditorStateChange?.(false, "");
 			}
 			setIsEditorMode(checked);
@@ -327,41 +332,38 @@ export function FetchXmlEditor({
 
 	// Validate XML
 	const handleValidate = useCallback(() => {
-		clearMessages();
-
 		// First check syntax
 		const syntaxResult = validateFetchXmlSyntax(editedXml);
 		if (!syntaxResult.valid) {
-			addMessage("error", "Syntax error", syntaxResult.error || "Invalid XML syntax");
+			report(FULL_CHECK, [syntaxProblem(syntaxResult.error || "Invalid XML syntax")]);
 			return;
 		}
 
 		// Then do a full parse to classify findings
 		const parseResult = parseFetchXml(editedXml);
 		if (!parseResult.success) {
-			addMessage("error", INVALID_TITLE, parseResult.errors);
+			report(FULL_CHECK, [invalidProblem(parseResult.errors)]);
 			return;
 		}
 
-		// One bar per level. Messages are prepended, so add the least severe first.
+		// One bar per level. A bar offers "View all in Advisories" when the tab lists one of its
+		// findings (#97)
 		const notes = parseResult.warnings.filter((w) => w.severity === "info");
 		const blocking = getBlockingWarnings(parseResult);
 		const executionErrors = getExecutionErrors(parseResult);
-		// A bar offers "View all in Advisories" when the tab lists one of its findings (#97)
-		if (notes.length > 0) addMessage("info", "Notes", notes, notes.some(listedInAdvisories));
-		if (blocking.length > 0)
-			addMessage("warning", MIGHT_REJECT_TITLE, blocking, blocking.some(listedInAdvisories));
+		const found: EditorProblem[] = [];
 		if (executionErrors.length > 0)
-			addMessage(
-				"error",
-				INVALID_TITLE,
-				executionErrors,
-				executionErrors.some(listedInAdvisories),
+			found.push(invalidProblem(executionErrors, executionErrors.some(listedInAdvisories)));
+		if (blocking.length > 0)
+			found.push(
+				mightRejectProblem(blocking, { advisories: blocking.some(listedInAdvisories) }),
 			);
+		if (notes.length > 0) found.push(notesProblem(notes, notes.some(listedInAdvisories)));
+		report(FULL_CHECK, found);
 		if (blocking.length === 0 && executionErrors.length === 0) {
 			notify.success({ title: "Valid FetchXML", body: "Dataverse should accept it." });
 		}
-	}, [editedXml, clearMessages, addMessage, notify]);
+	}, [editedXml, report, notify]);
 
 	// Load XML into the tree. `changesConfirmed` is true when the user already reviewed the
 	// changes in the confirmation dialog, so they aren't repeated as notes.
@@ -369,11 +371,10 @@ export function FetchXmlEditor({
 		(xmlToParse: string, changesConfirmed: boolean) => {
 			if (!onParseToTree) return;
 
-			clearMessages();
 			const result = onParseToTree(xmlToParse);
 
 			if (!result.success) {
-				addMessage("error", INVALID_TITLE, result.errors);
+				report(FULL_CHECK, [invalidProblem(result.errors)]);
 				return;
 			}
 
@@ -385,16 +386,19 @@ export function FetchXmlEditor({
 			const notes = result.warnings.filter(
 				(w) => w.severity === "info" && !(changesConfirmed && changes.has(w)),
 			);
-			if (notes.length > 0) addMessage("info", "Notes", notes);
-			if (stillWarnings.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, stillWarnings);
-			if (stillErrors.length > 0) addMessage("error", INVALID_TITLE, stillErrors);
+			const found: EditorProblem[] = [];
+			if (stillErrors.length > 0) found.push(invalidProblem(stillErrors));
+			if (stillWarnings.length > 0) found.push(mightRejectProblem(stillWarnings));
+			if (notes.length > 0) found.push(notesProblem(notes));
+			// The tree now holds what the editor had: the tree-changed bar is out of date too
+			report([...FULL_CHECK, "tree-changed"], found);
 			notify.success("Loaded into the tree");
 
 			// Exit editor mode after successful parse
 			onEditorStateChange?.(false, "");
 			setIsEditorMode(false);
 		},
-		[onParseToTree, clearMessages, addMessage, notify, onEditorStateChange],
+		[onParseToTree, report, notify, onEditorStateChange],
 	);
 
 	// Parse to tree — confirm first when the tree would change the query
@@ -403,8 +407,7 @@ export function FetchXmlEditor({
 
 		const preview = parseFetchXml(editedXml);
 		if (!preview.success) {
-			clearMessages();
-			addMessage("error", INVALID_TITLE, preview.errors);
+			report(FULL_CHECK, [invalidProblem(preview.errors)]);
 			return;
 		}
 
@@ -415,7 +418,7 @@ export function FetchXmlEditor({
 		}
 
 		commitParseToTree(editedXml, false);
-	}, [editedXml, onParseToTree, clearMessages, addMessage, commitParseToTree]);
+	}, [editedXml, onParseToTree, report, commitParseToTree]);
 
 	const handleConfirmParseToTree = useCallback(() => {
 		if (!pendingParse) return;
@@ -512,6 +515,51 @@ export function FetchXmlEditor({
 				</div>
 			</div>
 
+			{/* The editor's bars, one per condition, under the toolbar (#277) */}
+			{messages.length > 0 && (
+				<div className={styles.messageBarContainer}>
+					<MessageBarGroup animate="both">
+						{messages.map((msg) => (
+							<MessageBar
+								key={msg.key}
+								intent={msg.intent}
+								layout={typeof msg.body === "string" ? "auto" : "multiline"}
+							>
+								<MessageBarBody>
+									<MessageBarTitle>{msg.title}</MessageBarTitle>
+									{typeof msg.body === "string" ? (
+										msg.body
+									) : (
+										<ParseIssueList items={msg.body} />
+									)}
+								</MessageBarBody>
+								<MessageBarActions
+									containerAction={
+										<Button
+											onClick={() => dismissMessage(msg.key)}
+											aria-label="Dismiss"
+											appearance="transparent"
+											icon={<Dismiss16Regular />}
+										/>
+									}
+								>
+									{msg.action && (
+										<Button onClick={msg.action.onClick}>
+											{msg.action.label}
+										</Button>
+									)}
+									{msg.advisories && onViewAdvisories && (
+										<Button onClick={onViewAdvisories}>
+											View all in Advisories
+										</Button>
+									)}
+								</MessageBarActions>
+							</MessageBar>
+						))}
+					</MessageBarGroup>
+				</div>
+			)}
+
 			{/* Hidden file input */}
 			<input
 				ref={fileInputRef}
@@ -556,48 +604,6 @@ export function FetchXmlEditor({
 				/>
 			</div>
 
-			{/* Messages */}
-			{messages.length > 0 && (
-				<div className={styles.messageBarContainer}>
-					<MessageBarGroup animate="both">
-						{messages.map((msg) => (
-							<MessageBar
-								key={msg.id}
-								intent={msg.intent}
-								shape="rounded"
-								layout={typeof msg.body === "string" ? "auto" : "multiline"}
-							>
-								<MessageBarBody>
-									<MessageBarTitle>{msg.title}</MessageBarTitle>
-									{typeof msg.body === "string" ? (
-										msg.body
-									) : (
-										<ParseIssueList items={msg.body} />
-									)}
-								</MessageBarBody>
-								<MessageBarActions
-									containerAction={
-										<Button
-											onClick={() => dismissMessage(msg.id)}
-											aria-label="dismiss"
-											appearance="transparent"
-											icon={<Dismiss24Regular />}
-											size="small"
-										/>
-									}
-								>
-									{msg.advisories && onViewAdvisories && (
-										<Button size="small" onClick={onViewAdvisories}>
-											View all in Advisories
-										</Button>
-									)}
-								</MessageBarActions>
-							</MessageBar>
-						))}
-					</MessageBarGroup>
-				</div>
-			)}
-
 			{/* Parse to tree confirmation (#89) */}
 			<ParseChangesDialog
 				action={pendingParse ? "parse" : null}
@@ -608,3 +614,5 @@ export function FetchXmlEditor({
 		</div>
 	);
 }
+
+export const FetchXmlEditor = forwardRef(FetchXmlEditorImpl);

@@ -21,12 +21,13 @@ import type { LayoutXmlConfig } from "../../features/fetchxml/model/layoutxml";
 import type { DisplaySettings } from "../../features/fetchxml/model/displaySettings";
 import type { LoadedViewState } from "../../features/fetchxml/state/builderStore";
 import type { QueryResult } from "../../features/fetchxml/ui/RightPane/ResultsGrid";
+import type { ExportError } from "../../features/fetchxml/ui/RightPane/ResultsTabBars";
 import { debugLog } from "../../shared/utils/debug";
 
 export interface ExportStatus {
 	isExporting: boolean;
-	/** Shown above the results; #277 will extend it so Try again can repeat the same export */
-	error?: string;
+	/** Shown in the Results tab; Try again repeats the same export when it can help (#277) */
+	error?: ExportError;
 	hasPrivilege: boolean;
 	privilegeChecked: boolean;
 }
@@ -58,6 +59,8 @@ export interface ResultsExport {
 	exportToExcel: () => Promise<void>;
 	/** The local export of the loaded rows */
 	exportLocal: () => Promise<void>;
+	/** Repeats the export that failed: the server export or the local one (#277) */
+	retryExport: () => void;
 	dismissExportError: () => void;
 }
 
@@ -131,7 +134,12 @@ export function useResultsExport({
 		if (!exportStatus.hasPrivilege) {
 			setExportStatus((prev) => ({
 				...prev,
-				error: "You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
+				error: {
+					kind: "server",
+					message:
+						"You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
+					retryable: false,
+				},
 			}));
 			return;
 		}
@@ -140,7 +148,12 @@ export function useResultsExport({
 		if (!loadedView) {
 			setExportStatus((prev) => ({
 				...prev,
-				error: "Export to Excel requires a saved view. Please save your query as a view first.",
+				error: {
+					kind: "server",
+					message:
+						"Export to Excel requires a saved view. Please save your query as a view first.",
+					retryable: false,
+				},
 			}));
 			return;
 		}
@@ -148,7 +161,11 @@ export function useResultsExport({
 		if (!fetchXml || !layoutXml) {
 			setExportStatus((prev) => ({
 				...prev,
-				error: "Export to Excel requires FetchXML and LayoutXML",
+				error: {
+					kind: "server",
+					message: "Export to Excel requires FetchXML and LayoutXML",
+					retryable: false,
+				},
 			}));
 			return;
 		}
@@ -192,7 +209,14 @@ export function useResultsExport({
 			setExportStatus((prev) => ({
 				...prev,
 				isExporting: false,
-				error: formatDataverseError(error, "Export to Excel failed. Please try again."), // (#96)
+				error: {
+					kind: "server",
+					message: formatDataverseError(
+						error,
+						"Export to Excel failed. Please try again.",
+					), // (#96)
+					retryable: true,
+				},
 			}));
 		}
 	};
@@ -206,7 +230,11 @@ export function useResultsExport({
 		if (!queryResult || !queryResult.rows.length) {
 			setExportStatus((prev) => ({
 				...prev,
-				error: "No data to export. Execute a query first.",
+				error: {
+					kind: "local",
+					message: "No data to export. Execute a query first.",
+					retryable: false,
+				},
 			}));
 			return;
 		}
@@ -318,23 +346,17 @@ export function useResultsExport({
 			setExportStatus((prev) => ({
 				...prev,
 				isExporting: false,
-				error:
-					error instanceof Error
-						? error.message
-						: "Local export failed. Please try again.",
+				error: {
+					kind: "local",
+					message:
+						error instanceof Error
+							? error.message
+							: "Local export failed. Please try again.",
+					retryable: true,
+				},
 			}));
 		}
 	};
-
-	// Clear export error after 10 seconds
-	useEffect(() => {
-		if (exportStatus.error) {
-			const timer = setTimeout(() => {
-				setExportStatus((prev) => ({ ...prev, error: undefined }));
-			}, 10000);
-			return () => clearTimeout(timer);
-		}
-	}, [exportStatus.error]);
 
 	return {
 		exportStatus,
@@ -346,6 +368,10 @@ export function useResultsExport({
 				: undefined,
 		exportToExcel: handleExport,
 		exportLocal: handleExportLocal,
+		retryExport: () => {
+			if (exportStatus.error?.kind === "server") void handleExport();
+			else if (exportStatus.error?.kind === "local") void handleExportLocal();
+		},
 		dismissExportError: () => setExportStatus((prev) => ({ ...prev, error: undefined })),
 	};
 }

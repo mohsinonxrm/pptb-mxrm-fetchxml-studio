@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Save view says it saved (#277).** A toast names the saved view, and for a system view that wasn't published adds "Not published yet: apps show it after you publish."
 - **Launch and view-load messages sit above the tree (#277).** When another tool launches FetchXML Studio with a view that doesn't exist or can't be read, or with FetchXML that can't be parsed, an error bar above the empty tree says so until a query starts or you press **New**. "View loaded with changes" is a warning bar above the tree, kept while you edit that query in the tree and cleared by the next load, Parse to tree or **New**. A view opened from **Load view** whose FetchXML can't be parsed is an error toast, and the tree keeps what it had; one asked for by another tool gets the error bar.
 
+- **Each tab's messages are in that tab (#277).** Messages no longer stack above every tab. A query that didn't run is a bar in the **Results** tab, under its command bar: "The query didn't run" with Dataverse's message, **Try again** and **Copy details**. Exporting and Export failed are there too, and Export failed offers **Try again** for the same export (server or local) when trying again can help. It no longer disappears after 10 seconds.
+- **The FetchXML editor shows each problem once (#277).** Invalid FetchXML and "Dataverse might reject this query", found by Execute, Save view or Send to tool in editor mode, are now the editor's own messages: the FetchXML tab opens to show them, and Validate or Parse to tree update the same message instead of adding a second, differently worded one. "Dataverse might reject" keeps **Execute anyway**. The messages sit under the editor's toolbar, most severe first, and opening the FetchXML tab no longer clears them; they go when fixed, dismissed, or when editor mode is turned off.
+
 ## [1.6.0-beta.3] - 2026-11-15
 
 ### 🔧 Fixed

@@ -422,6 +422,7 @@ function AppContent({
 					isExporting={resultsExport.exportStatus.isExporting}
 					exportError={resultsExport.exportStatus.error}
 					onDismissExportError={resultsExport.dismissExportError}
+					onRetryExport={resultsExport.retryExport}
 					executeError={executeError}
 					onDismissExecuteError={queryExecution.dismissExecuteError}
 					exportDisabledReason={resultsExport.exportDisabledReason}

@@ -76,7 +76,9 @@ To try a build inside PPTB, load the repository folder as a local tool after
 - **Feedback has three channels** (#277). A **toast** (`useNotify()` / `useCopy()` from
   `src/shared/feedback/`) for a short confirmation or a failure the user started, named after
   the object ("Copied 3 rows"). A **MessageBar** in the place it's about (a tab, a pane, a
-  dialog), with an action where one exists. The **Operations panel** (#296) for anything the
+  dialog), with an action where one exists: one group per tab, under that tab's toolbar, most
+  severe first, and one owner per message (the FetchXML editor owns every message about its
+  FetchXML; other checks report to it). The **Operations panel** (#296) for anything the
   user needs after it's gone. Host notifications (`showNotification`) are only for events from
   outside the window, such as a connection change.
 - **Wording:** follow the [style table](#ui-wording-style) below: sentence case, "…" for

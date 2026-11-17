@@ -17,14 +17,9 @@ import {
 	Spinner,
 	Tooltip,
 	tokens,
-	MessageBar,
-	MessageBarBody,
-	MessageBarTitle,
-	MessageBarActions,
 } from "@fluentui/react-components";
 import {
 	Play24Regular,
-	Dismiss16Regular,
 	Settings20Regular,
 	ArrowReply24Regular,
 	Code20Regular,
@@ -60,9 +55,17 @@ import { DATAVERSE_DEFAULT_PAGE_SIZE } from "../../api/pageRecovery";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
-import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
 import { useNotify } from "../../../../shared/feedback/useNotify";
+import {
+	invalidProblem,
+	mightRejectProblem,
+	syntaxProblem,
+	type EditorProblem,
+	type EditorProblemKey,
+} from "./editorProblems";
+import type { FetchXmlEditorHandle } from "./FetchXmlEditor";
+import { ResultsTabBars, type ExportError } from "./ResultsTabBars";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
@@ -292,10 +295,12 @@ interface PreviewTabsProps {
 	canExport?: boolean;
 	/** Whether export is in progress */
 	isExporting?: boolean;
-	/** Export error message */
-	exportError?: string;
+	/** Why the last export failed, and whether Try again can repeat it (#277) */
+	exportError?: ExportError;
 	/** Callback to dismiss export error */
 	onDismissExportError?: () => void;
+	/** Repeats the export that failed (#277) */
+	onRetryExport?: () => void;
 	/** Tooltip text for disabled export button */
 	exportDisabledReason?: string;
 	/** Entity display name */
@@ -411,6 +416,7 @@ export function PreviewTabs({
 	isExporting,
 	exportError,
 	onDismissExportError,
+	onRetryExport,
 	exportDisabledReason,
 	executeError,
 	onDismissExecuteError,
@@ -466,14 +472,15 @@ export function PreviewTabs({
 	// Quick search over the loaded rows (#23), and how many rows it shows
 	const [searchText, setSearchText] = useState("");
 	const [visibleRowCount, setVisibleRowCount] = useState(0);
-	const [editorValidationError, setEditorValidationError] = useState<ParseIssueItem[] | null>(
-		null,
-	);
-	// Editor XML Dataverse might reject, awaiting "Execute anyway" (#89)
-	const [pendingExecute, setPendingExecute] = useState<{
-		xml: string;
-		warnings: ParseWarning[];
-	} | null>(null);
+	// The FetchXML editor owns the bars about its FetchXML; the checks here report to it (#277)
+	const fetchXmlEditorRef = useRef<FetchXmlEditorHandle>(null);
+	// The editor FetchXML that "Execute anyway" was offered for: it only applies to that text (#89)
+	const executeAnywayXmlRef = useRef<string | null>(null);
+	/** Reports a check's findings to the editor; findings switch to the FetchXML tab, where they are */
+	const reportToEditor = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
+		fetchXmlEditorRef.current?.report(checked, found);
+		if (found.length > 0) setSelectedTab("xml");
+	}, []);
 	// Related columns already returned by root link-entities Add columns would reuse (#114)
 	const existingRelatedColumns = useMemo(
 		() =>
@@ -516,9 +523,12 @@ export function PreviewTabs({
 		setIsEditorModeActive((prev) => (prev !== isActive ? isActive : prev));
 		setEditorHasContent(isActive && editorXml.trim().length > 0);
 		// A pending "Execute anyway" only applies to the exact XML it warned about
-		setPendingExecute((prev) => (prev && (!isActive || prev.xml !== editorXml) ? null : prev));
-		if (!isActive) {
-			setEditorValidationError(null);
+		if (
+			executeAnywayXmlRef.current !== null &&
+			(!isActive || executeAnywayXmlRef.current !== editorXml)
+		) {
+			executeAnywayXmlRef.current = null;
+			fetchXmlEditorRef.current?.report(["warning"], []);
 		}
 		clearTimeout(editorTextTimer.current);
 		editorTextTimer.current = setTimeout(() => setEditorText(isActive ? editorXml : ""), 300);
@@ -597,11 +607,6 @@ export function PreviewTabs({
 
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
 		setSelectedTab(data.value as PreviewTab);
-		// Clear the editor validation error when returning to the XML tab so it
-		// doesn't linger as a banner on top of the editor.
-		if (data.value === "xml") {
-			setEditorValidationError(null);
-		}
 	};
 
 	/**
@@ -617,20 +622,25 @@ export function PreviewTabs({
 
 			const syntaxResult = validateFetchXmlSyntax(editorXml);
 			if (!syntaxResult.valid) {
-				setEditorValidationError([{ message: syntaxResult.error || "Invalid XML syntax" }]);
+				reportToEditor(
+					["error"],
+					[syntaxProblem(syntaxResult.error || "Invalid XML syntax")],
+				);
 				return { status: "cancelled" };
 			}
 			const preview = parseFetchXml(editorXml);
 			if (!preview.success || !preview.fetchNode) {
-				setEditorValidationError(preview.errors);
+				reportToEditor(["error"], [invalidProblem(preview.errors)]);
 				return { status: "cancelled" };
 			}
 			// Known to be rejected by Dataverse: block (Parse to Tree can often correct these)
 			const executionErrors = getExecutionErrors(preview);
 			if (executionErrors.length > 0) {
-				setEditorValidationError(executionErrors);
+				reportToEditor(["error"], [invalidProblem(executionErrors)]);
 				return { status: "cancelled" };
 			}
+			// No errors now: an earlier error bar is out of date
+			reportToEditor(["error"], []);
 			if (xml && generateFetchXml(preview.fetchNode) === xml) return { status: "unchanged" };
 
 			const changes = getParseToTreeChanges(preview);
@@ -643,9 +653,14 @@ export function PreviewTabs({
 
 			const result = onParseToTree?.(editorXml, { preserveLayout: true });
 			if (!result?.success || !result.fetchNode) {
-				setEditorValidationError(
-					result?.errors ?? [
-						{ message: "The FetchXML couldn't be loaded into the tree." },
+				reportToEditor(
+					["error"],
+					[
+						invalidProblem(
+							result?.errors ?? [
+								{ message: "The FetchXML couldn't be loaded into the tree." },
+							],
+						),
 					],
 				);
 				return { status: "cancelled" };
@@ -658,7 +673,7 @@ export function PreviewTabs({
 			}
 			return { status: "synced", fetchXml: syncedXml, fetchQuery: result.fetchNode };
 		},
-		[isEditorModeActive, xml, onParseToTree],
+		[isEditorModeActive, xml, onParseToTree, reportToEditor],
 	);
 
 	const editorSyncValue = useMemo(
@@ -686,16 +701,30 @@ export function PreviewTabs({
 		);
 	};
 
+	// The bar's Execute anyway runs the latest version, not the one from when the bar was shown
+	const runExecuteRef = useRef(runExecute);
+	useEffect(() => {
+		runExecuteRef.current = runExecute;
+	});
+
 	/** Run the editor XML despite warnings; Dataverse's own error is shown if it fails. */
 	const handleExecuteAnyway = () => {
-		if (!pendingExecute) return;
-		setPendingExecute(null);
-		void runExecute();
+		if (executeAnywayXmlRef.current === null) return;
+		executeAnywayXmlRef.current = null;
+		fetchXmlEditorRef.current?.report(["warning"], []);
+		void runExecuteRef.current();
 	};
+	const handleExecuteAnywayRef = useRef(handleExecuteAnyway);
+	useEffect(() => {
+		handleExecuteAnywayRef.current = handleExecuteAnyway;
+	});
 
 	const handleExecute = () => {
-		setEditorValidationError(null);
-		setPendingExecute(null);
+		// This Execute decides again: an earlier Execute anyway bar would be a dead button
+		if (executeAnywayXmlRef.current !== null) {
+			executeAnywayXmlRef.current = null;
+			fetchXmlEditorRef.current?.report(["warning"], []);
+		}
 
 		if (isEditorModeActive) {
 			// Can't be determined client-side: ask before sending. Errors are checked by the sync.
@@ -704,7 +733,18 @@ export function PreviewTabs({
 			if (preview.success && getExecutionErrors(preview).length === 0) {
 				const blocking = getBlockingWarnings(preview);
 				if (blocking.length > 0) {
-					setPendingExecute({ xml: editorXml, warnings: blocking });
+					executeAnywayXmlRef.current = editorXml;
+					reportToEditor(
+						["warning"],
+						[
+							mightRejectProblem(blocking, {
+								action: {
+									label: "Execute anyway",
+									onClick: () => handleExecuteAnywayRef.current(),
+								},
+							}),
+						],
+					);
 					return;
 				}
 			}
@@ -814,99 +854,6 @@ export function PreviewTabs({
 				{quickFindTestValue && (
 					<div className={styles.messageBarContainer}>{quickFindTestValue}</div>
 				)}
-				{/* Export status MessageBar */}
-				{isExporting && (
-					<div className={styles.messageBarContainer}>
-						<MessageBar intent="info">
-							<MessageBarBody>
-								<MessageBarTitle>Exporting</MessageBarTitle>
-								Exporting view to Excel…
-							</MessageBarBody>
-						</MessageBar>
-					</div>
-				)}
-				{exportError && !isExporting && (
-					<div className={styles.messageBarContainer}>
-						<MessageBar intent="error">
-							<MessageBarBody>
-								<MessageBarTitle>Export failed</MessageBarTitle>
-								{exportError}
-							</MessageBarBody>
-							<MessageBarActions
-								containerAction={
-									<Button
-										appearance="transparent"
-										icon={<Dismiss16Regular />}
-										onClick={onDismissExportError}
-										aria-label="Dismiss"
-									/>
-								}
-							/>
-						</MessageBar>
-					</div>
-				)}
-				{pendingExecute && (
-					<div className={styles.messageBarContainer}>
-						<MessageBar intent="warning" layout="multiline">
-							<MessageBarBody>
-								<MessageBarTitle>Dataverse might reject this query</MessageBarTitle>
-								<ParseIssueList items={pendingExecute.warnings} />
-							</MessageBarBody>
-							<MessageBarActions
-								containerAction={
-									<Button
-										appearance="transparent"
-										icon={<Dismiss16Regular />}
-										onClick={() => setPendingExecute(null)}
-										aria-label="Dismiss"
-									/>
-								}
-							>
-								<Button onClick={handleExecuteAnyway}>Execute anyway</Button>
-							</MessageBarActions>
-						</MessageBar>
-					</div>
-				)}
-				{editorValidationError && (
-					<div className={styles.messageBarContainer}>
-						<MessageBar intent="error" layout="multiline">
-							<MessageBarBody>
-								<MessageBarTitle>Invalid FetchXML</MessageBarTitle>
-								<ParseIssueList items={editorValidationError} />
-							</MessageBarBody>
-							<MessageBarActions
-								containerAction={
-									<Button
-										appearance="transparent"
-										icon={<Dismiss16Regular />}
-										onClick={() => setEditorValidationError(null)}
-										aria-label="Dismiss"
-									/>
-								}
-							/>
-						</MessageBar>
-					</div>
-				)}
-				{executeError && (
-					<div className={styles.messageBarContainer}>
-						<MessageBar intent="error">
-							<MessageBarBody>
-								<MessageBarTitle>Execution failed</MessageBarTitle>
-								{executeError}
-							</MessageBarBody>
-							<MessageBarActions
-								containerAction={
-									<Button
-										appearance="transparent"
-										icon={<Dismiss16Regular />}
-										onClick={onDismissExecuteError}
-										aria-label="Dismiss"
-									/>
-								}
-							/>
-						</MessageBar>
-					</div>
-				)}
 				<div className={styles.tabContent}>
 					{/* FetchXML tab — always mounted so Monaco editor state (editor mode, content,
 					    cursor position) survives tab switches. Hidden via display:none when inactive;
@@ -920,6 +867,7 @@ export function PreviewTabs({
 							title="The FetchXML editor couldn't be shown"
 						>
 							<FetchXmlEditor
+								ref={fetchXmlEditorRef}
 								xml={xml}
 								onParseToTree={onParseToTree}
 								onEditorStateChange={handleEditorStateChange}
@@ -1110,52 +1058,19 @@ export function PreviewTabs({
 										onStopRetrieveAll={onStopRetrieveAll}
 									/>
 								</div>
-								{pagingNotice && (
-									<div className={styles.messageBarContainer}>
-										<MessageBar
-											intent={
-												pagingNotice.kind === "error"
-													? "error"
-													: pagingNotice.kind === "stopped" ||
-														  pagingNotice.kind === "limit"
-														? "warning"
-														: "info"
-											}
-											layout="multiline"
-										>
-											<MessageBarBody>
-												<MessageBarTitle>
-													{pagingNotice.kind === "error"
-														? "Couldn't load all records"
-														: pagingNotice.kind === "stopped"
-															? "Retrieve all stopped"
-															: pagingNotice.kind === "limit"
-																? `Retrieve all stopped at ${result?.rows.length.toLocaleString() ?? 0} rows`
-																: "Paging without a paging cookie"}
-												</MessageBarTitle>
-												{pagingNotice.kind === "error"
-													? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
-													: pagingNotice.kind === "stopped"
-														? `Stopped after ${result?.rows.length ?? 0} rows. Scroll to the end of the grid to load more, or execute again.`
-														: pagingNotice.message}
-											</MessageBarBody>
-											<MessageBarActions
-												containerAction={
-													<Button
-														appearance="transparent"
-														icon={<Dismiss16Regular />}
-														onClick={onDismissPagingNotice}
-														aria-label="Dismiss"
-													/>
-												}
-											>
-												{pagingNotice.kind === "error" && onRetryPaging && (
-													<Button onClick={onRetryPaging}>Retry</Button>
-												)}
-											</MessageBarActions>
-										</MessageBar>
-									</div>
-								)}
+								<ResultsTabBars
+									executeError={executeError}
+									onRetryRun={handleExecute}
+									onDismissExecuteError={onDismissExecuteError}
+									isExporting={isExporting}
+									exportError={exportError}
+									onRetryExport={onRetryExport}
+									onDismissExportError={onDismissExportError}
+									pagingNotice={pagingNotice}
+									rowCount={result?.rows.length ?? 0}
+									onRetryPaging={onRetryPaging}
+									onDismissPagingNotice={onDismissPagingNotice}
+								/>
 								<div className={styles.gridCard}>
 									<ResultsGrid
 										ref={resultsGridRef}
