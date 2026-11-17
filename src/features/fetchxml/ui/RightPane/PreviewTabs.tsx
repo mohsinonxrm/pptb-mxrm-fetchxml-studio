@@ -3,28 +3,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
-import {
-	TabList,
-	Tab,
-	CounterBadge,
-	type SelectTabData,
-	type SelectTabEvent,
-	Button,
-	makeStyles,
-	Toolbar,
-	ToolbarDivider,
-	ProgressBar,
-	Spinner,
-	Tooltip,
-	tokens,
-} from "@fluentui/react-components";
-import {
-	Play24Regular,
-	Settings20Regular,
-	ArrowReply24Regular,
-	Code20Regular,
-} from "@fluentui/react-icons";
-import { returnFetchXmlToInvokingTool } from "../../api/invocation";
+import { makeStyles, ProgressBar, tokens } from "@fluentui/react-components";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
@@ -56,7 +35,6 @@ import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
 import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
-import { useNotify } from "../../../../shared/feedback/useNotify";
 import {
 	invalidProblem,
 	mightRejectProblem,
@@ -66,7 +44,6 @@ import {
 } from "./editorProblems";
 import type { FetchXmlEditorHandle } from "./FetchXmlEditor";
 import { ResultsTabBars, type ExportError } from "./ResultsTabBars";
-import { useCopy } from "../../../../shared/feedback/useCopy";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
 import {
@@ -79,7 +56,10 @@ import { collectAdvisories, mergeDataverseCheck, type Advisory } from "../../mod
 import { AdvisoriesPanel } from "./AdvisoriesPanel";
 import { useAdvisorMetadata, useDataverseCheck } from "./useAdvisories";
 
-type PreviewTab = "xml" | "layout" | "results" | "advisories" | "code";
+import { PreviewHeader } from "./PreviewHeader";
+import { emptyQueryReason, type PreviewTab } from "./previewHeaderRules";
+import type { SaveViewCommandOptions } from "../Toolbar/useSaveViewCommand";
+import type { SendToToolCommandOptions } from "../Toolbar/useSendToToolCommand";
 
 /** FetchXML as the tree writes it, to compare meaning rather than formatting; null if it doesn't parse */
 function parseForAdvisories(xmlText: string): { fetchNode: FetchNode; canonical: string } | null {
@@ -95,13 +75,6 @@ const useStyles = makeStyles({
 		flexDirection: "column",
 		height: "100%",
 		overflow: "hidden",
-	},
-	header: {
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "space-between",
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-		paddingRight: "16px",
 	},
 	progressContainer: {
 		paddingLeft: "16px",
@@ -172,62 +145,6 @@ const useStyles = makeStyles({
 	},
 });
 
-/**
- * Returns the current FetchXML to the tool that launched this window (T2T callee).
- *
- * This is distinct from the host-injected "Return to [Caller]" banner: that banner
- * is a plain "go back" affordance and resolves the caller's promise with null. Only
- * an explicit returnData() call carries the query back — which is what this does.
- */
-export function ReturnFetchXmlButton({ getCurrentXml }: { getCurrentXml: () => string }) {
-	const [isReturning, setIsReturning] = useState(false);
-	const { notify } = useNotify();
-	const copy = useCopy();
-
-	// A failure is a sticky error toast with Try again and Copy FetchXML, so the query isn't lost
-	// (#277, owner decision 4)
-	const handleReturn = useCallback(async () => {
-		setIsReturning(true);
-		const xml = getCurrentXml();
-		try {
-			await returnFetchXmlToInvokingTool(xml);
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			notify.error({
-				title: "Couldn't return the FetchXML",
-				body: message,
-				action: { label: "Try again", onClick: () => void handleReturnRef.current() },
-				secondaryAction: {
-					label: "Copy FetchXML",
-					onClick: () => void copy(xml, "FetchXML"),
-				},
-			});
-		} finally {
-			setIsReturning(false);
-		}
-	}, [getCurrentXml, notify, copy]);
-	const handleReturnRef = useRef(handleReturn);
-	useEffect(() => {
-		handleReturnRef.current = handleReturn;
-	}, [handleReturn]);
-
-	return (
-		<Tooltip
-			content="Return the current FetchXML to the tool that launched this window"
-			relationship="description"
-		>
-			<Button
-				appearance="subtle"
-				icon={isReturning ? <Spinner size="tiny" /> : <ArrowReply24Regular />}
-				onClick={handleReturn}
-				disabled={isReturning}
-			>
-				Return FetchXML
-			</Button>
-		</Tooltip>
-	);
-}
-
 interface PreviewTabsProps {
 	xml: string;
 	/** LayoutXML string for the grid column configuration */
@@ -271,14 +188,14 @@ interface PreviewTabsProps {
 	columnFilters?: ConditionNode[];
 	onAddColumnFilter?: (condition: NewCondition) => void;
 	onRemoveColumnFilters?: (conditionIds: string[]) => void;
-	/** Optional SaveViewButton to render in the toolbar */
-	saveViewButton?: ReactNode;
+	/** Save view on the header bar (FetchXML tab only) */
+	saveView?: SaveViewCommandOptions;
 	/** Quick find test value field, shown under the toolbar while the query has {0} (#142) */
 	quickFindTestValue?: ReactNode;
 	/** Why Execute is off, e.g. a quick find view without a test value (#142) */
 	executeDisabledReason?: string;
-	/** Optional SendToToolButton to render in the toolbar */
-	sendToToolButton?: ReactNode;
+	/** Send to tool on the header bar; left out when no tool takes FetchXML */
+	sendToTool?: SendToToolCommandOptions;
 	/** True when this tool was launched by another tool via T2T — shows the Return button */
 	isCallee?: boolean;
 	/** Callback when user scrolls near bottom (infinite scroll) */
@@ -400,10 +317,10 @@ export function PreviewTabs({
 	columnFilters,
 	onAddColumnFilter,
 	onRemoveColumnFilters,
-	saveViewButton,
+	saveView,
 	quickFindTestValue,
 	executeDisabledReason,
-	sendToToolButton,
+	sendToTool,
 	isCallee,
 	onLoadMore,
 	pagingNotice,
@@ -607,10 +524,6 @@ export function PreviewTabs({
 		}
 	};
 
-	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-		setSelectedTab(data.value as PreviewTab);
-	};
-
 	/**
 	 * Editor mode (#102): load the editor's FetchXML into the tree before an action, so the tree is
 	 * always what runs, is saved and is sent. Invalid FetchXML is shown and stops the action; if
@@ -776,77 +689,26 @@ export function PreviewTabs({
 					onConfirm={() => resolvePendingSync(true)}
 					onCancel={() => resolvePendingSync(false)}
 				/>
-				<div className={styles.header}>
-					<TabList selectedValue={selectedTab} onTabSelect={handleTabSelect}>
-						<Tab value="xml">FetchXML</Tab>
-						<Tab value="layout">LayoutXML</Tab>
-						<Tab value="results">Results</Tab>
-						<Tab value="advisories" aria-label={`Advisories (${advisories.length})`}>
-							Advisories{" "}
-							<CounterBadge
-								count={advisories.length}
-								size="small"
-								appearance="ghost"
-								color="brand"
-							/>
-						</Tab>
-						<Tab value="code" icon={<Code20Regular />}>
-							Code
-						</Tab>
-					</TabList>
-					<Toolbar size="small">
-						{/* The reason follows the tree's query; in editor mode the editor's query runs after
-						    syncing, and Execute stops there if it still needs a test value (#142) */}
-						{executeDisabledReason && !isEditorModeActive ? (
-							// Disabled buttons don't get pointer events: the tooltip goes on a wrapper (#142)
-							<Tooltip content={executeDisabledReason} relationship="description">
-								<span>
-									<Button appearance="primary" icon={<Play24Regular />} disabled>
-										Execute
-									</Button>
-								</span>
-							</Tooltip>
-						) : (
-							<Button
-								appearance="primary"
-								icon={<Play24Regular />}
-								onClick={handleExecute}
-								disabled={
-									isExecuting ||
-									isLoadingMore ||
-									(isEditorModeActive ? !editorHasContent : !xml)
-								}
-							>
-								{isExecuting ? "Executing…" : "Execute"}
-							</Button>
-						)}
-						{isCallee && (
-							<>
-								<ToolbarDivider />
-								<ReturnFetchXmlButton getCurrentXml={getCurrentXml} />
-							</>
-						)}
-						{selectedTab === "xml" && saveViewButton && (
-							<>
-								<ToolbarDivider />
-								{saveViewButton}
-							</>
-						)}
-						{sendToToolButton && (
-							<>
-								<ToolbarDivider />
-								{sendToToolButton}
-							</>
-						)}
-						<ToolbarDivider />
-						<Button
-							appearance="subtle"
-							icon={<Settings20Regular />}
-							onClick={onOpenSettings}
-							aria-label="Settings"
-						/>
-					</Toolbar>
-				</div>
+				<PreviewHeader
+					selectedTab={selectedTab}
+					onTabSelect={setSelectedTab}
+					advisoryCount={advisories.length}
+					execute={{
+						onClick: handleExecute,
+						isExecuting: !!isExecuting,
+						busy: !!isExecuting || !!isLoadingMore,
+						// The quick find reason follows the tree's query; in editor mode the editor's query
+						// runs after syncing, and Execute stops there if it still needs a test value (#142)
+						disabledReason:
+							(isEditorModeActive ? undefined : executeDisabledReason) ??
+							emptyQueryReason(isEditorModeActive, editorHasContent, xml),
+					}}
+					saveView={saveView}
+					sendToTool={sendToTool}
+					isCallee={isCallee}
+					getCurrentXml={getCurrentXml}
+					onOpenSettings={onOpenSettings}
+				/>
 				{(isExecuting || isLoadingMore) && (
 					<div className={styles.progressContainer}>
 						<ProgressBar />

@@ -21,8 +21,6 @@ import { useResultsGridEdits } from "./hooks/useResultsGridEdits";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
-import { SaveViewButton } from "../features/fetchxml/ui/Toolbar/SaveViewButton";
-import { SendToToolButton } from "../features/fetchxml/ui/Toolbar/SendToToolButton";
 import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
@@ -469,30 +467,26 @@ function AppContent({
 							? "Enter a quick find value to execute this query."
 							: undefined
 					}
-					saveViewButton={
-						<SaveViewButton
-							fetchXml={fetchXml}
-							layoutXml={layoutXml}
-							entityLogicalName={builder.fetchQuery?.entity?.name || ""}
-							entityDisplayName={
-								entityMetadata?.DisplayName?.UserLocalizedLabel?.Label
-							}
-							objectTypeCode={entityMetadata?.ObjectTypeCode || 0}
-							primaryIdAttribute={entityMetadata?.PrimaryIdAttribute || ""}
-							loadedView={builder.loadedView}
-							onSaveComplete={handleSaveViewComplete}
-							disabled={!fetchXml || !entityMetadata}
-						/>
-					}
-					sendToToolButton={
-						isT2TSupported() && sendToTools.length > 0 ? (
-							<SendToToolButton
-								fetchXml={fetchXml}
-								entityLogicalName={builder.fetchQuery?.entity?.name || ""}
-								tools={sendToTools}
-								disabled={!fetchXml || !builder.fetchQuery?.entity?.name}
-							/>
-						) : undefined
+					saveView={{
+						fetchXml,
+						layoutXml,
+						entityLogicalName: builder.fetchQuery?.entity?.name || "",
+						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
+						objectTypeCode: entityMetadata?.ObjectTypeCode || 0,
+						primaryIdAttribute: entityMetadata?.PrimaryIdAttribute || "",
+						loadedView: builder.loadedView,
+						onSaveComplete: handleSaveViewComplete,
+						disabled: !fetchXml || !entityMetadata,
+					}}
+					sendToTool={
+						isT2TSupported() && sendToTools.length > 0
+							? {
+									fetchXml,
+									entityLogicalName: builder.fetchQuery?.entity?.name || "",
+									tools: sendToTools,
+									disabled: !fetchXml || !builder.fetchQuery?.entity?.name,
+								}
+							: undefined
 					}
 					onReorderColumns={gridEdits.reorderColumns}
 					onRemoveColumns={gridEdits.removeColumns}

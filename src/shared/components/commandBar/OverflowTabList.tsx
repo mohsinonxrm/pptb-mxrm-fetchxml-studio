@@ -127,7 +127,11 @@ export function OverflowTabList({
 							id={t.value}
 							priority={t.value === selectedValue ? SELECTED_PRIORITY : TAB_PRIORITY}
 						>
-							<Tab value={t.value} icon={Icon ? <Icon /> : undefined}>
+							<Tab
+								value={t.value}
+								icon={Icon ? <Icon /> : undefined}
+								{...(t.ariaLabel ? { "aria-label": t.ariaLabel } : {})}
+							>
 								{t.label}
 								{t.content}
 							</Tab>

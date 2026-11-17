@@ -85,6 +85,8 @@ export interface OverflowToolbarProps {
 	moreExtra?: ReactNode;
 	/** Space Overflow keeps free, in px. Defaults to the Toolbar's own inline padding plus a little. */
 	padding?: number;
+	/** Where the commands sit when there's room to spare. Default "start". */
+	align?: "start" | "end";
 	className?: string;
 }
 
@@ -125,6 +127,7 @@ const useStyles = makeStyles({
 		whiteSpace: "nowrap",
 		textOverflow: "ellipsis",
 	},
+	alignEnd: { justifyContent: "flex-end" },
 	hidden: { display: "none" },
 	/** Destructive command: danger text, still subtle (forced colours keep the system text colour) */
 	danger: {
@@ -410,7 +413,9 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 					)}
 				</MenuTrigger>
 				<MenuPopover>
-					{c.kind === "split" ? splitMenu(c, c.busy ? undefined : icon) : c.menu}
+					{c.kind === "split" && !c.menuHasPrimary
+						? splitMenu(c, c.busy ? undefined : icon)
+						: c.menu}
 				</MenuPopover>
 			</Menu>
 		);
@@ -529,6 +534,7 @@ export function OverflowToolbar({
 	moreLabel = "More commands",
 	moreExtra,
 	padding,
+	align = "start",
 	className,
 }: OverflowToolbarProps) {
 	const styles = useStyles();
@@ -596,6 +602,10 @@ export function OverflowToolbar({
 			{start !== undefined && start !== null && <div className={styles.start}>{start}</div>}
 			{/* With moreExtra, More always shows, so Overflow must keep room for it (hasHiddenItems) */}
 			<Overflow
+				// Fluent's overflow manager crashes when an item of a group it hasn't seen registers
+				// after it started observing (@fluentui/priority-overflow 9.4: it shows or hides the item
+				// before it adds the item's group). A new set of groups starts a new Overflow instead.
+				key={[...groups, ...endCommands.map(groupOf)].join("|")}
 				padding={padding ?? (size === "small" ? 16 : 24)}
 				hasHiddenItems={!!moreExtra}
 				onOverflowChange={onOverflowChange}
@@ -604,7 +614,7 @@ export function OverflowToolbar({
 					ref={toolbarRef}
 					aria-label={ariaLabel}
 					size={size}
-					className={styles.toolbar}
+					className={mergeClasses(styles.toolbar, align === "end" && styles.alignEnd)}
 					checkedValues={checkedValuesOf(commands)}
 					onCheckedValueChange={(_, data) =>
 						onCheckedChange(commands, data.name, data.checkedItems)

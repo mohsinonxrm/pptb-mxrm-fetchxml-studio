@@ -1,23 +1,24 @@
 /**
- * SaveViewButton - SplitButton for saving views to Dataverse
- * Supports Save, Save As, and Save and Publish actions
- * Handles both System Views (savedquery) and Personal Views (userquery)
+ * Save view as a command for the shared bar (#232): a split button for Save (or Save as), with
+ * Save, Save as… and Save and publish in its menu, plus the dialog it opens. Handles both system
+ * views (savedquery) and personal views (userquery).
+ *
+ * It's a hook rather than a component so the bar can render it on the bar or, once it overflows, in
+ * More, while the dialog state lives here once.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, type ReactNode } from "react";
+import { MenuItem, MenuList } from "@fluentui/react-components";
 import {
-	Menu,
-	MenuTrigger,
-	MenuList,
-	MenuItem,
-	MenuPopover,
-	SplitButton,
-	makeStyles,
-	tokens,
-	Tooltip,
-	type MenuButtonProps,
-} from "@fluentui/react-components";
-import { SaveRegular, SaveArrowRightRegular, SendRegular } from "@fluentui/react-icons";
+	Save20Filled,
+	Save20Regular,
+	SaveArrowRight20Filled,
+	SaveArrowRight20Regular,
+	SaveRegular,
+	SaveArrowRightRegular,
+	SendRegular,
+	bundleIcon,
+} from "@fluentui/react-icons";
 import {
 	SaveViewDialog,
 	type SaveViewDialogLoadedView,
@@ -25,23 +26,15 @@ import {
 	type SavedViewDetails,
 } from "../Dialogs/SaveViewDialog";
 import { useEditorSync } from "../RightPane/editorSync";
+import type { BarCommand } from "../../../../shared/components/commandBar";
 
-const useStyles = makeStyles({
-	splitButton: {
-		minWidth: "110px",
-	},
-	menuItem: {
-		display: "flex",
-		alignItems: "center",
-		gap: "8px",
-	},
-	menuIcon: {
-		fontSize: "16px",
-		color: tokens.colorNeutralForeground2,
-	},
-});
+const SaveIcon = bundleIcon(Save20Filled, Save20Regular);
+const SaveAsIcon = bundleIcon(SaveArrowRight20Filled, SaveArrowRight20Regular);
 
-interface SaveViewButtonProps {
+/** Why Save and Send to tool are off before there's a query */
+export const NO_QUERY_REASON = "Choose an entity first";
+
+export interface SaveViewCommandOptions {
 	/** Current FetchXML to save */
 	fetchXml: string;
 	/** Current LayoutXML configuration */
@@ -63,11 +56,11 @@ interface SaveViewButtonProps {
 		viewName: string,
 		details: SavedViewDetails,
 	) => void;
-	/** Disabled state */
+	/** No query to save yet */
 	disabled?: boolean;
 }
 
-export function SaveViewButton({
+export function useSaveViewCommand({
 	fetchXml,
 	layoutXml,
 	entityLogicalName,
@@ -77,8 +70,7 @@ export function SaveViewButton({
 	loadedView,
 	onSaveComplete,
 	disabled = false,
-}: SaveViewButtonProps) {
-	const styles = useStyles();
+}: SaveViewCommandOptions): { command: BarCommand; dialog: ReactNode } {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<SaveViewDialogMode>("save");
 	const [shouldPublish, setShouldPublish] = useState(false);
@@ -124,10 +116,6 @@ export function SaveViewButton({
 	const handleSaveAs = useCallback(() => void requestOpen("saveAs", false), [requestOpen]);
 	const handleSaveAndPublish = useCallback(() => void requestOpen("save", true), [requestOpen]);
 
-	const handleDialogClose = useCallback(() => {
-		setDialogOpen(false);
-	}, []);
-
 	const handleDialogSaveComplete = useCallback(
 		(
 			viewId: string,
@@ -141,80 +129,58 @@ export function SaveViewButton({
 		[onSaveComplete],
 	);
 
-	// Primary button text based on state
-	const primaryText = loadedView ? "Save" : "Save as";
-	const primaryIcon = loadedView ? <SaveRegular /> : <SaveArrowRightRegular />;
+	// With content in the editor, saving is available even before the tree has a query (#102)
+	const disabledReason = disabled && !editorHasContent ? NO_QUERY_REASON : undefined;
 
-	return (
-		<>
-			<Menu positioning="below-end">
-				<MenuTrigger disableButtonEnhancement>
-					{(triggerProps: MenuButtonProps) => (
-						<Tooltip
-							content={
-								loadedView
-									? `Save changes to "${loadedView.name}"`
-									: "Save as new view"
-							}
-							relationship="description"
-						>
-							<SplitButton
-								className={styles.splitButton}
-								appearance="primary"
-								icon={primaryIcon}
-								menuButton={triggerProps}
-								primaryActionButton={{
-									onClick: loadedView ? handleSave : handleSaveAs,
-								}}
-								disabled={disabled && !editorHasContent}
-							>
-								{primaryText}
-							</SplitButton>
-						</Tooltip>
-					)}
-				</MenuTrigger>
-				<MenuPopover>
-					<MenuList>
-						{loadedView && (
-							<MenuItem
-								icon={<SaveRegular className={styles.menuIcon} />}
-								onClick={handleSave}
-							>
-								<span className={styles.menuItem}>Save</span>
-							</MenuItem>
-						)}
-						<MenuItem
-							icon={<SaveArrowRightRegular className={styles.menuIcon} />}
-							onClick={handleSaveAs}
-						>
-							<span className={styles.menuItem}>Save as…</span>
-						</MenuItem>
-						{loadedView?.type === "system" && (
-							<MenuItem
-								icon={<SendRegular className={styles.menuIcon} />}
-								onClick={handleSaveAndPublish}
-							>
-								<span className={styles.menuItem}>Save and publish</span>
-							</MenuItem>
-						)}
-					</MenuList>
-				</MenuPopover>
-			</Menu>
+	const command: BarCommand = {
+		id: "save",
+		label: loadedView ? "Save" : "Save as",
+		icon: loadedView ? SaveIcon : SaveAsIcon,
+		group: "file",
+		priority: 60,
+		kind: "split",
+		// One primary per bar: Execute (#232)
+		appearance: "secondary",
+		onClick: loadedView ? handleSave : handleSaveAs,
+		disabledReason,
+		hint: loadedView ? `Save changes to "${loadedView.name}"` : "Save as new view",
+		// The menu lists Save itself, so More shows it as it is
+		menuHasPrimary: true,
+		menu: (
+			<MenuList>
+				{loadedView && (
+					<MenuItem icon={<SaveRegular />} onClick={handleSave}>
+						Save
+					</MenuItem>
+				)}
+				<MenuItem icon={<SaveArrowRightRegular />} onClick={handleSaveAs}>
+					Save as…
+				</MenuItem>
+				{loadedView?.type === "system" && (
+					<MenuItem icon={<SendRegular />} onClick={handleSaveAndPublish}>
+						Save and publish
+					</MenuItem>
+				)}
+			</MenuList>
+		),
+	};
 
-			<SaveViewDialog
-				open={dialogOpen}
-				onClose={handleDialogClose}
-				onSaveComplete={handleDialogSaveComplete}
-				mode={dialogMode}
-				shouldPublish={shouldPublish}
-				fetchXml={fetchXml}
-				layoutXml={layoutXml}
-				entityLogicalName={entityLogicalName}
-				entityDisplayName={entityDisplayName}
-				objectTypeCode={objectTypeCode}
-				primaryIdAttribute={primaryIdAttribute}
-				loadedView={loadedView}
-			/>
-		</>
+	const dialog = (
+		<SaveViewDialog
+			open={dialogOpen}
+			onClose={() => setDialogOpen(false)}
+			onSaveComplete={handleDialogSaveComplete}
+			mode={dialogMode}
+			shouldPublish={shouldPublish}
+			fetchXml={fetchXml}
+			layoutXml={layoutXml}
+			entityLogicalName={entityLogicalName}
+			entityDisplayName={entityDisplayName}
+			objectTypeCode={objectTypeCode}
+			primaryIdAttribute={primaryIdAttribute}
+			loadedView={loadedView}
+		/>
 	);
+
+	return { command, dialog };
 }
