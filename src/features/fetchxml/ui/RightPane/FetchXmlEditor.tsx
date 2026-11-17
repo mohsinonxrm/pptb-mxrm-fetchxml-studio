@@ -132,7 +132,10 @@ const useStyles = makeStyles({
 	switchLabel: {
 		fontSize: tokens.fontSizeBase200,
 		fontWeight: tokens.fontWeightSemibold,
+		whiteSpace: "nowrap",
 	},
+	// The Switch never shrinks; the commands give way
+	modeSwitch: { flexShrink: 0 },
 });
 
 /** For PreviewTabs: the editor-mode checks of Execute, Save view and Send to tool report here (#277) */
@@ -537,6 +540,7 @@ function FetchXmlEditorImpl(
 					onChange={(_, data) => handleToggleEditorMode(data.checked)}
 					label={<span className={styles.switchLabel}>Editor mode</span>}
 					labelPosition="before"
+					className={styles.modeSwitch}
 				/>
 			</div>
 

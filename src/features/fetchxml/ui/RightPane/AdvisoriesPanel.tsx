@@ -51,7 +51,13 @@ const useStyles = makeStyles({
 	},
 	toolbar: {
 		paddingInline: tokens.spacingHorizontalS,
-		paddingBlock: tokens.spacingVerticalXS,
+		paddingTop: tokens.spacingVerticalXS,
+	},
+	status: {
+		display: "block",
+		color: tokens.colorNeutralForeground3,
+		paddingInline: tokens.spacingHorizontalM,
+		paddingBottom: tokens.spacingVerticalXS,
 		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 	},
 	messageBar: { padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS} 0` },
@@ -248,8 +254,11 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 	): BarCommand => ({
 		id: `show-${value}`,
 		label: `${label} (${count})`,
+		// The filters lost their "Show" group around them; the name says it instead
+		ariaLabel: `Show ${label.toLowerCase()} (${count})`,
 		group,
-		priority,
+		// The chosen filter stays on the bar longest, so the bar always shows which one it is
+		priority: filter === value ? 30 : priority,
 		kind: "toggle",
 		radioName: "show",
 		checked: filter === value,
@@ -301,8 +310,11 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 				size="small"
 				className={s.toolbar}
 				commands={commands}
-				end={<span aria-live="polite">{statusText(props)}</span>}
 			/>
+			{/* A sentence, so it wraps under the bar rather than taking the bar's room (#232) */}
+			<Text size={200} className={s.status} aria-live="polite">
+				{statusText(props)}
+			</Text>
 			{props.checkError && (
 				<div className={s.messageBar}>
 					<MessageBar intent="error" layout="multiline">

@@ -115,6 +115,25 @@ describe("the FetchXML editor's bar", () => {
 		expect(menuTexts(menus()[0])).toEqual(["Paste", "Load", "Reset"]);
 	});
 
+	it("Paste puts the clipboard's FetchXML in the editor", async () => {
+		stubOverflowWidths({ container: 2000 });
+		const pasted = "<fetch><entity name='contact'/></fetch>";
+		const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { readText: async () => pasted },
+		});
+		try {
+			await renderEditor();
+			await click(editorMode());
+			await click(control(bar(), "Paste"));
+			expect(document.querySelector("textarea")?.value).toBe(pasted);
+		} finally {
+			if (original) Object.defineProperty(navigator, "clipboard", original);
+			else delete (navigator as { clipboard?: unknown }).clipboard;
+		}
+	});
+
 	it("keeps Parse to tree focusable with its reason when there's no tree", async () => {
 		stubOverflowWidths({ container: 2000 });
 		await render(createElement(FetchXmlEditor, { xml: XML }));
@@ -164,6 +183,7 @@ describe("the Code panel's bar", () => {
 		await render(createElement(CodePanel, { fetchXml: XML }));
 		expect(copy()?.getAttribute("aria-disabled")).toBeNull();
 		await click(tab(tabs(), "Power Automate"));
+		expect(copy()?.getAttribute("aria-disabled")).toBe("true");
 		expect(description(copy())).toBe("Use the per-field Copy buttons below");
 		await click(tab(tabs(), "SQL"));
 		expect(copy()?.getAttribute("aria-disabled")).toBe("true");
@@ -211,10 +231,32 @@ describe("the Advisories bar", () => {
 		expect(document.body.textContent).toContain("Title a");
 		expect(document.body.textContent).not.toContain("Title b");
 
-		await layout.resize({ container: 80 + 24 + 40 + 16 });
+		// Room for Check, one filter, the divider and More: the chosen filter stays on the bar
+		await layout.resize({ container: 2 * 80 + 2 * 24 + 40 + 16 });
 		expect(overflowed(control(bar(), "Check with Dataverse"))).toBe(false);
+		expect(overflowed(radio("Will be rejected (1)"))).toBe(false);
+		expect(overflowed(radio("All (2)"))).toBe(true);
+
+		// Choosing a filter from More filters the list
 		await click(control(bar(), "More commands"));
-		expect(menuTexts(menus()[0])).toContain("Performance advice (1)");
+		const advice = [
+			...(menus()[0]?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []),
+		].find((i) => i.textContent?.trim() === "Performance advice (1)");
+		await click(advice);
+		expect(document.body.textContent).toContain("Title b");
+		expect(document.body.textContent).not.toContain("Title a");
+	});
+
+	it("names each filter 'Show …', and keeps the status as a line of its own", async () => {
+		stubOverflowWidths({ container: 2000 });
+		await renderPanel();
+		expect(radio("All (2)")?.getAttribute("aria-label")).toBe("Show all (2)");
+		expect(radio("Will be rejected (1)")?.getAttribute("aria-label")).toBe(
+			"Show will be rejected (1)",
+		);
+		const status = document.querySelector('[aria-live="polite"]');
+		expect(status).toBeTruthy();
+		expect(bar()?.contains(status)).toBe(false);
 	});
 
 	it("keeps Check focusable with its reason", async () => {
