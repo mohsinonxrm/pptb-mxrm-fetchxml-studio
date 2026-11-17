@@ -1,42 +1,38 @@
 /**
- * SendToToolButton – launches another PPTB tool with the current FetchXML query as prefill.
+ * Send to tool as a command for the shared bar (#232): launches another PPTB tool with the current
+ * FetchXML query as prefill.
  *
  * Targets are discovered automatically via the host capability registry (tools that declare
- * the "fetchxml" capability); see useSendToTools. Always renders as a "Send to Tool" dropdown
- * listing the discovered tools (even a single one), with each tool's runtime id shown beneath
- * its name. When no tools are found the button is hidden entirely (AppShell gates on this).
+ * the "fetchxml" capability); see useSendToTools. It's always a "Send to tool" menu listing the
+ * discovered tools (even a single one), with each tool's runtime id under its name. With no tools
+ * there's no command (null).
  *
  * The launch is fire-and-forget: launchTool's promise doesn't resolve until the callee window
- * closes, so we deliberately do NOT await it (that would pin the button in a loading state for
+ * closes, so we deliberately do NOT await it (that would pin the command in a loading state for
  * the whole session). We pass noReturn and never consume a result.
  */
 
 import { useCallback } from "react";
+import { MenuItem, MenuList, makeStyles, tokens } from "@fluentui/react-components";
+import { PlugConnected20Filled, PlugConnected20Regular, bundleIcon } from "@fluentui/react-icons";
 import { useNotify } from "../../../../shared/feedback/useNotify";
-import {
-	Button,
-	Menu,
-	MenuTrigger,
-	MenuList,
-	MenuItem,
-	MenuPopover,
-	makeStyles,
-	tokens,
-} from "@fluentui/react-components";
-import { PlugConnected20Regular } from "@fluentui/react-icons";
 import {
 	sendFetchXmlToTool,
 	type DiscoveredTool,
 	type FetchXmlStudioT2TPrefill,
 } from "../../api/invocation";
 import { useEditorSync } from "../RightPane/editorSync";
+import type { BarCommand } from "../../../../shared/components/commandBar";
+import { NO_QUERY_REASON } from "./useSaveViewCommand";
+
+const SendIcon = bundleIcon(PlugConnected20Filled, PlugConnected20Regular);
 
 const useStyles = makeStyles({
 	menuItemContent: {
 		display: "flex",
 		flexDirection: "column",
 		alignItems: "flex-start",
-		gap: "2px",
+		gap: tokens.spacingVerticalXXS,
 	},
 	toolIdHint: {
 		fontSize: tokens.fontSizeBase100,
@@ -44,23 +40,23 @@ const useStyles = makeStyles({
 	},
 });
 
-export interface SendToToolButtonProps {
+export interface SendToToolCommandOptions {
 	/** Current serialized FetchXML query */
 	fetchXml: string;
 	/** Root entity logical name */
 	entityLogicalName: string;
 	/** Tools discovered via the "fetchxml" capability */
 	tools: DiscoveredTool[];
-	/** Disabled state (e.g. no query built yet) */
+	/** No query to send yet */
 	disabled?: boolean;
 }
 
-export function SendToToolButton({
+export function useSendToToolCommand({
 	fetchXml,
 	entityLogicalName,
 	tools,
 	disabled,
-}: SendToToolButtonProps) {
+}: SendToToolCommandOptions): BarCommand | null {
 	const styles = useStyles();
 	const { sync, editorHasContent } = useEditorSync();
 	const { notify } = useNotify();
@@ -92,38 +88,35 @@ export function SendToToolButton({
 		[fetchXml, entityLogicalName, sync, tools, notify],
 	);
 
+	// No tools discovered → nothing to send to
+	if (tools.length === 0) return null;
+
 	// With content in the editor, sending is available even before the tree has a query
 	const isDisabled = !editorHasContent && (disabled || !fetchXml || !entityLogicalName);
 
-	// No tools discovered → nothing to send to. The button is hidden entirely
-	// (AppShell also gates on this, so this is a defensive guard).
-	if (tools.length === 0) {
-		return null;
-	}
-
-	return (
-		<Menu>
-			<MenuTrigger disableButtonEnhancement>
-				<Button appearance="subtle" icon={<PlugConnected20Regular />} disabled={isDisabled}>
-					Send to tool
-				</Button>
-			</MenuTrigger>
-			<MenuPopover>
-				<MenuList>
-					{tools.map((tool) => (
-						<MenuItem
-							key={tool.id}
-							icon={<PlugConnected20Regular />}
-							onClick={() => void handleSend(tool.id)}
-						>
-							<div className={styles.menuItemContent}>
-								<span>{tool.name}</span>
-								<span className={styles.toolIdHint}>{tool.id}</span>
-							</div>
-						</MenuItem>
-					))}
-				</MenuList>
-			</MenuPopover>
-		</Menu>
-	);
+	return {
+		id: "send",
+		label: "Send to tool",
+		icon: SendIcon,
+		group: "share",
+		priority: 20,
+		kind: "menu",
+		disabledReason: isDisabled ? NO_QUERY_REASON : undefined,
+		menu: (
+			<MenuList>
+				{tools.map((tool) => (
+					<MenuItem
+						key={tool.id}
+						icon={<PlugConnected20Regular />}
+						onClick={() => void handleSend(tool.id)}
+					>
+						<div className={styles.menuItemContent}>
+							<span>{tool.name}</span>
+							<span className={styles.toolIdHint}>{tool.id}</span>
+						</div>
+					</MenuItem>
+				))}
+			</MenuList>
+		),
+	};
 }

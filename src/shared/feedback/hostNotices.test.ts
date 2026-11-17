@@ -9,6 +9,7 @@ import {
 	button,
 	cleanup,
 	click,
+	deferred,
 	flush,
 	installHost,
 	removeHost,
@@ -16,8 +17,12 @@ import {
 	toasts,
 	type HostStub,
 } from "../testing/ui";
-import { ReturnFetchXmlButton } from "../../features/fetchxml/ui/RightPane/PreviewTabs";
-import { SendToToolButton } from "../../features/fetchxml/ui/Toolbar/SendToToolButton";
+import { useReturnFetchXmlCommand } from "../../features/fetchxml/ui/Toolbar/useReturnFetchXmlCommand";
+import {
+	useSendToToolCommand,
+	type SendToToolCommandOptions,
+} from "../../features/fetchxml/ui/Toolbar/useSendToToolCommand";
+import { OverflowToolbar } from "../components/commandBar";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -33,6 +38,21 @@ vi.mock("@monaco-editor/react", async () => {
 });
 
 const XML = "<fetch><entity name='account'><attribute name='name'/></entity></fetch>";
+
+/** The commands on a bar of their own, as the header bar renders them (#232) */
+function ReturnBar({ getCurrentXml }: { getCurrentXml: () => string }) {
+	return createElement(OverflowToolbar, {
+		ariaLabel: "Test commands",
+		commands: [useReturnFetchXmlCommand(getCurrentXml)],
+	});
+}
+function SendBar(options: SendToToolCommandOptions) {
+	const command = useSendToToolCommand(options);
+	return createElement(OverflowToolbar, {
+		ariaLabel: "Test commands",
+		commands: command ? [command] : [],
+	});
+}
 
 let host: HostStub;
 let copied: string[];
@@ -69,7 +89,7 @@ const toastButton = (label: string) =>
 
 describe("Return FetchXML", () => {
 	it("a failure is a sticky error toast with Try again and Copy FetchXML", async () => {
-		await render(createElement(ReturnFetchXmlButton, { getCurrentXml: () => XML }));
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
 		await click(button("Return FetchXML"));
 		expect(invocation.returnData).toHaveBeenCalledWith({ fetchXml: XML });
 		expect(toasts()).toEqual([
@@ -103,10 +123,25 @@ describe("Return FetchXML", () => {
 	});
 });
 
+describe("Return FetchXML while it returns", () => {
+	it("can't be pressed again until the caller has it", async () => {
+		const pending = deferred<undefined>();
+		invocation.returnData.mockImplementationOnce(async () => pending.promise);
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+		await click(button("Return FetchXML"));
+		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBe("true");
+		await click(button("Return FetchXML"));
+		expect(invocation.returnData).toHaveBeenCalledTimes(1);
+		pending.resolve(undefined);
+		await flush(5);
+		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBeNull();
+	});
+});
+
 describe("Send to tool", () => {
 	it("a launch that fails is an error toast naming the tool", async () => {
 		await render(
-			createElement(SendToToolButton, {
+			createElement(SendBar, {
 				fetchXml: XML,
 				entityLogicalName: "account",
 				tools: [{ id: "pptb-other-tool", name: "Other Tool" }],
@@ -135,7 +170,7 @@ describe("Send to tool", () => {
 			Promise.reject(new Error("A tool launch is already in progress")),
 		);
 		await render(
-			createElement(SendToToolButton, {
+			createElement(SendBar, {
 				fetchXml: XML,
 				entityLogicalName: "account",
 				tools: [{ id: "pptb-other-tool", name: "Other Tool" }],

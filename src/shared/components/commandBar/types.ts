@@ -41,6 +41,11 @@ interface BarCommandBase {
 	onClick?: () => void;
 	/** menu / split: a `<MenuList>` body */
 	menu?: ReactElement;
+	/**
+	 * split: the menu already lists the primary action (e.g. Save in Save's menu), so More shows the
+	 * menu as it is instead of adding the primary action at the top
+	 */
+	menuHasPrimary?: boolean;
 	/** menu / split: open state changes (e.g. to load the menu's items lazily) */
 	onMenuOpenChange?: (open: boolean) => void;
 	/** toggle: on or off (for a radio, whether this one is the chosen one) */
@@ -69,6 +74,8 @@ export interface BarTab {
 	label: string;
 	/** A bundleIcon sized to the tab list (20 px for medium, 16 px for small) */
 	icon?: FluentIcon;
-	/** Extra content after the label inside the tab, such as a count badge */
+	/** Extra content after the label inside the tab and its More entry, such as a count badge */
 	content?: ReactNode;
+	/** The accessible name of the tab and its More entry, when `content` would read badly ("Advisories (3)") */
+	ariaLabel?: string;
 }

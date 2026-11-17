@@ -140,6 +140,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
 - **Intelligent caching** — In-memory cache prevents duplicate API calls per session
 - **Resizable panes** — Adjust split-pane layout to your preference
+- **Bars that fit any width** — The right pane's tabs and commands never wrap or get cut off. When the pane is narrow, tabs that don't fit move into **More**, and commands into **More commands** (…), in the same order. The open tab, **Execute** and **Settings** always stay. A command that can't be used right now stays where it is and says why when you point at it or tab to it (for example "Choose an entity first")
 - **Copy FetchXML** — the FetchXML tab's **Copy** puts the query on the clipboard
 - **Display settings** — Toggle logical names vs display names in column headers; choose formatted, raw, or both value modes in the grid and exports
 - **Entity source** — In the scope chip: *Publisher → solution* (full filter), *Solution only*, or *All entities* (no filter). Options your privileges don't allow are off. Persisted across sessions.
@@ -208,7 +209,7 @@ Nothing else writes to Dataverse:
 ## 🖼️ Interface Overview
 
 - **Left:** the entity and view pickers, the query tree (right-click an entity or filter node, or use its **+** (Add…) button, to add attributes, filters, conditions, orders and link-entities) and the properties of the selected node.
-- **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**. **Execute** runs the query.
+- **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**, then the query's commands: **Execute** runs the query, then **Return FetchXML** (when another tool opened FetchXML Studio), **Save** (on the FetchXML tab), **Send to tool** and **Settings**.
 - The tool follows the ToolBox's light or dark theme.
 
 ![The FetchXML tab with the query in the editor, in the dark theme](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/fetchxml-dark.png)
@@ -386,7 +387,7 @@ src/
     ├── components/               # Reusable value pickers (option set, boolean,
     │   │                         # date, numeric, multi-value, relationship, etc.)
     │   └── commandBar/           # OverflowToolbar + OverflowTabList: Fluent Toolbar /
-    │                             # TabList in Overflow with a More menu (#232, not used yet)
+    │                             # TabList in Overflow with a More menu (#232)
     ├── contexts/                 # ThemeContext
     ├── hooks/                    # usePptbContext, useLazyMetadata, useAccessMode,
     │                             # usePublisherFilter, useSolutionFilter
@@ -445,7 +446,7 @@ Resolution priority at runtime: **`fetchXml` → `viewRef` → `entityLogicalNam
 
 ### Returning a query to the caller
 
-When FetchXML Studio is launched by another tool, a **Return FetchXML** button appears in the FetchXML toolbar. Clicking it returns the current query to the caller:
+When FetchXML Studio is launched by another tool, a **Return FetchXML** command appears next to **Execute**. Clicking it returns the current query to the caller:
 
 ```json
 { "fetchXml": "<fetch>...</fetch>" }
@@ -471,7 +472,7 @@ const editedFetchXml = (result as { fetchXml?: string } | null)?.fetchXml;
 
 ### Sending a query to another tool (Send to Tool)
 
-FetchXML Studio discovers send targets automatically — no configuration needed. It calls the host capability registry (`toolboxAPI.invocation.findToolsByCapability("fetchxml")`) to find installed tools that declare the `fetchxml` capability in their own `pptb.config.json`, and lists them in a **Send to Tool** button (a single button for one match, a dropdown picker for several). The button is hidden when no other `fetchxml`-capable tools are installed, or on hosts that don't support capability discovery.
+FetchXML Studio discovers send targets automatically — no configuration needed. It calls the host capability registry (`toolboxAPI.invocation.findToolsByCapability("fetchxml")`) to find installed tools that declare the `fetchxml` capability in their own `pptb.config.json`, and lists them in the **Send to tool** menu, with each tool's id under its name. The command is hidden when no other `fetchxml`-capable tools are installed, or on hosts that don't support capability discovery.
 
 The launch is one-way (`noReturn: true`) — FetchXML Studio hands the current query off and does not wait for data back. Any tool that wants to appear here only needs to declare:
 

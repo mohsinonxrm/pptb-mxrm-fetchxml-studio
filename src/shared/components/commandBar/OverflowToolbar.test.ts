@@ -156,7 +156,8 @@ describe("OverflowToolbar layout", () => {
 		expect(shown(divider())).toBe(true);
 
 		// Group b (lower priority, after the divider) all in More
-		await layout.resize({ container: fits(2 * 80 + 24 + 40) });
+		// Room for two commands, the two dividers Fluent counts while both groups show, and More
+		await layout.resize({ container: fits(2 * 80 + 2 * 24 + 40) });
 		expect(visibleOnBar(["A1", "A2", "B1", "B2"])).toEqual(["A1", "A2"]);
 		expect(shown(divider())).toBe(false);
 
@@ -463,6 +464,57 @@ describe("OverflowToolbar commands that change", () => {
 
 		await renderBar([run(), button("Save", 10)]);
 		expect(document.activeElement).toBe(onBar("Run"));
+	});
+
+	it("takes a command in a group it hadn't had, and lays it out", async () => {
+		// Fluent's overflow manager crashed on an item of a new group registering after it started
+		// (Save coming back with the FetchXML tab, Send to tool once tools are found)
+		// Too narrow for the new ones, so Overflow hides them as they arrive
+		const layout = stubOverflowWidths({ container: fits(80 + 2 * 24 + 40) });
+		await renderBar([button("Run", 50, { group: "run" })]);
+		await renderBar([
+			button("Run", 50, { group: "run" }),
+			button("Save", 20, { group: "file" }),
+			button("Send", 10, { group: "share" }),
+		]);
+		expect(visibleOnBar(["Run", "Save", "Send"])).toEqual(["Run"]);
+		await click(more());
+		expect(textsOf(menus()[0])).toEqual(["Save", "Send"]);
+
+		// Room for two commands, the two dividers Fluent counts while both groups show, and More
+		await layout.resize({ container: fits(2 * 80 + 2 * 24 + 40) });
+		expect(visibleOnBar(["Run", "Save", "Send"])).toEqual(["Run", "Save"]);
+
+		// And a group going away
+		await renderBar([button("Run", 50, { group: "run" })]);
+		expect(visibleOnBar(["Run"])).toEqual(["Run"]);
+		expect(more()).toBeNull();
+	});
+
+	it("keeps the bar, and an open menu, when a group it had comes back", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const commands = (withSave: boolean) => [
+			button("Run", 50, { group: "run" }),
+			...(withSave ? [button("Save", 20, { group: "file" })] : []),
+			{
+				id: "Send",
+				label: "Send",
+				kind: "menu",
+				group: "share",
+				priority: 10,
+				menu: createElement(MenuList, null, createElement(MenuItem, null, "Other tool")),
+			} as BarCommand,
+		];
+		await renderBar(commands(true));
+		const run = onBar("Run");
+		// Save goes (another tab) and comes back while Send's menu is open
+		await renderBar(commands(false));
+		await click(onBar("Send"));
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		await renderBar(commands(true));
+		expect(onBar("Run")).toBe(run);
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		expect(visibleOnBar(["Run", "Save", "Send"])).toEqual(["Run", "Save", "Send"]);
 	});
 });
 
