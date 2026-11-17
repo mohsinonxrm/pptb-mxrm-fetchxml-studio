@@ -175,6 +175,29 @@ describe("OverflowToolbar layout", () => {
 		expect(shown(divider())).toBe(false);
 	});
 
+	it("colours both halves of a danger split, which set their own colour", async () => {
+		stubOverflowWidths({ container: 1000 });
+		await renderBar([
+			{
+				...button("Delete", 10, { danger: true }),
+				kind: "split",
+				menu: createElement(MenuList, null, createElement(MenuItem, null, "Bulk delete")),
+			} as BarCommand,
+			{
+				...button("Keep", 5),
+				kind: "split",
+				menu: createElement(MenuList, null, createElement(MenuItem, null, "Other")),
+			} as BarCommand,
+		]);
+		const halves = (label: string) => [
+			...(onBar(label)?.closest(".fui-SplitButton")?.querySelectorAll("button") ?? []),
+		];
+		const danger = /colorStatusDangerForeground1/;
+		expect(halves("Delete")).toHaveLength(2);
+		for (const half of halves("Delete")) expect(getComputedStyle(half).color).toMatch(danger);
+		for (const half of halves("Keep")) expect(getComputedStyle(half).color).not.toMatch(danger);
+	});
+
 	it("separates groups in More with a divider", async () => {
 		// Room for Open, the divider after its group, and More
 		stubOverflowWidths({ container: fits(80 + 24 + 40) });
@@ -489,6 +512,31 @@ describe("OverflowToolbar commands that change", () => {
 		await renderBar([button("Run", 50, { group: "run" })]);
 		expect(visibleOnBar(["Run"])).toEqual(["Run"]);
 		expect(more()).toBeNull();
+	});
+
+	it("keeps the bar, and an open menu, when a declared group arrives late", async () => {
+		// Narrow, so Overflow hides the late command as it registers (the path that crashed)
+		stubOverflowWidths({ container: fits(80 + 2 * 24 + 40) });
+		const send: BarCommand = {
+			id: "Send",
+			label: "Send",
+			kind: "menu",
+			group: "share",
+			priority: 60,
+			menu: createElement(MenuList, null, createElement(MenuItem, null, "Other tool")),
+		};
+		const groups = ["share", "run", "late"];
+		await renderBar([send, button("Run", 50, { group: "run" })], { groups });
+		const sendButton = onBar("Send");
+		await click(sendButton);
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		await renderBar(
+			[send, button("Run", 50, { group: "run" }), button("Late", 10, { group: "late" })],
+			{ groups },
+		);
+		expect(onBar("Send")).toBe(sendButton);
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		expect(overflowed(onBar("Late"))).toBe(true);
 	});
 
 	it("keeps the bar, and an open menu, when a group it had comes back", async () => {

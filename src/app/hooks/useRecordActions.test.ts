@@ -52,6 +52,8 @@ vi.mock("../../features/fetchxml/api/pptbClient", async (importOriginal) => {
 
 let latest: RecordActions;
 let availability: RecordActionAvailability;
+/** When set, every render's entity and canChangeState */
+let renderLog: [string | undefined, boolean][] | null = null;
 
 type ProbeProps = Omit<RecordActionsInputs, "entityLogicalName" | "availability"> & {
 	/** The selected entity; the query's root by default */
@@ -62,6 +64,7 @@ function Probe({ entityLogicalName: entity, ...props }: ProbeProps) {
 	const entityLogicalName = entity ?? props.fetchQuery?.entity.name;
 	availability = useRecordActionAvailability(entityLogicalName);
 	latest = useRecordActions({ ...props, entityLogicalName, availability });
+	renderLog?.push([entityLogicalName, latest.canChangeState]);
 	return null;
 }
 
@@ -341,9 +344,49 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 		expect(latest.activateDisabledReason).toBeUndefined();
 		expect(latest.deactivateDisabledReason).toBeUndefined();
 		expect(latest.closeActions).toBeUndefined();
+		expect(latest.canChangeState).toBe(true);
 	});
 
-	it("says why when the user doesn't have the entity's Write privilege", async () => {
+	it("keeps Activate, Deactivate and Close hidden until the Write check answers (#232)", async () => {
+		const gate = deferred<void>();
+		const fake = host.dataverseAPI.queryData;
+		host.dataverseAPI.queryData = async (q: unknown) => {
+			if (String(q) === "EntityDefinitions(LogicalName='account')?$select=Privileges")
+				await gate.promise;
+			return fake(q as string);
+		};
+		await show();
+		await flush(10);
+		expect(latest.canChangeState).toBe(false);
+		gate.resolve();
+		await waitFor(() => latest.canChangeState);
+	});
+
+	it("doesn't show the previous entity's state commands for the next entity (#232)", async () => {
+		await show();
+		await waitFor(() => latest.canChangeState);
+		const gate = deferred<void>();
+		const fake = host.dataverseAPI.queryData;
+		host.dataverseAPI.queryData = async (q: unknown) => {
+			if (String(q) === "EntityDefinitions(LogicalName='incident')?$select=Privileges")
+				await gate.promise;
+			return fake(q as string);
+		};
+		renderLog = [];
+		try {
+			await show({ fetchQuery: query("incident"), entityMetadata: INCIDENT });
+			await flush(10);
+			const forIncident = renderLog.filter(([entity]) => entity === "incident");
+			expect(forIncident.length).toBeGreaterThan(0);
+			expect(forIncident.every(([, allowed]) => !allowed)).toBe(true);
+			gate.resolve();
+			await waitFor(() => latest.canChangeState);
+		} finally {
+			renderLog = null;
+		}
+	});
+
+	it("hides Activate, Deactivate and Close without the entity's Write privilege (#232)", async () => {
 		cleanup();
 		connect({ privileges: new Set(["prvDeleteAccount"]) });
 		answerQuery(
@@ -351,10 +394,12 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 			() => ({ Privileges: [{ Name: "prvWriteAccount", PrivilegeType: "Write" }] }),
 		);
 		await show();
-		const reason =
-			"You don't have the Write privilege on this entity, so you can't change its records' status.";
-		await waitFor(() => latest.activateDisabledReason === reason);
-		expect(latest.deactivateDisabledReason).toBe(reason);
+		await waitFor(() => dataverse.calls.some((c) => c.includes("EnforceStateTransitions")));
+		await flush(10);
+		expect(latest.canChangeState).toBe(false);
+		// Hidden rather than off: no reason to show
+		expect(latest.activateDisabledReason).toBeUndefined();
+		expect(latest.deactivateDisabledReason).toBeUndefined();
 	});
 
 	it("gives a close-message entity its Close menu, and says why Deactivate is off", async () => {
@@ -366,10 +411,10 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 			["resolve", "Resolve case"],
 			["cancel", "Cancel case"],
 		]);
-		expect(latest.closeActions?.every((a) => a.disabledReason === undefined)).toBe(true);
+		expect(latest.canChangeState).toBe(true);
 	});
 
-	it("turns a close message off without the Create privilege on its activity", async () => {
+	it("leaves out a close message without the Create privilege on its activity (#232)", async () => {
 		cleanup();
 		connect({ privileges: new Set(["prvWriteIncident"]) });
 		answerQuery(
@@ -377,11 +422,9 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 			() => ({ Privileges: [{ Name: "prvCreateActivity", PrivilegeType: "Create" }] }),
 		);
 		await show({ fetchQuery: query("incident"), entityMetadata: INCIDENT });
-		await waitFor(() => latest.closeActions?.[0].disabledReason !== undefined);
-		expect(latest.closeActions?.map((a) => a.disabledReason)).toEqual([
-			"You don't have the Create privilege on activities, and CloseIncident creates a incidentresolution activity.",
-			undefined,
-		]);
+		await waitFor(() => latest.closeActions?.length === 1);
+		expect(latest.closeActions?.map((a) => a.key)).toEqual(["cancel"]);
+		expect(latest.canChangeState).toBe(true);
 	});
 
 	it("drops a slow answer for an entity that's no longer selected (#143, #149)", async () => {
@@ -444,6 +487,13 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 		expect(latest.deactivateDisabledReason).toBe(latest.activateDisabledReason);
 		expect(latest.closeDisabledReason).toBe(
 			"The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to close records.",
+		);
+		// Delete and Run workflow say so too (#232)
+		expect(latest.deleteDisabledReason).toBe(
+			"The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to delete records.",
+		);
+		expect(latest.workflowDisabledReason).toBe(
+			"The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to run a workflow on records.",
 		);
 	});
 });

@@ -514,7 +514,9 @@ function AppContent({
 					canRunWorkflow={recordActions.canRunWorkflow}
 					onFetchWorkflows={recordActions.fetchWorkflows}
 					isAggregateQuery={recordActions.isAggregateQuery}
-					hasOneToManyRelationship={recordActions.hasOneToManyRelationship}
+					deleteDisabledReason={recordActions.deleteDisabledReason}
+					workflowDisabledReason={recordActions.workflowDisabledReason}
+					canChangeState={recordActions.canChangeState}
 					recordActionsDisabledReason={recordActions.recordActionsDisabledReason}
 					deleteAllDisabledReason={recordActions.deleteAllDisabledReason}
 					onSelectionChange={recordActions.onSelectionChange}

@@ -267,8 +267,12 @@ interface PreviewTabsProps {
 	onFetchWorkflows?: (entityLogicalName?: string) => Promise<WorkflowInfo[]>;
 	/** Whether the current query is an aggregate query (disables delete/workflow) */
 	isAggregateQuery?: boolean;
-	/** Whether the query has 1-N or N-N relationships that cause row duplication */
-	hasOneToManyRelationship?: boolean;
+	/** Why Delete is off for this query's shape (aggregate, or rows that repeat) (#232) */
+	deleteDisabledReason?: string;
+	/** Why Run workflow is off for this query's shape (#232) */
+	workflowDisabledReason?: string;
+	/** Activate / Deactivate / Close show: the Write check finished and didn't say no (#232) */
+	canChangeState?: boolean;
 	/** When set, results have no record IDs and all record actions are disabled with this explanation */
 	recordActionsDisabledReason?: string;
 	/** Why "Delete all" (no selection) is off: the query changed since the results loaded, or nothing ran (#174) */
@@ -360,7 +364,9 @@ export function PreviewTabs({
 	canRunWorkflow,
 	onFetchWorkflows,
 	isAggregateQuery,
-	hasOneToManyRelationship,
+	deleteDisabledReason,
+	workflowDisabledReason,
+	canChangeState,
 	recordActionsDisabledReason,
 	deleteAllDisabledReason,
 	onSelectionChange,
@@ -854,9 +860,8 @@ export function PreviewTabs({
 										}}
 										canDelete={canDelete}
 										canBulkDelete={canBulkDelete}
-										deleteDisabled={
-											isAggregateQuery || hasOneToManyRelationship
-										}
+										deleteDisabledReason={deleteDisabledReason}
+										canChangeState={canChangeState}
 										onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
 											const ids = getSelectedIds();
 											if (ids?.length && onRunSpecificWorkflow) {
@@ -864,9 +869,7 @@ export function PreviewTabs({
 											}
 										}}
 										canRunWorkflow={canRunWorkflow}
-										workflowDisabled={
-											isAggregateQuery || hasOneToManyRelationship
-										}
+										workflowDisabledReason={workflowDisabledReason}
 										recordActionsDisabledReason={recordActionsDisabledReason}
 										deleteAllDisabledReason={deleteAllDisabledReason}
 										onFetchWorkflows={onFetchWorkflows}
