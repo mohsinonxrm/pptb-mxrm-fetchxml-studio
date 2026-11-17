@@ -53,11 +53,20 @@ const DIVIDER_WIDTH = 24;
 /** The space Overflow keeps free (COMMANDS_OVERFLOW_PADDING), plus the small toolbar's own padding */
 const COMMANDS_OVERFLOW_PADDING = 8;
 const COMMANDS_PADDING = COMMANDS_OVERFLOW_PADDING + 8;
+/** Execute while a query runs ("Executing…" and a spinner) */
+const EXECUTING_WIDTH = 124;
+const MORE_WIDTH = 32;
 /**
- * The least each side needs: Execute, More and Settings with their dividers (they never overflow),
- * and one tab with More. At the default 900 px window (480 px builder pane) the row is about 414 px.
+ * The least each side needs: Execute, More and Settings, with the one divider before Settings
+ * (they never overflow), and one tab with More. At the default 900 px window (480 px builder pane)
+ * the row is about 414 px.
  */
-const COMMANDS_MIN_WIDTH = 104 + 32 + 32 + 2 * DIVIDER_WIDTH + COMMANDS_PADDING;
+const commandsMinWidth = (isExecuting: boolean) =>
+	(isExecuting ? EXECUTING_WIDTH : COMMAND_WIDTH.execute) +
+	MORE_WIDTH +
+	COMMAND_WIDTH.settings +
+	DIVIDER_WIDTH +
+	COMMANDS_PADDING;
 const TABS_MIN_WIDTH = 184;
 
 const useStyles = makeStyles({
@@ -71,7 +80,6 @@ const useStyles = makeStyles({
 	},
 	// Overflow keeps one tab and More however narrow, so the side never shrinks below that
 	tabs: { minWidth: `${TABS_MIN_WIDTH}px` },
-	commands: { minWidth: `${COMMANDS_MIN_WIDTH}px` },
 });
 
 export interface PreviewHeaderProps {
@@ -177,7 +185,12 @@ export function PreviewHeader({
 	});
 
 	const commandsWidth = commands.reduce(
-		(sum, c, i) => sum + (COMMAND_WIDTH[c.id] ?? 120) + (i > 0 ? DIVIDER_WIDTH : 0),
+		(sum, c, i) =>
+			sum +
+			(c.id === "execute" && execute.isExecuting
+				? EXECUTING_WIDTH
+				: (COMMAND_WIDTH[c.id] ?? 120)) +
+			(i > 0 ? DIVIDER_WIDTH : 0),
 		COMMANDS_PADDING,
 	);
 
@@ -191,7 +204,12 @@ export function PreviewHeader({
 					onTabSelect={(value) => onTabSelect(value as PreviewTab)}
 				/>
 			</div>
-			<div className={styles.commands} style={{ flex: `1 1 ${commandsWidth}px` }}>
+			<div
+				style={{
+					flex: `1 1 ${commandsWidth}px`,
+					minWidth: `${commandsMinWidth(execute.isExecuting)}px`,
+				}}
+			>
 				<OverflowToolbar
 					ariaLabel="Query commands"
 					size="small"
