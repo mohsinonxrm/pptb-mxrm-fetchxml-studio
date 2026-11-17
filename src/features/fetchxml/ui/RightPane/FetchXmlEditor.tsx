@@ -192,11 +192,10 @@ function FetchXmlEditorImpl(
 	const currentXml = isEditorMode ? editedXml : xml;
 
 	// A check replaces the bars for what it checked
-	// Each reported bar gets a new revision, so it mounts again and is announced (see EditorProblem.rev)
-	const revisionRef = useRef(0);
+	// A check replaces the bars for what it checked. A bar updated in place isn't announced again:
+	// Fluent announces a MessageBar when it mounts, through the AriaLiveAnnouncer (#186)
 	const report = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
-		const stamped = found.map((p) => ({ ...p, rev: ++revisionRef.current }));
-		setMessages((prev) => applyCheck(prev, checked, stamped));
+		setMessages((prev) => applyCheck(prev, checked, found));
 	}, []);
 	const drop = useCallback(
 		(key: EditorProblemKey, source: NonNullable<EditorProblem["source"]>) => {
@@ -532,7 +531,7 @@ function FetchXmlEditorImpl(
 					<MessageBarGroup animate="both">
 						{messages.map((msg) => (
 							<MessageBar
-								key={`${msg.key}-${msg.rev ?? 0}`}
+								key={msg.key}
 								intent={msg.intent}
 								layout={typeof msg.body === "string" ? "auto" : "multiline"}
 							>

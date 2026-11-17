@@ -730,8 +730,9 @@ export function PreviewTabs({
 				const blocking = getBlockingWarnings(preview);
 				if (blocking.length > 0) {
 					executeAnywayXmlRef.current = editorXml;
+					// It parses and has no errors, so an error bar from before is out of date too
 					reportToEditor(
-						["warning"],
+						["error", "warning"],
 						[
 							mightRejectProblem(blocking, {
 								action: {

@@ -27,11 +27,6 @@ export interface EditorProblem {
 	action?: { label: string; onClick: () => void };
 	/** Who raised it, when it has to be told apart: Execute's might-reject bar carries Execute anyway */
 	source?: "execute";
-	/**
-	 * Set by the editor on every report, so a reported bar mounts again: Fluent announces a
-	 * MessageBar to screen readers when it mounts, not when its text changes
-	 */
-	rev?: number;
 }
 
 export const SYNTAX_ERROR_TITLE = "Syntax error";

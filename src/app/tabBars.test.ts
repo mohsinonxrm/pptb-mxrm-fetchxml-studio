@@ -160,6 +160,26 @@ describe("the FetchXML tab: the editor owns its problems", () => {
 	);
 
 	it(
+		"Execute that stops at a warning also removes the error bar the fixed text no longer has",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(brokenXml);
+			await click(button("Execute", document));
+			expect(barsTitled("Syntax error")).toHaveLength(1);
+			Object.defineProperty(navigator, "clipboard", {
+				configurable: true,
+				value: { readText: async () => mightRejectXml },
+			});
+			await click(button("Paste", document));
+			await click(button("Execute", document));
+			expect(barsTitled("Syntax error")).toEqual([]);
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
 		"might reject: one warning with Execute anyway, which runs the query and removes it",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery } });
@@ -252,22 +272,6 @@ describe("the FetchXML tab: the editor owns its problems", () => {
 			await click(button("Validate", document));
 			await paste(mightRejectXml);
 			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
-		},
-		FLOW_TIMEOUT,
-	);
-
-	it(
-		"a check shows its bar again, so screen readers announce it",
-		async () => {
-			const app = await renderApp({ launch: { fetchXml: accountQuery } });
-			await app.waitFor(() => !!button("Execute", document));
-			await editorWith(brokenXml);
-			await click(button("Validate", document));
-			const first = document.querySelector(".fui-MessageBar");
-			await click(button("Validate", document));
-			const second = document.querySelector(".fui-MessageBar");
-			expect(second).not.toBeNull();
-			expect(second).not.toBe(first);
 		},
 		FLOW_TIMEOUT,
 	);
