@@ -88,8 +88,17 @@ export interface RecordActionAvailability {
 	recordActionPrivileges: RecordActionPrivileges;
 	/** Why Activate / Deactivate are off for the entity, per action (#143) */
 	stateActionReasons: { activate?: string; deactivate?: string };
-	/** The Close menu's items for close-message entities, or undefined (#149) */
+	/**
+	 * The Close menu's items for close-message entities, or undefined (#149). Items whose activity the
+	 * user can't create are left out (#232: a missing privilege hides the command).
+	 */
 	closeMenuItems: CloseMenuItem[] | undefined;
+	/**
+	 * Activate / Deactivate / Close show: the Write check on the entity has finished and didn't say no
+	 * (#232: a missing privilege hides the command, once the check is done so it doesn't flash).
+	 * Undeterminable answers count as yes; Dataverse decides.
+	 */
+	canChangeState: boolean;
 }
 
 /**
@@ -116,6 +125,8 @@ export function useRecordActionAvailability(
 
 	// Close menu for close-message entities (#149): its items
 	const [closeMenuItems, setCloseMenuItems] = useState<CloseMenuItem[] | undefined>();
+	// The Write check for Activate / Deactivate / Close (#232)
+	const [canChangeState, setCanChangeState] = useState(false);
 
 	// Check record action privileges when entity changes
 	useEffect(() => {
@@ -172,34 +183,32 @@ export function useRecordActionAvailability(
 	}, [entityLogicalName]);
 
 	// Activate / Deactivate / Close availability (#143, #149): entities whose states need dedicated
-	// messages (Close replaces Deactivate where it has actions), no statecode, or missing privileges:
-	// Write on the entity, and Create on the close activity a message creates (the documented
-	// privileges, e.g. CloseIncidentRequest: prvWriteIncident, prvCreateActivity). Undeterminable
-	// answers leave the actions on; Dataverse decides.
+	// messages (Close replaces Deactivate where it has actions) or have no statecode say why. Missing
+	// privileges hide the command instead (#232, as model-driven apps do): Write on the entity hides
+	// all three, and Create on the close activity a message creates hides that Close item (the
+	// documented privileges, e.g. CloseIncidentRequest: prvWriteIncident, prvCreateActivity).
+	// Undeterminable answers leave the actions on; Dataverse decides.
 	useEffect(() => {
 		const activateClose = closeMessageReason(entityLogicalName, "activate");
 		const deactivateClose = closeMessageReason(entityLogicalName, "deactivate");
 		const actions = closeActionsFor(entityLogicalName);
-		const toItems = (
-			reasonFor: (action: CloseAction) => string | undefined,
-		): CloseMenuItem[] | undefined =>
-			actions?.map((a) => ({
-				key: a.key,
-				label: a.label,
-				destructive: a.destructive,
-				disabledReason: reasonFor(a),
-			}));
-		setCloseMenuItems(toItems(() => undefined));
+		const toItems = (allowed: (action: CloseAction) => boolean): CloseMenuItem[] | undefined =>
+			actions
+				?.filter(allowed)
+				.map((a) => ({ key: a.key, label: a.label, destructive: a.destructive }));
+		setCloseMenuItems(toItems(() => true));
+		setStateActionReasons({ activate: activateClose, deactivate: deactivateClose });
 		if (
 			!entityLogicalName ||
 			!isDataverseAvailable() ||
 			(activateClose && deactivateClose && !actions)
 		) {
-			setStateActionReasons({ activate: activateClose, deactivate: deactivateClose });
+			setCanChangeState(true);
 			return;
 		}
+		// Hidden until the Write check answers, so they don't show and then go
+		setCanChangeState(false);
 		let current = true;
-		setStateActionReasons({ activate: activateClose, deactivate: deactivateClose });
 		(async () => {
 			const closeEntities = [
 				...new Set(
@@ -219,32 +228,21 @@ export function useRecordActionAvailability(
 				).then((pairs) => new Map(pairs)),
 			]);
 			if (!current) return;
-			const writeReason =
-				canWrite === false
-					? "You don't have the Write privilege on this entity, so you can't change its records' status."
-					: undefined;
+			setCanChangeState(canWrite !== false);
 			setStateActionReasons({
 				activate:
 					activateClose ??
 					(model !== undefined
 						? stateActionUnavailableReason(model, "activate")
-						: undefined) ??
-					writeReason,
+						: undefined),
 				deactivate:
 					deactivateClose ??
 					(model !== undefined
 						? stateActionUnavailableReason(model, "deactivate")
-						: undefined) ??
-					writeReason,
+						: undefined),
 			});
 			setCloseMenuItems(
-				toItems(
-					(a) =>
-						writeReason ??
-						(a.kind === "message" && canCreate.get(a.closeEntity) === false
-							? `You don't have the Create privilege on activities, and ${a.message} creates a ${a.closeEntity} activity.`
-							: undefined),
-				),
+				toItems((a) => !(a.kind === "message" && canCreate.get(a.closeEntity) === false)),
 			);
 		})();
 		return () => {
@@ -252,7 +250,7 @@ export function useRecordActionAvailability(
 		};
 	}, [entityLogicalName]);
 
-	return { recordActionPrivileges, stateActionReasons, closeMenuItems };
+	return { recordActionPrivileges, stateActionReasons, closeMenuItems, canChangeState };
 }
 
 export interface DeleteDialogState {
@@ -317,6 +315,12 @@ export interface RecordActions {
 	recordActionsDisabledReason: string | undefined;
 	/** Why Delete all is off (#174), or undefined */
 	deleteAllDisabledReason: string | undefined;
+	/** Activate / Deactivate / Close show: the Write check finished and didn't say no (#232) */
+	canChangeState: boolean;
+	/** Why Delete is off for this query's shape (aggregate, or rows that repeat), or undefined (#232) */
+	deleteDisabledReason: string | undefined;
+	/** Why Run workflow is off for this query's shape, or undefined (#232) */
+	workflowDisabledReason: string | undefined;
 	activateDisabledReason: string | undefined;
 	deactivateDisabledReason: string | undefined;
 	closeActions: CloseMenuItem[] | undefined;
@@ -383,7 +387,8 @@ export function useRecordActions({
 	handleExecuteRef,
 	availability,
 }: RecordActionsInputs): RecordActions {
-	const { recordActionPrivileges, stateActionReasons, closeMenuItems } = availability;
+	const { recordActionPrivileges, stateActionReasons, closeMenuItems, canChangeState } =
+		availability;
 	// Copy and open-record feedback in the app's Toaster (#277)
 	const { notify } = useNotify();
 	const copy = useCopy();
@@ -925,6 +930,20 @@ export function useRecordActions({
 	const oneToManyCloseReason = hasOneToManyRelationship
 		? "The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to close records."
 		: undefined;
+	// Delete and Run workflow are off for the same query shapes, and now say why too (#232)
+	const aggregateReason = isAggregateQuery
+		? "Aggregate query results don't contain record IDs, so record actions aren't available."
+		: undefined;
+	const deleteDisabledReason =
+		aggregateReason ??
+		(hasOneToManyRelationship
+			? "The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to delete records."
+			: undefined);
+	const workflowDisabledReason =
+		aggregateReason ??
+		(hasOneToManyRelationship
+			? "The query has a one-to-many or many-to-many link-entity, so rows repeat. Remove it to run a workflow on records."
+			: undefined);
 
 	return {
 		canDelete: recordActionPrivileges.canDelete,
@@ -934,10 +953,15 @@ export function useRecordActions({
 		hasOneToManyRelationship,
 		recordActionsDisabledReason,
 		deleteAllDisabledReason,
-		activateDisabledReason: stateActionReasons.activate ?? oneToManyStateReason,
-		deactivateDisabledReason: stateActionReasons.deactivate ?? oneToManyStateReason,
+		canChangeState,
+		deleteDisabledReason,
+		workflowDisabledReason,
+		activateDisabledReason:
+			stateActionReasons.activate ?? aggregateReason ?? oneToManyStateReason,
+		deactivateDisabledReason:
+			stateActionReasons.deactivate ?? aggregateReason ?? oneToManyStateReason,
 		closeActions: closeMenuItems,
-		closeDisabledReason: oneToManyCloseReason,
+		closeDisabledReason: aggregateReason ?? oneToManyCloseReason,
 
 		onSelectionChange: handleSelectionChange,
 		getSelectedRecordIds,

@@ -3,7 +3,7 @@
  * A bar describes its commands as data; the component renders each one on the bar and, once it
  * overflows, as the matching entry in the More menu, so both stay in step.
  */
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 import type { FluentIcon } from "@fluentui/react-icons";
 
 /** How a command renders: on the bar, and in More once it overflows */
@@ -22,8 +22,8 @@ interface BarCommandBase {
 	id: string;
 	/** Visible text (sentence case), and the accessible name unless `ariaLabel` is set */
 	label: string;
-	/** A 20 px bundleIcon (`bundleIcon(X20Filled, X20Regular)`) */
-	icon?: FluentIcon;
+	/** A 20 px bundleIcon (`bundleIcon(X20Filled, X20Regular)`), or a 20 px image icon such as ExcelIcon */
+	icon?: FluentIcon | ComponentType;
 	/** Commands in different groups get a divider between them, on the bar and in More */
 	group?: string;
 	/** "end": after More, never overflows (e.g. Settings) */
