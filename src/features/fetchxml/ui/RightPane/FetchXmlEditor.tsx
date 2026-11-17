@@ -136,6 +136,8 @@ const useStyles = makeStyles({
 export interface FetchXmlEditorHandle {
 	/** Replaces the bars for the keys `checked` with what the check `found` (see applyCheck) */
 	report: (checked: EditorProblemKey[], found: EditorProblem[]) => void;
+	/** Removes the bar for `key` only if `source` raised it (a later check may have replaced it) */
+	drop: (key: EditorProblemKey, source: NonNullable<EditorProblem["source"]>) => void;
 }
 
 interface FetchXmlEditorProps {
@@ -190,10 +192,19 @@ function FetchXmlEditorImpl(
 	const currentXml = isEditorMode ? editedXml : xml;
 
 	// A check replaces the bars for what it checked
+	// Each reported bar gets a new revision, so it mounts again and is announced (see EditorProblem.rev)
+	const revisionRef = useRef(0);
 	const report = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
-		setMessages((prev) => applyCheck(prev, checked, found));
+		const stamped = found.map((p) => ({ ...p, rev: ++revisionRef.current }));
+		setMessages((prev) => applyCheck(prev, checked, stamped));
 	}, []);
-	useImperativeHandle(ref, () => ({ report }), [report]);
+	const drop = useCallback(
+		(key: EditorProblemKey, source: NonNullable<EditorProblem["source"]>) => {
+			setMessages((prev) => prev.filter((m) => !(m.key === key && m.source === source)));
+		},
+		[],
+	);
+	useImperativeHandle(ref, () => ({ report, drop }), [report, drop]);
 
 	const dismissMessage = useCallback((key: EditorProblemKey) => {
 		setMessages((prev) => prev.filter((m) => m.key !== key));
@@ -521,7 +532,7 @@ function FetchXmlEditorImpl(
 					<MessageBarGroup animate="both">
 						{messages.map((msg) => (
 							<MessageBar
-								key={msg.key}
+								key={`${msg.key}-${msg.rev ?? 0}`}
 								intent={msg.intent}
 								layout={typeof msg.body === "string" ? "auto" : "multiline"}
 							>

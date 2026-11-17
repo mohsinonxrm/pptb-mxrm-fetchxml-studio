@@ -424,6 +424,32 @@ describe("useResultsExport: the error", () => {
 		expect(latest.exportStatus.error).toBeUndefined();
 	});
 
+	it("a new run clears it, so Try again can't repeat it on other rows (#277)", async () => {
+		excel.exportToExcelLocal.mockRejectedValueOnce(new Error("Disk full"));
+		await show();
+		await run(latest.exportLocal);
+		expect(latest.exportStatus.error).toBeDefined();
+		await show({ queryResult: null });
+		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("another view clears it", async () => {
+		api.exportToExcel.mockRejectedValueOnce(new Error("Timeout"));
+		await show({ loadedView: view });
+		await run(latest.exportToExcel);
+		expect(latest.exportStatus.error).toBeDefined();
+		await show({ loadedView: { ...view, id: "another-view" } });
+		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("more rows of the same query keep it", async () => {
+		excel.exportToExcelLocal.mockRejectedValueOnce(new Error("Disk full"));
+		await show();
+		await run(latest.exportLocal);
+		await show({ queryResult: { rows: [...rows, ...rows], query: fetchQuery } });
+		expect(latest.exportStatus.error?.message).toBe("Disk full");
+	});
+
 	it("a new export clears the previous error", async () => {
 		await show({ loadedView: view, layoutXml: "" });
 		await run(latest.exportToExcel);

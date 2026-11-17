@@ -528,7 +528,9 @@ export function PreviewTabs({
 			(!isActive || executeAnywayXmlRef.current !== editorXml)
 		) {
 			executeAnywayXmlRef.current = null;
-			fetchXmlEditorRef.current?.report(["warning"], []);
+			// The text changed: Execute's warning was about the old text. Leaving editor mode needs
+			// nothing here: turning it off clears the bars, and Parse to tree reports its own.
+			if (isActive) fetchXmlEditorRef.current?.drop("warning", "execute");
 		}
 		clearTimeout(editorTextTimer.current);
 		editorTextTimer.current = setTimeout(() => setEditorText(isActive ? editorXml : ""), 300);
@@ -720,12 +722,6 @@ export function PreviewTabs({
 	});
 
 	const handleExecute = () => {
-		// This Execute decides again: an earlier Execute anyway bar would be a dead button
-		if (executeAnywayXmlRef.current !== null) {
-			executeAnywayXmlRef.current = null;
-			fetchXmlEditorRef.current?.report(["warning"], []);
-		}
-
 		if (isEditorModeActive) {
 			// Can't be determined client-side: ask before sending. Errors are checked by the sync.
 			const editorXml = editorXmlRef.current;
@@ -742,11 +738,15 @@ export function PreviewTabs({
 									label: "Execute anyway",
 									onClick: () => handleExecuteAnywayRef.current(),
 								},
+								source: "execute",
 							}),
 						],
 					);
 					return;
 				}
+				// Nothing Dataverse might reject now: a warning from before is out of date
+				executeAnywayXmlRef.current = null;
+				reportToEditor(["warning"], []);
 			}
 		}
 		void runExecute();

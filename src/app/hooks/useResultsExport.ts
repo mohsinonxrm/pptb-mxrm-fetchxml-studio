@@ -358,6 +358,14 @@ export function useResultsExport({
 		}
 	};
 
+	// A failed export is about the query and view it was for: a new run or another view clears it, so
+	// Try again never repeats it on something else (#277). Paging keeps the same query.
+	const resultQuery = queryResult?.query;
+	const loadedViewId = loadedView?.id;
+	useEffect(() => {
+		setExportStatus((prev) => (prev.error ? { ...prev, error: undefined } : prev));
+	}, [resultQuery, loadedViewId]);
+
 	return {
 		exportStatus,
 		canExport: !!loadedView && exportStatus.hasPrivilege,

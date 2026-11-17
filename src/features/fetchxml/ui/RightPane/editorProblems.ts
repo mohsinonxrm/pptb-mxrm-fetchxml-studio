@@ -25,6 +25,13 @@ export interface EditorProblem {
 	advisories?: boolean;
 	/** One action of its own, e.g. Execute anyway */
 	action?: { label: string; onClick: () => void };
+	/** Who raised it, when it has to be told apart: Execute's might-reject bar carries Execute anyway */
+	source?: "execute";
+	/**
+	 * Set by the editor on every report, so a reported bar mounts again: Fluent announces a
+	 * MessageBar to screen readers when it mounts, not when its text changes
+	 */
+	rev?: number;
 }
 
 export const SYNTAX_ERROR_TITLE = "Syntax error";
@@ -55,7 +62,7 @@ export const invalidProblem = (items: ParseIssueItem[], advisories?: boolean): E
 
 export const mightRejectProblem = (
 	items: ParseIssueItem[],
-	options: { advisories?: boolean; action?: EditorProblem["action"] } = {},
+	options: Pick<EditorProblem, "advisories" | "action" | "source"> = {},
 ): EditorProblem => ({
 	key: "warning",
 	intent: "warning",

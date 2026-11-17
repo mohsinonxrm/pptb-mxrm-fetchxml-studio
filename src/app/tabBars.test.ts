@@ -138,6 +138,28 @@ describe("the FetchXML tab: the editor owns its problems", () => {
 	);
 
 	it(
+		"Execute after the XML is fixed removes the error bar, and runs",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(brokenXml);
+			await click(button("Execute", document));
+			expect(barsTitled("Syntax error")).toHaveLength(1);
+			Object.defineProperty(navigator, "clipboard", {
+				configurable: true,
+				value: { readText: async () => accountQuery },
+			});
+			await click(button("Paste", document));
+			await click(button("Execute", document));
+			await app.waitFor(() =>
+				app.dataverse.calls.some((c) => c.startsWith("queryData accounts")),
+			);
+			expect(barsTitled("Syntax error")).toEqual([]);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
 		"might reject: one warning with Execute anyway, which runs the query and removes it",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery } });
@@ -163,6 +185,89 @@ describe("the FetchXML tab: the editor owns its problems", () => {
 				app.dataverse.calls.some((c) => c.startsWith("queryData accounts")),
 			);
 			expect(barsTitled("Dataverse might reject this query")).toEqual([]);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"Parse to tree after Execute's warning keeps the warning Parse to tree found",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(mightRejectXml);
+			await click(button("Execute", document));
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+			await click(button("Parse to tree", document));
+			const confirm = [...document.querySelectorAll('[role="dialog"] button')].find((b) =>
+				/^(Parse|Continue|Load)/.test(b.textContent?.trim() ?? ""),
+			);
+			if (confirm) await click(confirm);
+			expect(barsTitled("Dataverse might reject this query")).toEqual([
+				expect.not.stringContaining("Execute anyway"),
+			]);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"Execute after the text is fixed removes the old warning",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(mightRejectXml);
+			await click(button("Validate", document));
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+			// Fix the text; Validate's own warning stays until a check says otherwise
+			Object.defineProperty(navigator, "clipboard", {
+				configurable: true,
+				value: { readText: async () => accountQuery },
+			});
+			await click(button("Paste", document));
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+			await click(button("Execute", document));
+			expect(barsTitled("Dataverse might reject this query")).toEqual([]);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"editing the text removes Execute's warning, but not Validate's",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(mightRejectXml);
+			await click(button("Execute", document));
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+			const paste = async (xml: string) => {
+				Object.defineProperty(navigator, "clipboard", {
+					configurable: true,
+					value: { readText: async () => xml },
+				});
+				await click(button("Paste", document));
+			};
+			await paste(mightRejectXml.replace("value='x'", "value='y'"));
+			expect(barsTitled("Dataverse might reject this query")).toEqual([]);
+
+			await click(button("Execute", document));
+			await click(button("Validate", document));
+			await paste(mightRejectXml);
+			expect(barsTitled("Dataverse might reject this query")).toHaveLength(1);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"a check shows its bar again, so screen readers announce it",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => !!button("Execute", document));
+			await editorWith(brokenXml);
+			await click(button("Validate", document));
+			const first = document.querySelector(".fui-MessageBar");
+			await click(button("Validate", document));
+			const second = document.querySelector(".fui-MessageBar");
+			expect(second).not.toBeNull();
+			expect(second).not.toBe(first);
 		},
 		FLOW_TIMEOUT,
 	);
