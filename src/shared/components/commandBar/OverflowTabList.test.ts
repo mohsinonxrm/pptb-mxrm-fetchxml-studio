@@ -110,6 +110,30 @@ describe("OverflowTabList", () => {
 		expect(visibleTabs()).toHaveLength(2);
 	});
 
+	it("shows a tab's extra content and accessible name in More too", async () => {
+		stubOverflowWidths({ container: fits(80 + 40) });
+		await render(
+			createElement(OverflowTabList, {
+				ariaLabel: "Query views",
+				tabs: tabs.map((t) =>
+					t.value === "advisories"
+						? {
+								...t,
+								ariaLabel: "Advisories (3)",
+								content: createElement("span", null, " 3"),
+							}
+						: t,
+				),
+				selectedValue: "fetchxml",
+				onTabSelect: () => {},
+			}),
+		);
+		await click(more());
+		const advisories = menuItems().find((i) => i.textContent?.startsWith("Advisories"));
+		expect(advisories?.textContent?.trim()).toBe("Advisories 3");
+		expect(advisories?.getAttribute("aria-label")).toBe("Advisories (3)");
+	});
+
 	it("calls onTabSelect when a visible tab is clicked", async () => {
 		stubOverflowWidths({ container: 1000 });
 		const onTabSelect = vi.fn();

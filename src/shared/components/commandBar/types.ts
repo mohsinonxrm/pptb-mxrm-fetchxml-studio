@@ -74,8 +74,8 @@ export interface BarTab {
 	label: string;
 	/** A bundleIcon sized to the tab list (20 px for medium, 16 px for small) */
 	icon?: FluentIcon;
-	/** Extra content after the label inside the tab, such as a count badge */
+	/** Extra content after the label inside the tab and its More entry, such as a count badge */
 	content?: ReactNode;
-	/** The tab's accessible name, when `content` would make the visible text read badly ("Advisories (3)") */
+	/** The accessible name of the tab and its More entry, when `content` would read badly ("Advisories (3)") */
 	ariaLabel?: string;
 }

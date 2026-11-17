@@ -51,7 +51,7 @@ export function useReturnFetchXmlCommand(getCurrentXml: () => string): BarComman
 		id: "return",
 		label: "Return FetchXML",
 		icon: ReturnIcon,
-		group: "share",
+		group: "return",
 		priority: 10,
 		kind: "button",
 		busy: isReturning,

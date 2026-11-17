@@ -9,6 +9,7 @@ import {
 	button,
 	cleanup,
 	click,
+	deferred,
 	flush,
 	installHost,
 	removeHost,
@@ -119,6 +120,21 @@ describe("Return FetchXML", () => {
 		await flush(5);
 		expect(invocation.returnData).toHaveBeenCalledTimes(4);
 		expect(toastButton("Try again")).toBeUndefined();
+	});
+});
+
+describe("Return FetchXML while it returns", () => {
+	it("can't be pressed again until the caller has it", async () => {
+		const pending = deferred<undefined>();
+		invocation.returnData.mockImplementationOnce(async () => pending.promise);
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+		await click(button("Return FetchXML"));
+		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBe("true");
+		await click(button("Return FetchXML"));
+		expect(invocation.returnData).toHaveBeenCalledTimes(1);
+		pending.resolve(undefined);
+		await flush(5);
+		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBeNull();
 	});
 });
 

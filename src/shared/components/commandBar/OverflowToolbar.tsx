@@ -551,6 +551,24 @@ export function OverflowToolbar({
 	const endCommands = commands.filter((c) => c.placement === "end");
 	const groups = barCommands.map(groupOf).filter((g, i, all) => all.indexOf(g) === i);
 
+	// Fluent's overflow manager crashes when an item of a group it has never had registers after it
+	// started observing (@fluentui/priority-overflow 9.4: it shows or hides the item before it adds
+	// the item's group). A group it had keeps existing after its items go, so only a group new to
+	// this Overflow needs a fresh one: Save coming back with its tab doesn't remount, tools found
+	// after the first layout do, once. A remount closes an open menu of this bar.
+	const known = useRef<{ groups: Set<string>; generation: number }>({
+		groups: new Set(),
+		generation: 0,
+	});
+	const allGroups = [...groups, ...endCommands.map(groupOf)];
+	if (allGroups.some((g) => !known.current.groups.has(g))) {
+		// The fresh Overflow registers exactly the groups present now
+		known.current = {
+			groups: new Set(allGroups),
+			generation: known.current.generation + 1,
+		};
+	}
+
 	const focusedIsGone = (element: HTMLElement) => {
 		const active = element.ownerDocument.activeElement;
 		return active === element || active === element.ownerDocument.body || active === null;
@@ -602,10 +620,7 @@ export function OverflowToolbar({
 			{start !== undefined && start !== null && <div className={styles.start}>{start}</div>}
 			{/* With moreExtra, More always shows, so Overflow must keep room for it (hasHiddenItems) */}
 			<Overflow
-				// Fluent's overflow manager crashes when an item of a group it hasn't seen registers
-				// after it started observing (@fluentui/priority-overflow 9.4: it shows or hides the item
-				// before it adds the item's group). A new set of groups starts a new Overflow instead.
-				key={[...groups, ...endCommands.map(groupOf)].join("|")}
+				key={known.current.generation}
 				padding={padding ?? (size === "small" ? 16 : 24)}
 				hasHiddenItems={!!moreExtra}
 				onOverflowChange={onOverflowChange}

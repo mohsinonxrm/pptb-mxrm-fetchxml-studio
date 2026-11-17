@@ -490,6 +490,32 @@ describe("OverflowToolbar commands that change", () => {
 		expect(visibleOnBar(["Run"])).toEqual(["Run"]);
 		expect(more()).toBeNull();
 	});
+
+	it("keeps the bar, and an open menu, when a group it had comes back", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const commands = (withSave: boolean) => [
+			button("Run", 50, { group: "run" }),
+			...(withSave ? [button("Save", 20, { group: "file" })] : []),
+			{
+				id: "Send",
+				label: "Send",
+				kind: "menu",
+				group: "share",
+				priority: 10,
+				menu: createElement(MenuList, null, createElement(MenuItem, null, "Other tool")),
+			} as BarCommand,
+		];
+		await renderBar(commands(true));
+		const run = onBar("Run");
+		// Save goes (another tab) and comes back while Send's menu is open
+		await renderBar(commands(false));
+		await click(onBar("Send"));
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		await renderBar(commands(true));
+		expect(onBar("Run")).toBe(run);
+		expect(textsOf(menus()[0])).toEqual(["Other tool"]);
+		expect(visibleOnBar(["Run", "Save", "Send"])).toEqual(["Run", "Save", "Send"]);
+	});
 });
 
 describe("OverflowToolbar details", () => {

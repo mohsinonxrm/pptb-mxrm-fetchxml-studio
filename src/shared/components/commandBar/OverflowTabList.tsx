@@ -87,8 +87,10 @@ function MoreTabs({
 									key={t.value}
 									icon={Icon ? <Icon /> : undefined}
 									onClick={() => onTabSelect(t.value)}
+									{...(t.ariaLabel ? { "aria-label": t.ariaLabel } : {})}
 								>
 									{t.label}
+									{t.content}
 								</MenuItem>
 							);
 						})}

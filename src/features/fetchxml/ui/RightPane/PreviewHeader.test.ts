@@ -10,6 +10,7 @@ import { cleanup, click, render, stubOverflowWidths } from "../../../../shared/t
 import { PreviewHeader, type PreviewHeaderProps } from "./PreviewHeader";
 import { EMPTY_EDITOR_REASON, emptyQueryReason } from "./previewHeaderRules";
 import { NO_QUERY_REASON } from "../Toolbar/useSaveViewCommand";
+import { EditorSyncContext } from "./editorSync";
 
 const execute = (extra: Partial<PreviewHeaderProps["execute"]> = {}) => ({
 	onClick: vi.fn(),
@@ -130,6 +131,43 @@ describe("the header's commands", () => {
 		expect(menuTexts(menus()[0])).toEqual(["Return FetchXML", "Save as", "Send to tool"]);
 	});
 
+	it("never shows two dividers in a row, or one with nothing after it, as commands overflow", async () => {
+		const layout = stubOverflowWidths({ container: 2000 });
+		await renderHeader({
+			isCallee: true,
+			sendToTool: {
+				fetchXml: "<fetch/>",
+				entityLogicalName: "account",
+				tools: [{ id: "other", name: "Other" }],
+			},
+		});
+		// What shows on the bar, in order: "|" for a divider, a name for a control
+		const sequence = () =>
+			[...(commandBar()?.children ?? [])]
+				.filter(
+					(c) =>
+						!c.hasAttribute("data-overflowing") &&
+						getComputedStyle(c).display !== "none",
+				)
+				.map((c) => {
+					if (
+						c.getAttribute("role") === "separator" ||
+						c.querySelector('[role="separator"]')
+					)
+						return "|";
+					const b = c.matches("button") ? c : c.querySelector("button");
+					return b?.getAttribute("aria-label") ?? b?.textContent?.trim() ?? "";
+				})
+				.filter(Boolean);
+		for (const width of [700, 600, 520, 480, 440, 400, 360, 300]) {
+			await layout.resize({ container: width });
+			const shown = sequence();
+			const doubled = shown.some((s, i) => s === "|" && shown[i + 1] === "|");
+			expect({ width, shown, doubled }).toEqual({ width, shown, doubled: false });
+			expect(shown[0]).not.toBe("|");
+		}
+	});
+
 	it("shows Save's own menu in More, without a second Save", async () => {
 		const layout = stubOverflowWidths({ container: 2000 });
 		await renderHeader({
@@ -178,6 +216,66 @@ describe("the header's commands", () => {
 		expect(settings?.textContent?.trim()).toBe("");
 		await click(settings);
 		expect(onOpenSettings).toHaveBeenCalledOnce();
+	});
+});
+
+describe("which commands show", () => {
+	const tools = [{ id: "other", name: "Other" }];
+
+	it("shows Return FetchXML only when another tool opened FetchXML Studio", async () => {
+		stubOverflowWidths({ container: 2000 });
+		await renderHeader();
+		expect(onBar("Return FetchXML")).toBeUndefined();
+		await renderHeader({ isCallee: true });
+		expect(onBar("Return FetchXML")).toBeTruthy();
+	});
+
+	it("shows Send to tool only when a tool takes FetchXML", async () => {
+		stubOverflowWidths({ container: 2000 });
+		await renderHeader({
+			sendToTool: { fetchXml: "<fetch/>", entityLogicalName: "account", tools: [] },
+		});
+		expect(onBar("Send to tool")).toBeUndefined();
+		await renderHeader({
+			sendToTool: { fetchXml: "<fetch/>", entityLogicalName: "account", tools },
+		});
+		expect(onBar("Send to tool")?.getAttribute("aria-disabled")).toBeNull();
+	});
+
+	it("keeps Send to tool focusable with its reason before there's a query", async () => {
+		stubOverflowWidths({ container: 2000 });
+		await renderHeader({
+			sendToTool: { fetchXml: "", entityLogicalName: "", tools, disabled: true },
+		});
+		const send = onBar("Send to tool");
+		expect(send?.getAttribute("aria-disabled")).toBe("true");
+		expect(description(send)).toBe("Choose an entity first");
+	});
+
+	it("offers Save and Send to tool with an empty tree when the editor has FetchXML", async () => {
+		stubOverflowWidths({ container: 2000 });
+		await render(
+			createElement(
+				EditorSyncContext.Provider,
+				{
+					value: {
+						sync: async () => ({ status: "unchanged" as const }),
+						editorHasContent: true,
+					},
+				},
+				createElement(PreviewHeader, {
+					selectedTab: "xml",
+					onTabSelect: () => {},
+					advisoryCount: 0,
+					execute: execute(),
+					saveView: saveView({ disabled: true }),
+					sendToTool: { fetchXml: "", entityLogicalName: "", tools, disabled: true },
+					getCurrentXml: () => "",
+				}),
+			),
+		);
+		expect(onBar("Save as")?.getAttribute("aria-disabled")).toBeNull();
+		expect(onBar("Send to tool")?.getAttribute("aria-disabled")).toBeNull();
 	});
 });
 

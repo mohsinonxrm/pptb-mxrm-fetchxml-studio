@@ -50,19 +50,27 @@ const COMMAND_WIDTH: Record<string, number> = {
 };
 /** A ToolbarDivider with its margins */
 const DIVIDER_WIDTH = 24;
-/** The space Overflow keeps free in a small toolbar, plus the toolbar's own padding */
-const COMMANDS_PADDING = 24;
-/** Execute, More and Settings with their dividers: Execute and Settings never overflow */
-const COMMANDS_MIN_WIDTH = 240;
+/** The space Overflow keeps free (COMMANDS_OVERFLOW_PADDING), plus the small toolbar's own padding */
+const COMMANDS_OVERFLOW_PADDING = 8;
+const COMMANDS_PADDING = COMMANDS_OVERFLOW_PADDING + 8;
+/**
+ * The least each side needs: Execute, More and Settings with their dividers (they never overflow),
+ * and one tab with More. At the default 900 px window (480 px builder pane) the row is about 414 px.
+ */
+const COMMANDS_MIN_WIDTH = 104 + 32 + 32 + 2 * DIVIDER_WIDTH + COMMANDS_PADDING;
+const TABS_MIN_WIDTH = 184;
 
 const useStyles = makeStyles({
 	header: {
 		display: "flex",
 		alignItems: "center",
 		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
-		paddingRight: tokens.spacingHorizontalL,
+		paddingRight: tokens.spacingHorizontalS,
+		// Below both minimums (a very wide builder pane) the row clips at its end, never overlaps
+		overflow: "hidden",
 	},
-	tabs: { minWidth: 0 },
+	// Overflow keeps one tab and More however narrow, so the side never shrinks below that
+	tabs: { minWidth: `${TABS_MIN_WIDTH}px` },
 	commands: { minWidth: `${COMMANDS_MIN_WIDTH}px` },
 });
 
@@ -188,6 +196,7 @@ export function PreviewHeader({
 					ariaLabel="Query commands"
 					size="small"
 					align="end"
+					padding={COMMANDS_OVERFLOW_PADDING}
 					commands={commands}
 				/>
 			</div>
