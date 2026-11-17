@@ -52,6 +52,8 @@ vi.mock("../../features/fetchxml/api/pptbClient", async (importOriginal) => {
 
 let latest: RecordActions;
 let availability: RecordActionAvailability;
+/** When set, every render's entity and canChangeState */
+let renderLog: [string | undefined, boolean][] | null = null;
 
 type ProbeProps = Omit<RecordActionsInputs, "entityLogicalName" | "availability"> & {
 	/** The selected entity; the query's root by default */
@@ -62,6 +64,7 @@ function Probe({ entityLogicalName: entity, ...props }: ProbeProps) {
 	const entityLogicalName = entity ?? props.fetchQuery?.entity.name;
 	availability = useRecordActionAvailability(entityLogicalName);
 	latest = useRecordActions({ ...props, entityLogicalName, availability });
+	renderLog?.push([entityLogicalName, latest.canChangeState]);
 	return null;
 }
 
@@ -357,6 +360,30 @@ describe("useRecordActionAvailability: Activate / Deactivate / Close (#143, #149
 		expect(latest.canChangeState).toBe(false);
 		gate.resolve();
 		await waitFor(() => latest.canChangeState);
+	});
+
+	it("doesn't show the previous entity's state commands for the next entity (#232)", async () => {
+		await show();
+		await waitFor(() => latest.canChangeState);
+		const gate = deferred<void>();
+		const fake = host.dataverseAPI.queryData;
+		host.dataverseAPI.queryData = async (q: unknown) => {
+			if (String(q) === "EntityDefinitions(LogicalName='incident')?$select=Privileges")
+				await gate.promise;
+			return fake(q as string);
+		};
+		renderLog = [];
+		try {
+			await show({ fetchQuery: query("incident"), entityMetadata: INCIDENT });
+			await flush(10);
+			const forIncident = renderLog.filter(([entity]) => entity === "incident");
+			expect(forIncident.length).toBeGreaterThan(0);
+			expect(forIncident.every(([, allowed]) => !allowed)).toBe(true);
+			gate.resolve();
+			await waitFor(() => latest.canChangeState);
+		} finally {
+			renderLog = null;
+		}
 	});
 
 	it("hides Activate, Deactivate and Close without the entity's Write privilege (#232)", async () => {

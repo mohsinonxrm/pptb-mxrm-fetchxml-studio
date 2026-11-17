@@ -214,6 +214,8 @@ export function PreviewHeader({
 					ariaLabel="Query commands"
 					size="small"
 					align="end"
+					// Return and Send to tool can appear after the first layout (launch, tool discovery)
+					groups={["run", "return", "file", "share", "settings"]}
 					padding={COMMANDS_OVERFLOW_PADDING}
 					commands={commands}
 				/>

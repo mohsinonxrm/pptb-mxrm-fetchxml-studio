@@ -18,6 +18,7 @@ import {
 	useEffect,
 	useLayoutEffect,
 	useRef,
+	useState,
 	type MutableRefObject,
 	type ReactElement,
 	type ReactNode,
@@ -87,6 +88,12 @@ export interface OverflowToolbarProps {
 	padding?: number;
 	/** Where the commands sit when there's room to spare. Default "start". */
 	align?: "start" | "end";
+	/**
+	 * Every group the bar may show, including ones whose commands appear later (after a privilege
+	 * check, say). Overflow learns them up front, so a late group doesn't start a fresh Overflow,
+	 * which would close an open menu of the bar.
+	 */
+	groups?: string[];
 	className?: string;
 }
 
@@ -266,8 +273,13 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 				icon={icon}
 				className={className}
 				disabledFocusable={off}
-				menuButton={menuButton}
+				// The halves set their own colour, so danger goes on each of them
+				menuButton={{
+					...menuButton,
+					className: mergeClasses(menuButton.className, className),
+				}}
 				primaryActionButton={{
+					className,
 					...primary,
 					...restoreFocus,
 					...barNameOf(c),
@@ -369,6 +381,25 @@ function BarDivider({ prev, after }: { prev: string; after: string[] }) {
 			<ToolbarDivider className={nothingAfter ? styles.hidden : undefined} />
 		</OverflowDivider>
 	);
+}
+
+/**
+ * Registers each group with the Overflow before it starts observing, then goes: Fluent's overflow
+ * manager keeps a group once it has had an item, so an item of that group registering later is
+ * safe (see the remount note in OverflowToolbar). Its placeholder items register in their layout
+ * effects, which run before the Overflow's own (where it starts observing), and are gone again
+ * before the browser paints.
+ */
+function GroupPrimer({ groups }: { groups: string[] }) {
+	const styles = useStyles();
+	const [primed, setPrimed] = useState(false);
+	useLayoutEffect(() => setPrimed(true), []);
+	if (primed) return null;
+	return groups.map((groupId) => (
+		<OverflowItem key={groupId} id={`__group:${groupId}`} groupId={groupId} priority={-1}>
+			<span className={styles.hidden} aria-hidden />
+		</OverflowItem>
+	));
 }
 
 /** A split's menu with its primary action first */
@@ -535,6 +566,7 @@ export function OverflowToolbar({
 	moreExtra,
 	padding,
 	align = "start",
+	groups: declaredGroups,
 	className,
 }: OverflowToolbarProps) {
 	const styles = useStyles();
@@ -562,9 +594,9 @@ export function OverflowToolbar({
 	});
 	const allGroups = [...groups, ...endCommands.map(groupOf)];
 	if (allGroups.some((g) => !known.current.groups.has(g))) {
-		// The fresh Overflow registers exactly the groups present now
+		// The fresh Overflow learns the groups present now, and the declared ones (GroupPrimer)
 		known.current = {
-			groups: new Set(allGroups),
+			groups: new Set([...allGroups, ...(declaredGroups ?? [])]),
 			generation: known.current.generation + 1,
 		};
 	}
@@ -653,6 +685,7 @@ export function OverflowToolbar({
 							lastFocused.current = null;
 					}}
 				>
+					<GroupPrimer groups={[...known.current.groups]} />
 					{barCommands.map((c, i) => (
 						<Fragment key={c.id}>
 							{i > 0 && groupOf(barCommands[i - 1]) !== groupOf(c) && (

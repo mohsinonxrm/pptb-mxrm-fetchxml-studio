@@ -166,6 +166,51 @@ describe("unavailable commands say why", () => {
 		expect(exp?.getAttribute("aria-disabled")).toBe("true");
 	});
 
+	it("Close asks for rows", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({
+			selectedCount: 0,
+			closeActions: [{ key: "resolve", label: "Resolve case" }],
+			onCloseAction: () => {},
+		});
+		const close = onBar("Close selected records");
+		expect(close?.getAttribute("aria-disabled")).toBe("true");
+		expect(description(close)).toBe("Select rows to close them");
+	});
+
+	it("a blocked Delete can't be reached: not its menu half, not from More", async () => {
+		const layout = stubOverflowWidths({ container: 3000 });
+		const onDelete = vi.fn();
+		const onBulkDelete = vi.fn();
+		const blocked = "The query has a one-to-many or many-to-many link-entity, so rows repeat.";
+		await renderBar({
+			selectedCount: 2,
+			onDelete,
+			onBulkDelete,
+			deleteDisabledReason: blocked,
+		});
+		const split = onBar("Delete selected records")?.closest(".fui-SplitButton");
+		for (const half of split?.querySelectorAll("button") ?? []) await click(half);
+		expect(menus()).toHaveLength(0);
+
+		await layout.resize({ container: 24 + 80 + 40 });
+		await click(more());
+		const del = [
+			...(menus()[0]?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
+		].find((i) => i.textContent?.trim() === "Delete");
+		expect(del?.getAttribute("aria-disabled")).toBe("true");
+		await click(del);
+		expect(menus()).toHaveLength(1);
+		expect(onDelete).not.toHaveBeenCalled();
+		expect(onBulkDelete).not.toHaveBeenCalled();
+	});
+
+	it("Export says why while it exports", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({ isExporting: true });
+		expect(description(onBar("Export to Excel"))).toBe("Export in progress...");
+	});
+
 	it("Copy has nothing to copy without rows", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ loadedCount: 0 });

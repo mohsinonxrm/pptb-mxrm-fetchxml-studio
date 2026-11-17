@@ -126,7 +126,12 @@ export function useRecordActionAvailability(
 	// Close menu for close-message entities (#149): its items
 	const [closeMenuItems, setCloseMenuItems] = useState<CloseMenuItem[] | undefined>();
 	// The Write check for Activate / Deactivate / Close (#232)
-	const [canChangeState, setCanChangeState] = useState(false);
+	// Keyed by entity: on the render right after the entity changes, before the effect below resets
+	// it, the previous entity's answer must not show the commands (#232: no flash)
+	const [stateCheck, setStateCheck] = useState<{ entity?: string; allowed: boolean }>({
+		allowed: false,
+	});
+	const canChangeState = stateCheck.entity === entityLogicalName && stateCheck.allowed;
 
 	// Check record action privileges when entity changes
 	useEffect(() => {
@@ -203,11 +208,11 @@ export function useRecordActionAvailability(
 			!isDataverseAvailable() ||
 			(activateClose && deactivateClose && !actions)
 		) {
-			setCanChangeState(true);
+			setStateCheck({ entity: entityLogicalName, allowed: true });
 			return;
 		}
 		// Hidden until the Write check answers, so they don't show and then go
-		setCanChangeState(false);
+		setStateCheck({ entity: entityLogicalName, allowed: false });
 		let current = true;
 		(async () => {
 			const closeEntities = [
@@ -228,7 +233,7 @@ export function useRecordActionAvailability(
 				).then((pairs) => new Map(pairs)),
 			]);
 			if (!current) return;
-			setCanChangeState(canWrite !== false);
+			setStateCheck({ entity: entityLogicalName, allowed: canWrite !== false });
 			setStateActionReasons({
 				activate:
 					activateClose ??

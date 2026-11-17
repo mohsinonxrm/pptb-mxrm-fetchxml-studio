@@ -74,6 +74,9 @@ const StopIcon = bundleIcon(Stop20Filled, Stop20Regular);
 const CopyIcon = bundleIcon(Copy20Filled, Copy20Regular);
 const DensityIcon = bundleIcon(TextDensity20Filled, TextDensity20Regular);
 
+/** Every group the bar can show, in bar order */
+const BAR_GROUPS = ["retrieve", "record", "state", "action", "data", "view"];
+
 const useStyles = makeStyles({
 	// The card around the bar gives the padding; the toolbar keeps a small inset
 	bar: { paddingInline: tokens.spacingHorizontalXS },
@@ -398,7 +401,10 @@ export function ResultsCommandBar({
 									{i > 0 &&
 										item.destructive &&
 										!closeActions[i - 1].destructive && <MenuDivider />}
-									<MenuItem onClick={() => onCloseAction(item.key)}>
+									<MenuItem
+										onClick={() => onCloseAction(item.key)}
+										disabled={!!reasons.close}
+									>
 										{item.label}...
 									</MenuItem>
 								</Fragment>
@@ -438,11 +444,19 @@ export function ResultsCommandBar({
 			menuHasPrimary: true,
 			menu: (
 				<MenuList>
-					<MenuItem icon={<Delete20Regular />} onClick={onDelete}>
+					<MenuItem
+						icon={<Delete20Regular />}
+						onClick={onDelete}
+						disabled={!!reasons.delete}
+					>
 						Delete{hasSelection ? ` (${selectedCount})` : " All"}
 					</MenuItem>
 					{canBulkDelete && (
-						<MenuItem icon={<DocumentBulletList20Regular />} onClick={onBulkDelete}>
+						<MenuItem
+							icon={<DocumentBulletList20Regular />}
+							onClick={onBulkDelete}
+							disabled={!!reasons.delete}
+						>
 							Bulk delete (job)
 						</MenuItem>
 					)}
@@ -535,6 +549,7 @@ export function ResultsCommandBar({
 			priority: 15,
 			kind: "menu",
 			busy: isExporting,
+			disabledReason: isExporting ? "Export in progress..." : undefined,
 			menu: (
 				<MenuList>
 					<Tooltip
@@ -600,6 +615,9 @@ export function ResultsCommandBar({
 			<OverflowToolbar
 				ariaLabel="Record actions"
 				commands={commands}
+				// Stop, the state commands and Delete / Run workflow come and go with Retrieve all and
+				// the privilege checks; declaring them keeps the bar (and an open menu) when they do
+				groups={BAR_GROUPS}
 				className={styles.bar}
 			/>
 
