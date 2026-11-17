@@ -1,7 +1,8 @@
 /**
  * useResultsExport (#301): the prvExportToExcel check on mount, the local export through the lazily
  * loaded exceljs module (#187), the server export of a loaded view, the exporting flag, the error
- * messages, and the error clearing after 10 seconds or on dismiss.
+ * messages (which export failed, and whether Try again can help), Try again, and the error
+ * staying until it's dismissed or the next export (#277).
  */
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -240,7 +241,11 @@ describe("useResultsExport: the local export", () => {
 	it("with no rows, says to execute a query first and exports nothing", async () => {
 		await show({ queryResult: { rows: [] } });
 		await run(latest.exportLocal);
-		expect(latest.exportStatus.error).toBe("No data to export. Execute a query first.");
+		expect(latest.exportStatus.error).toEqual({
+			kind: "local",
+			message: "No data to export. Execute a query first.",
+			retryable: false,
+		});
 		expect(latest.exportStatus.isExporting).toBe(false);
 		expect(excel.exportToExcelLocal).not.toHaveBeenCalled();
 	});
@@ -249,7 +254,11 @@ describe("useResultsExport: the local export", () => {
 		excel.exportToExcelLocal.mockRejectedValue(new Error("Disk full"));
 		await show();
 		await run(latest.exportLocal);
-		expect(latest.exportStatus.error).toBe("Disk full");
+		expect(latest.exportStatus.error).toEqual({
+			kind: "local",
+			message: "Disk full",
+			retryable: true,
+		});
 		expect(latest.exportStatus.isExporting).toBe(false);
 	});
 
@@ -257,7 +266,7 @@ describe("useResultsExport: the local export", () => {
 		excel.downloadExcelFile.mockRejectedValue("nope");
 		await show();
 		await run(latest.exportLocal);
-		expect(latest.exportStatus.error).toBe("Local export failed. Please try again.");
+		expect(latest.exportStatus.error?.message).toBe("Local export failed. Please try again.");
 	});
 });
 
@@ -301,25 +310,35 @@ describe("useResultsExport: the server export of a loaded view", () => {
 		api.checkPrivilegeByName.mockResolvedValue(false);
 		await show({ loadedView: view });
 		await run(latest.exportToExcel);
-		expect(latest.exportStatus.error).toBe(
-			"You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
-		);
+		expect(latest.exportStatus.error).toEqual({
+			kind: "server",
+			message:
+				"You don't have permission to export to Excel. Contact your administrator to request the 'Export to Excel' privilege.",
+			retryable: false,
+		});
 		expect(api.exportToExcel).not.toHaveBeenCalled();
 	});
 
 	it("without a loaded view, says to save the query as a view first", async () => {
 		await show();
 		await run(latest.exportToExcel);
-		expect(latest.exportStatus.error).toBe(
-			"Export to Excel requires a saved view. Please save your query as a view first.",
-		);
+		expect(latest.exportStatus.error).toEqual({
+			kind: "server",
+			message:
+				"Export to Excel requires a saved view. Please save your query as a view first.",
+			retryable: false,
+		});
 		expect(api.exportToExcel).not.toHaveBeenCalled();
 	});
 
 	it("without LayoutXML, says both are needed", async () => {
 		await show({ loadedView: view, layoutXml: "" });
 		await run(latest.exportToExcel);
-		expect(latest.exportStatus.error).toBe("Export to Excel requires FetchXML and LayoutXML");
+		expect(latest.exportStatus.error).toEqual({
+			kind: "server",
+			message: "Export to Excel requires FetchXML and LayoutXML",
+			retryable: false,
+		});
 		expect(api.exportToExcel).not.toHaveBeenCalled();
 	});
 
@@ -328,9 +347,11 @@ describe("useResultsExport: the server export of a loaded view", () => {
 		api.exportToExcel.mockRejectedValue(error);
 		await show({ loadedView: view });
 		await run(latest.exportToExcel);
-		expect(latest.exportStatus.error).toBe(
-			formatDataverseError(error, "Export to Excel failed. Please try again."),
-		);
+		expect(latest.exportStatus.error).toEqual({
+			kind: "server",
+			message: formatDataverseError(error, "Export to Excel failed. Please try again."),
+			retryable: true,
+		});
 		expect(latest.exportStatus.isExporting).toBe(false);
 	});
 
@@ -358,19 +379,38 @@ describe("useResultsExport: the server export of a loaded view", () => {
 });
 
 describe("useResultsExport: the error", () => {
-	it("clears itself after 10 seconds", async () => {
+	it("stays: a bar with Try again doesn't go by itself (#277)", async () => {
 		await show({ queryResult: null });
 		vi.useFakeTimers();
 		await run(latest.exportLocal);
-		expect(latest.exportStatus.error).toBe("No data to export. Execute a query first.");
+		await act(async () => {
+			vi.advanceTimersByTime(60_000);
+		});
+		expect(latest.exportStatus.error?.message).toBe(
+			"No data to export. Execute a query first.",
+		);
+	});
 
-		await act(async () => {
-			vi.advanceTimersByTime(9999);
-		});
-		expect(latest.exportStatus.error).toBeDefined();
-		await act(async () => {
-			vi.advanceTimersByTime(1);
-		});
+	it("Try again repeats the server export that failed", async () => {
+		api.exportToExcel.mockRejectedValueOnce(new Error("Timeout"));
+		api.exportToExcel.mockResolvedValueOnce({ excelFile: "QUJD", filename: "A.xlsx" });
+		await show({ loadedView: view });
+		await run(latest.exportToExcel);
+		expect(latest.exportStatus.error?.kind).toBe("server");
+		await run(async () => latest.retryExport());
+		expect(api.exportToExcel).toHaveBeenCalledTimes(2);
+		expect(excel.exportToExcelLocal).not.toHaveBeenCalled();
+		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("Try again repeats the local export that failed", async () => {
+		excel.exportToExcelLocal.mockRejectedValueOnce(new Error("Disk full"));
+		await show({ loadedView: view });
+		await run(latest.exportLocal);
+		expect(latest.exportStatus.error?.kind).toBe("local");
+		await run(async () => latest.retryExport());
+		expect(excel.exportToExcelLocal).toHaveBeenCalledTimes(2);
+		expect(api.exportToExcel).not.toHaveBeenCalled();
 		expect(latest.exportStatus.error).toBeUndefined();
 	});
 
@@ -382,6 +422,32 @@ describe("useResultsExport: the error", () => {
 			latest.dismissExportError();
 		});
 		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("a new run clears it, so Try again can't repeat it on other rows (#277)", async () => {
+		excel.exportToExcelLocal.mockRejectedValueOnce(new Error("Disk full"));
+		await show();
+		await run(latest.exportLocal);
+		expect(latest.exportStatus.error).toBeDefined();
+		await show({ queryResult: null });
+		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("another view clears it", async () => {
+		api.exportToExcel.mockRejectedValueOnce(new Error("Timeout"));
+		await show({ loadedView: view });
+		await run(latest.exportToExcel);
+		expect(latest.exportStatus.error).toBeDefined();
+		await show({ loadedView: { ...view, id: "another-view" } });
+		expect(latest.exportStatus.error).toBeUndefined();
+	});
+
+	it("more rows of the same query keep it", async () => {
+		excel.exportToExcelLocal.mockRejectedValueOnce(new Error("Disk full"));
+		await show();
+		await run(latest.exportLocal);
+		await show({ queryResult: { rows: [...rows, ...rows], query: fetchQuery } });
+		expect(latest.exportStatus.error?.message).toBe("Disk full");
 	});
 
 	it("a new export clears the previous error", async () => {
