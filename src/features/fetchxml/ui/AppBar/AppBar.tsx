@@ -19,6 +19,7 @@ import {
 	bundleIcon,
 } from "@fluentui/react-icons";
 import { OverflowToolbar, type BarCommand } from "../../../../shared/components/commandBar";
+import { formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import { useSaveViewCommand, type SaveViewCommandOptions } from "../Toolbar/useSaveViewCommand";
 import {
@@ -90,7 +91,8 @@ export function AppBar({
 			appearance: "primary",
 			busy: run.busy,
 			disabledReason: run.disabledReason,
-			hint: "Run query (Ctrl+Enter)",
+			hint: `Run query (${formatKeys(getEntry("run")).join(" or ")})`,
+			keyShortcuts: getEntry("run").aria,
 			onClick: run.onClick,
 		},
 		{ ...save.command, group: "file" },

@@ -166,6 +166,24 @@ describe("the app bar's commands", () => {
 		expect(onClick).toHaveBeenCalledOnce();
 	});
 
+	it("is busy while more rows load, even without a reason, and says its shortcut", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const onClick = vi.fn();
+		await renderBar({ run: run({ busy: true, onClick }) });
+		expect(onBar("Run")?.getAttribute("aria-disabled")).toBe("true");
+		await click(onBar("Run"));
+		expect(onClick).not.toHaveBeenCalled();
+		await renderBar();
+		expect(onBar("Run")?.getAttribute("aria-keyshortcuts")).toBe("Control+Enter");
+	});
+
+	it("puts Settings at the far end", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar();
+		const divider = [...(bar()?.querySelectorAll('[role="separator"]') ?? [])].at(-1);
+		expect(divider && getComputedStyle(divider).marginInlineStart).toBe("auto");
+	});
+
 	it("can't run again while a query runs", async () => {
 		stubOverflowWidths({ container: 3000 });
 		const onClick = vi.fn();

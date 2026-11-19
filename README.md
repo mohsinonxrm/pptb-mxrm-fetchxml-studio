@@ -148,7 +148,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### ⌨️ Keyboard shortcuts
 
-> **Not all active yet.** This is the planned set (#186). `Ctrl+Enter` runs the query today from anywhere but the FetchXML editor, where it still adds a line until #186 binds it, and not while a dialog or menu is open; the other seven of the first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
+> **Not all active yet.** This is the planned set (#186). `Ctrl+Enter` runs the query today from anywhere but the FetchXML editor, where it still adds a line until #186 binds it; on a button it presses that button, and it waits while a dialog or menu is open; the other seven of the first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
 
 | Action | Keys | Where |
 | --- | --- | --- |

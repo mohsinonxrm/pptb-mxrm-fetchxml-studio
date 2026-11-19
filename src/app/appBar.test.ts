@@ -117,7 +117,11 @@ describe("the app bar's Run", () => {
 			});
 			await app.waitFor(() => !document.querySelector('[role="dialog"]'));
 
-			await ctrlEnter(document.querySelector('[role="treeitem"]'));
+			// The root branch stays open: the key runs the query and stops there
+			const branch = document.querySelector('[role="treeitem"][aria-expanded]');
+			const expanded = branch?.getAttribute("aria-expanded");
+			await ctrlEnter(branch);
+			expect(branch?.getAttribute("aria-expanded")).toBe(expanded);
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 			expect(runs()).toBe(1);
 			app.expectClean();

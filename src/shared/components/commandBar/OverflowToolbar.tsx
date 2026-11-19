@@ -162,10 +162,12 @@ const nameOf = (command: BarCommand) =>
 	command.ariaLabel ? { "aria-label": command.ariaLabel } : {};
 
 /** On the bar an icon-only command is named "Label: reason"; an `ariaLabel` replaces the label part only */
-const barNameOf = (command: BarCommand) =>
-	command.ariaLabel && command.iconOnly && command.disabledReason
+const barNameOf = (command: BarCommand) => ({
+	...(command.ariaLabel && command.iconOnly && command.disabledReason
 		? { "aria-label": `${command.ariaLabel}: ${command.disabledReason}` }
-		: nameOf(command);
+		: nameOf(command)),
+	...(command.keyShortcuts ? { "aria-keyshortcuts": command.keyShortcuts } : {}),
+});
 
 /**
  * Checked-value names for the Toolbar and More's MenuList, namespaced so a toggle's id and a radio
