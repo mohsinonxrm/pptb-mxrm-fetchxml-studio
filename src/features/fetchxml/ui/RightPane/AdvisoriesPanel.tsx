@@ -12,18 +12,17 @@ import {
 	MessageBarActions,
 	MessageBarBody,
 	MessageBarTitle,
-	Spinner,
 	Text,
-	ToggleButton,
-	Toolbar,
-	ToolbarDivider,
 	Tooltip,
 	makeStyles,
 	mergeClasses,
 	tokens,
 } from "@fluentui/react-components";
+import { OverflowToolbar, type BarCommand } from "../../../../shared/components/commandBar";
 import {
+	CloudCheckmark20Filled,
 	CloudCheckmark20Regular,
+	bundleIcon,
 	Dismiss16Regular,
 	ErrorCircle20Regular,
 	Lightbulb20Regular,
@@ -51,20 +50,15 @@ const useStyles = makeStyles({
 		overflow: "hidden",
 	},
 	toolbar: {
-		display: "flex",
-		alignItems: "center",
-		flexWrap: "wrap",
-		gap: tokens.spacingHorizontalS,
-		padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
-		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+		paddingInline: tokens.spacingHorizontalS,
+		paddingTop: tokens.spacingVerticalXS,
 	},
-	status: { color: tokens.colorNeutralForeground3, minWidth: 0, flex: "1 1 240px" },
-	filters: {
-		display: "flex",
-		alignItems: "center",
-		flexWrap: "nowrap",
-		gap: tokens.spacingHorizontalXXS,
-		marginLeft: "auto",
+	status: {
+		display: "block",
+		color: tokens.colorNeutralForeground3,
+		paddingInline: tokens.spacingHorizontalM,
+		paddingBottom: tokens.spacingVerticalXS,
+		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 	},
 	messageBar: { padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS} 0` },
 	scroll: { flex: 1, overflowY: "auto", minHeight: 0 },
@@ -240,6 +234,8 @@ function AdvisoryRow({ a, props }: { a: Advisory; props: AdvisoriesPanelProps })
 	);
 }
 
+const CheckIcon = bundleIcon(CloudCheckmark20Filled, CloudCheckmark20Regular);
+
 export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 	const s = useStyles();
 	const { advisories, checking, checkedAt, onCheck, checkDisabledReason } = props;
@@ -247,26 +243,46 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 	const counts = countByLevel(advisories);
 	const list = advisories.filter((a) => filter === "all" || a.level === filter);
 
-	const checkButton = (
-		<Button
-			icon={checking ? <Spinner size="extra-tiny" /> : <CloudCheckmark20Regular />}
-			onClick={onCheck}
-			disabled={checking || !!checkDisabledReason || props.noQuery}
-		>
-			{checkedAt ? "Check again" : "Check with Dataverse"}
-		</Button>
-	);
-
-	const toggle = (value: Filter, label: string, count: number) => (
-		<ToggleButton
-			size="small"
-			appearance="subtle"
-			checked={filter === value}
-			onClick={() => setFilter(value)}
-		>
-			{label} ({count})
-		</ToggleButton>
-	);
+	// Check is pinned; the filters are one radio group, All apart from the levels; what doesn't fit
+	// moves into More (#232). The status text sits at the end and truncates.
+	const filterCommand = (
+		value: Filter,
+		label: string,
+		count: number,
+		group: string,
+		priority: number,
+	): BarCommand => ({
+		id: `show-${value}`,
+		label: `${label} (${count})`,
+		// The filters lost their "Show" group around them; the name says it instead
+		ariaLabel: `Show ${label.toLowerCase()} (${count})`,
+		group,
+		// The chosen filter stays on the bar longest, so the bar always shows which one it is
+		priority: filter === value ? 30 : priority,
+		kind: "toggle",
+		radioName: "show",
+		checked: filter === value,
+		onClick: () => setFilter(value),
+	});
+	const commands: BarCommand[] = [
+		{
+			id: "check",
+			label: checkedAt ? "Check again" : "Check with Dataverse",
+			icon: CheckIcon,
+			group: "check",
+			pinned: true,
+			kind: "button",
+			appearance: "secondary",
+			busy: checking,
+			disabledReason:
+				checkDisabledReason ?? (props.noQuery ? "Choose an entity first" : undefined),
+			onClick: onCheck,
+		},
+		filterCommand("all", "All", advisories.length, "show-all", 20),
+		filterCommand("error", LEVEL_LABELS.error, counts.error, "show-level", 15),
+		filterCommand("warning", LEVEL_LABELS.warning, counts.warning, "show-level", 10),
+		filterCommand("advice", LEVEL_LABELS.advice, counts.advice, "show-level", 5),
+	];
 
 	let empty: ReactNode = null;
 	if (props.noQuery) {
@@ -289,27 +305,16 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 
 	return (
 		<div className={s.card}>
-			<Toolbar size="small" className={s.toolbar} aria-label="Advisories">
-				{checkDisabledReason ? (
-					// Disabled buttons don't get pointer events: the tooltip goes on a wrapper
-					<Tooltip content={checkDisabledReason} relationship="description">
-						<span>{checkButton}</span>
-					</Tooltip>
-				) : (
-					checkButton
-				)}
-				<Text size={200} className={s.status} aria-live="polite">
-					{statusText(props)}
-				</Text>
-				{/* The filters wrap together, so they never split across lines */}
-				<div className={s.filters} role="group" aria-label="Show">
-					{toggle("all", "All", advisories.length)}
-					<ToolbarDivider />
-					{toggle("error", LEVEL_LABELS.error, counts.error)}
-					{toggle("warning", LEVEL_LABELS.warning, counts.warning)}
-					{toggle("advice", LEVEL_LABELS.advice, counts.advice)}
-				</div>
-			</Toolbar>
+			<OverflowToolbar
+				ariaLabel="Advisories"
+				size="small"
+				className={s.toolbar}
+				commands={commands}
+			/>
+			{/* A sentence, so it wraps under the bar rather than taking the bar's room (#232) */}
+			<Text size={200} className={s.status} aria-live="polite">
+				{statusText(props)}
+			</Text>
 			{props.checkError && (
 				<div className={s.messageBar}>
 					<MessageBar intent="error" layout="multiline">

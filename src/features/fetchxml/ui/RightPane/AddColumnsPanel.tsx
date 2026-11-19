@@ -20,8 +20,6 @@ import {
 	TreeItem,
 	TreeItemLayout,
 	Spinner,
-	TabList,
-	Tab,
 	Combobox,
 	Option,
 	Badge,
@@ -29,9 +27,8 @@ import {
 	AccordionItem,
 	AccordionHeader,
 	AccordionPanel,
-	type SelectTabData,
-	type SelectTabEvent,
 } from "@fluentui/react-components";
+import { OverflowTabList } from "../../../../shared/components/commandBar";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import { metadataCache } from "../../state/cache";
@@ -346,10 +343,6 @@ export function AddColumnsPanel({
 		return existingRelatedColumns?.has(key) ?? false;
 	};
 
-	const handleTabSelect = useCallback((_e: SelectTabEvent, data: SelectTabData) => {
-		setActiveTab(data.value as "entity" | "related");
-	}, []);
-
 	const handleRootAttributeToggle = useCallback((logicalName: string) => {
 		setSelectedRootAttrs((prev) => {
 			const next = new Set(prev);
@@ -491,10 +484,18 @@ export function AddColumnsPanel({
 				</DrawerHeaderTitle>
 			</DrawerHeader>
 			<DrawerBody>
-				<TabList selectedValue={activeTab} onTabSelect={handleTabSelect}>
-					<Tab value="entity">{entityDisplayName || entityLogicalName || "Entity"}</Tab>
-					<Tab value="related">Related</Tab>
-				</TabList>
+				<OverflowTabList
+					ariaLabel="Columns from"
+					tabs={[
+						{
+							value: "entity",
+							label: entityDisplayName || entityLogicalName || "Entity",
+						},
+						{ value: "related", label: "Related" },
+					]}
+					selectedValue={activeTab}
+					onTabSelect={(value) => setActiveTab(value as "entity" | "related")}
+				/>
 
 				<div className={styles.tabContent}>
 					<div className={styles.searchContainer}>

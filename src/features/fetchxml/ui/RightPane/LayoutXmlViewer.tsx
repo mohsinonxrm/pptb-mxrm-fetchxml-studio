@@ -6,10 +6,13 @@
 import { useRef, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import type * as MonacoEditor from "monaco-editor/editor";
-import { makeStyles, Spinner, tokens, Toolbar, ToolbarButton } from "@fluentui/react-components";
-import { Copy24Regular } from "@fluentui/react-icons";
+import { makeStyles, Spinner, tokens } from "@fluentui/react-components";
+import { Copy20Filled, Copy20Regular, bundleIcon } from "@fluentui/react-icons";
+import { OverflowToolbar } from "../../../../shared/components/commandBar";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import { useTheme } from "../../../../shared/contexts/useTheme";
+
+const CopyIcon = bundleIcon(Copy20Filled, Copy20Regular);
 
 const useStyles = makeStyles({
 	container: {
@@ -19,23 +22,11 @@ const useStyles = makeStyles({
 		overflow: "hidden",
 	},
 	toolbar: {
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "space-between",
-		padding: "4px 8px",
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+		paddingInline: tokens.spacingHorizontalS,
+		paddingBlock: tokens.spacingVerticalXXS,
+		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
 		backgroundColor: tokens.colorNeutralBackground2,
 		flexShrink: 0,
-	},
-	toolbarLeft: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalS,
-	},
-	toolbarRight: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalS,
 	},
 	editorWrapper: {
 		flex: 1,
@@ -118,21 +109,26 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 
 	return (
 		<div className={styles.container}>
-			<div className={styles.toolbar}>
-				<div className={styles.toolbarLeft}>
-					<span className={styles.label}>LayoutXML (Read-only)</span>
-				</div>
-				<Toolbar size="small">
-					<ToolbarButton
-						icon={<Copy24Regular />}
-						onClick={handleCopy}
-						disabled={!layoutXml}
-						aria-label="Copy LayoutXML"
-					>
-						Copy
-					</ToolbarButton>
-				</Toolbar>
-			</div>
+			{/* The label, then Copy at the end (#232) */}
+			<OverflowToolbar
+				ariaLabel="LayoutXML commands"
+				size="small"
+				align="end"
+				className={styles.toolbar}
+				start={<span className={styles.label}>LayoutXML (Read-only)</span>}
+				commands={[
+					{
+						id: "copy",
+						label: "Copy",
+						ariaLabel: "Copy LayoutXML",
+						icon: CopyIcon,
+						kind: "button",
+						priority: 10,
+						disabledReason: layoutXml ? undefined : "There's no LayoutXML to copy yet",
+						onClick: () => void handleCopy(),
+					},
+				]}
+			/>
 			<div className={styles.editorWrapper}>
 				<Editor
 					height="100%"
