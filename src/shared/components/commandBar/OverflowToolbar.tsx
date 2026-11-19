@@ -89,6 +89,12 @@ export interface OverflowToolbarProps {
 	/** Where the commands sit when there's room to spare. Default "start". */
 	align?: "start" | "end";
 	/**
+	 * Put the `placement: "end"` commands at the far end of the bar, after the room to spare, as in a
+	 * model-driven app's command bar (Settings at the right). Give them a group of their own: the
+	 * divider before them is what moves.
+	 */
+	endAtEdge?: boolean;
+	/**
 	 * Every group the bar may show, including ones whose commands appear later (after a privilege
 	 * check, say). Overflow learns them up front, so a late group doesn't start a fresh Overflow,
 	 * which would close an open menu of the bar.
@@ -135,6 +141,9 @@ const useStyles = makeStyles({
 		textOverflow: "ellipsis",
 	},
 	alignEnd: { justifyContent: "flex-end" },
+	// Takes the room to spare, so what follows sits at the far end; Overflow measures widths, not
+	// margins, so it doesn't change what fits
+	pushToEnd: { marginInlineStart: "auto" },
 	hidden: { display: "none" },
 	/** Destructive command: danger text, still subtle (forced colours keep the system text colour) */
 	danger: {
@@ -566,6 +575,7 @@ export function OverflowToolbar({
 	moreExtra,
 	padding,
 	align = "start",
+	endAtEdge = false,
 	groups: declaredGroups,
 	className,
 }: OverflowToolbarProps) {
@@ -709,7 +719,9 @@ export function OverflowToolbar({
 						groupOf(endCommands[0]) !==
 							groupOf(barCommands[barCommands.length - 1]) && (
 							<OverflowDivider groupId={groupOf(endCommands[0])}>
-								<ToolbarDivider />
+								<ToolbarDivider
+									className={endAtEdge ? styles.pushToEnd : undefined}
+								/>
 							</OverflowDivider>
 						)}
 					{endCommands.map(renderItem)}

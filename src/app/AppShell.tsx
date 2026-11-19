@@ -21,6 +21,10 @@ import { useResultsGridEdits } from "./hooks/useResultsGridEdits";
 import { metadataScope, useAdvancedFindOnly } from "../features/fetchxml/state/metadataScope";
 import { PreviewTabs } from "../features/fetchxml/ui/RightPane/PreviewTabs";
 import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
+import { AppBar } from "../features/fetchxml/ui/AppBar/AppBar";
+import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync";
+import { useEditorSession } from "./hooks/useEditorSession";
+import { useRunShortcut } from "./hooks/useRunShortcut";
 import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
@@ -302,171 +306,29 @@ function AppContent({
 		availability: recordActionAvailability,
 	});
 
+	// The editor session and Run (#278): shared by the app bar and the right pane
+	const editorSession = useEditorSession({
+		xml: fetchXml,
+		onParseToTree: builder.loadFetchXml,
+		onRun: queryExecution.execute,
+		runDisabledReason:
+			quickFindPlaceholderCount > 0 && !quickFindSearchValue
+				? "Enter a quick find value first"
+				: undefined,
+		isRunning: queryExecution.isExecuting,
+		isLoadingMore: queryExecution.isLoadingMore,
+	});
+	useRunShortcut(editorSession.run, editorSession.runDisabledReason);
+
 	return (
-		<div className={styles.root} data-app-root>
-			{/* Left Pane */}
-			<div className={styles.leftPane} data-left-pane style={{ width: `${leftPaneWidth}px` }}>
-				{/* Top: Tree View */}
-				<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
-					<PaneErrorBoundary
-						where="Query scope"
-						title="The query scope couldn't be shown"
-						resetKey={connectionKey}
-					>
-						<EntitySelector
-							selectedEntity={builder.fetchQuery?.entity.name || null}
-							onEntityChange={builder.setEntity}
-							onNewQuery={() => {
-								treeNotice.dismiss();
-								builder.newQuery();
-							}}
-							entityScopeMode={displaySettings.entityScopeMode}
-							onEntityScopeModeChange={(entityScopeMode) =>
-								setDisplaySettings({ ...displaySettings, entityScopeMode })
-							}
-							advancedFindOnly={displaySettings.advancedFindOnly}
-							onAdvancedFindOnlyChange={(advancedFindOnly) =>
-								setDisplaySettings({ ...displaySettings, advancedFindOnly })
-							}
-							onViewLoad={applyLoadedView}
-						/>
-					</PaneErrorBoundary>
-					<TreeNoticeBar notice={treeNotice.notice} onDismiss={treeNotice.dismiss} />
-					{builder.fetchQuery ? (
-						<PaneErrorBoundary
-							where="Query tree"
-							title="The query tree couldn't be shown"
-							resetKey={builder.fetchQuery}
-						>
-							<TreeView
-								fetchQuery={builder.fetchQuery}
-								size={treeSizeFor(displaySettings.gridDensity)}
-								iconStyle={displaySettings.treeIconStyle}
-								attributeMetadata={attributeMetadata}
-								selectedNodeId={builder.selectedNodeId}
-								revealSeq={builder.revealSeq}
-								onNodeSelect={builder.selectNode}
-								onAddAttribute={builder.addAttribute}
-								onAddAllAttributes={builder.addAllAttributes}
-								onAddOrder={builder.addOrder}
-								onAddFilter={builder.addFilter}
-								onAddSubfilter={builder.addSubfilter}
-								onAddCondition={builder.addCondition}
-								onAddLinkEntity={builder.addLinkEntity}
-								onRemoveNode={builder.removeNode}
-								onUpdateAttributes={builder.updateAttributes}
-							/>
-						</PaneErrorBoundary>
-					) : (
-						<div className={styles.placeholder}>Select an entity to begin</div>
-					)}
-				</div>
-				{/* Resize Handle */}
-				<div
-					className={styles.horizontalResizeHandle}
-					onMouseDown={startHorizontalDrag}
-					title="Drag to resize"
-				>
-					<span className={styles.horizontalGrip}>
-						<span>•</span>
-						<span>•</span>
-						<span>•</span>
-					</span>
-				</div>{" "}
-				{/* Bottom: Properties Panel */}
-				<div className={styles.leftPaneBottom} style={{ height: `${100 - topHeight}%` }}>
-					<div className={styles.toolbar}>
-						<span style={{ fontWeight: 600 }}>Properties</span>
-					</div>
-					<div className={styles.propertiesContent}>
-						<PaneErrorBoundary
-							where="Properties panel"
-							title="The properties couldn't be shown"
-							resetKey={builder.selectedNodeId}
-						>
-							<PropertiesPanel
-								selectedNode={builder.selectedNode}
-								fetchQuery={builder.fetchQuery}
-								onNodeUpdate={builder.updateNode}
-							/>
-						</PaneErrorBoundary>
-					</div>
-				</div>
-			</div>
-			{/* Vertical Resize Handle */}
-			<div
-				className={styles.verticalResizeHandle}
-				onMouseDown={startVerticalDrag}
-				title="Drag to resize"
-			>
-				<span className={styles.verticalGrip}>
-					<span>•</span>
-					<span>•</span>
-					<span>•</span>
-				</span>
-			</div>{" "}
-			{/* Right Pane */}
-			<div className={styles.rightPane}>
-				<PreviewTabs
-					xml={fetchXml}
-					layoutXml={layoutXml}
-					result={queryResult}
-					isExecuting={queryExecution.isExecuting}
-					isLoadingMore={queryExecution.isLoadingMore}
-					onExecute={queryExecution.execute}
-					onExport={resultsExport.exportToExcel}
-					onExportLocal={resultsExport.exportLocal}
-					canExport={resultsExport.canExport}
-					isExporting={resultsExport.exportStatus.isExporting}
-					exportError={resultsExport.exportStatus.error}
-					onDismissExportError={resultsExport.dismissExportError}
-					onRetryExport={resultsExport.retryExport}
-					executeError={executeError}
-					onDismissExecuteError={queryExecution.dismissExecuteError}
-					exportDisabledReason={resultsExport.exportDisabledReason}
-					onParseToTree={builder.loadFetchXml}
-					isCallee={launch.isCallee}
-					attributeMetadata={attributeMetadata}
-					fetchQuery={builder.fetchQuery}
-					primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
-					connectionKey={connectionKey}
-					selectedNodeId={builder.selectedNodeId}
-					onSelectNode={builder.revealNode}
-					onAddOrder={builder.addOrder}
-					columnConfig={builder.columnConfig}
-					onColumnResize={builder.updateColumnWidth}
-					onLoadMore={queryExecution.loadMore}
-					pagingNotice={queryExecution.pagingNotice}
-					pagingWaitSeconds={queryExecution.pagingWaitSeconds}
-					isRetrieveAllInProgress={queryExecution.isRetrieveAllInProgress}
-					onStopRetrieveAll={queryExecution.stopRetrieveAll}
-					onRetryPaging={queryExecution.retryPaging}
-					onDismissPagingNotice={queryExecution.dismissPagingNotice}
-					entityDisplayName={
-						entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
-						entityMetadata?.LogicalName
-					}
-					lookupRelationships={lookupRelationships}
-					oneToManyRelationships={oneToManyRelationships}
-					isLoadingRelationships={isLoadingRelationships}
-					onLoadRelatedAttributes={loadAttributes}
-					quickFindTestValue={
-						quickFindPlaceholderCount > 0 ? (
-							<QuickFindTestValue
-								value={quickFindValue}
-								onValueChange={setQuickFindValue}
-								addPercent={quickFindAddPercent}
-								onAddPercentChange={setQuickFindAddPercent}
-								searchValue={quickFindSearchValue}
-								disabled={queryExecution.isExecuting}
-							/>
-						) : undefined
-					}
-					executeDisabledReason={
-						quickFindPlaceholderCount > 0 && !quickFindSearchValue
-							? "Enter a quick find value to execute this query."
-							: undefined
-					}
+		<EditorSyncContext.Provider value={editorSession.syncValue}>
+			<div className={styles.shell}>
+				<AppBar
+					run={{
+						onClick: editorSession.run,
+						busy: editorSession.isRunning,
+						disabledReason: editorSession.runDisabledReason,
+					}}
 					saveView={{
 						fetchXml,
 						layoutXml,
@@ -488,60 +350,233 @@ function AppContent({
 								}
 							: undefined
 					}
-					onReorderColumns={gridEdits.reorderColumns}
-					onRemoveColumns={gridEdits.removeColumns}
-					onAddColumn={gridEdits.addColumn}
-					onAddRelatedColumns={gridEdits.addRelatedColumns}
-					columnFilters={gridEdits.columnFilters}
-					onAddColumnFilter={gridEdits.addColumnFilter}
-					onRemoveColumnFilters={gridEdits.removeColumnFilters}
-					onSortChange={gridEdits.sortByColumn}
-					// Record action handlers
-					onOpenRecord={recordActions.openRecord}
-					onCopyRecordUrl={recordActions.copyRecordUrl}
-					onDeleteRecords={recordActions.deleteRecords}
-					onBulkDeleteRecords={recordActions.bulkDeleteRecords}
-					onActivateRecords={recordActions.activateRecords}
-					onDeactivateRecords={recordActions.deactivateRecords}
-					activateDisabledReason={recordActions.activateDisabledReason}
-					deactivateDisabledReason={recordActions.deactivateDisabledReason}
-					closeActions={recordActions.closeActions}
-					closeDisabledReason={recordActions.closeDisabledReason}
-					onCloseRecords={recordActions.closeRecords}
-					onRunSpecificWorkflow={recordActions.runSpecificWorkflow}
-					canDelete={recordActions.canDelete}
-					canBulkDelete={recordActions.canBulkDelete}
-					canRunWorkflow={recordActions.canRunWorkflow}
-					onFetchWorkflows={recordActions.fetchWorkflows}
-					isAggregateQuery={recordActions.isAggregateQuery}
-					deleteDisabledReason={recordActions.deleteDisabledReason}
-					workflowDisabledReason={recordActions.workflowDisabledReason}
-					canChangeState={recordActions.canChangeState}
-					recordActionsDisabledReason={recordActions.recordActionsDisabledReason}
-					deleteAllDisabledReason={recordActions.deleteAllDisabledReason}
-					onSelectionChange={recordActions.onSelectionChange}
-					getSelectedRecordIds={recordActions.getSelectedRecordIds}
+					isCallee={launch.isCallee}
+					getCurrentXml={editorSession.getCurrentXml}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
-					displaySettings={displaySettings}
-					onGridDensityChange={(gridDensity) =>
-						setDisplaySettings({ ...displaySettings, gridDensity })
-					}
 				/>
+				<div className={styles.root} data-app-root>
+					{/* Left Pane */}
+					<div
+						className={styles.leftPane}
+						data-left-pane
+						style={{ width: `${leftPaneWidth}px` }}
+					>
+						{/* Top: Tree View */}
+						<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
+							<PaneErrorBoundary
+								where="Query scope"
+								title="The query scope couldn't be shown"
+								resetKey={connectionKey}
+							>
+								<EntitySelector
+									selectedEntity={builder.fetchQuery?.entity.name || null}
+									onEntityChange={builder.setEntity}
+									onNewQuery={() => {
+										treeNotice.dismiss();
+										builder.newQuery();
+									}}
+									entityScopeMode={displaySettings.entityScopeMode}
+									onEntityScopeModeChange={(entityScopeMode) =>
+										setDisplaySettings({ ...displaySettings, entityScopeMode })
+									}
+									advancedFindOnly={displaySettings.advancedFindOnly}
+									onAdvancedFindOnlyChange={(advancedFindOnly) =>
+										setDisplaySettings({ ...displaySettings, advancedFindOnly })
+									}
+									onViewLoad={applyLoadedView}
+								/>
+							</PaneErrorBoundary>
+							<TreeNoticeBar
+								notice={treeNotice.notice}
+								onDismiss={treeNotice.dismiss}
+							/>
+							{builder.fetchQuery ? (
+								<PaneErrorBoundary
+									where="Query tree"
+									title="The query tree couldn't be shown"
+									resetKey={builder.fetchQuery}
+								>
+									<TreeView
+										fetchQuery={builder.fetchQuery}
+										size={treeSizeFor(displaySettings.gridDensity)}
+										iconStyle={displaySettings.treeIconStyle}
+										attributeMetadata={attributeMetadata}
+										selectedNodeId={builder.selectedNodeId}
+										revealSeq={builder.revealSeq}
+										onNodeSelect={builder.selectNode}
+										onAddAttribute={builder.addAttribute}
+										onAddAllAttributes={builder.addAllAttributes}
+										onAddOrder={builder.addOrder}
+										onAddFilter={builder.addFilter}
+										onAddSubfilter={builder.addSubfilter}
+										onAddCondition={builder.addCondition}
+										onAddLinkEntity={builder.addLinkEntity}
+										onRemoveNode={builder.removeNode}
+										onUpdateAttributes={builder.updateAttributes}
+									/>
+								</PaneErrorBoundary>
+							) : (
+								<div className={styles.placeholder}>Select an entity to begin</div>
+							)}
+						</div>
+						{/* Resize Handle */}
+						<div
+							className={styles.horizontalResizeHandle}
+							onMouseDown={startHorizontalDrag}
+							title="Drag to resize"
+						>
+							<span className={styles.horizontalGrip}>
+								<span>•</span>
+								<span>•</span>
+								<span>•</span>
+							</span>
+						</div>{" "}
+						{/* Bottom: Properties Panel */}
+						<div
+							className={styles.leftPaneBottom}
+							style={{ height: `${100 - topHeight}%` }}
+						>
+							<div className={styles.toolbar}>
+								<span style={{ fontWeight: 600 }}>Properties</span>
+							</div>
+							<div className={styles.propertiesContent}>
+								<PaneErrorBoundary
+									where="Properties panel"
+									title="The properties couldn't be shown"
+									resetKey={builder.selectedNodeId}
+								>
+									<PropertiesPanel
+										selectedNode={builder.selectedNode}
+										fetchQuery={builder.fetchQuery}
+										onNodeUpdate={builder.updateNode}
+									/>
+								</PaneErrorBoundary>
+							</div>
+						</div>
+					</div>
+					{/* Vertical Resize Handle */}
+					<div
+						className={styles.verticalResizeHandle}
+						onMouseDown={startVerticalDrag}
+						title="Drag to resize"
+					>
+						<span className={styles.verticalGrip}>
+							<span>•</span>
+							<span>•</span>
+							<span>•</span>
+						</span>
+					</div>{" "}
+					{/* Right Pane */}
+					<div className={styles.rightPane}>
+						<PreviewTabs
+							xml={fetchXml}
+							layoutXml={layoutXml}
+							result={queryResult}
+							isExecuting={queryExecution.isExecuting}
+							isLoadingMore={queryExecution.isLoadingMore}
+							session={editorSession}
+							onExport={resultsExport.exportToExcel}
+							onExportLocal={resultsExport.exportLocal}
+							canExport={resultsExport.canExport}
+							isExporting={resultsExport.exportStatus.isExporting}
+							exportError={resultsExport.exportStatus.error}
+							onDismissExportError={resultsExport.dismissExportError}
+							onRetryExport={resultsExport.retryExport}
+							executeError={executeError}
+							onDismissExecuteError={queryExecution.dismissExecuteError}
+							exportDisabledReason={resultsExport.exportDisabledReason}
+							onParseToTree={builder.loadFetchXml}
+							attributeMetadata={attributeMetadata}
+							fetchQuery={builder.fetchQuery}
+							primaryIdAttribute={entityMetadata?.PrimaryIdAttribute}
+							connectionKey={connectionKey}
+							selectedNodeId={builder.selectedNodeId}
+							onSelectNode={builder.revealNode}
+							onAddOrder={builder.addOrder}
+							columnConfig={builder.columnConfig}
+							onColumnResize={builder.updateColumnWidth}
+							onLoadMore={queryExecution.loadMore}
+							pagingNotice={queryExecution.pagingNotice}
+							pagingWaitSeconds={queryExecution.pagingWaitSeconds}
+							isRetrieveAllInProgress={queryExecution.isRetrieveAllInProgress}
+							onStopRetrieveAll={queryExecution.stopRetrieveAll}
+							onRetryPaging={queryExecution.retryPaging}
+							onDismissPagingNotice={queryExecution.dismissPagingNotice}
+							entityDisplayName={
+								entityMetadata?.DisplayName?.UserLocalizedLabel?.Label ||
+								entityMetadata?.LogicalName
+							}
+							lookupRelationships={lookupRelationships}
+							oneToManyRelationships={oneToManyRelationships}
+							isLoadingRelationships={isLoadingRelationships}
+							onLoadRelatedAttributes={loadAttributes}
+							quickFindTestValue={
+								quickFindPlaceholderCount > 0 ? (
+									<QuickFindTestValue
+										value={quickFindValue}
+										onValueChange={setQuickFindValue}
+										addPercent={quickFindAddPercent}
+										onAddPercentChange={setQuickFindAddPercent}
+										searchValue={quickFindSearchValue}
+										disabled={queryExecution.isExecuting}
+									/>
+								) : undefined
+							}
+							onReorderColumns={gridEdits.reorderColumns}
+							onRemoveColumns={gridEdits.removeColumns}
+							onAddColumn={gridEdits.addColumn}
+							onAddRelatedColumns={gridEdits.addRelatedColumns}
+							columnFilters={gridEdits.columnFilters}
+							onAddColumnFilter={gridEdits.addColumnFilter}
+							onRemoveColumnFilters={gridEdits.removeColumnFilters}
+							onSortChange={gridEdits.sortByColumn}
+							// Record action handlers
+							onOpenRecord={recordActions.openRecord}
+							onCopyRecordUrl={recordActions.copyRecordUrl}
+							onDeleteRecords={recordActions.deleteRecords}
+							onBulkDeleteRecords={recordActions.bulkDeleteRecords}
+							onActivateRecords={recordActions.activateRecords}
+							onDeactivateRecords={recordActions.deactivateRecords}
+							activateDisabledReason={recordActions.activateDisabledReason}
+							deactivateDisabledReason={recordActions.deactivateDisabledReason}
+							closeActions={recordActions.closeActions}
+							closeDisabledReason={recordActions.closeDisabledReason}
+							onCloseRecords={recordActions.closeRecords}
+							onRunSpecificWorkflow={recordActions.runSpecificWorkflow}
+							canDelete={recordActions.canDelete}
+							canBulkDelete={recordActions.canBulkDelete}
+							canRunWorkflow={recordActions.canRunWorkflow}
+							onFetchWorkflows={recordActions.fetchWorkflows}
+							isAggregateQuery={recordActions.isAggregateQuery}
+							deleteDisabledReason={recordActions.deleteDisabledReason}
+							workflowDisabledReason={recordActions.workflowDisabledReason}
+							canChangeState={recordActions.canChangeState}
+							recordActionsDisabledReason={recordActions.recordActionsDisabledReason}
+							deleteAllDisabledReason={recordActions.deleteAllDisabledReason}
+							onSelectionChange={recordActions.onSelectionChange}
+							getSelectedRecordIds={recordActions.getSelectedRecordIds}
+							displaySettings={displaySettings}
+							onGridDensityChange={(gridDensity) =>
+								setDisplaySettings({ ...displaySettings, gridDensity })
+							}
+						/>
+					</div>
+					{/* The record actions' dialogs: Delete, Bulk delete, Run workflow, Activate / Deactivate, Close */}
+					<RecordActionDialogs
+						recordActions={recordActions}
+						entityLogicalName={entityLogicalName}
+						entityMetadata={entityMetadata}
+						moreRecords={queryResult?.moreRecords}
+					/>
+					{/* Settings Drawer */}
+					<SettingsDrawer
+						open={settingsDrawerOpen}
+						settings={displaySettings}
+						onClose={() => setSettingsDrawerOpen(false)}
+						onSettingsChange={setDisplaySettings}
+					/>
+				</div>
 			</div>
-			{/* The record actions' dialogs: Delete, Bulk delete, Run workflow, Activate / Deactivate, Close */}
-			<RecordActionDialogs
-				recordActions={recordActions}
-				entityLogicalName={entityLogicalName}
-				entityMetadata={entityMetadata}
-				moreRecords={queryResult?.moreRecords}
-			/>
-			{/* Settings Drawer */}
-			<SettingsDrawer
-				open={settingsDrawerOpen}
-				settings={displaySettings}
-				onClose={() => setSettingsDrawerOpen(false)}
-				onSettingsChange={setDisplaySettings}
-			/>
-		</div>
+		</EditorSyncContext.Provider>
 	);
 }

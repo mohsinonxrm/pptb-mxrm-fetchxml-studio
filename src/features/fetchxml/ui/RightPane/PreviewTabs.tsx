@@ -2,7 +2,7 @@
  * Tabbed preview panel with FetchXML editor and Results grid
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { makeStyles, ProgressBar, tokens } from "@fluentui/react-components";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
@@ -21,28 +21,13 @@ import { NON_RETURNING_LINK_TYPES } from "../../model/fetchxmlRules";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import type { ConditionNode, FetchNode } from "../../model/nodes";
 import type { NewCondition } from "../../model/columnFilters";
-import type { ParseResult, ParseWarning } from "../../model/fetchxmlParser";
-import {
-	validateFetchXmlSyntax,
-	parseFetchXml,
-	getBlockingWarnings,
-	getExecutionErrors,
-	getParseToTreeChanges,
-} from "../../model/fetchxmlParser";
+import type { ParseResult } from "../../model/fetchxmlParser";
+import { parseFetchXml } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
 import { DATAVERSE_DEFAULT_PAGE_SIZE } from "../../api/pageRecovery";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
-import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
 import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
-import {
-	invalidProblem,
-	mightRejectProblem,
-	syntaxProblem,
-	type EditorProblem,
-	type EditorProblemKey,
-} from "./editorProblems";
-import type { FetchXmlEditorHandle } from "./FetchXmlEditor";
 import { ResultsTabBars, type ExportError } from "./ResultsTabBars";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
 import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
@@ -57,9 +42,7 @@ import { AdvisoriesPanel } from "./AdvisoriesPanel";
 import { useAdvisorMetadata, useDataverseCheck } from "./useAdvisories";
 
 import { PreviewHeader } from "./PreviewHeader";
-import { emptyQueryReason, type PreviewTab } from "./previewHeaderRules";
-import type { SaveViewCommandOptions } from "../Toolbar/useSaveViewCommand";
-import type { SendToToolCommandOptions } from "../Toolbar/useSendToToolCommand";
+import type { EditorSession } from "../../../../app/hooks/useEditorSession";
 
 /** FetchXML as the tree writes it, to compare meaning rather than formatting; null if it doesn't parse */
 function parseForAdvisories(xmlText: string): { fetchNode: FetchNode; canonical: string } | null {
@@ -146,6 +129,10 @@ const useStyles = makeStyles({
 });
 
 interface PreviewTabsProps {
+	/** The editor session and Run, shared with the app bar (#278) */
+	session: EditorSession;
+	/** The FetchXML editor's Parse to tree */
+	onParseToTree?: (xmlString: string, options?: LoadFetchXmlOptions) => ParseResult;
 	xml: string;
 	/** LayoutXML string for the grid column configuration */
 	layoutXml?: string;
@@ -153,16 +140,10 @@ interface PreviewTabsProps {
 	isExecuting?: boolean;
 	/** Whether more pages are being loaded (for progress display) */
 	isLoadingMore?: boolean;
-	/**
-	 * Execute the tree's query. After an editor-mode sync (#102) the new tree and its XML are
-	 * passed along, because builder state updates arrive on the next render.
-	 */
-	onExecute?: (synced?: { xml: string; fetchQuery: FetchNode }) => void;
 	/** Export via Dataverse ExportToExcel API */
 	onExport?: () => void;
 	/** Export locally using exceljs */
 	onExportLocal?: () => void;
-	onParseToTree?: (xmlString: string, options?: LoadFetchXmlOptions) => ParseResult;
 	/** Multi-entity attribute metadata: Map<entityLogicalName, Map<attributeLogicalName, AttributeMetadata>> */
 	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	fetchQuery?: FetchNode | null;
@@ -188,16 +169,8 @@ interface PreviewTabsProps {
 	columnFilters?: ConditionNode[];
 	onAddColumnFilter?: (condition: NewCondition) => void;
 	onRemoveColumnFilters?: (conditionIds: string[]) => void;
-	/** Save view on the header bar (FetchXML tab only) */
-	saveView?: SaveViewCommandOptions;
 	/** Quick find test value field, shown under the toolbar while the query has {0} (#142) */
 	quickFindTestValue?: ReactNode;
-	/** Why Execute is off, e.g. a quick find view without a test value (#142) */
-	executeDisabledReason?: string;
-	/** Send to tool on the header bar; left out when no tool takes FetchXML */
-	sendToTool?: SendToToolCommandOptions;
-	/** True when this tool was launched by another tool via T2T — shows the Return button */
-	isCallee?: boolean;
 	/** Callback when user scrolls near bottom (infinite scroll) */
 	onLoadMore?: () => void;
 	/** Paging notice above the grid: failed page, Stop, simple paging (#60) */
@@ -281,8 +254,6 @@ interface PreviewTabsProps {
 	onSelectionChange?: (recordIds: string[]) => void;
 	/** Callback to get currently selected record IDs */
 	getSelectedRecordIds?: () => string[];
-	/** Callback when user clicks Settings button */
-	onOpenSettings?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
 	/** Change the grid and tree density (#228) */
@@ -305,10 +276,8 @@ export function PreviewTabs({
 	result,
 	isExecuting,
 	isLoadingMore,
-	onExecute,
 	onExport,
 	onExportLocal,
-	onParseToTree,
 	attributeMetadata,
 	fetchQuery,
 	columnConfig,
@@ -321,11 +290,7 @@ export function PreviewTabs({
 	columnFilters,
 	onAddColumnFilter,
 	onRemoveColumnFilters,
-	saveView,
 	quickFindTestValue,
-	executeDisabledReason,
-	sendToTool,
-	isCallee,
 	onLoadMore,
 	pagingNotice,
 	pagingWaitSeconds,
@@ -371,7 +336,6 @@ export function PreviewTabs({
 	deleteAllDisabledReason,
 	onSelectionChange,
 	getSelectedRecordIds,
-	onOpenSettings,
 	displaySettings,
 	onGridDensityChange,
 	primaryIdAttribute,
@@ -379,31 +343,33 @@ export function PreviewTabs({
 	selectedNodeId,
 	onSelectNode,
 	onAddOrder,
+	session,
+	onParseToTree,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const advancedFindOnly = useAdvancedFindOnly();
-	const [selectedTab, setSelectedTab] = useState<PreviewTab>("xml");
+	// The editor and Run live in AppShell's editor session, shared with the app bar (#278)
+	const {
+		selectedTab,
+		setSelectedTab,
+		isEditorModeActive,
+		editorText,
+		flushEditorText,
+		fetchXmlEditorRef,
+		editorReplace,
+		pendingSync,
+		resolvePendingSync,
+		onEditorStateChange,
+		run,
+	} = session;
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
-	// Track editor mode state via ref (avoids re-renders on each keystroke)
-	// isEditorModeActive in state controls the disabled prop + renders; the ref holds the latest XML.
-	const [isEditorModeActive, setIsEditorModeActive] = useState(false);
-	const editorXmlRef = useRef<string>("");
 	// The command bar's Copy menu copies through the grid (#50)
 	const resultsGridRef = useRef<ResultsGridHandle>(null);
 	// Quick search over the loaded rows (#23), and how many rows it shows
 	const [searchText, setSearchText] = useState("");
 	const [visibleRowCount, setVisibleRowCount] = useState(0);
-	// The FetchXML editor owns the bars about its FetchXML; the checks here report to it (#277)
-	const fetchXmlEditorRef = useRef<FetchXmlEditorHandle>(null);
-	// The editor FetchXML that "Execute anyway" was offered for: it only applies to that text (#89)
-	const executeAnywayXmlRef = useRef<string | null>(null);
-	/** Reports a check's findings to the editor; findings switch to the FetchXML tab, where they are */
-	const reportToEditor = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
-		fetchXmlEditorRef.current?.report(checked, found);
-		if (found.length > 0) setSelectedTab("xml");
-	}, []);
 	// Related columns already returned by root link-entities Add columns would reuse (#114)
 	const existingRelatedColumns = useMemo(
 		() =>
@@ -418,46 +384,6 @@ export function PreviewTabs({
 			),
 		[fetchQuery],
 	);
-
-	// Whether the editor buffer has any content (Execute is enabled on it in editor mode, #102)
-	const [editorHasContent, setEditorHasContent] = useState(false);
-	// Cleaned FetchXML to show in the editor after a sync changed the query (#102)
-	const [editorReplace, setEditorReplace] = useState<{ xml: string; id: number } | null>(null);
-	// Editor sync awaiting confirmation because loading into the tree would change the query
-	const [pendingSync, setPendingSync] = useState<{
-		action: EditorSyncAction;
-		changes: ParseWarning[];
-		resolve: (confirmed: boolean) => void;
-	} | null>(null);
-
-	// The XML currently shown to the user: the live editor buffer when in editor
-	// mode, otherwise the tree-generated XML. Used by the T2T "Return FetchXML" button.
-	const getCurrentXml = useCallback(() => {
-		return isEditorModeActive ? editorXmlRef.current || xml : xml;
-	}, [isEditorModeActive, xml]);
-
-	// The editor's text for the Advisories tab (#97), a moment after typing stops
-	const [editorText, setEditorText] = useState("");
-	const editorTextTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	useEffect(() => () => clearTimeout(editorTextTimer.current), []);
-
-	const handleEditorStateChange = useCallback((isActive: boolean, editorXml: string) => {
-		editorXmlRef.current = editorXml;
-		setIsEditorModeActive((prev) => (prev !== isActive ? isActive : prev));
-		setEditorHasContent(isActive && editorXml.trim().length > 0);
-		// A pending "Execute anyway" only applies to the exact XML it warned about
-		if (
-			executeAnywayXmlRef.current !== null &&
-			(!isActive || executeAnywayXmlRef.current !== editorXml)
-		) {
-			executeAnywayXmlRef.current = null;
-			// The text changed: Execute's warning was about the old text. Leaving editor mode needs
-			// nothing here: turning it off clears the bars, and Parse to tree reports its own.
-			if (isActive) fetchXmlEditorRef.current?.drop("warning", "execute");
-		}
-		clearTimeout(editorTextTimer.current);
-		editorTextTimer.current = setTimeout(() => setEditorText(isActive ? editorXml : ""), 300);
-	}, []);
 
 	// ---- Advisories (#97): what the user is looking at, the editor's FetchXML in editor mode
 	const advisorySubject = useMemo(() => {
@@ -516,9 +442,7 @@ export function PreviewTabs({
 	const handleCheckWithDataverse = () => {
 		if (isEditorModeActive) {
 			// Flush the debounce, so the list and the stale check use the text that's checked
-			const text = editorXmlRef.current;
-			clearTimeout(editorTextTimer.current);
-			setEditorText(text);
+			const text = flushEditorText();
 			void dataverseCheck.run(text, parseForAdvisories(text)?.canonical ?? text);
 		} else {
 			void dataverseCheck.run(xml, xml);
@@ -528,148 +452,6 @@ export function PreviewTabs({
 		if (advisory.fix?.kind === "add-root-order" && fetchQuery && advisorySubject.inTree) {
 			onAddOrder?.(fetchQuery.entity.id, advisory.fix.attribute);
 		}
-	};
-
-	/**
-	 * Editor mode (#102): load the editor's FetchXML into the tree before an action, so the tree is
-	 * always what runs, is saved and is sent. Invalid FetchXML is shown and stops the action; if
-	 * loading would change the query, the user confirms the changes first (#89). When the editor
-	 * already matches the tree, nothing is reloaded.
-	 */
-	const syncEditorToTree = useCallback(
-		async (action: EditorSyncAction): Promise<EditorSyncResult> => {
-			if (!isEditorModeActive) return { status: "unchanged" };
-			const editorXml = editorXmlRef.current;
-
-			const syntaxResult = validateFetchXmlSyntax(editorXml);
-			if (!syntaxResult.valid) {
-				reportToEditor(
-					["error"],
-					[syntaxProblem(syntaxResult.error || "Invalid XML syntax")],
-				);
-				return { status: "cancelled" };
-			}
-			const preview = parseFetchXml(editorXml);
-			if (!preview.success || !preview.fetchNode) {
-				reportToEditor(["error"], [invalidProblem(preview.errors)]);
-				return { status: "cancelled" };
-			}
-			// Known to be rejected by Dataverse: block (Parse to Tree can often correct these)
-			const executionErrors = getExecutionErrors(preview);
-			if (executionErrors.length > 0) {
-				reportToEditor(["error"], [invalidProblem(executionErrors)]);
-				return { status: "cancelled" };
-			}
-			// No errors now: an earlier error bar is out of date
-			reportToEditor(["error"], []);
-			if (xml && generateFetchXml(preview.fetchNode) === xml) return { status: "unchanged" };
-
-			const changes = getParseToTreeChanges(preview);
-			if (changes.length > 0) {
-				const confirmed = await new Promise<boolean>((resolve) =>
-					setPendingSync({ action, changes, resolve }),
-				);
-				if (!confirmed) return { status: "cancelled" };
-			}
-
-			const result = onParseToTree?.(editorXml, { preserveLayout: true });
-			if (!result?.success || !result.fetchNode) {
-				reportToEditor(
-					["error"],
-					[
-						invalidProblem(
-							result?.errors ?? [
-								{ message: "The FetchXML couldn't be loaded into the tree." },
-							],
-						),
-					],
-				);
-				return { status: "cancelled" };
-			}
-			const syncedXml = generateFetchXml(result.fetchNode);
-			// The tree changed the query (the user confirmed it): show what actually runs in the editor
-			if (changes.length > 0) {
-				editorXmlRef.current = syncedXml;
-				setEditorReplace({ xml: syncedXml, id: Date.now() });
-			}
-			return { status: "synced", fetchXml: syncedXml, fetchQuery: result.fetchNode };
-		},
-		[isEditorModeActive, xml, onParseToTree, reportToEditor],
-	);
-
-	const editorSyncValue = useMemo(
-		() => ({
-			sync: syncEditorToTree,
-			editorHasContent: isEditorModeActive && editorHasContent,
-		}),
-		[syncEditorToTree, isEditorModeActive, editorHasContent],
-	);
-
-	const resolvePendingSync = (confirmed: boolean) => {
-		pendingSync?.resolve(confirmed);
-		setPendingSync(null);
-	};
-
-	/** Sync the editor into the tree (editor mode), then run the tree's query. */
-	const runExecute = async () => {
-		const synced = await syncEditorToTree("execute");
-		if (synced.status === "cancelled") return;
-		setSelectedTab("results");
-		onExecute?.(
-			synced.status === "synced"
-				? { xml: synced.fetchXml, fetchQuery: synced.fetchQuery }
-				: undefined,
-		);
-	};
-
-	// The bar's Execute anyway runs the latest version, not the one from when the bar was shown
-	const runExecuteRef = useRef(runExecute);
-	useEffect(() => {
-		runExecuteRef.current = runExecute;
-	});
-
-	/** Run the editor XML despite warnings; Dataverse's own error is shown if it fails. */
-	const handleExecuteAnyway = () => {
-		if (executeAnywayXmlRef.current === null) return;
-		executeAnywayXmlRef.current = null;
-		fetchXmlEditorRef.current?.report(["warning"], []);
-		void runExecuteRef.current();
-	};
-	const handleExecuteAnywayRef = useRef(handleExecuteAnyway);
-	useEffect(() => {
-		handleExecuteAnywayRef.current = handleExecuteAnyway;
-	});
-
-	const handleExecute = () => {
-		if (isEditorModeActive) {
-			// Can't be determined client-side: ask before sending. Errors are checked by the sync.
-			const editorXml = editorXmlRef.current;
-			const preview = parseFetchXml(editorXml);
-			if (preview.success && getExecutionErrors(preview).length === 0) {
-				const blocking = getBlockingWarnings(preview);
-				if (blocking.length > 0) {
-					executeAnywayXmlRef.current = editorXml;
-					// It parses and has no errors, so an error bar from before is out of date too
-					reportToEditor(
-						["error", "warning"],
-						[
-							mightRejectProblem(blocking, {
-								action: {
-									label: "Execute anyway",
-									onClick: () => handleExecuteAnywayRef.current(),
-								},
-								source: "execute",
-							}),
-						],
-					);
-					return;
-				}
-				// Nothing Dataverse might reject now: a warning from before is out of date
-				executeAnywayXmlRef.current = null;
-				reportToEditor(["warning"], []);
-			}
-		}
-		void runExecute();
 	};
 
 	const handleSelectionChange = useCallback(
@@ -687,7 +469,7 @@ export function PreviewTabs({
 	}, [getSelectedRecordIds, selectedRecordIds]);
 
 	return (
-		<EditorSyncContext.Provider value={editorSyncValue}>
+		<>
 			<div className={styles.container}>
 				<ParseChangesDialog
 					action={pendingSync?.action ?? null}
@@ -699,21 +481,6 @@ export function PreviewTabs({
 					selectedTab={selectedTab}
 					onTabSelect={setSelectedTab}
 					advisoryCount={advisories.length}
-					execute={{
-						onClick: handleExecute,
-						isExecuting: !!isExecuting,
-						busy: !!isExecuting || !!isLoadingMore,
-						// The quick find reason follows the tree's query; in editor mode the editor's query
-						// runs after syncing, and Execute stops there if it still needs a test value (#142)
-						disabledReason:
-							(isEditorModeActive ? undefined : executeDisabledReason) ??
-							emptyQueryReason(isEditorModeActive, editorHasContent, xml),
-					}}
-					saveView={saveView}
-					sendToTool={sendToTool}
-					isCallee={isCallee}
-					getCurrentXml={getCurrentXml}
-					onOpenSettings={onOpenSettings}
 				/>
 				{(isExecuting || isLoadingMore) && (
 					<div className={styles.progressContainer}>
@@ -739,7 +506,7 @@ export function PreviewTabs({
 								ref={fetchXmlEditorRef}
 								xml={xml}
 								onParseToTree={onParseToTree}
-								onEditorStateChange={handleEditorStateChange}
+								onEditorStateChange={onEditorStateChange}
 								replaceRequest={editorReplace}
 								onViewAdvisories={() => setSelectedTab("advisories")}
 							/>
@@ -926,7 +693,7 @@ export function PreviewTabs({
 								</div>
 								<ResultsTabBars
 									executeError={executeError}
-									onRetryRun={handleExecute}
+									onRetryRun={run}
 									onDismissExecuteError={onDismissExecuteError}
 									isExporting={isExporting}
 									exportError={exportError}
@@ -967,6 +734,6 @@ export function PreviewTabs({
 					)}
 				</div>
 			</div>
-		</EditorSyncContext.Provider>
+		</>
 	);
 }

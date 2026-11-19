@@ -45,13 +45,13 @@ const accountQuery = (count = 50) =>
 
 describe("app: running a query", () => {
 	it(
-		"a query from another tool loads into the tree, and Execute shows its rows",
+		"a query from another tool loads into the tree, and Run shows its rows",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery() } });
-			await app.waitFor(() => !!button("Execute", document));
+			await app.waitFor(() => !!button("Run", document));
 			expect(treeRow("Fetch query")).toBeTruthy();
 			expect(treeRow("name")).toBeTruthy();
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 			expect(
 				app.dataverse.calls.some((c) => c.startsWith("queryData accounts?fetchXml=")),
@@ -65,14 +65,14 @@ describe("app: running a query", () => {
 		"a first page shows 'more available', and Retrieve all loads every page",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery(2) } });
-			await app.waitFor(() => !!button("Execute", document));
-			await click(button("Execute", document));
+			await app.waitFor(() => !!button("Run", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 2 \(more available\)/.test(app.status()));
 
 			await click(treeRow("Fetch query"));
 			await app.waitFor(() => !!switchByLabel("Retrieve all records"));
 			await click(switchByLabel("Retrieve all records")!);
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(
 				() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()),
 				30000,
@@ -99,7 +99,7 @@ describe("app: running a query", () => {
 			await click(treeRow("Fetch query"));
 			await app.waitFor(() => !!switchByLabel("Retrieve all records"));
 			await click(switchByLabel("Retrieve all records")!);
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(() => !!buttonOrNull("Stop"));
 			await click(buttonOrNull("Stop")!);
 			release();
@@ -127,14 +127,14 @@ describe("app: running a query", () => {
 						);
 				},
 			});
-			await app.waitFor(() => !!button("Execute", document));
-			await click(button("Execute", document));
+			await app.waitFor(() => !!button("Run", document));
+			await click(button("Run", document));
 			await app.waitFor(() =>
 				/doesn't contain attribute/.test(document.body.textContent ?? ""),
 			);
 			expect(app.status()).toBe("");
 			fail = false;
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 			expect(document.body.textContent).not.toMatch(/doesn't contain attribute/);
 			app.expectClean();
@@ -148,8 +148,8 @@ describe("app: record actions", () => {
 		"deleting a selected row confirms first, names the target, deletes that record and re-runs",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery() } });
-			await app.waitFor(() => !!button("Execute", document));
-			await click(button("Execute", document));
+			await app.waitFor(() => !!button("Run", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 
 			// The first data row: "Account 01", ordered by name
@@ -203,7 +203,7 @@ const activeAccounts = {
 
 describe("app: opening a view from another tool", () => {
 	it(
-		"a viewRef loads the view, and Execute runs it by its id",
+		"a viewRef loads the view, and Run runs it by its id",
 		async () => {
 			const app = await renderApp({
 				views: [activeAccounts],
@@ -211,10 +211,10 @@ describe("app: opening a view from another tool", () => {
 			});
 			await app.waitFor(
 				() =>
-					!!button("Execute", document) &&
+					!!button("Run", document) &&
 					(document.body.textContent ?? "").includes("Active accounts"),
 			);
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 			expect(app.dataverse.calls).toContain(`queryData accounts?savedQuery=${VIEW_ID}`);
 			expect(app.notifications).toEqual([]);
@@ -236,16 +236,16 @@ describe("app: opening a view from another tool", () => {
 			});
 			await app.waitFor(
 				() =>
-					!!button("Execute", document) &&
+					!!button("Run", document) &&
 					(document.body.textContent ?? "").includes("Active accounts"),
 			);
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 2 \(more available\)/.test(app.status()));
 
 			await click(treeRow("Fetch query"));
 			await app.waitFor(() => !!switchByLabel("Retrieve all records"));
 			await click(switchByLabel("Retrieve all records")!);
-			await click(button("Execute", document));
+			await click(button("Run", document));
 			await app.waitFor(
 				() => /Rows: 5\b/.test(app.status()) && !/more available/.test(app.status()),
 				30000,

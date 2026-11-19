@@ -57,15 +57,15 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Bi-directional editing** — Edit XML directly and parse back to the visual builder
 - **Intellisense from the reference** — Element, attribute and value suggestions follow the FetchXML reference (every documented attribute, including `aggregatelimit`, `datasource`, `options`, `rowaggregate`, order `entityname` and the quick find overrides). Undocumented attributes are suggested only where Dataverse was verified to accept them, and say so. Value suggestions work for hyphenated attributes such as `link-type`
 - **Power Automate–safe values** — Apostrophes stay literal in the generated FetchXML (attribute values use double quotes), so expressions such as `@{body('x')}` paste into Power Automate unchanged; `"`, `&`, `<` and `>` are escaped everywhere, including names, aliases and `from` / `to`
-- **Editor mode actions run what you see** — In editor mode, **Execute**, **Save** and **Send to Tool** first load your FetchXML into the tree, so results, saved views and sent queries always match the editor. Execute is available as soon as the editor has content, even before an entity is chosen. If the tree would change anything, a confirmation lists the changes first, and the editor then shows the cleaned FetchXML that ran. Invalid FetchXML is reported in the FetchXML tab, which opens to show it, and nothing runs. The editor shows each problem once: Validate, Parse to tree and these actions update the same message instead of adding another, and it stays until it's fixed or dismissed.
+- **Editor mode actions run what you see** — In editor mode, **Run**, **Save** and **Send to tool** first load your FetchXML into the tree, so results, saved views and sent queries always match the editor. Run is available as soon as the editor has content, even before an entity is chosen. If the tree would change anything, a confirmation lists the changes first, and the editor then shows the cleaned FetchXML that ran. Invalid FetchXML is reported in the FetchXML tab, which opens to show it, and nothing runs. The editor shows each problem once: Validate, Parse to tree and these actions update the same message instead of adding another, and it stays until it's fixed or dismissed.
 - **What you build is what runs** — The generated FetchXML contains exactly what is in the tree; nothing is injected, so what you copy, save as a view, or send to another tool matches what executes
 - **Copy to clipboard** — One-click copy of generated FetchXML, available in both read-only and editor modes
 - **Alias validation** — Invalid alias characters are sanitized in real time in the property editors; Parse to Tree corrects invalid aliases, lists each correction, and updates every reference to a corrected alias (condition and order `entityname`, `valueof`, aggregate order aliases) so the query keeps working
 - **Accurate validation** — Everything in the FetchXML reference is supported, plus undocumented behaviour verified to work (e.g. `link-type="natural"`). Every rule is checked against a live Dataverse environment:
   - **errors** block execution — only for FetchXML Dataverse is known to reject;
-  - **warnings** offer **Execute anyway** — only where it can't be determined in the client (e.g. a link-entity without `from`/`to`, which is valid only for system many-to-many relationships);
+  - **warnings** offer **Run anyway** — only where it can't be determined in the client (e.g. a link-entity without `from`/`to`, which is valid only for system many-to-many relationships);
   - **notes** never block (e.g. `xmlns:*` from other tools, which Dataverse ignores).
-- **Query-level checks** — Validate and Execute catch the mistakes Dataverse rejects, each verified on a live environment:
+- **Query-level checks** — Validate and Run catch the mistakes Dataverse rejects, each verified on a live environment:
   - aggregate queries where an attribute has no Group by / aggregate or no alias;
   - an aggregate order using an alias from another entity;
   - `aggregatelimit` combined with an order;
@@ -84,7 +84,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **LayoutXML preview** — See the column layout configuration
 
 ### 💡 Query Advisor (Advisories tab)
-- **One list of everything worth knowing about the query** — The **Advisories** tab (between Results and Code) shows a count on the tab and lists every finding: what Dataverse **will reject**, what it **might reject**, and **performance advice**, with filters for each. Each row has a title, an explanation, a **Microsoft Learn** link and its location; select the location to show that node in the tree. **Advice never blocks Execute.** The tree, the properties panel and Validate keep showing their findings, and Validate's messages have **View all in Advisories**.
+- **One list of everything worth knowing about the query** — The **Advisories** tab (between Results and Code) shows a count on the tab and lists every finding: what Dataverse **will reject**, what it **might reject**, and **performance advice**, with filters for each. Each row has a title, an explanation, a **Microsoft Learn** link and its location; select the location to show that node in the tree. **Advice never blocks Run.** The tree, the properties panel and Validate keep showing their findings, and Validate's messages have **View all in Advisories**.
 - **Documented anti-patterns and limits, before the query runs** — leading wildcards (including ends-with), returning all attributes, orders on link-entity attributes, distinct without an order, simple paging past 50,000 records, aggregate queries without a filter, legacy `no-lock`, and the hard limits (15 link-entities, 500 conditions, the URL length) — each citing [query anti-patterns](https://learn.microsoft.com/power-apps/developer/data-platform/query-antipatterns) or the FetchXML article it comes from.
 - **Checks that use metadata** (loaded when the tab is first opened; skipped, never guessed, while it isn't loaded):
   - **Order on a choice attribute** (choice, status, status reason, Yes/No): Dataverse sorts by the label in the user's language, which is slower. Not reported with "Sort option sets by value" (`useraworderby`).
@@ -140,7 +140,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Lazy metadata loading** — Loads only what's needed, when it's needed
 - **Intelligent caching** — In-memory cache prevents duplicate API calls per session
 - **Resizable panes** — Adjust split-pane layout to your preference
-- **Bars that fit any width** — The right pane's tabs and commands never wrap or get cut off. When the pane is narrow, tabs that don't fit move into **More**, and commands into **More commands** (…), in the same order. The open tab, **Execute** and **Settings** always stay. The results command bar works the same way: Open, Delete, Copy URL and the rest stay as long as there's room, in that order of importance, and **Stop** (while Retrieve all records runs) always stays. A command that can't be used right now stays where it is and says why when you point at it or tab to it (for example "Choose an entity first" or "Select only one row to open it"). A command you don't have the privilege for isn't shown, as in model-driven apps
+- **Bars that fit any width** — The right pane's tabs and commands never wrap or get cut off. When the pane is narrow, tabs that don't fit move into **More**, and commands into **More commands** (…), in the same order. The open tab always stays. The results command bar works the same way: Open, Delete, Copy URL and the rest stay as long as there's room, in that order of importance, and **Stop** (while Retrieve all records runs) always stays. A command that can't be used right now stays where it is and says why when you point at it or tab to it (for example "Choose an entity first" or "Select only one row to open it"). A command you don't have the privilege for isn't shown, as in model-driven apps
 - **Copy FetchXML** — the FetchXML tab's **Copy** puts the query on the clipboard
 - **Display settings** — Toggle logical names vs display names in column headers; choose formatted, raw, or both value modes in the grid and exports
 - **Entity source** — In the scope chip: *Publisher → solution* (full filter), *Solution only*, or *All entities* (no filter). Options your privileges don't allow are off. Persisted across sessions.
@@ -148,7 +148,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ### ⌨️ Keyboard shortcuts
 
-> **Not all active yet.** This is the planned set (#186). The first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
+> **Not all active yet.** This is the planned set (#186). `Ctrl+Enter` runs the query today from anywhere but the FetchXML editor, where it still adds a line until #186 binds it, and not while a dialog or menu is open; the other seven of the first eight rows take effect once the shortcuts are wired in. Of the rest, `Ctrl+C` in the grid, `Shift+F10` or `Menu` on a tree row and `Escape` in popups work today; `Delete` on a tree row, the menu key on a results cell and `Shift+Alt+F` (the editor has no FetchXML formatter yet) are still to come. On a Mac, `Ctrl` is `⌘` and `Alt` is `Option`.
 
 | Action | Keys | Where |
 | --- | --- | --- |
@@ -209,7 +209,8 @@ Nothing else writes to Dataverse:
 ## 🖼️ Interface Overview
 
 - **Left:** the entity and view pickers, the query tree (right-click an entity or filter node, or use its **+** (Add…) button, to add attributes, filters, conditions, orders and link-entities) and the properties of the selected node.
-- **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**, then the query's commands: **Execute** runs the query, then **Return FetchXML** (when another tool opened FetchXML Studio), **Save** (on the FetchXML tab), **Send to tool** and **Settings**.
+- **Top:** the app bar, across both panes, with the query's commands: **Run** (or **Ctrl+Enter**) runs the query, then **Save**, **Send to tool**, **Return FetchXML** (when another tool opened FetchXML Studio), **More** (…) with **Copy FetchXML**, and **Settings**. When the window is narrow, commands that don't fit move into **More**; **Run** and **Settings** always stay.
+- **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**.
 - The tool follows the ToolBox's light or dark theme.
 
 ![The FetchXML tab with the query in the editor, in the dark theme](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/fetchxml-dark.png)
@@ -229,7 +230,7 @@ FetchXML Studio is available as a tool in Power Platform ToolBox. In Power Platf
 1. In Power Platform ToolBox, open **Installed Tools** and select **FetchXML Studio**. Choose a Dataverse connection when it asks.
 2. In **Entity**, pick the table to query, for example *Account*. The query tree shows a **Fetch query** node with that entity under it.
 3. Add columns: right-click the entity node (or use its **+** (Add…) button) and choose **All attributes** or **Select attributes…**. Add an **Order by** the same way. To filter, add a **Filter**, then choose **Condition** from the filter's own menu, and set the attribute, operator and value in the properties panel below the tree.
-4. Select **Execute**. The rows appear on the **Results** tab; scroll to load more. To load every page, select the **Fetch query** node, turn on **Retrieve all records** and select **Execute** again.
+4. Select **Run** in the app bar, or press **Ctrl+Enter**. The rows appear on the **Results** tab; scroll to load more. To load every page, select the **Fetch query** node, turn on **Retrieve all records** and select **Run** again.
 5. Optional: open a saved view with **Load view**, edit the FetchXML on the **FetchXML** tab (turn on **Editor mode**, then **Parse to tree**), or copy generated code from the **Code** tab.
 
 Nothing is written to Dataverse until you choose one of the operations under **What this tool changes**, and each one asks first.
@@ -446,7 +447,7 @@ Resolution priority at runtime: **`fetchXml` → `viewRef` → `entityLogicalNam
 
 ### Returning a query to the caller
 
-When FetchXML Studio is launched by another tool, a **Return FetchXML** command appears next to **Execute**. Clicking it returns the current query to the caller:
+When FetchXML Studio is launched by another tool, a **Return FetchXML** command appears in the app bar. Clicking it returns the current query to the caller:
 
 ```json
 { "fetchXml": "<fetch>...</fetch>" }

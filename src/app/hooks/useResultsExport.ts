@@ -232,7 +232,7 @@ export function useResultsExport({
 				...prev,
 				error: {
 					kind: "local",
-					message: "No data to export. Execute a query first.",
+					message: "No data to export. Run the query first.",
 					retryable: false,
 				},
 			}));

@@ -35,9 +35,9 @@ const COPY: Record<"parse" | EditorSyncAction, { title: string; intro: string; c
 			confirm: "Parse anyway",
 		},
 		execute: {
-			title: "Executing will change this query",
-			intro: "In editor mode, Execute loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
-			confirm: "Load and execute",
+			title: "Running will change this query",
+			intro: "In editor mode, Run loads your FetchXML into the tree first. The tree can't represent everything in it, so these changes will be made:",
+			confirm: "Load and run",
 		},
 		save: {
 			title: "Saving will change this query",
