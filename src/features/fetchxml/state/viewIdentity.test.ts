@@ -62,6 +62,18 @@ describe("viewIdentity", () => {
 		expect(b().viewIdentity).toEqual(identity);
 	});
 
+	it("goes when FetchXML of another entity loads into the tree", async () => {
+		await render(createElement(BuilderProvider, null, createElement(Probe)));
+		await run((x) => void x.loadView(VIEW_XML, viewInfo, LAYOUT));
+		await run(
+			(x) =>
+				void x.loadFetchXml(
+					"<fetch><entity name='contact'><attribute name='fullname'/></entity></fetch>",
+				),
+		);
+		expect(b().viewIdentity).toBeNull();
+	});
+
 	it("is what was saved after a save", async () => {
 		await render(createElement(BuilderProvider, null, createElement(Probe)));
 		await run((x) => x.setEntity("account"));

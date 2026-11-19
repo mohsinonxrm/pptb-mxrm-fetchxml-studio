@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderApp } from "../shared/testing/app";
 import { act } from "react";
-import { button, cleanup, click, flush, removeHost, toasts } from "../shared/testing/ui";
+import { button, cleanup, click, flush, removeHost, toasts, typeInto } from "../shared/testing/ui";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -173,8 +173,16 @@ describe("the app bar's identity and New", () => {
 			const app = await renderApp({ launch: { fetchXml: quickFindQuery } });
 			await app.waitFor(() => treeItems() > 0 && unsavedBadge());
 			expect(identity()).toBe("New query");
-			// The quick find value field shows for this query
-			expect(document.body.textContent).toContain("Enter a quick find value");
+			// A quick find value, editor mode on and the Results tab open: New resets all three
+			const quickFind = () =>
+				document.querySelector<HTMLInputElement>('input[placeholder="e.g. contoso"]');
+			await typeInto(quickFind(), "contoso");
+			await click(document.querySelector('input[role="switch"]'));
+			await click(
+				[...document.querySelectorAll('[role="tab"]')].find((t) =>
+					t.textContent?.startsWith("Results"),
+				),
+			);
 			await click(button("New", document));
 			await app.waitFor(() => !!document.querySelector('[role="alertdialog"]'));
 			await click(
@@ -189,6 +197,20 @@ describe("the app bar's identity and New", () => {
 			).toMatch(/^FetchXML/);
 			expect(toasts()).toEqual([expect.stringContaining("Discarded the unsaved query")]);
 			expect(execute()?.getAttribute("aria-disabled")).toBe("true");
+			expect(document.querySelector<HTMLInputElement>('input[role="switch"]')?.checked).toBe(
+				false,
+			);
+
+			// The same quick find query again: its value starts empty
+			Object.defineProperty(navigator, "clipboard", {
+				configurable: true,
+				value: { readText: async () => quickFindQuery },
+			});
+			await click(document.querySelector('input[role="switch"]'));
+			await click(button("Paste", document));
+			await click(button("Parse to tree", document));
+			await app.waitFor(() => !!quickFind());
+			expect(quickFind()?.value).toBe("");
 		},
 		FLOW_TIMEOUT,
 	);

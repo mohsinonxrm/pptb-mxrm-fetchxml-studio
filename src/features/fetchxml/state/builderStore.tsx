@@ -389,8 +389,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNode: fetchNode.entity,
 				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - this was manual edit
-				// Still the same view, now changed (#278)
-				viewIdentity: state.viewIdentity,
+				// Still the same view, now changed (#278); a query of another entity isn't that view
+				viewIdentity:
+					state.fetchQuery?.entity.name === fetchNode.entity.name
+						? state.viewIdentity
+						: null,
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option

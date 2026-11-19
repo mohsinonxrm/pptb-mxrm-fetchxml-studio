@@ -92,7 +92,11 @@ export function useSaveViewCommand({
 	const requestOpen = useCallback(
 		async (mode: SaveViewDialogMode, publish: boolean) => {
 			const synced = await sync("save");
-			if (synced.status === "cancelled") return;
+			// Invalid FetchXML, or the user said no to the changes: nothing opens, so it's a cancel
+			if (synced.status === "cancelled") {
+				onCancel?.();
+				return;
+			}
 			if (synced.status === "unchanged") {
 				openDialog(mode, publish);
 				return;
@@ -100,7 +104,7 @@ export function useSaveViewCommand({
 			// The tree was replaced, which clears the loaded view like any tree edit: save as a new view
 			setPendingOpen({ entity: synced.fetchQuery.entity.name, xml: synced.fetchXml });
 		},
-		[sync, openDialog],
+		[sync, openDialog, onCancel],
 	);
 
 	useEffect(() => {

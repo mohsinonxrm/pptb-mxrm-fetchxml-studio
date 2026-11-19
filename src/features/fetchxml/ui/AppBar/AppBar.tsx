@@ -81,8 +81,10 @@ export interface AppBarProps {
 	onOpenSettings?: () => void;
 	/** The view the query is (#278); null for "New query" */
 	viewName: string | null;
-	/** The query differs from the view as loaded or saved (its FetchXML, columns or widths) */
+	/** The query differs from the view as loaded or saved (its FetchXML, columns or widths): the badge */
 	unsaved: boolean;
+	/** The same, now (the editor's text this moment): New asks first when it's true */
+	hasUnsavedChanges?: () => boolean;
 	/** Start a new query: the caller resets the tree, the editor and the results */
 	onNewQuery: () => void;
 }
@@ -96,6 +98,7 @@ export function AppBar({
 	onOpenSettings,
 	viewName,
 	unsaved,
+	hasUnsavedChanges,
 	onNewQuery,
 }: AppBarProps) {
 	const styles = useStyles();
@@ -119,7 +122,7 @@ export function AppBar({
 		},
 	});
 	const handleNew = () => {
-		if (unsaved) setConfirmNew(true);
+		if (hasUnsavedChanges ? hasUnsavedChanges() : unsaved) setConfirmNew(true);
 		else onNewQuery();
 	};
 	const send = useSendToToolCommand(
@@ -209,6 +212,14 @@ export function AppBar({
 				intent="new"
 				viewName={viewName}
 				onSave={() => {
+					// Save can't run yet (no entity metadata, say): say why, and keep the choice open
+					if (save.command.disabledReason) {
+						notify.warning({
+							title: "Can't save yet",
+							body: save.command.disabledReason,
+						});
+						return;
+					}
 					setConfirmNew(false);
 					newAfterSave.current = true;
 					save.command.onClick?.();

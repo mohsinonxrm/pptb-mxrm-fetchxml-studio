@@ -328,22 +328,34 @@ function AppContent({
 	// The view the query is, and whether it has unsaved changes (#278, owner decision Q4): its
 	// FetchXML (the editor's in editor mode), columns or widths differ from the view as loaded or saved
 	const viewIdentity = builder.viewIdentity;
-	const unsaved =
-		!!builder.fetchQuery &&
+	// A query counts once there's a tree, or FetchXML in the editor (editor mode works without a tree)
+	const isUnsavedWith = (currentFetchXml: string) =>
+		(!!builder.fetchQuery || currentFetchXml.trim() !== "") &&
 		isViewDirty({
 			baselineFetchXml: viewIdentity?.baselineFetchXml ?? null,
-			currentFetchXml:
-				editorSession.isEditorModeActive && editorSession.editorText.trim()
-					? editorSession.editorText
-					: fetchXml,
+			currentFetchXml,
 			baselineLayoutXml: viewIdentity?.baselineLayoutXml ?? null,
 			currentLayoutXml: layoutXml,
 		}).dirty;
+	// The badge follows the editor's text a moment after typing stops
+	const unsaved = isUnsavedWith(
+		editorSession.isEditorModeActive && editorSession.editorText.trim()
+			? editorSession.editorText
+			: fetchXml,
+	);
+	// New decides from the editor's text now, so what was typed a moment ago isn't lost unasked
+	const hasUnsavedChanges = () => {
+		const current = editorSession.getCurrentXml();
+		return isUnsavedWith(
+			editorSession.isEditorModeActive && current.trim() ? current : fetchXml,
+		);
+	};
 	/** New (#278): back to the first-run state */
 	const startNewQuery = () => {
 		treeNotice.dismiss();
 		builder.newQuery();
 		setQuickFindValue("");
+		queryExecution.dismissExecuteError();
 		editorSession.resetEditor();
 	};
 
@@ -382,6 +394,7 @@ function AppContent({
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
 					viewName={viewIdentity?.name ?? null}
 					unsaved={unsaved}
+					hasUnsavedChanges={hasUnsavedChanges}
 					onNewQuery={startNewQuery}
 				/>
 				<div className={styles.root} data-app-root>
