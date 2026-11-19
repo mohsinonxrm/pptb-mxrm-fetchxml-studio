@@ -175,6 +175,21 @@ describe("OverflowToolbar layout", () => {
 		expect(shown(divider())).toBe(false);
 	});
 
+	it("puts the end commands at the far end with endAtEdge", async () => {
+		stubOverflowWidths({ container: 1000 });
+		const settings = {
+			...button("Settings", 0, { group: "end" }),
+			placement: "end",
+		} as BarCommand;
+		await renderBar([button("Run", 50, { group: "run" }), settings], { endAtEdge: true });
+		const dividers = [...(toolbar()?.querySelectorAll('[role="separator"]') ?? [])];
+		const last = dividers.at(-1);
+		expect(last && getComputedStyle(last).marginInlineStart).toBe("auto");
+		await renderBar([button("Run", 50, { group: "run" }), settings]);
+		const plain = [...(toolbar()?.querySelectorAll('[role="separator"]') ?? [])].at(-1);
+		expect(plain && getComputedStyle(plain).marginInlineStart).not.toBe("auto");
+	});
+
 	it("colours both halves of a danger split, which set their own colour", async () => {
 		stubOverflowWidths({ container: 1000 });
 		await renderBar([

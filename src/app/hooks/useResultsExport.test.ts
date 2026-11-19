@@ -243,7 +243,7 @@ describe("useResultsExport: the local export", () => {
 		await run(latest.exportLocal);
 		expect(latest.exportStatus.error).toEqual({
 			kind: "local",
-			message: "No data to export. Execute a query first.",
+			message: "No data to export. Run the query first.",
 			retryable: false,
 		});
 		expect(latest.exportStatus.isExporting).toBe(false);
@@ -386,9 +386,7 @@ describe("useResultsExport: the error", () => {
 		await act(async () => {
 			vi.advanceTimersByTime(60_000);
 		});
-		expect(latest.exportStatus.error?.message).toBe(
-			"No data to export. Execute a query first.",
-		);
+		expect(latest.exportStatus.error?.message).toBe("No data to export. Run the query first.");
 	});
 
 	it("Try again repeats the server export that failed", async () => {

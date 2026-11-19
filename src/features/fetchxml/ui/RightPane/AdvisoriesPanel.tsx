@@ -343,7 +343,7 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 				)}
 			</div>
 			<Text size={200} className={s.footer}>
-				Advice never blocks Execute. Select a location to show it in the tree.
+				Advice never blocks Run. Select a location to show it in the tree.
 			</Text>
 		</div>
 	);

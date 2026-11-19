@@ -1480,9 +1480,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	}
 
 	if (!result) {
-		return withFilterBar(
-			<div className={styles.emptyState}>Click Execute to run the query</div>,
-		);
+		return withFilterBar(<div className={styles.emptyState}>Select Run to see results</div>);
 	}
 
 	if (result.rows.length === 0) {
@@ -1575,7 +1573,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 								? ` (${throttleWaitMessage(throttleWaitSeconds)})`
 								: " (loading more...)")}
 						{result.executionTimeMs !== undefined &&
-							` | Executed in ${result.executionTimeMs}ms`}
+							` | Ran in ${result.executionTimeMs}ms`}
 						{result.totalRecordCountLimitExceeded && result.entityLogicalName && (
 							<>
 								{" | "}

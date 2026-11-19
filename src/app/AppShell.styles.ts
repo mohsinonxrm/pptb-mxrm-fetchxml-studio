@@ -7,22 +7,31 @@ import { makeStyles, tokens } from "@fluentui/react-components";
 // but tokens will automatically update when FluentProvider theme changes
 // because Fluent UI v9 uses CSS variables under the hood
 export const useStyles = makeStyles({
-	root: {
+	// The app bar above the two panes (#278)
+	shell: {
 		// The theme background covers the whole tool; without it, surfaces with no background of
 		// their own showed the page's white canvas in dark mode (#67). (Not on the FluentProvider:
 		// Fluent copies its className onto portal containers.)
 		backgroundColor: tokens.colorNeutralBackground1,
 		color: tokens.colorNeutralForeground1,
 		display: "flex",
-		flexDirection: "row",
-		height: "100%",
-		width: "100%",
+		flexDirection: "column",
 		overflow: "hidden",
 		position: "absolute",
 		top: 0,
 		left: 0,
 		right: 0,
 		bottom: 0,
+	},
+	// The two panes, under the app bar
+	root: {
+		display: "flex",
+		flexDirection: "row",
+		flex: "1 1 0",
+		minHeight: 0,
+		width: "100%",
+		overflow: "hidden",
+		position: "relative",
 	},
 	leftPane: {
 		display: "flex",

@@ -251,7 +251,7 @@ function FetchXmlEditorImpl(
 					key: "tree-changed",
 					intent: "warning",
 					title: TREE_CHANGED_TITLE,
-					body: "Execute, Save and Send to tool use the editor's FetchXML and will replace the tree's changes. Use Reset to take the tree's FetchXML instead.",
+					body: "Run, Save and Send to tool use the editor's FetchXML and will replace the tree's changes. Use Reset to take the tree's FetchXML instead.",
 				},
 			],
 		);

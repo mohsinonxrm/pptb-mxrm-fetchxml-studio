@@ -31,7 +31,7 @@ export interface AppHarnessOptions extends FakeDataverseOptions {
 export interface AppHarness {
 	dataverse: ReturnType<typeof createFakeDataverse>;
 	notifications: { title?: string; body?: string; type?: string }[];
-	/** The status line under the results ("Rows: 3 (more available) | Executed in 2ms"), or "" */
+	/** The status line under the results ("Rows: 3 (more available) | Ran in 2ms"), or "" */
 	status: () => string;
 	/** Close holds taken (toolboxAPI.preventClose) and released: equal once nothing is running */
 	closeHolds: { prevented: number; released: number };

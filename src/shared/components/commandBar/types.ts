@@ -58,6 +58,8 @@ interface BarCommandBase {
 	hint?: string;
 	/** Overrides the accessible name (keep the visible label in it) */
 	ariaLabel?: string;
+	/** Its keyboard shortcut, as `aria-keyshortcuts` ("Control+Enter") */
+	keyShortcuts?: string;
 }
 
 /**
