@@ -85,6 +85,10 @@ export interface EditorSession {
 	isRunning: boolean;
 	/** The FetchXML the user sees: the editor's in editor mode, otherwise the tree's */
 	getCurrentXml: () => string;
+	/** For FetchXmlEditor's resetRequest: bumped by resetEditor */
+	editorResetId: number;
+	/** New (#278): leave editor mode, drop the editor's text and open the FetchXML tab */
+	resetEditor: () => void;
 }
 
 export function useEditorSession({
@@ -114,6 +118,12 @@ export function useEditorSession({
 	const [editorHasContent, setEditorHasContent] = useState(false);
 	const [editorReplace, setEditorReplace] = useState<{ xml: string; id: number } | null>(null);
 	const [pendingSync, setPendingSync] = useState<PendingSync | null>(null);
+	const [editorResetId, setEditorResetId] = useState(0);
+	const resetEditor = useCallback(() => {
+		runAnywayXmlRef.current = null;
+		setEditorResetId((n) => n + 1);
+		setSelectedTab("xml");
+	}, []);
 
 	const getCurrentXml = useCallback(() => {
 		return isEditorModeActive ? editorXmlRef.current || xml : xml;
@@ -321,5 +331,7 @@ export function useEditorSession({
 		runDisabledReason,
 		isRunning: isRunning || isLoadingMore,
 		getCurrentXml,
+		editorResetId,
+		resetEditor,
 	};
 }

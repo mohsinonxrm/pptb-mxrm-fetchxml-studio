@@ -9,10 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	cleanup,
 	click,
+	flush,
 	installHost,
 	removeHost,
 	render,
 	stubOverflowWidths,
+	toasts,
 } from "../../../../shared/testing/ui";
 import { AppBar, type AppBarProps } from "./AppBar";
 import { NO_QUERY_REASON } from "../Toolbar/useSaveViewCommand";
@@ -41,6 +43,9 @@ const barProps = (props: Partial<AppBarProps> = {}): AppBarProps => ({
 	run: run(),
 	saveView: saveView(),
 	getCurrentXml: () => XML,
+	viewName: null,
+	unsaved: false,
+	onNewQuery: () => {},
 	...props,
 });
 
@@ -104,6 +109,7 @@ describe("the app bar's commands", () => {
 			.filter(Boolean);
 		expect(names).toEqual([
 			"Run",
+			"New",
 			"Save as",
 			"Send to tool",
 			"Return FetchXML",
@@ -124,6 +130,7 @@ describe("the app bar's commands", () => {
 		expect(overflowed(moreByTooltip())).toBe(false);
 		await click(moreByTooltip());
 		expect(menuTexts(menus()[0])).toEqual([
+			"New",
 			"Save as",
 			"Send to tool",
 			"Return FetchXML",
@@ -220,6 +227,80 @@ describe("the app bar's commands", () => {
 		const save = menuItems(menus()[0]).find((i) => i.textContent?.trim() === "Save");
 		await click(save);
 		expect(menuTexts(menus()[1])).toEqual(["Save", "Save as…", "Save and publish"]);
+	});
+});
+
+describe("the view's identity", () => {
+	const identity = () =>
+		bar()?.parentElement?.querySelector<HTMLElement>(".fui-Body1Strong")?.textContent;
+	const badge = () =>
+		[...document.querySelectorAll<HTMLElement>(".fui-Badge")].find(
+			(b) => b.textContent === "Unsaved changes",
+		);
+
+	it("shows the view's name, or New query, with Unsaved changes when there are some", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar();
+		expect(identity()).toBe("New query");
+		expect(badge()).toBeUndefined();
+		await renderBar({ viewName: "Active accounts", unsaved: true });
+		expect(identity()).toBe("Active accounts");
+		expect(badge()).toBeTruthy();
+	});
+});
+
+describe("New", () => {
+	const dialog = () =>
+		document.querySelector<HTMLElement>('[role="alertdialog"], [role="dialog"]');
+	const dialogButton = (label: string) =>
+		[...(dialog()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+			(b) => b.textContent?.trim() === label,
+		);
+
+	it("starts a new query straight away when nothing is unsaved", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const onNewQuery = vi.fn();
+		await renderBar({ onNewQuery });
+		await click(onBar("New"));
+		expect(onNewQuery).toHaveBeenCalledOnce();
+		expect(dialog()).toBeNull();
+	});
+
+	it("asks first when there are unsaved changes: Cancel keeps the query", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const onNewQuery = vi.fn();
+		await renderBar({ onNewQuery, unsaved: true, viewName: "Active accounts" });
+		await click(onBar("New"));
+		expect(dialog()?.textContent).toContain(`Your changes to "Active accounts" aren't saved.`);
+		await click(dialogButton("Cancel"));
+		expect(onNewQuery).not.toHaveBeenCalled();
+	});
+
+	it("Discard changes starts new and says what it discarded", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const onNewQuery = vi.fn();
+		await renderBar({ onNewQuery, unsaved: true, viewName: "Active accounts" });
+		await click(onBar("New"));
+		await click(dialogButton("Discard changes"));
+		expect(onNewQuery).toHaveBeenCalledOnce();
+		expect(toasts()).toEqual([
+			expect.stringContaining('Discarded changes to "Active accounts"'),
+		]);
+	});
+
+	it("Save and start new opens the save; cancelling it keeps the query", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const onNewQuery = vi.fn();
+		await renderBar({ onNewQuery, unsaved: true });
+		await click(onBar("New"));
+		expect(dialog()?.textContent).toContain("Your query isn't saved.");
+		await click(dialogButton("Save and start new"));
+		await flush(5);
+		expect(dialog()?.textContent).toContain("Save as new view");
+		await click(dialogButton("Cancel"));
+		await flush(5);
+		expect(onNewQuery).not.toHaveBeenCalled();
+		// A later save that isn't from New doesn't start a new query either
 	});
 });
 

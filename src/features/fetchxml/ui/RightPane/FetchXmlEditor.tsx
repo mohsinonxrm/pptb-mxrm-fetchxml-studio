@@ -160,6 +160,8 @@ interface FetchXmlEditorProps {
 	 * FetchXML into the tree and the tree changed it (#102). A new `id` triggers the replacement.
 	 */
 	replaceRequest?: { xml: string; id: number } | null;
+	/** A new value leaves editor mode and drops the editor's text: New started a new query (#278) */
+	resetRequest?: number;
 	/** Switch to the Advisories tab, from Validate's message bars (#97) */
 	onViewAdvisories?: () => void;
 }
@@ -170,6 +172,7 @@ function FetchXmlEditorImpl(
 		onParseToTree,
 		onEditorStateChange,
 		replaceRequest,
+		resetRequest,
 		onViewAdvisories,
 	}: FetchXmlEditorProps,
 	ref: ForwardedRef<FetchXmlEditorHandle>,
@@ -290,6 +293,14 @@ function FetchXmlEditorImpl(
 		},
 		[xml, clearMessages, onEditorStateChange],
 	);
+
+	// New (#278): back to the tree's FetchXML, out of editor mode
+	useEffect(() => {
+		if (!resetRequest || !isEditorMode) return;
+		handleToggleEditorMode(false);
+		// Only a new request resets
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [resetRequest]);
 
 	// Copy to clipboard
 	const handleCopy = useCallback(async () => {

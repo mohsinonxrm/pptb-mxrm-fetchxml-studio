@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderApp } from "../shared/testing/app";
 import { act } from "react";
-import { button, cleanup, click, flush, removeHost } from "../shared/testing/ui";
+import { button, cleanup, click, flush, removeHost, toasts } from "../shared/testing/ui";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -125,6 +125,70 @@ describe("the app bar's Run", () => {
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
 			expect(runs()).toBe(1);
 			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+});
+
+const VIEW_ID = "11111111-2222-3333-4444-555555555555";
+const activeAccounts = {
+	id: VIEW_ID,
+	name: "Active accounts",
+	entity: "account",
+	type: "system" as const,
+	fetchxml:
+		"<fetch><entity name='account'><attribute name='name'/><attribute name='accountid'/><order attribute='name'/></entity></fetch>",
+	layoutxml:
+		"<grid name='resultset' object='1' jump='name' select='1' icon='1' preview='1'><row name='result' id='accountid'><cell name='name' width='300'/><cell name='accountid' width='100'/></row></grid>",
+};
+const identity = () =>
+	document
+		.querySelector('[role="toolbar"][aria-label="Query commands"]')
+		?.parentElement?.querySelector(".fui-Body1Strong")?.textContent;
+const unsavedBadge = () =>
+	[...document.querySelectorAll(".fui-Badge")].some((b) => b.textContent === "Unsaved changes");
+const treeItems = () => document.querySelectorAll('[role="treeitem"]').length;
+
+describe("the app bar's identity and New", () => {
+	it(
+		"a view shows its name and no Unsaved changes; New starts over without asking",
+		async () => {
+			const app = await renderApp({
+				views: [activeAccounts],
+				launch: { viewRef: { id: VIEW_ID, entityLogicalName: "savedquery" } },
+			});
+			await app.waitFor(() => identity() === "Active accounts" && treeItems() > 0);
+			expect(unsavedBadge()).toBe(false);
+			await click(button("New", document));
+			await app.waitFor(() => treeItems() === 0);
+			expect(identity()).toBe("New query");
+			expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"a query that isn't a view is unsaved: New asks, and Discard changes resets everything",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: quickFindQuery } });
+			await app.waitFor(() => treeItems() > 0 && unsavedBadge());
+			expect(identity()).toBe("New query");
+			// The quick find value field shows for this query
+			expect(document.body.textContent).toContain("Enter a quick find value");
+			await click(button("New", document));
+			await app.waitFor(() => !!document.querySelector('[role="alertdialog"]'));
+			await click(
+				[
+					...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'),
+				].find((b) => b.textContent?.trim() === "Discard changes"),
+			);
+			await app.waitFor(() => treeItems() === 0);
+			expect(unsavedBadge()).toBe(false);
+			expect(
+				document.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+			).toMatch(/^FetchXML/);
+			expect(toasts()).toEqual([expect.stringContaining("Discarded the unsaved query")]);
+			expect(execute()?.getAttribute("aria-disabled")).toBe("true");
 		},
 		FLOW_TIMEOUT,
 	);

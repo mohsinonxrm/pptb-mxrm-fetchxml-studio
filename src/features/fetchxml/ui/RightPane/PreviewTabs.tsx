@@ -508,6 +508,7 @@ export function PreviewTabs({
 								onParseToTree={onParseToTree}
 								onEditorStateChange={onEditorStateChange}
 								replaceRequest={editorReplace}
+								resetRequest={session.editorResetId}
 								onViewAdvisories={() => setSelectedTab("advisories")}
 							/>
 						</PaneErrorBoundary>

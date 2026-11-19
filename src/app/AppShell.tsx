@@ -25,6 +25,7 @@ import { AppBar } from "../features/fetchxml/ui/AppBar/AppBar";
 import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync";
 import { useEditorSession } from "./hooks/useEditorSession";
 import { useRunShortcut } from "./hooks/useRunShortcut";
+import { isViewDirty } from "../features/fetchxml/model/viewDirty";
 import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
@@ -268,21 +269,25 @@ function AppContent({
 			// Overwriting keeps the view's query type; Save As creates a public view (#93). The
 			// solution and owner stay; description and default are what was saved (#142).
 			const overwritten = builder.loadedView?.id === viewId ? builder.loadedView : null;
-			builder.setLoadedView({
-				id: viewId,
-				type: viewType,
-				entitySetName: entityMetadata.EntitySetName,
-				name: viewName,
-				originalFetchXml: generateFetchXml(builder.fetchQuery),
-				queryType: overwritten ? overwritten.queryType : 0,
-				isCustomizable: overwritten?.isCustomizable,
-				description: details.description,
-				isDefault: details.isDefault,
-				isManaged: overwritten?.isManaged,
-				solutionId: overwritten?.solutionId,
-				ownerId: overwritten?.ownerId,
-				ownerName: overwritten?.ownerName,
-			});
+			builder.setLoadedView(
+				{
+					id: viewId,
+					type: viewType,
+					entitySetName: entityMetadata.EntitySetName,
+					name: viewName,
+					originalFetchXml: generateFetchXml(builder.fetchQuery),
+					queryType: overwritten ? overwritten.queryType : 0,
+					isCustomizable: overwritten?.isCustomizable,
+					description: details.description,
+					isDefault: details.isDefault,
+					isManaged: overwritten?.isManaged,
+					solutionId: overwritten?.solutionId,
+					ownerId: overwritten?.ownerId,
+					ownerName: overwritten?.ownerName,
+				},
+				// What was saved is the view's baseline for "Unsaved changes" (#278)
+				layoutXml,
+			);
 		}
 		debugLog("app", `✅ View saved: ${viewName} (${viewType}) - ${viewId}`);
 		// Says the view was saved, and when a system view isn't published yet (#277, owner decision 5;
@@ -320,6 +325,28 @@ function AppContent({
 	});
 	useRunShortcut(editorSession.run, editorSession.runDisabledReason);
 
+	// The view the query is, and whether it has unsaved changes (#278, owner decision Q4): its
+	// FetchXML (the editor's in editor mode), columns or widths differ from the view as loaded or saved
+	const viewIdentity = builder.viewIdentity;
+	const unsaved =
+		!!builder.fetchQuery &&
+		isViewDirty({
+			baselineFetchXml: viewIdentity?.baselineFetchXml ?? null,
+			currentFetchXml:
+				editorSession.isEditorModeActive && editorSession.editorText.trim()
+					? editorSession.editorText
+					: fetchXml,
+			baselineLayoutXml: viewIdentity?.baselineLayoutXml ?? null,
+			currentLayoutXml: layoutXml,
+		}).dirty;
+	/** New (#278): back to the first-run state */
+	const startNewQuery = () => {
+		treeNotice.dismiss();
+		builder.newQuery();
+		setQuickFindValue("");
+		editorSession.resetEditor();
+	};
+
 	return (
 		<EditorSyncContext.Provider value={editorSession.syncValue}>
 			<div className={styles.shell}>
@@ -353,6 +380,9 @@ function AppContent({
 					isCallee={launch.isCallee}
 					getCurrentXml={editorSession.getCurrentXml}
 					onOpenSettings={() => setSettingsDrawerOpen(true)}
+					viewName={viewIdentity?.name ?? null}
+					unsaved={unsaved}
+					onNewQuery={startNewQuery}
 				/>
 				<div className={styles.root} data-app-root>
 					{/* Left Pane */}
@@ -371,10 +401,6 @@ function AppContent({
 								<EntitySelector
 									selectedEntity={builder.fetchQuery?.entity.name || null}
 									onEntityChange={builder.setEntity}
-									onNewQuery={() => {
-										treeNotice.dismiss();
-										builder.newQuery();
-									}}
 									entityScopeMode={displaySettings.entityScopeMode}
 									onEntityScopeModeChange={(entityScopeMode) =>
 										setDisplaySettings({ ...displaySettings, entityScopeMode })

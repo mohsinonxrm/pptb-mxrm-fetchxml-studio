@@ -58,6 +58,8 @@ export interface SaveViewCommandOptions {
 	) => void;
 	/** No query to save yet */
 	disabled?: boolean;
+	/** The save dialog closed without saving */
+	onCancel?: () => void;
 }
 
 export function useSaveViewCommand({
@@ -70,6 +72,7 @@ export function useSaveViewCommand({
 	loadedView,
 	onSaveComplete,
 	disabled = false,
+	onCancel,
 }: SaveViewCommandOptions): { command: BarCommand; dialog: ReactNode } {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<SaveViewDialogMode>("save");
@@ -168,7 +171,10 @@ export function useSaveViewCommand({
 	const dialog = (
 		<SaveViewDialog
 			open={dialogOpen}
-			onClose={() => setDialogOpen(false)}
+			onClose={() => {
+				setDialogOpen(false);
+				onCancel?.();
+			}}
 			onSaveComplete={handleDialogSaveComplete}
 			mode={dialogMode}
 			shouldPublish={shouldPublish}
