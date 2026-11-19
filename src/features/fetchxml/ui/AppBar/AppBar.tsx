@@ -31,6 +31,7 @@ import {
 import { useReturnFetchXmlCommand } from "../Toolbar/useReturnFetchXmlCommand";
 import { DiscardChangesDialog } from "../Dialogs/DiscardChangesDialog";
 import { useNotify } from "../../../../shared/feedback/useNotify";
+import { discardedToast } from "./appBarRules";
 
 const RunIcon = bundleIcon(Play20Filled, Play20Regular);
 const NewIcon = bundleIcon(Add20Filled, Add20Regular);
@@ -62,10 +63,6 @@ const useStyles = makeStyles({
 	},
 	badge: { flexShrink: 0 },
 });
-
-/** What New says when it discards the query's changes */
-export const discardedToast = (viewName: string | null) =>
-	viewName ? `Discarded changes to "${viewName}"` : "Discarded the unsaved query";
 
 export interface AppBarProps {
 	run: {
