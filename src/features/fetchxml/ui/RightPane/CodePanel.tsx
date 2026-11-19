@@ -9,11 +9,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import {
-	Button,
-	TabList,
-	Tab,
-	type SelectTabData,
-	type SelectTabEvent,
 	Spinner,
 	MessageBar,
 	MessageBarBody,
@@ -23,7 +18,12 @@ import {
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
-import { Copy20Regular, Info20Regular } from "@fluentui/react-icons";
+import { Copy20Filled, Copy20Regular, Info20Regular, bundleIcon } from "@fluentui/react-icons";
+import {
+	OverflowTabList,
+	OverflowToolbar,
+	type BarTab,
+} from "../../../../shared/components/commandBar";
 import { useTheme } from "../../../../shared/contexts/useTheme";
 import { usePptbContext } from "../../../../shared/hooks/usePptbContext";
 import {
@@ -52,6 +52,10 @@ import {
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CopyIcon = bundleIcon(Copy20Filled, Copy20Regular);
+/** Copy and the toolbar's padding: the tabs take the rest of the row */
+const COPY_WIDTH = 104;
+
 const useStyles = makeStyles({
 	root: {
 		display: "flex",
@@ -62,28 +66,20 @@ const useStyles = makeStyles({
 	header: {
 		display: "flex",
 		alignItems: "center",
-		justifyContent: "space-between",
-		borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-		paddingLeft: "8px",
-		paddingRight: "8px",
-		paddingTop: "4px",
-		paddingBottom: "4px",
+		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+		paddingInline: tokens.spacingHorizontalS,
+		paddingBlock: tokens.spacingVerticalXXS,
 		flexShrink: 0,
 		backgroundColor: tokens.colorNeutralBackground2,
 	},
-	tabListWrap: {
-		display: "flex",
+	// The language tabs never wrap: the ones that don't fit move into More (#232)
+	tabs: { flex: "1 1 0", minWidth: 0 },
+	copy: { flex: `0 0 ${COPY_WIDTH}px` },
+	tabExtras: {
+		display: "inline-flex",
 		alignItems: "center",
-		gap: "4px",
-		flexWrap: "wrap",
-	},
-	tabLabel: {
-		display: "flex",
-		alignItems: "center",
-		gap: "4px",
-	},
-	copyButton: {
-		flexShrink: 0,
+		gap: tokens.spacingHorizontalXS,
+		marginInlineStart: tokens.spacingHorizontalXS,
 	},
 	body: {
 		flex: 1,
@@ -235,10 +231,6 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	const conversionIsCurrent = currentConversion?.key === conversionKey(fetchXml, environmentUrl);
 	const conversionLoading = !!conversionKind && !!fetchXml && connected && !conversionIsCurrent;
 
-	const handleTabSelect = (_e: SelectTabEvent, data: SelectTabData) => {
-		setSelectedFormat(data.value as CodeFormat);
-	};
-
 	// Resolve the code to display for the current tab
 	const currentCode = useCallback((): string => {
 		switch (selectedFormat) {
@@ -280,79 +272,87 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 
 	const code = currentCode();
 	const monacoTheme = isDark ? "vs-dark" : "light";
+
+	// Why Copy is off: Power Automate has its own per-field Copy buttons
+	const copyDisabledReason =
+		selectedFormat === "powerautomate"
+			? "Use the per-field Copy buttons below"
+			: showOffline
+				? "Connect to an environment to generate"
+				: isAsyncLoading
+					? "Generating…"
+					: !code
+						? "There's no code to copy yet"
+						: undefined;
+
+	// Each language, with Preview (SQL) and the not-connected hint after its name
+	const languageTabs: BarTab[] = ALL_FORMATS.map((fmt) => {
+		const preview = fmt === "sql";
+		const offline = (fmt === "csharp-queryexpr" || fmt === "sql") && !connected;
+		return {
+			value: fmt,
+			label: FORMAT_LABELS[fmt],
+			content:
+				preview || offline ? (
+					<span className={styles.tabExtras}>
+						{preview && (
+							<Tooltip
+								content="Undocumented API — may change without notice"
+								relationship="label"
+							>
+								<Badge size="small" appearance="tint" color="warning">
+									Preview
+								</Badge>
+							</Tooltip>
+						)}
+						{offline && (
+							<Tooltip
+								content="Connect to an environment to generate"
+								relationship="label"
+							>
+								<Info20Regular style={{ opacity: 0.5, width: 14, height: 14 }} />
+							</Tooltip>
+						)}
+					</span>
+				) : undefined,
+		};
+	});
 	const monacoLang = FORMAT_LANG[selectedFormat];
 
 	return (
 		<div className={styles.root}>
-			{/* Header: tab bar + copy button */}
+			{/* Header: the language tabs, then Copy (#232) */}
 			<div className={styles.header}>
-				<div className={styles.tabListWrap}>
-					<TabList
+				<div className={styles.tabs}>
+					<OverflowTabList
+						ariaLabel="Code languages"
 						size="small"
 						appearance="subtle"
+						tabs={languageTabs}
 						selectedValue={selectedFormat}
-						onTabSelect={handleTabSelect}
-					>
-						{ALL_FORMATS.map((fmt) => (
-							<Tab key={fmt} value={fmt}>
-								<span className={styles.tabLabel}>
-									{FORMAT_LABELS[fmt]}
-									{fmt === "sql" && (
-										<Tooltip
-											content="Undocumented API — may change without notice"
-											relationship="label"
-										>
-											<Badge
-												size="small"
-												appearance="tint"
-												color="warning"
-												style={{ cursor: "default" }}
-											>
-												Preview
-											</Badge>
-										</Tooltip>
-									)}
-									{(fmt === "csharp-queryexpr" || fmt === "sql") &&
-										!connected && (
-											<Tooltip
-												content="Connect to an environment to generate"
-												relationship="label"
-											>
-												<Info20Regular
-													style={{ opacity: 0.5, width: 14, height: 14 }}
-												/>
-											</Tooltip>
-										)}
-								</span>
-							</Tab>
-						))}
-					</TabList>
+						onTabSelect={(value) => setSelectedFormat(value as CodeFormat)}
+					/>
 				</div>
-				<Tooltip
-					content={
-						selectedFormat === "powerautomate"
-							? "Use the per-field Copy buttons below"
-							: "Copy to clipboard"
-					}
-					relationship="label"
-				>
-					<Button
-						appearance="subtle"
+				<div className={styles.copy}>
+					<OverflowToolbar
+						ariaLabel="Code commands"
 						size="small"
-						icon={<Copy20Regular />}
-						className={styles.copyButton}
-						onClick={handleCopy}
-						disabled={
-							isAsyncLoading ||
-							showOffline ||
-							!code ||
-							selectedFormat === "powerautomate"
-						}
-						aria-label="Copy code to clipboard"
-					>
-						Copy
-					</Button>
-				</Tooltip>
+						align="end"
+						commands={[
+							{
+								id: "copy",
+								label: "Copy",
+								ariaLabel: "Copy code to clipboard",
+								icon: CopyIcon,
+								kind: "button",
+								pinned: true,
+								hint: "Copy to clipboard",
+								disabledReason: copyDisabledReason,
+								onClick: handleCopy,
+							},
+						]}
+					/>
+				</div>
 			</div>
 
 			{/* Body */}

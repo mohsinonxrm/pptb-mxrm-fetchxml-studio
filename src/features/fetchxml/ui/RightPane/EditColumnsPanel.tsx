@@ -14,20 +14,25 @@ import {
 	makeStyles,
 	tokens,
 	Text,
-	Toolbar,
-	ToolbarButton,
 } from "@fluentui/react-components";
+import { OverflowToolbar, type BarCommand } from "../../../../shared/components/commandBar";
 import {
 	Dismiss24Regular,
 	ArrowUp20Regular,
 	ArrowDown20Regular,
 	Delete20Regular,
+	Add20Filled,
 	Add20Regular,
+	ArrowReset20Filled,
 	ArrowReset20Regular,
+	bundleIcon,
 	ReOrder16Regular,
 } from "@fluentui/react-icons";
 import type { LayoutColumn } from "../../model/layoutxml";
 import { mergeColumns } from "./mergeColumns";
+
+const AddIcon = bundleIcon(Add20Filled, Add20Regular);
+const ResetIcon = bundleIcon(ArrowReset20Filled, ArrowReset20Regular);
 
 const useStyles = makeStyles({
 	drawer: {
@@ -290,25 +295,34 @@ export function EditColumnsPanel({
 				</DrawerHeaderTitle>
 			</DrawerHeader>
 			<DrawerBody>
-				<Toolbar size="small">
-					<ToolbarButton
-						icon={<Add20Regular />}
-						onClick={onAddColumns}
-						aria-label="Add columns"
-						disabled={!!addColumnsDisabledReason}
-					>
-						Add columns
-					</ToolbarButton>
-					{onResetToDefault && (
-						<ToolbarButton
-							icon={<ArrowReset20Regular />}
-							onClick={onResetToDefault}
-							aria-label="Reset to default"
-						>
-							Reset to default
-						</ToolbarButton>
-					)}
-				</Toolbar>
+				{/* Add columns keeps its reason as text below too, where the drawer has room (#232) */}
+				<OverflowToolbar
+					ariaLabel="Column commands"
+					size="small"
+					commands={[
+						{
+							id: "add",
+							label: "Add columns",
+							icon: AddIcon,
+							kind: "button",
+							priority: 20,
+							disabledReason: addColumnsDisabledReason,
+							onClick: onAddColumns,
+						},
+						...(onResetToDefault
+							? [
+									{
+										id: "reset",
+										label: "Reset to default",
+										icon: ResetIcon,
+										kind: "button",
+										priority: 10,
+										onClick: onResetToDefault,
+									} satisfies BarCommand,
+								]
+							: []),
+					]}
+				/>
 
 				{addColumnsDisabledReason && (
 					<Text size={200} className={styles.hint}>

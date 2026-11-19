@@ -18,13 +18,9 @@ import type * as MonacoEditor from "monaco-editor/editor";
 import {
 	Button,
 	makeStyles,
-	Tooltip,
 	Spinner,
 	tokens,
 	Switch,
-	Toolbar,
-	ToolbarButton,
-	ToolbarDivider,
 	MessageBar,
 	MessageBarBody,
 	MessageBarTitle,
@@ -32,14 +28,22 @@ import {
 	MessageBarGroup,
 } from "@fluentui/react-components";
 import {
-	Copy24Regular,
-	ClipboardPaste24Regular,
-	FolderOpen24Regular,
-	ArrowReset24Regular,
-	Checkmark24Regular,
-	TreeDeciduous24Regular,
+	Copy20Filled,
+	Copy20Regular,
+	ClipboardPaste20Filled,
+	ClipboardPaste20Regular,
+	FolderOpen20Filled,
+	FolderOpen20Regular,
+	ArrowReset20Filled,
+	ArrowReset20Regular,
+	Checkmark20Filled,
+	Checkmark20Regular,
+	TreeDeciduous20Filled,
+	TreeDeciduous20Regular,
 	Dismiss16Regular,
+	bundleIcon,
 } from "@fluentui/react-icons";
+import { OverflowToolbar, type BarCommand } from "../../../../shared/components/commandBar";
 import { useTheme } from "../../../../shared/contexts/useTheme";
 import {
 	parseFetchXml,
@@ -81,6 +85,13 @@ const TREE_CHANGED_TITLE = "The tree changed while you were editing";
 const listedInAdvisories = (w: ParseWarning) =>
 	w.nodeId !== undefined && (w.severity !== "info" || w.kind === "advice");
 
+const CopyIcon = bundleIcon(Copy20Filled, Copy20Regular);
+const PasteIcon = bundleIcon(ClipboardPaste20Filled, ClipboardPaste20Regular);
+const LoadIcon = bundleIcon(FolderOpen20Filled, FolderOpen20Regular);
+const ResetIcon = bundleIcon(ArrowReset20Filled, ArrowReset20Regular);
+const ValidateIcon = bundleIcon(Checkmark20Filled, Checkmark20Regular);
+const ParseIcon = bundleIcon(TreeDeciduous20Filled, TreeDeciduous20Regular);
+
 const useStyles = makeStyles({
 	container: {
 		display: "flex",
@@ -91,22 +102,14 @@ const useStyles = makeStyles({
 	toolbar: {
 		display: "flex",
 		alignItems: "center",
-		justifyContent: "space-between",
-		padding: "4px 8px",
-		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+		gap: tokens.spacingHorizontalS,
+		paddingInline: tokens.spacingHorizontalS,
+		paddingBlock: tokens.spacingVerticalXXS,
+		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
 		backgroundColor: tokens.colorNeutralBackground2,
 		flexShrink: 0,
 	},
-	toolbarLeft: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalS,
-	},
-	toolbarRight: {
-		display: "flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalS,
-	},
+	commands: { flex: "1 1 0", minWidth: 0 },
 	editorWrapper: {
 		flex: 1,
 		overflow: "hidden",
@@ -129,7 +132,10 @@ const useStyles = makeStyles({
 	switchLabel: {
 		fontSize: tokens.fontSizeBase200,
 		fontWeight: tokens.fontWeightSemibold,
+		whiteSpace: "nowrap",
 	},
+	// The Switch never shrinks; the commands give way
+	modeSwitch: { flexShrink: 0 },
 });
 
 /** For PreviewTabs: the editor-mode checks of Execute, Save view and Send to tool report here (#277) */
@@ -448,81 +454,94 @@ function FetchXmlEditorImpl(
 		[],
 	);
 
+	// Bar order; what overflows first: Load 10, Reset 15, Paste 20, Parse to tree 35, Validate 40,
+	// Copy 50 (#232). Tooltips describe; the label names.
+	const copyCommand: BarCommand = {
+		id: "copy",
+		label: "Copy",
+		icon: CopyIcon,
+		group: "clipboard",
+		priority: 50,
+		kind: "button",
+		hint: "Copy FetchXML to clipboard",
+		onClick: handleCopy,
+	};
+	const editorCommands: BarCommand[] = isEditorMode
+		? [
+				copyCommand,
+				{
+					id: "paste",
+					label: "Paste",
+					icon: PasteIcon,
+					group: "clipboard",
+					priority: 20,
+					kind: "button",
+					hint: "Paste from clipboard",
+					onClick: handlePaste,
+				},
+				{
+					id: "load",
+					label: "Load",
+					icon: LoadIcon,
+					group: "clipboard",
+					priority: 10,
+					kind: "button",
+					hint: "Load from file",
+					onClick: handleLoadFile,
+				},
+				{
+					id: "reset",
+					label: "Reset",
+					icon: ResetIcon,
+					group: "clipboard",
+					priority: 15,
+					kind: "button",
+					hint: "Reset to tree-generated XML",
+					onClick: handleReset,
+				},
+				{
+					id: "validate",
+					label: "Validate",
+					icon: ValidateIcon,
+					group: "check",
+					priority: 40,
+					kind: "button",
+					hint: "Validate FetchXML syntax",
+					onClick: handleValidate,
+				},
+				{
+					id: "parse",
+					label: "Parse to tree",
+					icon: ParseIcon,
+					group: "check",
+					priority: 35,
+					kind: "button",
+					hint: "Parse FetchXML into tree builder",
+					disabledReason: onParseToTree ? undefined : "The query tree isn't available",
+					onClick: handleParseToTree,
+				},
+			]
+		: [copyCommand];
+
 	return (
 		<div className={styles.container}>
-			{/* Toolbar */}
+			{/* The editor's commands (#232): Copy only in view mode. The Switch sits beside the bar and
+			    never overflows. */}
 			<div className={styles.toolbar}>
-				<div className={styles.toolbarLeft}>
-					{isEditorMode ? (
-						<Toolbar size="small">
-							<Tooltip content="Copy FetchXML to clipboard" relationship="label">
-								<ToolbarButton icon={<Copy24Regular />} onClick={handleCopy}>
-									Copy
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Paste from clipboard" relationship="label">
-								<ToolbarButton
-									icon={<ClipboardPaste24Regular />}
-									onClick={handlePaste}
-								>
-									Paste
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Load from file" relationship="label">
-								<ToolbarButton
-									icon={<FolderOpen24Regular />}
-									onClick={handleLoadFile}
-								>
-									Load
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip content="Reset to tree-generated XML" relationship="label">
-								<ToolbarButton icon={<ArrowReset24Regular />} onClick={handleReset}>
-									Reset
-								</ToolbarButton>
-							</Tooltip>
-							<ToolbarDivider />
-							<Tooltip content="Validate FetchXML syntax" relationship="label">
-								<ToolbarButton
-									icon={<Checkmark24Regular />}
-									onClick={handleValidate}
-								>
-									Validate
-								</ToolbarButton>
-							</Tooltip>
-							<Tooltip
-								content="Parse FetchXML into tree builder"
-								relationship="label"
-							>
-								<ToolbarButton
-									icon={<TreeDeciduous24Regular />}
-									onClick={handleParseToTree}
-									disabled={!onParseToTree}
-								>
-									Parse to tree
-								</ToolbarButton>
-							</Tooltip>
-						</Toolbar>
-					) : (
-						<Tooltip content="Copy FetchXML to clipboard" relationship="label">
-							<Button
-								appearance="subtle"
-								icon={<Copy24Regular />}
-								onClick={handleCopy}
-							>
-								Copy
-							</Button>
-						</Tooltip>
-					)}
-				</div>
-				<div className={styles.toolbarRight}>
-					<Switch
-						checked={isEditorMode}
-						onChange={(_, data) => handleToggleEditorMode(data.checked)}
-						label={<span className={styles.switchLabel}>Editor mode</span>}
-						labelPosition="before"
-					/>
-				</div>
+				<OverflowToolbar
+					ariaLabel="FetchXML commands"
+					size="small"
+					groups={["clipboard", "check"]}
+					className={styles.commands}
+					commands={editorCommands}
+				/>
+				<Switch
+					checked={isEditorMode}
+					onChange={(_, data) => handleToggleEditorMode(data.checked)}
+					label={<span className={styles.switchLabel}>Editor mode</span>}
+					labelPosition="before"
+					className={styles.modeSwitch}
+				/>
 			</div>
 
 			{/* The editor's bars, one per condition, under the toolbar (#277) */}
