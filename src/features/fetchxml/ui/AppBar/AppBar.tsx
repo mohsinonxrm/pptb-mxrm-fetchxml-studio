@@ -8,9 +8,11 @@
  * Save and Send to keep their editor sync (EditorSyncContext), so AppShell renders this inside the
  * provider. New and Open view join in #278's next PRs; Operations in #296.
  */
-import { type ReactNode } from "react";
-import { MenuItem, makeStyles, tokens } from "@fluentui/react-components";
+import { useRef, useState } from "react";
+import { Badge, Body1Strong, MenuItem, makeStyles, tokens } from "@fluentui/react-components";
 import {
+	Add20Filled,
+	Add20Regular,
 	Copy20Regular,
 	Play20Filled,
 	Play20Regular,
@@ -27,8 +29,12 @@ import {
 	type SendToToolCommandOptions,
 } from "../Toolbar/useSendToToolCommand";
 import { useReturnFetchXmlCommand } from "../Toolbar/useReturnFetchXmlCommand";
+import { DiscardChangesDialog } from "../Dialogs/DiscardChangesDialog";
+import { useNotify } from "../../../../shared/feedback/useNotify";
+import { discardedToast } from "./appBarRules";
 
 const RunIcon = bundleIcon(Play20Filled, Play20Regular);
+const NewIcon = bundleIcon(Add20Filled, Add20Regular);
 const SettingsIcon = bundleIcon(Settings20Filled, Settings20Regular);
 
 /** Every group the bar can show, in bar order (OverflowToolbar learns them up front) */
@@ -42,6 +48,20 @@ const useStyles = makeStyles({
 		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
 		backgroundColor: tokens.colorNeutralBackground1,
 	},
+	identity: {
+		display: "flex",
+		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
+		minWidth: 0,
+		maxWidth: "320px",
+		paddingInlineEnd: tokens.spacingHorizontalS,
+	},
+	viewName: {
+		overflow: "hidden",
+		whiteSpace: "nowrap",
+		textOverflow: "ellipsis",
+	},
+	badge: { flexShrink: 0 },
 });
 
 export interface AppBarProps {
@@ -59,8 +79,14 @@ export interface AppBarProps {
 	/** The FetchXML the user sees (the editor's in editor mode) */
 	getCurrentXml: () => string;
 	onOpenSettings?: () => void;
-	/** Before the commands: the view's identity (#278 PR 2) */
-	start?: ReactNode;
+	/** The view the query is (#278); null for "New query" */
+	viewName: string | null;
+	/** The query differs from the view as loaded or saved (its FetchXML, columns or widths): the badge */
+	unsaved: boolean;
+	/** The same, now (the editor's text this moment): New asks first when it's true */
+	hasUnsavedChanges?: () => boolean;
+	/** Start a new query: the caller resets the tree, the editor and the results */
+	onNewQuery: () => void;
 }
 
 export function AppBar({
@@ -70,11 +96,35 @@ export function AppBar({
 	isCallee,
 	getCurrentXml,
 	onOpenSettings,
-	start,
+	viewName,
+	unsaved,
+	hasUnsavedChanges,
+	onNewQuery,
 }: AppBarProps) {
 	const styles = useStyles();
 	const copy = useCopy();
-	const save = useSaveViewCommand(saveView);
+	const { notify } = useNotify();
+	// New with unsaved changes asks first (#278); "Save and start new" starts new once the save is done
+	const [confirmNew, setConfirmNew] = useState(false);
+	const newAfterSave = useRef(false);
+	const save = useSaveViewCommand({
+		...saveView,
+		onSaveComplete: (...args) => {
+			saveView.onSaveComplete?.(...args);
+			if (newAfterSave.current) {
+				newAfterSave.current = false;
+				onNewQuery();
+			}
+		},
+		onCancel: () => {
+			newAfterSave.current = false;
+			saveView.onCancel?.();
+		},
+	});
+	const handleNew = () => {
+		if (hasUnsavedChanges ? hasUnsavedChanges() : unsaved) setConfirmNew(true);
+		else onNewQuery();
+	};
 	const send = useSendToToolCommand(
 		sendToTool ?? { fetchXml: "", entityLogicalName: "", tools: [] },
 	);
@@ -94,6 +144,16 @@ export function AppBar({
 			hint: `Run query (${formatKeys(getEntry("run")).join(" or ")})`,
 			keyShortcuts: getEntry("run").aria,
 			onClick: run.onClick,
+		},
+		{
+			id: "new",
+			label: "New",
+			icon: NewIcon,
+			group: "file",
+			priority: 40,
+			kind: "button",
+			hint: "Start a new query",
+			onClick: handleNew,
 		},
 		{ ...save.command, group: "file" },
 	];
@@ -116,9 +176,25 @@ export function AppBar({
 				ariaLabel="Query commands"
 				commands={commands}
 				groups={BAR_GROUPS}
+				start={
+					<div className={styles.identity}>
+						<Body1Strong className={styles.viewName} title={viewName ?? "New query"}>
+							{viewName ?? "New query"}
+						</Body1Strong>
+						{unsaved && (
+							<Badge
+								className={styles.badge}
+								appearance="tint"
+								color="warning"
+								shape="rounded"
+							>
+								Unsaved changes
+							</Badge>
+						)}
+					</div>
+				}
 				// Settings (and Operations, #296) at the right, as in a model-driven app
 				endAtEdge
-				start={start}
 				className={styles.bar}
 				moreExtra={
 					<MenuItem
@@ -131,6 +207,30 @@ export function AppBar({
 				}
 			/>
 			{save.dialog}
+			<DiscardChangesDialog
+				open={confirmNew}
+				intent="new"
+				viewName={viewName}
+				onSave={() => {
+					// Save can't run yet (no entity metadata, say): say why, and keep the choice open
+					if (save.command.disabledReason) {
+						notify.warning({
+							title: "Can't save yet",
+							body: save.command.disabledReason,
+						});
+						return;
+					}
+					setConfirmNew(false);
+					newAfterSave.current = true;
+					save.command.onClick?.();
+				}}
+				onDiscard={() => {
+					setConfirmNew(false);
+					onNewQuery();
+					notify.info(discardedToast(viewName));
+				}}
+				onCancel={() => setConfirmNew(false)}
+			/>
 		</>
 	);
 }

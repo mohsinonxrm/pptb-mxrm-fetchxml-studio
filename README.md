@@ -209,7 +209,7 @@ Nothing else writes to Dataverse:
 ## 🖼️ Interface Overview
 
 - **Left:** the entity and view pickers, the query tree (right-click an entity or filter node, or use its **+** (Add…) button, to add attributes, filters, conditions, orders and link-entities) and the properties of the selected node.
-- **Top:** the app bar, across both panes, with the query's commands: **Run** (or **Ctrl+Enter**) runs the query, then **Save**, **Send to tool**, **Return FetchXML** (when another tool opened FetchXML Studio), **More** (…) with **Copy FetchXML**, and **Settings**. When the window is narrow, commands that don't fit move into **More**; **Run** and **Settings** always stay.
+- **Top:** the app bar, across both panes. On the left, the view's name (**New query** when it isn't a view), with **Unsaved changes** when the query, its columns or their widths differ from the view as it was loaded or last saved, as in a model-driven app. Then the query's commands: **Run** (or **Ctrl+Enter**) runs the query, then **New**, **Save**, **Send to tool**, **Return FetchXML** (when another tool opened FetchXML Studio), **More** (…) with **Copy FetchXML**, and **Settings**. When the window is narrow, commands that don't fit move into **More**; **Run** and **Settings** always stay. **New** starts over (an empty tree, out of editor mode, no quick find value); with unsaved changes it asks first: **Save and start new**, **Discard changes** or **Cancel**.
 - **Right:** tabs for the FetchXML, the LayoutXML, the **Results** grid, **Advisories** and generated **Code**.
 - The tool follows the ToolBox's light or dark theme.
 

@@ -49,8 +49,8 @@ export interface BuilderContextValue extends BuilderState {
 	loadView: (xmlString: string, viewInfo: ViewSourceInfo, layoutXml?: string) => ParseResult;
 	/** Clear the loaded view info (called when FetchXML is manually edited) */
 	clearLoadedView: () => void;
-	/** Update loaded view info after save (without re-parsing FetchXML) */
-	setLoadedView: (viewInfo: ViewLoadInfo) => void;
+	/** Update loaded view info after save (without re-parsing FetchXML); layoutXml is what was saved */
+	setLoadedView: (viewInfo: ViewLoadInfo, layoutXml?: string) => void;
 	/** Set the column configuration (from parsed layoutxml or generated) */
 	setColumnConfig: (config: LayoutXmlConfig) => void;
 	/** Update a single column's width */

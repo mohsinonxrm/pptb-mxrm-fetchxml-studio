@@ -11,16 +11,14 @@ import {
 	Combobox,
 	Option,
 	makeStyles,
-	Button,
 	Spinner,
 	Text,
 	useId,
 	tokens,
-	Tooltip,
 	useComboboxFilter,
 	type ComboboxProps,
 } from "@fluentui/react-components";
-import { Add20Regular, LockClosed20Regular } from "@fluentui/react-icons";
+import { LockClosed20Regular } from "@fluentui/react-icons";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import type { EntityScopeMode } from "../../model/displaySettings";
 import { isEntityInScope } from "../../state/metadataScope";
@@ -44,7 +42,7 @@ const useStyles = makeStyles({
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 		containerType: "inline-size",
 	},
-	// The scope chip and New (#227)
+	// The scope chip (#227)
 	header: {
 		display: "flex",
 		alignItems: "center",
@@ -60,22 +58,6 @@ const useStyles = makeStyles({
 	comboboxInput: {
 		minWidth: 0,
 		width: "100%",
-	},
-	// In a narrow pane (< 300px) "New" keeps only its icon (#53); the tooltip and label still say "New query"
-	newButton: {
-		flexShrink: 0,
-		marginLeft: "auto",
-		"@container (max-width: 299px)": {
-			minWidth: "28px",
-			maxWidth: "28px",
-			paddingLeft: "3px",
-			paddingRight: "3px",
-		},
-	},
-	newButtonLabel: {
-		"@container (max-width: 299px)": {
-			display: "none",
-		},
 	},
 	field: {
 		display: "flex",
@@ -124,7 +106,6 @@ const useStyles = makeStyles({
 interface EntitySelectorProps {
 	selectedEntity: string | null;
 	onEntityChange: (entityLogicalName: string) => void;
-	onNewQuery: () => void;
 	/** Callback when a saved view should be loaded - provides full view info for execution optimization */
 	onViewLoad?: (viewInfo: LoadedViewInfo) => void;
 	/** User-preferred entity scope mode (may be clamped to privilege ceiling) */
@@ -139,7 +120,6 @@ interface EntitySelectorProps {
 export function EntitySelector({
 	selectedEntity,
 	onEntityChange,
-	onNewQuery,
 	onViewLoad,
 	entityScopeMode,
 	onEntityScopeModeChange,
@@ -433,7 +413,7 @@ export function EntitySelector({
 
 	return (
 		<div className={styles.container}>
-			{/* The scope chip (#227) and New */}
+			{/* The scope chip (#227); New is in the app bar (#278) */}
 			<div className={styles.header}>
 				<ScopeChip
 					mode={effectiveScopeMode}
@@ -461,17 +441,6 @@ export function EntitySelector({
 					showTip={showScopeTip}
 					onTipDismiss={scopeTip.dismiss}
 				/>
-				<Tooltip content="New query" relationship="label">
-					<Button
-						className={styles.newButton}
-						appearance="primary"
-						size="small"
-						icon={<Add20Regular />}
-						onClick={onNewQuery}
-					>
-						<span className={styles.newButtonLabel}>New</span>
-					</Button>
-				</Tooltip>
 			</div>
 
 			{/* Entity selector (all modes) */}

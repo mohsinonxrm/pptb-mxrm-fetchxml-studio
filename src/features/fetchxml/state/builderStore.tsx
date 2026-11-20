@@ -90,6 +90,19 @@ export interface LoadedViewState {
 	ownerName?: string;
 }
 
+/**
+ * The view the query is (#278): its name for the app bar, and what it was when loaded or last saved,
+ * to tell whether it has unsaved changes (viewDirty.ts). Unlike loadedView, edits keep it: the view
+ * is still the one being changed. A new entity or New clears it.
+ */
+export interface ViewIdentity {
+	name: string;
+	/** The view's FetchXML when loaded or saved, in generated form */
+	baselineFetchXml: string;
+	/** The view's LayoutXML when loaded or saved; null when it had none */
+	baselineLayoutXml: string | null;
+}
+
 export interface BuilderState {
 	fetchQuery: FetchNode | null;
 	selectedNodeId: NodeId | null;
@@ -98,6 +111,8 @@ export interface BuilderState {
 	revealSeq: number;
 	/** Loaded view info - null if query was not loaded from a view or has been modified */
 	loadedView: LoadedViewState | null;
+	/** The view the query is, kept across edits (#278); null for a query that isn't a view */
+	viewIdentity: ViewIdentity | null;
 	/** Column layout configuration - generated from FetchXML or loaded from view */
 	columnConfig: LayoutXmlConfig | null;
 	/** Track if layout needs regeneration due to FetchXML changes */
@@ -147,6 +162,8 @@ type BuilderAction =
 	| {
 			type: "SET_LOADED_VIEW";
 			viewInfo: LoadedViewState;
+			/** The LayoutXML that was saved, the view's baseline for unsaved changes (#278) */
+			layoutXml?: string;
 	  }
 	| { type: "SET_COLUMN_CONFIG"; config: LayoutXmlConfig }
 	| { type: "UPDATE_COLUMN_WIDTH"; columnName: string; width: number }
@@ -173,6 +190,7 @@ const initialState: BuilderState = {
 	selectedNode: null,
 	revealSeq: 0,
 	loadedView: null,
+	viewIdentity: null,
 	columnConfig: null,
 	layoutNeedsSync: false,
 	retrieveAllRecords: false,
@@ -371,6 +389,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNode: fetchNode.entity,
 				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - this was manual edit
+				// Still the same view, now changed (#278); a query of another entity isn't that view
+				viewIdentity:
+					state.fetchQuery?.entity.name === fetchNode.entity.name
+						? state.viewIdentity
+						: null,
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
@@ -408,6 +431,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNode: fetchNode.entity,
 				revealSeq: state.revealSeq,
 				loadedView: action.viewInfo, // Track the loaded view
+				viewIdentity: {
+					name: action.viewInfo.name,
+					baselineFetchXml: action.viewInfo.originalFetchXml,
+					baselineLayoutXml: action.layoutXml ?? null,
+				},
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
@@ -431,6 +459,12 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return {
 				...state,
 				loadedView: action.viewInfo,
+				// What was saved is the view now: no unsaved changes (#278)
+				viewIdentity: {
+					name: action.viewInfo.name,
+					baselineFetchXml: action.viewInfo.originalFetchXml,
+					baselineLayoutXml: action.layoutXml ?? null,
+				},
 			};
 		}
 
@@ -460,6 +494,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedNode: entityNode,
 				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - entity changed
+				viewIdentity: null, // A new query for this entity (#278)
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
 				retrieveAllRecords: state.retrieveAllRecords, // Preserve execution option
@@ -1239,11 +1274,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 				return result;
 			},
 			clearLoadedView: () => dispatch({ type: "CLEAR_LOADED_VIEW" }),
-			setLoadedView: (viewInfo: ViewLoadInfo) =>
+			setLoadedView: (viewInfo: ViewLoadInfo, layoutXml?: string) =>
 				dispatch({
 					type: "SET_LOADED_VIEW",
 					// originalFetchXml is supplied by the caller, generated from the tree that was saved
 					viewInfo: { ...viewInfo },
+					layoutXml,
 				}),
 			setColumnConfig: (config: LayoutXmlConfig) =>
 				dispatch({ type: "SET_COLUMN_CONFIG", config }),
