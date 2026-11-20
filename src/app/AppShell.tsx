@@ -283,7 +283,8 @@ function AppContent({
 					isDefault: details.isDefault,
 					isManaged: overwritten?.isManaged,
 					solutionId: overwritten?.solutionId,
-					ownerId: overwritten?.ownerId,
+					// A new personal view is the saver's own (#278)
+					ownerId: overwritten?.ownerId ?? details.ownerId,
 					ownerName: overwritten?.ownerName,
 				},
 				// What was saved is the view's baseline for "Unsaved changes" (#278)

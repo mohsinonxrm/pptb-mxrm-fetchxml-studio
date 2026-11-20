@@ -161,6 +161,25 @@ describe("Save's rules", () => {
 		]);
 	});
 
+	it("a personal view whose privilege check failed: the overwrite, and the dialog lets you save", async () => {
+		checks.checkUserQueryPrivileges.mockResolvedValue({ canWrite: false, failed: true });
+		await renderSave(personal());
+		expect(hint()).toContain('Save changes to "Mine"');
+		expect(hint()).toContain("Dataverse decides");
+		await click(saveButton());
+		await flush(5);
+		const save = [
+			...document.querySelectorAll<HTMLButtonElement>(".fui-DialogSurface button"),
+		].find((b) => b.textContent?.trim() === "Save");
+		expect(save?.disabled).toBe(false);
+	});
+
+	it("a shared personal view while its Write check runs: only a new view", async () => {
+		checks.checkUserQueryWriteAccess.mockReturnValue(new Promise(() => {}));
+		await renderSave(personal({ ownerId: SOMEONE }));
+		expect(await menuLabels()).toEqual(["Save as new view…"]);
+	});
+
 	it("a check still running hides the overwrite", async () => {
 		checks.checkUserQueryPrivileges.mockReturnValue(new Promise(() => {}));
 		await renderSave(personal());
