@@ -35,7 +35,7 @@ const saveView = (extra: Partial<AppBarProps["saveView"]> = {}): AppBarProps["sa
 	entityLogicalName: "account",
 	objectTypeCode: 1,
 	primaryIdAttribute: "accountid",
-	loadedView: null,
+	targetView: null,
 	...extra,
 });
 
@@ -110,7 +110,7 @@ describe("the app bar's commands", () => {
 		expect(names).toEqual([
 			"Run",
 			"New",
-			"Save as",
+			"Save",
 			"Send to tool",
 			"Return FetchXML",
 			"More commands",
@@ -126,12 +126,12 @@ describe("the app bar's commands", () => {
 			sendToTool: { fetchXml: XML, entityLogicalName: "account", tools },
 		});
 		await layout.resize({ container: 200 });
-		expect(shownOnBar(["Run", "Save as", "Send to tool", "Return FetchXML"])).toEqual(["Run"]);
+		expect(shownOnBar(["Run", "Save", "Send to tool", "Return FetchXML"])).toEqual(["Run"]);
 		expect(overflowed(moreByTooltip())).toBe(false);
 		await click(moreByTooltip());
 		expect(menuTexts(menus()[0])).toEqual([
 			"New",
-			"Save as",
+			"Save",
 			"Send to tool",
 			"Return FetchXML",
 			"Copy FetchXML",
@@ -159,7 +159,7 @@ describe("the app bar's commands", () => {
 		expect(description(runButton)).toBe("Choose an entity first");
 		await click(runButton);
 		expect(onClick).not.toHaveBeenCalled();
-		const save = onBar("Save as");
+		const save = onBar("Save");
 		expect(save?.getAttribute("aria-disabled")).toBe("true");
 		expect(description(save)).toBe("Choose an entity first");
 	});
@@ -217,16 +217,13 @@ describe("the app bar's commands", () => {
 
 	it("shows Save's own menu in More, without a second Save", async () => {
 		const layout = stubOverflowWidths({ container: 3000 });
-		await renderBar({
-			saveView: saveView({
-				loadedView: { id: "1", name: "Active accounts", type: "system" },
-			}),
-		});
+		await renderBar();
 		await layout.resize({ container: 200 });
 		await click(moreByTooltip());
 		const save = menuItems(menus()[0]).find((i) => i.textContent?.trim() === "Save");
 		await click(save);
-		expect(menuTexts(menus()[1])).toEqual(["Save", "Save as…", "Save and publish"]);
+		// Save's own menu (the rules are tested in saveRules.test.ts), once
+		expect(menuTexts(menus()[1])).toEqual(["Save as new view…"]);
 	});
 });
 
@@ -351,7 +348,7 @@ describe("which commands show", () => {
 				),
 			),
 		);
-		expect(onBar("Save as")?.getAttribute("aria-disabled")).toBeNull();
+		expect(onBar("Save")?.getAttribute("aria-disabled")).toBeNull();
 		expect(onBar("Send to tool")?.getAttribute("aria-disabled")).toBeNull();
 	});
 });

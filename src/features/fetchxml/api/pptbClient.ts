@@ -1808,11 +1808,14 @@ export async function validateSavedQuery(fetchXml: string, queryType: number = 0
 export async function checkSavedQueryPrivileges(): Promise<{
 	canWrite: boolean;
 	canPublish: boolean;
+	/** The check couldn't be completed (no user, or a privilege lookup failed): canWrite is a guess (#278) */
+	failed?: boolean;
 }> {
 	const user = await whoAmI();
 	if (!user) {
-		return { canWrite: false, canPublish: false };
+		return { canWrite: false, canPublish: false, failed: true };
 	}
+	let failed = false;
 
 	// Try to check privileges, but handle gracefully if the privilege check fails
 	let canWriteQuery = false;
@@ -1824,6 +1827,7 @@ export async function checkSavedQueryPrivileges(): Promise<{
 		canWriteQuery = await checkPrivilegeByName(user.UserId, "prvWriteQuery");
 	} catch (error) {
 		console.warn("Could not check prvWriteQuery, assuming false:", error);
+		failed = true;
 	}
 
 	try {
@@ -1831,6 +1835,7 @@ export async function checkSavedQueryPrivileges(): Promise<{
 		canWriteCustomization = await checkPrivilegeByName(user.UserId, "prvWriteCustomization");
 	} catch (error) {
 		console.warn("Could not check prvWriteCustomization, assuming false:", error);
+		failed = true;
 	}
 
 	try {
@@ -1853,7 +1858,7 @@ export async function checkSavedQueryPrivileges(): Promise<{
 		`✅ SavedQuery privileges: writeQuery=${canWriteQuery}, writeCustomization=${canWriteCustomization}, publishCustomization=${canPublishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}`,
 	);
 
-	return { canWrite, canPublish };
+	return { canWrite, canPublish, ...(failed ? { failed } : {}) };
 }
 
 /**
@@ -1864,24 +1869,28 @@ export async function checkSavedQueryPrivileges(): Promise<{
  */
 export async function checkUserQueryPrivileges(): Promise<{
 	canWrite: boolean;
+	/** The check couldn't be completed (no user, or the privilege lookup failed): canWrite is a guess (#278) */
+	failed?: boolean;
 }> {
 	const user = await whoAmI();
 	if (!user) {
-		return { canWrite: false };
+		return { canWrite: false, failed: true };
 	}
 
 	let canWrite = false;
+	let failed = false;
 
 	try {
 		// Check for prvWriteUserQuery privilege
 		canWrite = await checkPrivilegeByName(user.UserId, "prvWriteUserQuery");
 	} catch (error) {
 		console.warn("Could not check prvWriteUserQuery, assuming false:", error);
+		failed = true;
 	}
 
 	debugLog("viewAPI", `✅ UserQuery privileges: canWrite=${canWrite}`);
 
-	return { canWrite };
+	return { canWrite, ...(failed ? { failed } : {}) };
 }
 
 /**

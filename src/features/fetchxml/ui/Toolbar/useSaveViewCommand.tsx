@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, type ReactNode } from "react";
-import { MenuItem, MenuList } from "@fluentui/react-components";
+import { MenuItem, MenuList, Tooltip } from "@fluentui/react-components";
 import {
 	Save20Filled,
 	Save20Regular,
@@ -27,6 +27,8 @@ import {
 } from "../Dialogs/SaveViewDialog";
 import { useEditorSync } from "../RightPane/editorSync";
 import type { BarCommand } from "../../../../shared/components/commandBar";
+import type { SaveAction } from "../../model/saveTarget";
+import { useSaveOptions } from "./useSaveOptions";
 
 const SaveIcon = bundleIcon(Save20Filled, Save20Regular);
 const SaveAsIcon = bundleIcon(SaveArrowRight20Filled, SaveArrowRight20Regular);
@@ -47,8 +49,11 @@ export interface SaveViewCommandOptions {
 	objectTypeCode: number;
 	/** Primary ID attribute for LayoutXML */
 	primaryIdAttribute: string;
-	/** Loaded view info (for Save/overwrite) */
-	loadedView: SaveViewDialogLoadedView | null;
+	/**
+	 * The view Save would overwrite: the view the query is (the store's viewIdentity), kept across
+	 * edits (#278 PR 3). null for a query that isn't a view.
+	 */
+	targetView: SaveViewDialogLoadedView | null;
 	/** Callback after successful save */
 	onSaveComplete?: (
 		viewId: string,
@@ -69,7 +74,7 @@ export function useSaveViewCommand({
 	entityDisplayName,
 	objectTypeCode,
 	primaryIdAttribute,
-	loadedView,
+	targetView,
 	onSaveComplete,
 	disabled = false,
 	onCancel,
@@ -81,7 +86,14 @@ export function useSaveViewCommand({
 	const { sync, editorHasContent } = useEditorSync();
 	// Editor FetchXML just loaded into the tree (#102): open the dialog once the new tree and its
 	// root entity metadata have reached these props, so the view is saved with the right entity.
-	const [pendingOpen, setPendingOpen] = useState<{ entity: string; xml: string } | null>(null);
+	const [pendingOpen, setPendingOpen] = useState<{
+		entity: string;
+		xml: string;
+		mode: SaveViewDialogMode;
+		publish: boolean;
+	} | null>(null);
+	// What Save offers for the view, with its checks (owner decision Q3)
+	const options = useSaveOptions(targetView);
 
 	const openDialog = useCallback((mode: SaveViewDialogMode, publish: boolean) => {
 		setShouldPublish(publish);
@@ -101,8 +113,13 @@ export function useSaveViewCommand({
 				openDialog(mode, publish);
 				return;
 			}
-			// The tree was replaced, which clears the loaded view like any tree edit: save as a new view
-			setPendingOpen({ entity: synced.fetchQuery.entity.name, xml: synced.fetchXml });
+			// The editor's FetchXML replaced the tree: open once the new tree has reached these props
+			setPendingOpen({
+				entity: synced.fetchQuery.entity.name,
+				xml: synced.fetchXml,
+				mode,
+				publish,
+			});
 		},
 		[sync, openDialog, onCancel],
 	);
@@ -116,12 +133,31 @@ export function useSaveViewCommand({
 			primaryIdAttribute !== "";
 		if (!ready) return;
 		setPendingOpen(null);
-		openDialog("saveAs", false);
-	}, [pendingOpen, fetchXml, entityLogicalName, objectTypeCode, primaryIdAttribute, openDialog]);
+		// Another entity's FetchXML isn't the view any more (its identity went): save it as a new view
+		if (pendingOpen.mode === "save" && targetView) openDialog("save", pendingOpen.publish);
+		else openDialog("saveAs", false);
+	}, [
+		pendingOpen,
+		fetchXml,
+		entityLogicalName,
+		objectTypeCode,
+		primaryIdAttribute,
+		openDialog,
+		targetView,
+	]);
 
-	const handleSave = useCallback(() => void requestOpen("save", false), [requestOpen]);
-	const handleSaveAs = useCallback(() => void requestOpen("saveAs", false), [requestOpen]);
-	const handleSaveAndPublish = useCallback(() => void requestOpen("save", true), [requestOpen]);
+	const run = (action: SaveAction) =>
+		void requestOpen(action.kind === "save-as" ? "saveAs" : "save", action.publishes);
+	const iconFor = (action: SaveAction) =>
+		action.kind === "save-as" ? (
+			<SaveArrowRightRegular />
+		) : action.publishes ? (
+			<SendRegular />
+		) : (
+			<SaveRegular />
+		);
+	const describe = (action: SaveAction) =>
+		action.warning ? `${action.label}. ${action.warning}` : action.label;
 
 	const handleDialogSaveComplete = useCallback(
 		(
@@ -139,35 +175,47 @@ export function useSaveViewCommand({
 	// With content in the editor, saving is available even before the tree has a query (#102)
 	const disabledReason = disabled && !editorHasContent ? NO_QUERY_REASON : undefined;
 
+	// The button says Save; what it does follows the rules (Q3): save changes to a personal view you
+	// can write, or save as a new view. The menu adds the rest, such as overwriting a system view.
 	const command: BarCommand = {
 		id: "save",
-		label: loadedView ? "Save" : "Save as",
-		icon: loadedView ? SaveIcon : SaveAsIcon,
+		label: "Save",
+		icon: options.primary.kind === "save-as" ? SaveAsIcon : SaveIcon,
 		group: "file",
 		priority: 60,
 		kind: "split",
-		// One primary per bar: Execute (#232)
+		// One primary per bar: Run (#232, #278)
 		appearance: "secondary",
-		onClick: loadedView ? handleSave : handleSaveAs,
+		onClick: () => run(options.primary),
 		disabledReason,
-		hint: loadedView ? `Save changes to "${loadedView.name}"` : "Save as new view",
-		// The menu lists Save itself, so More shows it as it is
+		hint: describe(options.primary),
+		// The menu lists the primary action itself, so More shows it as it is
 		menuHasPrimary: true,
 		menu: (
 			<MenuList>
-				{loadedView && (
-					<MenuItem icon={<SaveRegular />} onClick={handleSave}>
-						Save
-					</MenuItem>
-				)}
-				<MenuItem icon={<SaveArrowRightRegular />} onClick={handleSaveAs}>
-					Save as…
-				</MenuItem>
-				{loadedView?.type === "system" && (
-					<MenuItem icon={<SendRegular />} onClick={handleSaveAndPublish}>
-						Save and publish
-					</MenuItem>
-				)}
+				{[options.primary, ...options.menu].map((action) => {
+					const item = (
+						<MenuItem
+							key={action.kind}
+							icon={iconFor(action)}
+							onClick={() => run(action)}
+						>
+							{action.label}
+						</MenuItem>
+					);
+					return action.warning ? (
+						<Tooltip
+							key={action.kind}
+							content={action.warning}
+							relationship="description"
+							positioning="after"
+						>
+							{item}
+						</Tooltip>
+					) : (
+						item
+					);
+				})}
 			</MenuList>
 		),
 	};
@@ -188,7 +236,7 @@ export function useSaveViewCommand({
 			entityDisplayName={entityDisplayName}
 			objectTypeCode={objectTypeCode}
 			primaryIdAttribute={primaryIdAttribute}
-			loadedView={loadedView}
+			loadedView={targetView}
 		/>
 	);
 
