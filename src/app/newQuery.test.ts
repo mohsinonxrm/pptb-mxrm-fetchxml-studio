@@ -203,4 +203,27 @@ describe("Save on a personal view you own (#278 PR 3)", () => {
 		},
 		FLOW_TIMEOUT,
 	);
+
+	it(
+		"after Save as a new personal view, Save saves changes to it: it's yours",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => treeItems() > 0 && saveReady());
+			await click(button("Save", appBar() ?? undefined));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"]'));
+			await typeInto(dialogInput(), "Fresh view");
+			await click(
+				[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+					(b) => b.textContent?.trim() === "Save",
+				),
+			);
+			await app.waitFor(() => !document.querySelector('[role="dialog"]'), 10000);
+			// Its own view: no access check, no warning
+			await app.waitFor(() => saveHint() === 'Save changes to "Fresh view"', 10000);
+			expect(app.dataverse.calls.some((c) => c.includes("RetrievePrincipalAccess"))).toBe(
+				false,
+			);
+		},
+		FLOW_TIMEOUT,
+	);
 });
