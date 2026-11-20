@@ -206,6 +206,8 @@ export interface SavedViewDetails {
 	isDefault?: boolean;
 	/** System views: whether the view was published, so apps show it; undefined for personal views (#277) */
 	published?: boolean;
+	/** A new personal view: its owner, the user who saved it, so Save knows it's theirs (#278) */
+	ownerId?: string;
 }
 
 /** A message ending with a full stop, so the next sentence reads on (#180) */
@@ -290,11 +292,19 @@ export function SaveViewDialog({
 	const [systemPrivileges, setSystemPrivileges] = useState<{
 		canWrite: boolean;
 		canPublish: boolean;
+		failed?: boolean;
 	} | null>(null);
 	// Personal view privileges from checkUserQueryPrivileges
 	const [personalPrivileges, setPersonalPrivileges] = useState<{
 		canWrite: boolean;
+		failed?: boolean;
 	} | null>(null);
+	// A check that couldn't be completed doesn't block: Dataverse decides when the view is saved
+	// (#278, owner rule: block only known-invalid)
+	const canWriteSystem =
+		!!systemPrivileges && (systemPrivileges.canWrite || !!systemPrivileges.failed);
+	const canWritePersonal =
+		!!personalPrivileges && (personalPrivileges.canWrite || !!personalPrivileges.failed);
 
 	// Validation state
 	const [validation, setValidation] = useState<ValidationState>({
@@ -551,10 +561,10 @@ export function SaveViewDialog({
 		if (isOverwriteBlocked || isCheckingAccess) return false;
 		if (viewType === "system") {
 			// System views require canWrite privilege (covers both create and update)
-			if (!systemPrivileges?.canWrite) return false;
+			if (!canWriteSystem) return false;
 		} else {
 			// Personal views require canWrite privilege
-			if (!personalPrivileges?.canWrite) return false;
+			if (!canWritePersonal) return false;
 		}
 		return true;
 	}, [
@@ -563,8 +573,8 @@ export function SaveViewDialog({
 		isOverwriteBlocked,
 		isCheckingAccess,
 		viewType,
-		systemPrivileges,
-		personalPrivileges,
+		canWriteSystem,
+		canWritePersonal,
 	]);
 
 	// One follow-up step for a saved system view (#180)
@@ -740,6 +750,10 @@ export function SaveViewDialog({
 				description: savedDescription || undefined,
 				isDefault: viewType === "system" ? setAsDefault || isAlreadyDefault : undefined,
 				published: viewType === "system" ? shouldPublish : undefined,
+				ownerId:
+					viewType === "personal" && !(isOverwriteMode && loadedView)
+						? (await whoAmI().catch(() => null))?.UserId
+						: undefined,
 			};
 			// Reported once the view is saved, whether or not the later steps finish (#307). A sticky
 			// warning toast: the dialog closes on success, and the user needs to act on it (#277).
@@ -985,22 +999,26 @@ export function SaveViewDialog({
 											<Radio
 												value="personal"
 												label="Personal view"
-												disabled={!personalPrivileges?.canWrite}
+												disabled={!canWritePersonal}
 											/>
 											<div className={styles.radioDescription}>
-												{personalPrivileges?.canWrite
-													? "Only visible to you"
-													: "You don't have permission to create personal views"}
+												{personalPrivileges?.failed
+													? "Only visible to you. FetchXML Studio couldn't check your privileges: Dataverse decides when you save."
+													: canWritePersonal
+														? "Only visible to you"
+														: "You don't have permission to create personal views"}
 											</div>
 											<Radio
 												value="system"
 												label="System view"
-												disabled={!systemPrivileges?.canWrite}
+												disabled={!canWriteSystem}
 											/>
 											<div className={styles.radioDescription}>
-												{systemPrivileges?.canWrite
-													? "Visible to all users with access to this entity"
-													: "You don't have permission to create system views"}
+												{systemPrivileges?.failed
+													? "Visible to all users with access to this entity. FetchXML Studio couldn't check your privileges: Dataverse decides when you save."
+													: canWriteSystem
+														? "Visible to all users with access to this entity"
+														: "You don't have permission to create system views"}
 											</div>
 										</RadioGroup>
 									</Field>

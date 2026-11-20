@@ -1115,6 +1115,28 @@ export async function checkPrivilegeByName(
 }
 
 /**
+ * Like checkPrivilegeByName, but a lookup that failed is "unknown" rather than false (#278): only a
+ * privilege the environment doesn't have counts as a known "no". For the Save checks, where an
+ * unknown answer offers the command and Dataverse decides (owner rule: block only known-invalid).
+ */
+async function privilegeOrUnknown(
+	userId: string,
+	privilegeName: string,
+): Promise<boolean | "unknown"> {
+	if (!isDataverseAvailable()) return "unknown";
+	try {
+		return await memoizeForSession(`privilege:${userId}:${privilegeName}`, () =>
+			retrieveUserPrivilege(userId, privilegeName),
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (message.includes("0x80040203") || message.includes("does not exist")) return false;
+		console.warn(`Could not check ${privilegeName}:`, error);
+		return "unknown";
+	}
+}
+
+/**
  * Get access summary with privilege checks and mode determination
  */
 export async function getAccessSummary(): Promise<AccessSummary | null> {
@@ -1808,52 +1830,37 @@ export async function validateSavedQuery(fetchXml: string, queryType: number = 0
 export async function checkSavedQueryPrivileges(): Promise<{
 	canWrite: boolean;
 	canPublish: boolean;
+	/**
+	 * A lookup couldn't be completed and no known "no" decides canWrite (#278): canWrite is then
+	 * false but unknown, and Save offers the command with a warning; Dataverse decides.
+	 */
+	failed?: boolean;
 }> {
 	const user = await whoAmI();
 	if (!user) {
-		return { canWrite: false, canPublish: false };
+		return { canWrite: false, canPublish: false, failed: true };
 	}
+	// prvWriteQuery (create/update system views), prvWriteCustomization, prvPublishCustomization
+	const [writeQuery, writeCustomization, publishCustomization] = await Promise.all([
+		privilegeOrUnknown(user.UserId, "prvWriteQuery"),
+		privilegeOrUnknown(user.UserId, "prvWriteCustomization"),
+		privilegeOrUnknown(user.UserId, "prvPublishCustomization"),
+	]);
 
-	// Try to check privileges, but handle gracefully if the privilege check fails
-	let canWriteQuery = false;
-	let canWriteCustomization = false;
-	let canPublishCustomization = false;
-
-	try {
-		// Check for prvWriteQuery privilege (create/update system views)
-		canWriteQuery = await checkPrivilegeByName(user.UserId, "prvWriteQuery");
-	} catch (error) {
-		console.warn("Could not check prvWriteQuery, assuming false:", error);
-	}
-
-	try {
-		// Check for prvWriteCustomization privilege
-		canWriteCustomization = await checkPrivilegeByName(user.UserId, "prvWriteCustomization");
-	} catch (error) {
-		console.warn("Could not check prvWriteCustomization, assuming false:", error);
-	}
-
-	try {
-		// Check for prvPublishCustomization privilege
-		canPublishCustomization = await checkPrivilegeByName(
-			user.UserId,
-			"prvPublishCustomization",
-		);
-	} catch (error) {
-		console.warn("Could not check prvPublishCustomization, assuming false:", error);
-	}
-
-	// User can write system views if they have both prvWriteQuery and prvWriteCustomization
-	const canWrite = canWriteQuery && canWriteCustomization;
-	// User can publish if they also have prvPublishCustomization
-	const canPublish = canWrite && canPublishCustomization;
+	// System views need both prvWriteQuery and prvWriteCustomization; a known "no" for either decides
+	const canWrite = writeQuery === true && writeCustomization === true;
+	const failed =
+		writeQuery !== false &&
+		writeCustomization !== false &&
+		(writeQuery === "unknown" || writeCustomization === "unknown");
+	const canPublish = canWrite && publishCustomization === true;
 
 	debugLog(
 		"viewAPI",
-		`✅ SavedQuery privileges: writeQuery=${canWriteQuery}, writeCustomization=${canWriteCustomization}, publishCustomization=${canPublishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}`,
+		`✅ SavedQuery privileges: writeQuery=${writeQuery}, writeCustomization=${writeCustomization}, publishCustomization=${publishCustomization} → canWrite=${canWrite}, canPublish=${canPublish}${failed ? " (unknown)" : ""}`,
 	);
 
-	return { canWrite, canPublish };
+	return { canWrite, canPublish, ...(failed ? { failed } : {}) };
 }
 
 /**
@@ -1864,24 +1871,17 @@ export async function checkSavedQueryPrivileges(): Promise<{
  */
 export async function checkUserQueryPrivileges(): Promise<{
 	canWrite: boolean;
+	/** The lookup couldn't be completed: canWrite is false but unknown (#278) */
+	failed?: boolean;
 }> {
 	const user = await whoAmI();
 	if (!user) {
-		return { canWrite: false };
+		return { canWrite: false, failed: true };
 	}
-
-	let canWrite = false;
-
-	try {
-		// Check for prvWriteUserQuery privilege
-		canWrite = await checkPrivilegeByName(user.UserId, "prvWriteUserQuery");
-	} catch (error) {
-		console.warn("Could not check prvWriteUserQuery, assuming false:", error);
-	}
-
-	debugLog("viewAPI", `✅ UserQuery privileges: canWrite=${canWrite}`);
-
-	return { canWrite };
+	const writeUserQuery = await privilegeOrUnknown(user.UserId, "prvWriteUserQuery");
+	const canWrite = writeUserQuery === true;
+	debugLog("viewAPI", `✅ UserQuery privileges: canWrite=${writeUserQuery}`);
+	return { canWrite, ...(writeUserQuery === "unknown" ? { failed: true } : {}) };
 }
 
 /**

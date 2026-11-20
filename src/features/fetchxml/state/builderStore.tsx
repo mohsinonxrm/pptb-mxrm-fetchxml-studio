@@ -97,6 +97,11 @@ export interface LoadedViewState {
  */
 export interface ViewIdentity {
 	name: string;
+	/**
+	 * The view's details as loaded or saved (id, type, owner, customizable…): what Save overwrites
+	 * (#278 PR 3). Kept across edits, unlike loadedView, which only means "unchanged, run by ID".
+	 */
+	view: LoadedViewState;
 	/** The view's FetchXML when loaded or saved, in generated form */
 	baselineFetchXml: string;
 	/** The view's LayoutXML when loaded or saved; null when it had none */
@@ -433,6 +438,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				loadedView: action.viewInfo, // Track the loaded view
 				viewIdentity: {
 					name: action.viewInfo.name,
+					view: action.viewInfo,
 					baselineFetchXml: action.viewInfo.originalFetchXml,
 					baselineLayoutXml: action.layoutXml ?? null,
 				},
@@ -462,6 +468,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				// What was saved is the view now: no unsaved changes (#278)
 				viewIdentity: {
 					name: action.viewInfo.name,
+					view: action.viewInfo,
 					baselineFetchXml: action.viewInfo.originalFetchXml,
 					baselineLayoutXml: action.layoutXml ?? null,
 				},

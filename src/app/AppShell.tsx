@@ -268,7 +268,8 @@ function AppContent({
 		if (entityMetadata && builder.fetchQuery) {
 			// Overwriting keeps the view's query type; Save As creates a public view (#93). The
 			// solution and owner stay; description and default are what was saved (#142).
-			const overwritten = builder.loadedView?.id === viewId ? builder.loadedView : null;
+			const target = builder.viewIdentity?.view;
+			const overwritten = target?.id === viewId ? target : null;
 			builder.setLoadedView(
 				{
 					id: viewId,
@@ -282,7 +283,8 @@ function AppContent({
 					isDefault: details.isDefault,
 					isManaged: overwritten?.isManaged,
 					solutionId: overwritten?.solutionId,
-					ownerId: overwritten?.ownerId,
+					// A new personal view is the saver's own (#278)
+					ownerId: overwritten?.ownerId ?? details.ownerId,
 					ownerName: overwritten?.ownerName,
 				},
 				// What was saved is the view's baseline for "Unsaved changes" (#278)
@@ -375,7 +377,8 @@ function AppContent({
 						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
 						objectTypeCode: entityMetadata?.ObjectTypeCode || 0,
 						primaryIdAttribute: entityMetadata?.PrimaryIdAttribute || "",
-						loadedView: builder.loadedView,
+						// What Save overwrites: the view the query is, kept across edits (#278)
+						targetView: builder.viewIdentity?.view ?? null,
 						onSaveComplete: handleSaveViewComplete,
 						disabled: !fetchXml || !entityMetadata,
 					}}
