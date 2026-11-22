@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-22
+
+FetchXML Studio 1.6 adds the Advisories tab and Check with Dataverse, the scope chip, Close dialogs for opportunities, cases, quotes, orders and invoices, and a clearer query tree. It also fixes date filters across time zones, the generated C# QueryExpression and many record-action and Save view edge cases. It was tested through 3 betas; their sections below have the detail. Power Platform ToolBox 1.2.7 or later is still required.
+
+### ✨ Added
+
+- **Advisories tab and Check with Dataverse (#97, #170).** A tab lists what Dataverse will reject, might reject, and performance advice, each with a Microsoft Learn link and a location that selects the node. **Check with Dataverse** asks Dataverse to validate the query you're looking at.
+- **Scope chip (#227).** One chip heads the left pane and shows where Entities come from (publisher and solution, solution only, or all Entities, plus Advanced Find only). It's the same design as in Dataverse Request Studio and Command Bar Studio.
+- **Close dialogs for opportunity, case, quote, order and invoice (#149).** **Close** replaces Deactivate for these Entities. Each dialog names the environment and scope and says how to undo (#69). **Activate** reopens closed records.
+- **Query tree icons, colours and density (#229, #230, #228).** The selected node is clearly marked; every node type has its own tinted icon, and Attributes show their type. A **Density** menu (Medium, Small, Extra small) applies to the grid and the tree.
+- **README screenshots, a Quick start and an AI assistance note (#84).**
+
+### 🔧 Changed
+
+- **1.4.x is no longer supported** (ended 2026-11-07). 1.5.x gets critical and security fixes for 30 days, until 2026-12-22 (`SECURITY.md`).
+
+### 🔧 Fixed
+
+- **Picked dates filter on the day and time you picked (#207, #198).** Date Only, Time Zone Independent and User Local values are written as Dataverse expects, in your Dataverse time zone, and the picker says which time zone applies.
+- **The generated C# QueryExpression compiles and means what the query does (#178).** The cURL line also no longer trips bash.
+- **The local Excel export keeps each record's currency and shows dates as the grid does (#184).**
+- **Long operations wait out Dataverse throttling, and Retrieve All stops at 100,000 rows (#183).**
+- **Record actions:**
+  - privileges follow the selected Entity (#179);
+  - deleting more than 100 selected records needs the Bulk Delete privilege (#177);
+  - Delete is shown on Entities whose delete privilege isn't `prvDelete{LogicalName}` (#327);
+  - Run workflow lists the current Entity's workflows and runs background workflows in batches, never twice (#182, #264).
+- **Save View:**
+  - no duplicate views after a failed step, and no closing mid-save (#180);
+  - values are kept as written (#181);
+  - an apostrophe in a value no longer breaks validation (#176);
+  - closing the tool with unsaved Save view edits asks first (#264).
+- **A view opened from another tool loads like Load view (#197),** with its layout, execution by ID and overwrite.
+- **Smaller fixes:**
+  - copied rows can't paste as live spreadsheet formulas (#208);
+  - the Code tab no longer sends requests on every keystroke (#199);
+  - editor suggestions no longer pile up (#194);
+  - metadata that couldn't load says so, with Retry (#201);
+  - a render error no longer blanks the whole tool (#185);
+  - `>` in attribute values and XML comments are handled (#200);
+  - Edit columns keeps your reorder;
+  - Advisories "Go to node" works on the selected node.
+- **From the 1.5.1 hotfix (#345, #348):** nested link-entities, alias renames, self-joins and the README on the ToolBox details page.
+
+### 🏗️ Technical
+
+- **Relative asset URLs (#173):** the tool works in the PPTB VS Code extension too. This fixes 1.5's known issue.
+- **Faster startup (#187).**
+- **Testing and release process:**
+  - component, golden-snippet and app flow tests (#189, #301);
+  - Prettier with a CI format check (#205);
+  - every tag checked in PPTB first;
+  - dev-only advisories fixed (#84).
+
 ## [1.6.0-beta.3] - 2026-11-15
 
 ### 🔧 Fixed
