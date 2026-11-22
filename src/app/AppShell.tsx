@@ -6,7 +6,11 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { FluentProvider, webLightTheme, webDarkTheme } from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
-import { useSplitters } from "./hooks/useSplitters";
+import { useBuilderLayout } from "./hooks/useBuilderLayout";
+import { PaneSplitter } from "../shared/components/PaneSplitter";
+import { InspectorDrawer } from "./layout/InspectorDrawer";
+import { SelectionBar } from "./layout/SelectionBar";
+import { selectionLabel } from "./layout/selectionLabel";
 import { useResultsExport } from "./hooks/useResultsExport";
 import { useRootEntityMetadata } from "./hooks/useRootEntityMetadata";
 import { useRecordActionAvailability, useRecordActions } from "./hooks/useRecordActions";
@@ -54,6 +58,10 @@ import { treeSizeFor } from "../features/fetchxml/model/displaySettings";
 import { metadataCache } from "../features/fetchxml/state/cache";
 import { resetDataverseSessionCache } from "../features/fetchxml/api/sessionCache";
 import { nextConnectionScope, type ConnectionScope } from "../shared/hooks/connectionIdentity";
+
+/** The builder pane and the query tree, which the splitters control (aria-controls) */
+const BUILDER_PANE_ID = "fxs-builder-pane";
+const QUERY_TREE_ID = "fxs-query-tree";
 
 export function AppShell() {
 	const { theme, connectionKey, connectionName } = usePptbContext();
@@ -182,7 +190,13 @@ function AppContent({
 	}, [displaySettings.advancedFindOnly]);
 	const advancedFindOnly = useAdvancedFindOnly();
 
-	const { topHeight, leftPaneWidth, startHorizontalDrag, startVerticalDrag } = useSplitters();
+	// The builder pane's sizes, remembered, and where Properties live (#234)
+	const layout = useBuilderLayout();
+	const editPropertiesRef = useRef<HTMLButtonElement>(null);
+	const closeInspector = () => {
+		layout.setInspectorOpen(false);
+		editPropertiesRef.current?.focus();
+	};
 
 	// Check Dataverse API on mount. WhoAmI is memoized per connection, so this shares the startup
 	// request with the privilege checks (#71); the details are debug output only.
@@ -413,15 +427,24 @@ function AppContent({
 						},
 					}}
 				/>
-				<div className={styles.root} data-app-root>
-					{/* Left Pane */}
-					<div
+				<div className={styles.root}>
+					{/* The builder pane (#234): the tree, then Properties (or, when narrow, a selection bar
+					    and the inspector drawer) */}
+					<aside
+						id={BUILDER_PANE_ID}
+						aria-label="Query builder"
 						className={styles.leftPane}
-						data-left-pane
-						style={{ width: `${leftPaneWidth}px` }}
+						style={{ width: `${layout.builderWidth}px` }}
 					>
-						{/* Top: Tree View */}
-						<div className={styles.leftPaneTop} style={{ height: `${topHeight}%` }}>
+						<div
+							id={QUERY_TREE_ID}
+							className={styles.leftPaneTop}
+							style={
+								layout.propertiesHost === "docked"
+									? { height: `${layout.treeHeight}px` }
+									: { flex: "1 1 0" }
+							}
+						>
 							<PaneErrorBoundary
 								where="Query scope"
 								title="The query scope couldn't be shown"
@@ -473,56 +496,83 @@ function AppContent({
 								<div className={styles.placeholder}>Select an entity to begin</div>
 							)}
 						</div>
-						{/* Resize Handle */}
-						<div
-							className={styles.horizontalResizeHandle}
-							onMouseDown={startHorizontalDrag}
-							title="Drag to resize"
-						>
-							<span className={styles.horizontalGrip}>
-								<span>•</span>
-								<span>•</span>
-								<span>•</span>
-							</span>
-						</div>{" "}
-						{/* Bottom: Properties Panel */}
-						<div
-							className={styles.leftPaneBottom}
-							style={{ height: `${100 - topHeight}%` }}
-						>
-							<div className={styles.toolbar}>
-								<span style={{ fontWeight: 600 }}>Properties</span>
-							</div>
-							<div className={styles.propertiesContent}>
-								<PaneErrorBoundary
-									where="Properties panel"
-									title="The properties couldn't be shown"
-									resetKey={builder.selectedNodeId}
-								>
-									<PropertiesPanel
-										selectedNode={builder.selectedNode}
-										fetchQuery={builder.fetchQuery}
-										onNodeUpdate={builder.updateNode}
-									/>
-								</PaneErrorBoundary>
-							</div>
-						</div>
-					</div>
-					{/* Vertical Resize Handle */}
-					<div
-						className={styles.verticalResizeHandle}
-						onMouseDown={startVerticalDrag}
-						title="Drag to resize"
-					>
-						<span className={styles.verticalGrip}>
-							<span>•</span>
-							<span>•</span>
-							<span>•</span>
-						</span>
-					</div>{" "}
-					{/* Right Pane */}
-					<div className={styles.rightPane}>
+						{layout.propertiesHost === "docked" ? (
+							<>
+								<PaneSplitter
+									orientation="horizontal"
+									value={layout.treeHeight}
+									min={layout.treeHeightLimits.min}
+									max={layout.treeHeightLimits.max}
+									defaultValue={layout.treeHeightLimits.defaultValue}
+									onChange={layout.setTreeHeight}
+									onCommit={layout.commitTreeHeight}
+									label="Resize the query tree (size is remembered)"
+									description="Drag or use arrow keys; double-click resets."
+									controls={QUERY_TREE_ID}
+								/>
+								<div className={styles.leftPaneBottom}>
+									<div className={styles.toolbar}>
+										<span style={{ fontWeight: 600 }}>Properties</span>
+									</div>
+									<div className={styles.propertiesContent}>
+										<PaneErrorBoundary
+											where="Properties panel"
+											title="The properties couldn't be shown"
+											resetKey={builder.selectedNodeId}
+										>
+											<PropertiesPanel
+												selectedNode={builder.selectedNode}
+												fetchQuery={builder.fetchQuery}
+												onNodeUpdate={builder.updateNode}
+											/>
+										</PaneErrorBoundary>
+									</div>
+								</div>
+							</>
+						) : (
+							<SelectionBar
+								ref={editPropertiesRef}
+								label={selectionLabel(builder.selectedNode)}
+								hasSelection={!!builder.selectedNode}
+								onEdit={() => layout.setInspectorOpen(true)}
+							/>
+						)}
+					</aside>
+					<PaneSplitter
+						orientation="vertical"
+						value={layout.builderWidth}
+						min={layout.builderWidthLimits.min}
+						max={layout.builderWidthLimits.max}
+						defaultValue={layout.builderWidthLimits.defaultValue}
+						onChange={layout.setBuilderWidth}
+						onCommit={layout.commitBuilderWidth}
+						label="Resize the builder pane (size is remembered)"
+						description="Drag or use arrow keys; double-click resets."
+						controls={BUILDER_PANE_ID}
+					/>
+					<main aria-label="Query output" className={styles.rightPane}>
 						<PreviewTabs
+							bodyOverlay={
+								layout.propertiesHost === "drawer" ? (
+									<InspectorDrawer
+										open={layout.inspectorOpen}
+										title={selectionLabel(builder.selectedNode)}
+										onClose={closeInspector}
+									>
+										<PaneErrorBoundary
+											where="Properties panel"
+											title="The properties couldn't be shown"
+											resetKey={builder.selectedNodeId}
+										>
+											<PropertiesPanel
+												selectedNode={builder.selectedNode}
+												fetchQuery={builder.fetchQuery}
+												onNodeUpdate={builder.updateNode}
+											/>
+										</PaneErrorBoundary>
+									</InspectorDrawer>
+								) : null
+							}
 							xml={fetchXml}
 							layoutXml={layoutXml}
 							result={queryResult}
@@ -614,7 +664,7 @@ function AppContent({
 								setDisplaySettings({ ...displaySettings, gridDensity })
 							}
 						/>
-					</div>
+					</main>
 					{/* The record actions' dialogs: Delete, Bulk delete, Run workflow, Activate / Deactivate, Close */}
 					<RecordActionDialogs
 						recordActions={recordActions}
