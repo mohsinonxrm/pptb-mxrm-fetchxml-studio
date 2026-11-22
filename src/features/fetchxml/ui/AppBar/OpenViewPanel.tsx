@@ -38,6 +38,8 @@ const useStyles = makeStyles({
 	list: {
 		maxHeight: "min(360px, 50vh)",
 		overflowY: "auto",
+		// Long names wrap; nothing should scroll sideways
+		overflowX: "hidden",
 		// Fluent's Listbox draws its own popup chrome; here it's part of the surface
 		boxShadow: "none",
 		padding: 0,
