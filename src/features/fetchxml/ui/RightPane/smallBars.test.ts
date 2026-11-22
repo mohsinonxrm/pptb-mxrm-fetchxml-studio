@@ -4,12 +4,12 @@
  * doesn't fit moves into More; unavailable commands keep their reason. jsdom has no layout, so
  * widths come from stubOverflowWidths.
  */
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, click, render, stubOverflowWidths } from "../../../../shared/testing/ui";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
-import { CodePanel } from "./CodePanel";
+import { CodePanel, type CodeLanguage } from "./CodePanel";
 import { AdvisoriesPanel } from "./AdvisoriesPanel";
 import { EditColumnsPanel } from "./EditColumnsPanel";
 import { AddColumnsPanel } from "./AddColumnsPanel";
@@ -160,11 +160,17 @@ describe("the LayoutXML bar", () => {
 
 describe("the Code panel's bar", () => {
 	const tabs = () => tabList("Code languages");
-	const copy = () => control(toolbar("Code commands"), "Copy code to clipboard");
+	const copy = () =>
+		control(toolbar("Code commands"), "Copy") ?? control(toolbar("Code commands"), "Copy all");
+	// The parent keeps the language (PreviewTabs), as in the app
+	function Code() {
+		const [language, setLanguage] = useState<CodeLanguage | null>("csharp-fetchexpr");
+		return createElement(CodePanel, { fetchXml: XML, language, onLanguageChange: setLanguage });
+	}
 
 	it("never wraps the languages: the ones that don't fit move into More", async () => {
 		const layout = stubOverflowWidths({ container: 2000 });
-		await render(createElement(CodePanel, { fetchXml: XML }));
+		await render(createElement(Code));
 		expect(tab(tabs(), "C# FetchExpression")).toBeTruthy();
 		await layout.resize({ container: 3 * 80 + 40 + 10 });
 		const more = tabs()?.querySelector<HTMLButtonElement>('button[aria-label^="More tabs"]');
@@ -173,21 +179,21 @@ describe("the Code panel's bar", () => {
 		await click(more);
 		const webApi = [
 			...(menus()[0]?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
-		].find((i) => i.textContent?.trim() === "Web API");
+		].find((i) => i.textContent?.trim() === "pac CLI");
 		await click(webApi);
-		expect(tab(tabs(), "Web API")?.getAttribute("aria-selected")).toBe("true");
+		expect(tab(tabs(), "pac CLI")?.getAttribute("aria-selected")).toBe("true");
 	});
 
-	it("says why Copy is off: Power Automate's own buttons, or not connected", async () => {
+	it("Copy becomes Copy all on Power Automate, and says why it's off when not connected", async () => {
 		stubOverflowWidths({ container: 2000 });
-		await render(createElement(CodePanel, { fetchXml: XML }));
+		await render(createElement(Code));
 		expect(copy()?.getAttribute("aria-disabled")).toBeNull();
 		await click(tab(tabs(), "Power Automate"));
+		expect(copy()?.textContent?.trim()).toBe("Copy all");
+		expect(copy()?.getAttribute("aria-disabled")).toBeNull();
+		await click(tab(tabs(), "SQL (TDS)"));
 		expect(copy()?.getAttribute("aria-disabled")).toBe("true");
-		expect(description(copy())).toBe("Use the per-field Copy buttons below");
-		await click(tab(tabs(), "SQL"));
-		expect(copy()?.getAttribute("aria-disabled")).toBe("true");
-		expect(description(copy())).toBe("Connect to an environment to generate");
+		expect(description(copy())).toBe("Connect to an environment to generate SQL (TDS)");
 	});
 });
 

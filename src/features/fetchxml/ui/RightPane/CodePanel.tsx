@@ -1,24 +1,38 @@
 /**
- * Code Generation Panel — renders 7 code-format tabs from a FetchXML query.
+ * The Code tab (#233): the query as code in seven languages, on a row of language tabs (Fluent
+ * Overflow: what doesn't fit moves into More) with Copy pinned at its end.
  *
- * Sync formats (C# FetchExpression, JavaScript, pac CLI, Power Automate, Web API)
- * are computed immediately. Async formats (C# QueryExpression, SQL) call Dataverse
- * Web API functions via pptbClient and display a Spinner while loading.
+ * C# FetchExpression, Web API, Xrm.WebApi, Power Automate and pac CLI are generated in the tool. C#
+ * QueryExpression and SQL come from Dataverse (FetchXmlToQueryExpression, FetchXMLToSQL), requested
+ * only while their tab is selected, after typing pauses, and once per query and environment (#199).
+ * The language picked stays for the session (the parent keeps it); the tab opens on C#
+ * QueryExpression, or on C# FetchExpression while not connected.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import {
+	Button,
+	Caption1,
+	Link,
 	Spinner,
 	MessageBar,
+	MessageBarActions,
 	MessageBarBody,
 	MessageBarTitle,
-	Badge,
-	Tooltip,
+	Text,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
-import { Copy20Filled, Copy20Regular, Info20Regular, bundleIcon } from "@fluentui/react-icons";
+import {
+	ArrowClockwise20Regular,
+	Copy20Filled,
+	Copy20Regular,
+	CopySelect20Regular,
+	DocumentDismiss48Regular,
+	PlugDisconnected48Regular,
+	bundleIcon,
+} from "@fluentui/react-icons";
 import {
 	OverflowTabList,
 	OverflowToolbar,
@@ -29,7 +43,6 @@ import { usePptbContext } from "../../../../shared/hooks/usePptbContext";
 import {
 	generateFxsSyncCode,
 	generatePowerAutomateSpec,
-	FXS_SYNC_FORMAT_LABELS,
 	FXS_SYNC_FORMAT_LANG,
 	type FxsSyncFormat,
 } from "../../engine/fetchxmlCodeGenerators";
@@ -47,14 +60,32 @@ import {
 	type ConversionResult,
 	type ServerConversion,
 } from "./serverConversions";
+import {
+	CODE_LANGUAGES,
+	CODE_LANGUAGE_LABELS,
+	copyAllText,
+	copyDisabledReason,
+	needsConnection,
+	shownLanguage,
+	sourceNote,
+	type CodeLanguage,
+} from "./codePanelRules";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
+export type { CodeLanguage } from "./codePanelRules";
 
 const CopyIcon = bundleIcon(Copy20Filled, Copy20Regular);
-/** Copy and the toolbar's padding: the tabs take the rest of the row */
-const COPY_WIDTH = 104;
+/** Copy (or Copy all) and the toolbar's padding: the tabs take the rest of the row */
+const COPY_WIDTH = 120;
+
+/** Microsoft Learn on Dataverse's SQL: FetchXMLToSQL itself has no reference page */
+const SQL_LEARN_MORE =
+	"https://learn.microsoft.com/power-apps/developer/data-platform/dataverse-sql-query";
+
+const LANG: Record<CodeLanguage, string> = {
+	...FXS_SYNC_FORMAT_LANG,
+	"csharp-queryexpr": "csharp",
+	sql: "sql",
+};
 
 const useStyles = makeStyles({
 	root: {
@@ -66,101 +97,75 @@ const useStyles = makeStyles({
 	header: {
 		display: "flex",
 		alignItems: "center",
+		gap: tokens.spacingHorizontalS,
 		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 		paddingInline: tokens.spacingHorizontalS,
 		paddingBlock: tokens.spacingVerticalXXS,
 		flexShrink: 0,
-		backgroundColor: tokens.colorNeutralBackground2,
 	},
 	// The language tabs never wrap: the ones that don't fit move into More (#232)
 	tabs: { flex: "1 1 0", minWidth: 0 },
-	copy: { flex: `0 0 ${COPY_WIDTH}px` },
-	tabExtras: {
-		display: "inline-flex",
-		alignItems: "center",
-		gap: tokens.spacingHorizontalXS,
-		marginInlineStart: tokens.spacingHorizontalXS,
+	// Where the code comes from, when there's room: it gives way first
+	source: {
+		flex: "0 1 auto",
+		minWidth: 0,
+		maxWidth: "30%",
+		overflow: "hidden",
+		whiteSpace: "nowrap",
+		textOverflow: "ellipsis",
+		color: tokens.colorNeutralForeground3,
 	},
+	copy: { flex: `0 0 ${COPY_WIDTH}px` },
 	body: {
 		flex: 1,
 		overflow: "hidden",
 		position: "relative",
+		display: "flex",
+		flexDirection: "column",
 	},
+	editor: { flex: 1, minHeight: 0 },
 	paPane: {
-		height: "100%",
+		flex: 1,
 		overflowY: "auto",
-		padding: "16px",
+		padding: tokens.spacingHorizontalL,
 		boxSizing: "border-box",
 	},
-	centerBox: {
+	bar: { padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS} 0` },
+	empty: {
+		flex: 1,
 		display: "flex",
 		flexDirection: "column",
 		alignItems: "center",
 		justifyContent: "center",
-		height: "100%",
-		gap: "12px",
-		padding: "24px",
-	},
-	offlineText: {
-		color: tokens.colorNeutralForeground3,
-		fontSize: tokens.fontSizeBase200,
+		gap: tokens.spacingVerticalS,
+		padding: tokens.spacingHorizontalXXL,
 		textAlign: "center",
-		maxWidth: "320px",
+		color: tokens.colorNeutralForeground3,
 	},
-	messagePad: {
-		padding: "12px",
-	},
+	emptyTitle: { color: tokens.colorNeutralForeground1 },
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-type CodeFormat = FxsSyncFormat | "csharp-queryexpr" | "sql";
-
-const ALL_FORMATS: CodeFormat[] = [
-	"csharp-fetchexpr",
-	"csharp-queryexpr",
-	"sql",
-	"javascript",
-	"pac",
-	"powerautomate",
-	"webapi",
-];
-
-const FORMAT_LABELS: Record<CodeFormat, string> = {
-	...FXS_SYNC_FORMAT_LABELS,
-	"csharp-queryexpr": "C# QueryExpression",
-	sql: "SQL",
-};
-
-const FORMAT_LANG: Record<CodeFormat, string> = {
-	...FXS_SYNC_FORMAT_LANG,
-	"csharp-queryexpr": "csharp",
-	sql: "sql",
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface CodePanelProps {
 	fetchXml: string;
+	/** The language picked this session, or null for the default (the parent keeps it) */
+	language: CodeLanguage | null;
+	onLanguageChange: (language: CodeLanguage) => void;
 }
 
-export function CodePanel({ fetchXml }: CodePanelProps) {
+export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelProps) {
 	const styles = useStyles();
 	const { isDark } = useTheme();
 	const { connected, environmentUrl } = usePptbContext();
-
-	const [selectedFormat, setSelectedFormat] = useState<CodeFormat>("csharp-fetchexpr");
+	const selected = shownLanguage(language, connected);
+	const label = CODE_LANGUAGE_LABELS[selected];
 	const copy = useCopy();
 
-	// Dataverse conversions (C# QueryExpression, SQL): for the selected format only, after typing
-	// pauses, and once per query and environment (#199)
+	// Dataverse conversions (C# QueryExpression, SQL): for the selected language only, after typing
+	// pauses, and once per query and environment (#199). Try again asks for a failed one again.
 	const [conversions, setConversions] = useState<
 		Partial<Record<ServerConversion, ConversionResult>>
 	>({});
+	const [retries, setRetries] = useState(0);
 	const lastRequestedRef = useRef<Partial<Record<ServerConversion, string>>>({});
 	const conversionsRef = useRef(conversions);
 	useEffect(() => {
@@ -168,16 +173,14 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	}, [conversions]);
 	const debouncedXml = useDebouncedValue(fetchXml, CONVERSION_DELAY_MS);
 
-	// Power Automate: resolved entity set name from metadata
+	// Power Automate and Web API: the entity set name from metadata
 	const [paEntitySetName, setPaEntitySetName] = useState<string | undefined>(undefined);
-
 	useEffect(() => {
 		if (!fetchXml || !connected) {
 			setPaEntitySetName(undefined);
 			return;
 		}
 		let cancelled = false;
-		// Resolve the real OData entity set name for Power Automate
 		const entityNameMatch = fetchXml.match(/<entity\b[^>]*?\sname=["']([^"']+)["']/i);
 		if (entityNameMatch) {
 			loadEntityMetadata(entityNameMatch[1])
@@ -185,7 +188,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 					if (!cancelled) setPaEntitySetName(meta.EntitySetName);
 				})
 				.catch(() => {
-					/* silently fall back to heuristic */
+					/* the generators fall back to a guess */
 				});
 		}
 		return () => {
@@ -194,14 +197,14 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 	}, [fetchXml, connected]);
 
 	useEffect(() => {
-		const kind = serverConversionFor(selectedFormat);
+		const kind = serverConversionFor(selected);
 		// Wait until typing pauses: until then the debounced query is behind the one on screen
 		if (!kind || !debouncedXml || debouncedXml !== fetchXml || !connected) return;
 		const key = conversionKey(debouncedXml, environmentUrl);
 		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind]))
 			return;
 		lastRequestedRef.current[kind] = key;
-		// Retrying a failed conversion: show it loading, not the old error
+		// Trying a failed conversion again: show it loading, not the old error
 		if (conversionsRef.current[kind]?.key === key) {
 			conversionsRef.current = { ...conversionsRef.current, [kind]: undefined };
 			setConversions((prev) => ({ ...prev, [kind]: undefined }));
@@ -214,7 +217,7 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 					)
 				: fetchXmlToSQL(debouncedXml);
 		const settle = (result: ConversionResult) => {
-			// A newer request for this format replaces this one
+			// A newer request for this language replaces this one
 			if (lastRequestedRef.current[kind] !== key) return;
 			setConversions((prev) => ({ ...prev, [kind]: result }));
 		};
@@ -223,105 +226,171 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 			(err: unknown) =>
 				settle({ key, code: "", error: err instanceof Error ? err.message : String(err) }),
 		);
-	}, [debouncedXml, fetchXml, selectedFormat, connected, environmentUrl]);
+	}, [debouncedXml, fetchXml, selected, connected, environmentUrl, retries]);
 
-	// The selected format's conversion, if it's for the query on screen; until then it's loading
-	const conversionKind = serverConversionFor(selectedFormat);
+	// The selected language's conversion, if it's for the query on screen; until then it's loading
+	const conversionKind = serverConversionFor(selected);
 	const currentConversion = conversionKind ? conversions[conversionKind] : undefined;
 	const conversionIsCurrent = currentConversion?.key === conversionKey(fetchXml, environmentUrl);
-	const conversionLoading = !!conversionKind && !!fetchXml && connected && !conversionIsCurrent;
+	const offline = needsConnection(selected) && !connected;
+	const loading = !!conversionKind && !!fetchXml && connected && !conversionIsCurrent;
+	const error = conversionIsCurrent ? (currentConversion?.error ?? null) : null;
 
-	// Resolve the code to display for the current tab
-	const currentCode = useCallback((): string => {
-		switch (selectedFormat) {
-			case "csharp-queryexpr":
-			case "sql":
-				return conversionIsCurrent ? (currentConversion?.code ?? "") : "";
-			default:
-				return generateFxsSyncCode(
-					selectedFormat as FxsSyncFormat,
-					fetchXml,
-					selectedFormat === "webapi" ? paEntitySetName : undefined,
-					environmentUrl,
-				);
-		}
-		// paEntitySetName loads after the query changes: without it the Web API snippet kept the old
-		// (or no) entity set name (#65)
+	const paSpec =
+		selected === "powerautomate" ? generatePowerAutomateSpec(fetchXml, paEntitySetName) : null;
+
+	// What Copy copies: the code, or Power Automate's filled-in fields as one block
+	const copyText = useCallback((): string => {
+		if (paSpec) return copyAllText(paSpec);
+		if (conversionKind) return conversionIsCurrent ? (currentConversion?.code ?? "") : "";
+		return generateFxsSyncCode(
+			selected as FxsSyncFormat,
+			fetchXml,
+			// paEntitySetName loads after the query changes: without it the Web API snippet kept the old
+			// (or no) entity set name (#65)
+			selected === "webapi" ? paEntitySetName : undefined,
+			environmentUrl,
+		);
 	}, [
-		selectedFormat,
-		fetchXml,
+		paSpec,
+		conversionKind,
 		conversionIsCurrent,
 		currentConversion,
-		environmentUrl,
+		selected,
+		fetchXml,
 		paEntitySetName,
+		environmentUrl,
 	]);
-
-	const handleCopy = useCallback(() => {
-		const code = currentCode();
-		if (!code) return;
-		// "Copied C# QueryExpression" or "Couldn't copy to the clipboard" (#277)
-		void copy(code, FORMAT_LABELS[selectedFormat]);
-	}, [currentCode, copy, selectedFormat]);
-
-	const isAsyncLoading = conversionLoading;
-
-	const asyncError = conversionIsCurrent ? (currentConversion?.error ?? null) : null;
-
-	const showOffline =
-		(selectedFormat === "csharp-queryexpr" || selectedFormat === "sql") && !connected;
-
-	const code = currentCode();
-	const monacoTheme = isDark ? "vs-dark" : "light";
-
-	// Why Copy is off: Power Automate has its own per-field Copy buttons
-	const copyDisabledReason =
-		selectedFormat === "powerautomate"
-			? "Use the per-field Copy buttons below"
-			: showOffline
-				? "Connect to an environment to generate"
-				: isAsyncLoading
-					? "Generating…"
-					: !code
-						? "There's no code to copy yet"
-						: undefined;
-
-	// Each language, with Preview (SQL) and the not-connected hint after its name
-	const languageTabs: BarTab[] = ALL_FORMATS.map((fmt) => {
-		const preview = fmt === "sql";
-		const offline = (fmt === "csharp-queryexpr" || fmt === "sql") && !connected;
-		return {
-			value: fmt,
-			label: FORMAT_LABELS[fmt],
-			content:
-				preview || offline ? (
-					<span className={styles.tabExtras}>
-						{preview && (
-							<Tooltip
-								content="Undocumented API — may change without notice"
-								relationship="label"
-							>
-								<Badge size="small" appearance="tint" color="warning">
-									Preview
-								</Badge>
-							</Tooltip>
-						)}
-						{offline && (
-							<Tooltip
-								content="Connect to an environment to generate"
-								relationship="label"
-							>
-								<Info20Regular style={{ opacity: 0.5, width: 14, height: 14 }} />
-							</Tooltip>
-						)}
-					</span>
-				) : undefined,
-		};
+	const text = copyText();
+	const copyReason = copyDisabledReason(selected, {
+		connected,
+		loading,
+		failed: !!error,
+		text,
 	});
-	const monacoLang = FORMAT_LANG[selectedFormat];
+	// "Copied C# QueryExpression", "Copied all fields" or "Couldn't copy to the clipboard" (#277)
+	const handleCopy = () => {
+		if (text) void copy(text, paSpec ? "all fields" : label);
+	};
+
+	// Text only: no badges or icons with Tooltips inside the tabs, which keyboard users can't reach
+	const languageTabs: BarTab[] = CODE_LANGUAGES.map((lang) => ({
+		value: lang,
+		label: CODE_LANGUAGE_LABELS[lang],
+	}));
+	const source = sourceNote(selected);
+
+	let body;
+	if (offline) {
+		body = (
+			<div className={styles.empty}>
+				<PlugDisconnected48Regular />
+				<Text weight="semibold" className={styles.emptyTitle}>
+					Not connected
+				</Text>
+				<Text>Connect to a Dataverse environment to generate {label}.</Text>
+			</div>
+		);
+	} else if (loading) {
+		body = (
+			<div className={styles.empty}>
+				<Spinner size="medium" label="Generating…" />
+			</div>
+		);
+	} else if (error) {
+		body = (
+			<>
+				<div className={styles.bar}>
+					<MessageBar intent="error" layout="multiline">
+						<MessageBarBody>
+							<MessageBarTitle>Couldn&apos;t generate {label}</MessageBarTitle>
+							{error}
+						</MessageBarBody>
+						<MessageBarActions>
+							<Button
+								size="small"
+								icon={<ArrowClockwise20Regular />}
+								onClick={() => setRetries((n) => n + 1)}
+							>
+								Try again
+							</Button>
+							<Button
+								size="small"
+								icon={<CopySelect20Regular />}
+								onClick={() => void copy(error, "the error details")}
+							>
+								Copy details
+							</Button>
+						</MessageBarActions>
+					</MessageBar>
+				</div>
+				<div className={styles.empty}>
+					<DocumentDismiss48Regular />
+					<Text weight="semibold" className={styles.emptyTitle}>
+						No code to show
+					</Text>
+					<Text>Fix the problem above, then try again.</Text>
+				</div>
+			</>
+		);
+	} else if (paSpec) {
+		body = (
+			<div className={styles.paPane}>
+				<PowerAutomatePane spec={paSpec} />
+			</div>
+		);
+	} else {
+		body = (
+			<>
+				{selected === "sql" && (
+					<div className={styles.bar}>
+						<MessageBar intent="info">
+							<MessageBarBody>
+								<MessageBarTitle>SQL is a preview</MessageBarTitle>
+								It comes from FetchXMLToSQL, which isn&apos;t documented and can
+								change.{" "}
+								<Link href={SQL_LEARN_MORE} target="_blank" inline>
+									Learn more
+								</Link>
+							</MessageBarBody>
+						</MessageBar>
+					</div>
+				)}
+				{language === null && !connected && (
+					<div className={styles.bar}>
+						<MessageBar intent="info">
+							<MessageBarBody>
+								Connect to an environment to generate QueryExpression.
+							</MessageBarBody>
+						</MessageBar>
+					</div>
+				)}
+				<div className={styles.editor}>
+					<Editor
+						height="100%"
+						language={LANG[selected]}
+						value={text}
+						theme={isDark ? "vs-dark" : "light"}
+						options={{
+							readOnly: true,
+							minimap: { enabled: false },
+							scrollBeyondLastLine: false,
+							wordWrap: selected === "webapi" ? "on" : "off",
+							fontSize: 13,
+							lineNumbers: "on",
+							renderLineHighlight: "none",
+							folding: true,
+							automaticLayout: true,
+						}}
+					/>
+				</div>
+			</>
+		);
+	}
 
 	return (
 		<div className={styles.root}>
-			{/* Header: the language tabs, then Copy (#232) */}
+			{/* The language tabs, where the code comes from, then Copy (#232, #233) */}
 			<div className={styles.header}>
 				<div className={styles.tabs}>
 					<OverflowTabList
@@ -329,10 +398,15 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 						size="small"
 						appearance="subtle"
 						tabs={languageTabs}
-						selectedValue={selectedFormat}
-						onTabSelect={(value) => setSelectedFormat(value as CodeFormat)}
+						selectedValue={selected}
+						onTabSelect={(value) => onLanguageChange(value as CodeLanguage)}
 					/>
 				</div>
+				{source && (
+					<Caption1 className={styles.source} title={source}>
+						{source}
+					</Caption1>
+				)}
 				<div className={styles.copy}>
 					<OverflowToolbar
 						ariaLabel="Code commands"
@@ -341,89 +415,21 @@ export function CodePanel({ fetchXml }: CodePanelProps) {
 						commands={[
 							{
 								id: "copy",
-								label: "Copy",
-								ariaLabel: "Copy code to clipboard",
+								label: paSpec ? "Copy all" : "Copy",
 								icon: CopyIcon,
 								kind: "button",
 								pinned: true,
-								hint: "Copy to clipboard",
-								disabledReason: copyDisabledReason,
+								hint: paSpec
+									? "Copy every filled-in field as one block"
+									: `Copy the ${label} code`,
+								disabledReason: copyReason,
 								onClick: handleCopy,
 							},
 						]}
 					/>
 				</div>
 			</div>
-
-			{/* Body */}
-			<div className={styles.body}>
-				{/* Spinner for async tabs */}
-				{isAsyncLoading && (
-					<div className={styles.centerBox}>
-						<Spinner size="medium" label="Generating…" />
-					</div>
-				)}
-
-				{/* Error state for async tabs */}
-				{!isAsyncLoading && asyncError && (
-					<div className={styles.messagePad}>
-						<MessageBar intent="error">
-							<MessageBarBody>
-								<MessageBarTitle>Generation failed</MessageBarTitle>
-								{asyncError}
-							</MessageBarBody>
-						</MessageBar>
-					</div>
-				)}
-
-				{/* Offline state for async tabs */}
-				{!isAsyncLoading && showOffline && (
-					<div className={styles.centerBox}>
-						<Info20Regular style={{ opacity: 0.4, width: 32, height: 32 }} />
-						<p className={styles.offlineText}>
-							Connect to a Dataverse environment to generate{" "}
-							{selectedFormat === "csharp-queryexpr" ? "C# QueryExpression" : "SQL"}{" "}
-							code.
-						</p>
-					</div>
-				)}
-
-				{/* Power Automate pane — field-by-field form */}
-				{!isAsyncLoading &&
-					!asyncError &&
-					!showOffline &&
-					selectedFormat === "powerautomate" && (
-						<div className={styles.paPane}>
-							<PowerAutomatePane
-								spec={generatePowerAutomateSpec(fetchXml, paEntitySetName)}
-							/>
-						</div>
-					)}
-
-				{/* Monaco editor for all other formats */}
-				{!isAsyncLoading &&
-					!asyncError &&
-					!showOffline &&
-					selectedFormat !== "powerautomate" && (
-						<Editor
-							height="100%"
-							language={monacoLang}
-							value={code}
-							theme={monacoTheme}
-							options={{
-								readOnly: true,
-								minimap: { enabled: false },
-								scrollBeyondLastLine: false,
-								wordWrap: selectedFormat === "webapi" ? "on" : "off",
-								fontSize: 13,
-								lineNumbers: "on",
-								renderLineHighlight: "none",
-								folding: true,
-								automaticLayout: true,
-							}}
-						/>
-					)}
-			</div>
+			<div className={styles.body}>{body}</div>
 		</div>
 	);
 }

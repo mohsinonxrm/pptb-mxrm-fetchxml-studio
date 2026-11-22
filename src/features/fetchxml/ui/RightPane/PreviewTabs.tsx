@@ -5,7 +5,7 @@
 import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { makeStyles, ProgressBar, tokens } from "@fluentui/react-components";
 import { FetchXmlEditor } from "./FetchXmlEditor";
-import { CodePanel } from "./CodePanel";
+import { CodePanel, type CodeLanguage } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import {
 	ResultsGrid,
@@ -390,6 +390,8 @@ export function PreviewTabs({
 	}, [isEditorModeActive, editorText, fetchQuery, xml]);
 	// The metadata rules' metadata loads from the tab's first open (#170)
 	const [advisoriesOpened, setAdvisoriesOpened] = useState(false);
+	// The Code tab's language: kept while you switch tabs, for this session only (#233, decision 2)
+	const [codeLanguage, setCodeLanguage] = useState<CodeLanguage | null>(null);
 	if (selectedTab === "advisories" && !advisoriesOpened) setAdvisoriesOpened(true);
 	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch, advisoriesOpened);
 	const dataverseCheck = useDataverseCheck();
@@ -539,7 +541,11 @@ export function PreviewTabs({
 								title="The code couldn't be generated"
 								resetKey={xml}
 							>
-								<CodePanel fetchXml={xml} />
+								<CodePanel
+									fetchXml={xml}
+									language={codeLanguage}
+									onLanguageChange={setCodeLanguage}
+								/>
 							</PaneErrorBoundary>
 						</div>
 					)}

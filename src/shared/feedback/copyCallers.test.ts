@@ -122,23 +122,39 @@ describe("copy buttons", () => {
 				},
 			}),
 		);
-		const copyButtons = [...document.querySelectorAll("button")].filter(
-			(b) => b.textContent?.trim() === "Copy",
-		);
-		await click(copyButtons[0]);
+		await click(document.querySelector('[aria-label="Copy Table name"]'));
 		expect(copied).toEqual(["Accounts"]);
 		expect(toasts()).toEqual(["Copied Table name."]);
-		expect(copyButtons[0].textContent?.trim()).toBe("Copy");
+		// An empty field has nothing to copy, and says so
+		const empty = document.querySelector<HTMLButtonElement>(
+			'[aria-label="Copy Filter rows: it\x27s empty"]',
+		);
+		expect(empty?.getAttribute("aria-disabled")).toBe("true");
+		await click(empty);
+		expect(copied).toHaveLength(1);
+	});
 
+	it("Power Automate: Copy all, in the Code tab's row", async () => {
+		await render(
+			createElement(CodePanel, {
+				fetchXml: "<fetch><entity name='account'><attribute name='name'/></entity></fetch>",
+				language: "powerautomate",
+				onLanguageChange: () => {},
+			}),
+		);
+		await flush(5);
 		await click(button("Copy all"));
-		expect(copied).toHaveLength(2);
-		expect(toasts()).toEqual(["Copied Table name.", "Copied all fields."]);
+		expect(copied).toHaveLength(1);
+		expect(copied[0]).toContain("<fetch");
+		expect(toasts()).toEqual(["Copied all fields."]);
 	});
 
 	it("Code: names the language, and the button still reads Copy", async () => {
 		await render(
 			createElement(CodePanel, {
 				fetchXml: "<fetch><entity name='account'><attribute name='name'/></entity></fetch>",
+				language: "csharp-fetchexpr",
+				onLanguageChange: () => {},
 			}),
 		);
 		await flush(5);
