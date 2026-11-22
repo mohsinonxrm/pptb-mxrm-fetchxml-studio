@@ -4,7 +4,7 @@
  * waits for an entity, loads the views each time it opens, asks before it discards unsaved changes,
  * and works from More once it has overflowed. The view lookups are mocked.
  */
-import { createElement } from "react";
+import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	cleanup,
@@ -16,6 +16,7 @@ import {
 	typeInto,
 } from "../../../../shared/testing/ui";
 import { AppBar, type AppBarProps } from "./AppBar";
+import { OverflowToolbar } from "../../../../shared/components/commandBar";
 import { openViewDisabledReason, openViewGroups } from "./appBarRules";
 import type { SavedView } from "../../api/pptbClient";
 
@@ -320,5 +321,56 @@ describe("Open view on the app bar", () => {
 		await flush(5);
 		expect(surface()).toBeTruthy();
 		expect(groups()).toHaveLength(2);
+	});
+});
+
+describe("Open view after a failed load", () => {
+	it("doesn't say it discarded anything when the view couldn't be opened", async () => {
+		const onOpen = vi.fn(() => false);
+		await renderBar({
+			viewName: "Mine",
+			unsaved: true,
+			openView: { ...barProps().openView, onOpen },
+		});
+		await openPopover();
+		await click(option("Active Accounts"));
+		await flush(5);
+		await click(alertButton("Discard changes"));
+		await flush(5);
+		expect(onOpen).toHaveBeenCalled();
+		expect(toasts().some((t) => t.includes("Discarded"))).toBe(false);
+	});
+});
+
+describe("a popover command that becomes unavailable while open", () => {
+	it("tells its owner it closed, so it doesn't reopen by itself", async () => {
+		const onPopoverOpenChange = vi.fn();
+		let setReason: (reason: string | undefined) => void = () => {};
+		function Bar() {
+			const [reason, set] = useState<string | undefined>(undefined);
+			setReason = set;
+			return createElement(OverflowToolbar, {
+				ariaLabel: "Test",
+				commands: [
+					{
+						id: "pick",
+						label: "Pick",
+						kind: "popover",
+						popover: createElement("p", null, "Inside"),
+						popoverOpen: true,
+						onPopoverOpenChange,
+						disabledReason: reason,
+					},
+				],
+			});
+		}
+		await render(createElement(Bar));
+		await flush(5);
+		expect(surface()?.textContent).toBe("Inside");
+		expect(onPopoverOpenChange).not.toHaveBeenCalled();
+		await act(async () => setReason("Choose an entity first"));
+		await flush(5);
+		expect(onPopoverOpenChange).toHaveBeenCalledWith(false);
+		expect(surface()).toBeNull();
 	});
 });

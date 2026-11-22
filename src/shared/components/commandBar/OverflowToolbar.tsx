@@ -262,6 +262,11 @@ const PopoverControl = forwardRef<
 	const moreRef = useContext(MoreAnchorContext);
 	const off = isOff(c);
 	const tooltip = barTooltip(c);
+	// Becoming unavailable closes it; say so, or it would reopen by itself once available again
+	const { popoverOpen, onPopoverOpenChange } = c;
+	useEffect(() => {
+		if (off && popoverOpen) onPopoverOpenChange?.(false);
+	}, [off, popoverOpen, onPopoverOpenChange]);
 	const button = (
 		<MenuButton
 			ref={ref}

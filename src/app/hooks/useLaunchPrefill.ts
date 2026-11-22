@@ -48,8 +48,8 @@ export interface LaunchPrefillInputs {
 }
 
 export interface LaunchPrefill {
-	/** Loads a view into the tree as Load view does (#93, #142, #197) */
-	applyLoadedView: (viewInfo: LoadedViewInfo) => void;
+	/** Loads a view into the tree as Open view does (#93, #142, #197); false when its FetchXML can't be loaded */
+	applyLoadedView: (viewInfo: LoadedViewInfo) => boolean;
 }
 
 export function useLaunchPrefill({
@@ -157,7 +157,10 @@ export function useLaunchPrefill({
 	 * (#93, #142, #197). `source` "launch": another tool asked for it, so a view that doesn't parse is
 	 * a launch failure (the error bar above the empty tree, #277 decision 2), not a toast.
 	 */
-	const applyLoadedView = (viewInfo: LoadedViewInfo, source: "picker" | "launch" = "picker") => {
+	const applyLoadedView = (
+		viewInfo: LoadedViewInfo,
+		source: "picker" | "launch" = "picker",
+	): boolean => {
 		// Load the view's FetchXML into the tree while preserving view info
 		// Pass layoutxml for column configuration if available
 		const result = builder.loadView(
@@ -193,6 +196,7 @@ export function useLaunchPrefill({
 				result.fetchNode?.entity.id,
 			);
 		}
+		return notice?.type !== "error";
 	};
 	// The launch prefill runs once, after the first render (#197)
 	const applyLoadedViewRef = useRef(applyLoadedView);

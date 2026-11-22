@@ -104,8 +104,11 @@ export interface OpenViewOptions {
 	entitySetName?: string;
 	/** The view the query is, checked in the list */
 	currentViewId?: string;
-	/** Load the view: its FetchXML, layout and identity (AppShell's applyLoadedView) */
-	onOpen: (viewInfo: LoadedViewInfo) => void;
+	/**
+	 * Load the view: its FetchXML, layout and identity, and drop the editor's text (AppShell). False
+	 * when its FetchXML couldn't be loaded and the query stays as it was.
+	 */
+	onOpen: (viewInfo: LoadedViewInfo) => boolean | void;
 }
 
 export function AppBar({
@@ -130,6 +133,10 @@ export function AppBar({
 		{ intent: "new" } | { intent: "open"; view: LoadedViewInfo } | null
 	>(null);
 	const afterSave = useRef<(() => void) | null>(null);
+	// What the dialog last asked about: its wording stays while it closes
+	const lastConfirm = useRef<NonNullable<typeof confirm>>({ intent: "new" });
+	if (confirm) lastConfirm.current = confirm;
+	const asked = lastConfirm.current;
 	const [openViewOpen, setOpenViewOpen] = useState(false);
 	const save = useSaveViewCommand({
 		...saveView,
@@ -156,9 +163,11 @@ export function AppBar({
 		if (isUnsaved()) setConfirm({ intent: "open", view: viewInfo });
 		else openView.onOpen(viewInfo);
 	};
-	const proceed = (choice: NonNullable<typeof confirm>) => {
-		if (choice.intent === "open") openView.onOpen(choice.view);
-		else onNewQuery();
+	/** Continue with New or Open view; false when the view couldn't be opened (nothing was replaced) */
+	const proceed = (choice: NonNullable<typeof confirm>): boolean => {
+		if (choice.intent === "open") return openView.onOpen(choice.view) !== false;
+		onNewQuery();
+		return true;
 	};
 	const openViewReason = openViewDisabledReason(
 		openView.entityLogicalName,
@@ -269,9 +278,9 @@ export function AppBar({
 			{save.dialog}
 			<DiscardChangesDialog
 				open={confirm !== null}
-				intent={confirm?.intent ?? "new"}
+				intent={asked.intent}
 				viewName={viewName}
-				targetViewName={confirm?.intent === "open" ? confirm.view.name : undefined}
+				targetViewName={asked.intent === "open" ? asked.view.name : undefined}
 				onSave={() => {
 					if (!confirm) return;
 					// Save can't run yet (no entity metadata, say): say why, and keep the choice open
@@ -283,14 +292,14 @@ export function AppBar({
 						return;
 					}
 					setConfirm(null);
-					afterSave.current = () => proceed(confirm);
+					afterSave.current = () => void proceed(confirm);
 					save.command.onClick?.();
 				}}
 				onDiscard={() => {
 					if (!confirm) return;
 					setConfirm(null);
-					proceed(confirm);
-					notify.info(discardedToast(viewName));
+					// A view that couldn't be loaded replaced nothing: its own error toast says so
+					if (proceed(confirm)) notify.info(discardedToast(viewName));
 				}}
 				onCancel={() => setConfirm(null)}
 			/>

@@ -5,7 +5,15 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderApp } from "../shared/testing/app";
-import { button, cleanup, click, flush, removeHost } from "../shared/testing/ui";
+import {
+	button,
+	cleanup,
+	click,
+	dialogInput,
+	flush,
+	removeHost,
+	typeInto,
+} from "../shared/testing/ui";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -24,10 +32,13 @@ vi.mock("@monaco-editor/react", async () => {
 	};
 });
 
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 afterEach(() => {
 	cleanup();
 	removeHost();
 	vi.restoreAllMocks();
+	if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+	else delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
 const FLOW_TIMEOUT = 120000;
@@ -100,6 +111,105 @@ describe("Open view", () => {
 			// Opened, unchanged: no badge
 			expect(appBar()?.parentElement?.textContent).not.toContain("Unsaved changes");
 			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+});
+
+async function pasteIntoEditor(xml: string) {
+	Object.defineProperty(navigator, "clipboard", {
+		configurable: true,
+		value: { readText: async () => xml },
+	});
+	const toggle = document.querySelector<HTMLInputElement>('input[role="switch"]');
+	if (!toggle?.checked) await click(toggle);
+	await click(button("Paste", document));
+}
+const editorText = () =>
+	document.querySelector<HTMLTextAreaElement>("textarea[data-monaco]")?.value;
+const editorMode = () =>
+	!!document.querySelector<HTMLInputElement>('input[role="switch"]')?.checked;
+async function openViewAndPick(app: Awaited<ReturnType<typeof renderApp>>, name: string) {
+	await app.waitFor(() => {
+		const open = button("Open view", appBar() ?? undefined);
+		return !!open && open.getAttribute("aria-disabled") !== "true";
+	});
+	await click(button("Open view", appBar() ?? undefined));
+	await app.waitFor(() => !!option(name));
+	await click(option(name));
+	await app.waitFor(() => !!document.querySelector('[role="alertdialog"]'));
+}
+const dialogButton = (label: string) =>
+	[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+		(b) => b.textContent?.trim() === label,
+	);
+const editedQuery = `<fetch><entity name='account'><attribute name='name'/><attribute name='statecode'/></entity></fetch>`;
+
+describe("Open view with unsaved changes", () => {
+	it(
+		"Discard changes drops the editor's text too, and leaves editor mode",
+		async () => {
+			const app = await renderApp({
+				views: [activeAccounts],
+				launch: { fetchXml: accountQuery },
+			});
+			await app.waitFor(() => document.querySelectorAll('[role="treeitem"]').length > 0);
+			await pasteIntoEditor(editedQuery);
+			expect(editorMode()).toBe(true);
+			await openViewAndPick(app, "Active accounts");
+			await click(alertButton("Discard changes"));
+			await app.waitFor(() => identity() === "Active accounts", 10000);
+			await flush(10);
+			expect(editorMode()).toBe(false);
+			expect(editorText()).toContain('<order attribute="name"');
+			expect(editorText()).not.toContain("statecode");
+			expect(appBar()?.parentElement?.textContent).not.toContain("Unsaved changes");
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"Save and open saves first, then opens the view",
+		async () => {
+			const app = await renderApp({
+				views: [activeAccounts],
+				launch: { fetchXml: accountQuery },
+			});
+			await app.waitFor(() => document.querySelectorAll('[role="treeitem"]').length > 0);
+			await openViewAndPick(app, "Active accounts");
+			await click(alertButton("Save and open"));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"] input'));
+			// Not opened yet: the save comes first
+			expect(identity()).not.toBe("Active accounts");
+			await typeInto(dialogInput(), "Saved before opening");
+			await click(dialogButton("Save"));
+			await app.waitFor(() => identity() === "Active accounts", 10000);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"a Save and open whose save was cancelled doesn't open the view after a later save",
+		async () => {
+			const app = await renderApp({
+				views: [activeAccounts],
+				launch: { fetchXml: accountQuery },
+			});
+			await app.waitFor(() => document.querySelectorAll('[role="treeitem"]').length > 0);
+			await openViewAndPick(app, "Active accounts");
+			await click(alertButton("Save and open"));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"] input'));
+			await click(dialogButton("Cancel"));
+			await app.waitFor(() => !document.querySelector('[role="dialog"]'));
+
+			// Later, an ordinary save
+			await click(button("Save", appBar() ?? undefined));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"] input'));
+			await typeInto(dialogInput(), "Just a save");
+			await click(dialogButton("Save"));
+			await app.waitFor(() => identity() === "Just a save", 10000);
+			await flush(10);
+			expect(identity()).toBe("Just a save");
 		},
 		FLOW_TIMEOUT,
 	);

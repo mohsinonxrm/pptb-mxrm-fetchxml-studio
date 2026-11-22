@@ -21,13 +21,17 @@ export function useEntityViews(entityLogicalName: string | undefined): EntityVie
 	const [systemViews, setSystemViews] = useState<SavedView[]>([]);
 	const [personalViews, setPersonalViews] = useState<SavedView[]>([]);
 	const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
-	const [loading, setLoading] = useState(false);
+	// Loading from the first render, so the panel never shows "no views" before the request starts
+	const [loading, setLoading] = useState(!!entityLogicalName);
 	const [error, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		if (!entityLogicalName) return;
 		let current = true;
+		// Never show (or let anyone pick) another entity's views while these load
+		setSystemViews([]);
+		setPersonalViews([]);
 		setLoading(true);
 		setError(null);
 		void Promise.all([getAllViews(entityLogicalName), whoAmI()])

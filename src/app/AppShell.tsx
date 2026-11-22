@@ -404,7 +404,13 @@ function AppContent({
 						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
 						entitySetName: entityMetadata?.EntitySetName,
 						currentViewId: viewIdentity?.view?.id,
-						onOpen: applyLoadedView,
+						onOpen: (viewInfo) => {
+							const loaded = applyLoadedView(viewInfo);
+							// The editor follows the view: its text was the previous query's, saved or
+							// discarded by now. A view that couldn't be loaded leaves everything as it was.
+							if (loaded) editorSession.discardEditor();
+							return loaded;
+						},
 					}}
 				/>
 				<div className={styles.root} data-app-root>
