@@ -221,8 +221,12 @@ function nodeNoun(node: SelectedNode): string {
 	}
 }
 
+/** Whether every update already holds: the fetch node's values are in its options (the reducer merges there) */
 function isNoOpUpdate(node: NonNullable<SelectedNode>, updates: Record<string, unknown>): boolean {
-	const current = node as unknown as Record<string, unknown>;
+	const current = (node.type === "fetch" ? node.options : node) as unknown as Record<
+		string,
+		unknown
+	>;
 	return Object.keys(updates).every((key) => Object.is(current[key], updates[key]));
 }
 

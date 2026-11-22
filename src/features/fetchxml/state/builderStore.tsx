@@ -182,19 +182,26 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		};
 	}, []);
 	const { undo, redo, undoIfLast, transaction, ...builderActions } = actions;
+	// Memoised on what it reports, so a history change that changes none of it (a transaction that
+	// recorded nothing) doesn't re-render every builder consumer
+	const undoable = canUndo(history);
+	const redoable = canRedo(history);
+	const nextUndo = undoLabel(history);
+	const nextRedo = redoLabel(history);
+	const lastId = lastEntryId(history);
 	const historyApi = useMemo<BuilderHistoryApi>(
 		() => ({
-			canUndo: canUndo(history),
-			canRedo: canRedo(history),
-			undoLabel: undoLabel(history),
-			redoLabel: redoLabel(history),
-			lastEntryId: lastEntryId(history),
+			canUndo: undoable,
+			canRedo: redoable,
+			undoLabel: nextUndo,
+			redoLabel: nextRedo,
+			lastEntryId: lastId,
 			undo,
 			redo,
 			undoIfLast,
 			transaction,
 		}),
-		[history, undo, redo, undoIfLast, transaction],
+		[undoable, redoable, nextUndo, nextRedo, lastId, undo, redo, undoIfLast, transaction],
 	);
 	const contextValue = useMemo<BuilderContextValue>(
 		() => ({ ...state, ...builderActions, history: historyApi }),

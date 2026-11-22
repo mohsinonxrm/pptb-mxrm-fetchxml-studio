@@ -185,6 +185,23 @@ describe("typing", () => {
 		expect(h.past).toHaveLength(4);
 	});
 
+	it("clearing a query option is a step; setting the value it has isn't (options live in fetch.options)", () => {
+		let h = loaded(
+			"<fetch distinct='true' top='5'><entity name='account'><attribute name='name'/></entity></fetch>",
+		);
+		const fetchId = q(h).id;
+		h = apply(h, { type: "UPDATE_NODE", nodeId: fetchId, updates: { top: 5 } });
+		expect(canUndo(h)).toBe(false);
+		h = apply(h, { type: "ADD_FILTER", parentId: q(h).entity.id });
+		h = undo(h);
+		h = apply(h, { type: "UPDATE_NODE", nodeId: fetchId, updates: { distinct: undefined } });
+		expect(undoLabel(h)).toBe("Edit query options");
+		// A real edit clears redo, so redo can't bring the option back
+		expect(canRedo(h)).toBe(false);
+		h = undo(h);
+		expect(q(h).options.distinct).toBe(true);
+	});
+
 	it("an edit that changes nothing isn't a step", () => {
 		let h = loaded();
 		h = typing(h, "a", clock + 5000);

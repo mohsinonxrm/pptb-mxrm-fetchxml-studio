@@ -77,6 +77,14 @@ describe("useBuilder().history", () => {
 		expect(builder.history.canUndo).toBe(false);
 	});
 
+	it("stays the same object after a transaction that changed nothing", async () => {
+		await show();
+		await run(() => builder.loadFetchXml(XML, { baseline: true }));
+		const before = builder;
+		await run(() => builder.history.transaction("Nothing", () => {}));
+		expect(builder.history).toBe(before.history);
+	});
+
 	it("closes a transaction whose function throws", async () => {
 		await show();
 		await run(() => builder.loadFetchXml(XML, { baseline: true }));
