@@ -72,6 +72,8 @@ const useStyles = makeStyles({
 		flex: 1,
 		overflow: "hidden",
 		backgroundColor: tokens.colorNeutralBackground1,
+		// The inspector drawer (#234) opens over the tab's content, inside this area
+		position: "relative",
 	},
 	// The Results command bar, divided from the grid by a thin line
 	toolbarCard: {
@@ -250,6 +252,8 @@ interface PreviewTabsProps {
 	onSelectNode?: (nodeId: NodeId) => void;
 	/** Add an order on an attribute: the Advisories tab's quick fix (#97) */
 	onAddOrder?: (parentId: NodeId, attribute: string) => void;
+	/** Shown over the tabs' content, under the tab row: the inspector drawer (#234) */
+	bodyOverlay?: ReactNode;
 }
 
 export function PreviewTabs({
@@ -327,6 +331,7 @@ export function PreviewTabs({
 	onAddOrder,
 	session,
 	onParseToTree,
+	bodyOverlay,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const advancedFindOnly = useAdvancedFindOnly();
@@ -726,6 +731,7 @@ export function PreviewTabs({
 							</div>
 						</PaneErrorBoundary>
 					)}
+					{bodyOverlay}
 				</div>
 			</div>
 		</>

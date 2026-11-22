@@ -1,5 +1,6 @@
 /**
- * AppShell's styles (#301): the panes, splitters and toolbars around the builder and the results.
+ * AppShell's styles (#301): the panes and toolbars around the builder and the results. The splitters
+ * are PaneSplitter (#234).
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
 
@@ -33,12 +34,12 @@ export const useStyles = makeStyles({
 		overflow: "hidden",
 		position: "relative",
 	},
+	// The builder pane: its width comes from useBuilderLayout, within the layout rules' limits (#234)
 	leftPane: {
 		display: "flex",
 		flexDirection: "column",
 		overflow: "hidden",
-		minWidth: "300px",
-		maxWidth: "800px",
+		flexShrink: 0,
 		height: "100%",
 	},
 	leftPaneTop: {
@@ -47,58 +48,9 @@ export const useStyles = makeStyles({
 		overflow: "hidden",
 		minHeight: 0, // Important for flex child with overflow
 	},
-	horizontalResizeHandle: {
-		height: "6px",
-		cursor: "ns-resize",
-		backgroundColor: tokens.colorNeutralBackground3,
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		position: "relative",
-		flexShrink: 0,
-		":hover": {
-			backgroundColor: tokens.colorNeutralBackground3Hover,
-		},
-		":active": {
-			backgroundColor: tokens.colorBrandBackgroundPressed,
-		},
-	},
-	horizontalGrip: {
-		fontSize: "10px",
-		color: tokens.colorNeutralForeground3,
-		userSelect: "none",
-		pointerEvents: "none",
-		display: "flex",
-		gap: "3px",
-		alignItems: "center",
-	},
-	verticalResizeHandle: {
-		width: "6px",
-		cursor: "ew-resize",
-		backgroundColor: tokens.colorNeutralBackground3,
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "center",
-		position: "relative",
-		flexShrink: 0,
-		":hover": {
-			backgroundColor: tokens.colorNeutralBackground3Hover,
-		},
-		":active": {
-			backgroundColor: tokens.colorBrandBackgroundPressed,
-		},
-	},
-	verticalGrip: {
-		fontSize: "10px",
-		color: tokens.colorNeutralForeground3,
-		userSelect: "none",
-		pointerEvents: "none",
-		display: "flex",
-		flexDirection: "column",
-		gap: "2px",
-		lineHeight: "0.5",
-	},
+	// Properties take the height the tree leaves (the tree has its own height while docked)
 	leftPaneBottom: {
+		flex: "1 1 0",
 		display: "flex",
 		flexDirection: "column",
 		minHeight: "100px",
