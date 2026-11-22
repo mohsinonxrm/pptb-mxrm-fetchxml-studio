@@ -85,10 +85,12 @@ export interface EditorSession {
 	isRunning: boolean;
 	/** The FetchXML the user sees: the editor's in editor mode, otherwise the tree's */
 	getCurrentXml: () => string;
-	/** For FetchXmlEditor's resetRequest: bumped by resetEditor */
+	/** For FetchXmlEditor's resetRequest: bumped by resetEditor and discardEditor */
 	editorResetId: number;
 	/** New (#278): leave editor mode, drop the editor's text and open the FetchXML tab */
 	resetEditor: () => void;
+	/** Open view (#278): leave editor mode and drop the editor's text, on whichever tab is open */
+	discardEditor: () => void;
 }
 
 export function useEditorSession({
@@ -119,11 +121,14 @@ export function useEditorSession({
 	const [editorReplace, setEditorReplace] = useState<{ xml: string; id: number } | null>(null);
 	const [pendingSync, setPendingSync] = useState<PendingSync | null>(null);
 	const [editorResetId, setEditorResetId] = useState(0);
-	const resetEditor = useCallback(() => {
+	const discardEditor = useCallback(() => {
 		runAnywayXmlRef.current = null;
 		setEditorResetId((n) => n + 1);
-		setSelectedTab("xml");
 	}, []);
+	const resetEditor = useCallback(() => {
+		discardEditor();
+		setSelectedTab("xml");
+	}, [discardEditor]);
 
 	const getCurrentXml = useCallback(() => {
 		return isEditorModeActive ? editorXmlRef.current || xml : xml;
@@ -333,5 +338,6 @@ export function useEditorSession({
 		getCurrentXml,
 		editorResetId,
 		resetEditor,
+		discardEditor,
 	};
 }

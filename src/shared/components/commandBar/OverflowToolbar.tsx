@@ -14,7 +14,9 @@ import {
 	Children,
 	Fragment,
 	cloneElement,
+	createContext,
 	forwardRef,
+	useContext,
 	useEffect,
 	useLayoutEffect,
 	useRef,
@@ -39,6 +41,9 @@ import {
 	Overflow,
 	OverflowDivider,
 	OverflowItem,
+	Popover,
+	PopoverSurface,
+	PopoverTrigger,
 	Spinner,
 	SplitButton,
 	Toolbar,
@@ -50,6 +55,7 @@ import {
 	makeStyles,
 	mergeClasses,
 	tokens,
+	useIsOverflowItemVisible,
 	useMergedRefs,
 	useOverflowMenu,
 	useOverflowVisibility,
@@ -145,6 +151,11 @@ const useStyles = makeStyles({
 	// margins, so it doesn't change what fits
 	pushToEnd: { marginInlineStart: "auto" },
 	hidden: { display: "none" },
+	// A popover command's surface: its content sets the width; this keeps it inside small windows
+	popoverSurface: {
+		padding: tokens.spacingHorizontalM,
+		maxWidth: "min(420px, calc(100vw - 32px))",
+	},
 	/** Destructive command: danger text, still subtle (forced colours keep the system text colour) */
 	danger: {
 		color: tokens.colorStatusDangerForeground1,
@@ -235,6 +246,64 @@ const menuOpenChange =
 	(_, data) =>
 		command.onMenuOpenChange?.(data.open);
 
+/** The More button: a popover command that overflowed opens anchored to it */
+const MoreAnchorContext = createContext<RefObject<HTMLButtonElement | null> | null>(null);
+
+/**
+ * A popover command on the bar: a MenuButton (its chevron says something opens) as the Popover's
+ * trigger. Once the command has overflowed, More opens the same Popover, anchored to More instead.
+ */
+const PopoverControl = forwardRef<
+	HTMLButtonElement,
+	{ command: BarCommand; common: Record<string, unknown>; children?: ReactNode }
+>(function PopoverControl({ command: c, common, children }, ref) {
+	const styles = useStyles();
+	const visible = useIsOverflowItemVisible(c.id);
+	const moreRef = useContext(MoreAnchorContext);
+	const off = isOff(c);
+	const tooltip = barTooltip(c);
+	// Becoming unavailable closes it; say so, or it would reopen by itself once available again
+	const { popoverOpen, onPopoverOpenChange } = c;
+	useEffect(() => {
+		if (off && popoverOpen) onPopoverOpenChange?.(false);
+	}, [off, popoverOpen, onPopoverOpenChange]);
+	const button = (
+		<MenuButton
+			ref={ref}
+			appearance={c.appearance ?? "subtle"}
+			aria-haspopup="dialog"
+			{...common}
+		>
+			{children}
+		</MenuButton>
+	);
+	return (
+		<Popover
+			open={!!c.popoverOpen && !off}
+			onOpenChange={(_, data) => c.onPopoverOpenChange?.(data.open)}
+			trapFocus
+			positioning={
+				visible || !moreRef?.current
+					? { position: "below", align: "start" }
+					: { target: moreRef.current, position: "below", align: "end" }
+			}
+		>
+			<PopoverTrigger disableButtonEnhancement>
+				{tooltip ? (
+					<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
+						{button}
+					</Tooltip>
+				) : (
+					button
+				)}
+			</PopoverTrigger>
+			<PopoverSurface aria-label={c.label} className={styles.popoverSurface}>
+				{c.popover}
+			</PopoverSurface>
+		</Popover>
+	);
+});
+
 /** One command on the bar. The ref reaches the element Overflow measures (OverflowItem passes it). */
 const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(function BarControl(
 	{ command: c },
@@ -259,6 +328,14 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 			element
 		);
 	const common = { icon, className, disabledFocusable: off, ...restoreFocus, ...barNameOf(c) };
+
+	if (c.kind === "popover") {
+		return (
+			<PopoverControl ref={ref} command={c} common={common}>
+				{children}
+			</PopoverControl>
+		);
+	}
 
 	if (c.kind === "menu") {
 		return (
@@ -487,13 +564,18 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 			),
 		);
 	}
+	// A popover opens once More's menu has closed and handed focus back to More, so the popover keeps
+	// the focus it moves into itself
+	const onClick =
+		c.kind === "popover" ? () => setTimeout(() => c.onPopoverOpenChange?.(true), 0) : c.onClick;
 	return withReason(
 		<MenuItem
 			icon={icon}
 			className={className}
 			disabled={off}
+			{...(c.kind === "popover" ? { "aria-haspopup": "dialog" as const } : {})}
 			{...nameOf(c)}
-			onClick={off ? undefined : c.onClick}
+			onClick={off ? undefined : onClick}
 		>
 			{c.label}
 		</MenuItem>,
@@ -698,17 +780,19 @@ export function OverflowToolbar({
 					}}
 				>
 					<GroupPrimer groups={[...known.current.groups]} />
-					{barCommands.map((c, i) => (
-						<Fragment key={c.id}>
-							{i > 0 && groupOf(barCommands[i - 1]) !== groupOf(c) && (
-								<BarDivider
-									prev={groupOf(barCommands[i - 1])}
-									after={groups.slice(groups.indexOf(groupOf(c)))}
-								/>
-							)}
-							{renderItem(c)}
-						</Fragment>
-					))}
+					<MoreAnchorContext.Provider value={moreRef}>
+						{barCommands.map((c, i) => (
+							<Fragment key={c.id}>
+								{i > 0 && groupOf(barCommands[i - 1]) !== groupOf(c) && (
+									<BarDivider
+										prev={groupOf(barCommands[i - 1])}
+										after={groups.slice(groups.indexOf(groupOf(c)))}
+									/>
+								)}
+								{renderItem(c)}
+							</Fragment>
+						))}
+					</MoreAnchorContext.Provider>
 					<More
 						commands={barCommands}
 						extra={moreExtra}

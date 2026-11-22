@@ -399,6 +399,19 @@ function AppContent({
 					unsaved={unsaved}
 					hasUnsavedChanges={hasUnsavedChanges}
 					onNewQuery={startNewQuery}
+					openView={{
+						entityLogicalName: builder.fetchQuery?.entity?.name,
+						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
+						entitySetName: entityMetadata?.EntitySetName,
+						currentViewId: viewIdentity?.view?.id,
+						onOpen: (viewInfo) => {
+							const loaded = applyLoadedView(viewInfo);
+							// The editor follows the view: its text was the previous query's, saved or
+							// discarded by now. A view that couldn't be loaded leaves everything as it was.
+							if (loaded) editorSession.discardEditor();
+							return loaded;
+						},
+					}}
 				/>
 				<div className={styles.root} data-app-root>
 					{/* Left Pane */}
@@ -425,7 +438,6 @@ function AppContent({
 									onAdvancedFindOnlyChange={(advancedFindOnly) =>
 										setDisplaySettings({ ...displaySettings, advancedFindOnly })
 									}
-									onViewLoad={applyLoadedView}
 								/>
 							</PaneErrorBoundary>
 							<TreeNoticeBar

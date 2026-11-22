@@ -46,6 +46,7 @@ const barProps = (props: Partial<AppBarProps> = {}): AppBarProps => ({
 	viewName: null,
 	unsaved: false,
 	onNewQuery: () => {},
+	openView: { onOpen: () => {} },
 	...props,
 });
 
@@ -96,7 +97,7 @@ afterEach(() => {
 });
 
 describe("the app bar's commands", () => {
-	it("are Run, Save, Send to tool and Return FetchXML, then Settings, with Run the one primary", async () => {
+	it("are Run, New, Open view, Save, Send to tool and Return FetchXML, then Settings, with Run the one primary", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({
 			isCallee: true,
@@ -110,6 +111,7 @@ describe("the app bar's commands", () => {
 		expect(names).toEqual([
 			"Run",
 			"New",
+			"Open view",
 			"Save",
 			"Send to tool",
 			"Return FetchXML",
@@ -131,6 +133,7 @@ describe("the app bar's commands", () => {
 		await click(moreByTooltip());
 		expect(menuTexts(menus()[0])).toEqual([
 			"New",
+			"Open view",
 			"Save",
 			"Send to tool",
 			"Return FetchXML",

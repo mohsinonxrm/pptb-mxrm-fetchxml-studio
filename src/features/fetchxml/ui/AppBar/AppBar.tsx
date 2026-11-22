@@ -1,12 +1,12 @@
 /**
  * The app bar (#278): one full-width row above both panes with the query's commands, in the
- * order of a model-driven app's command bar: Run | Save · Send to · Return FetchXML … More |
- * Settings. Run comes first, is the one primary button and never overflows; Settings never does
- * either. What doesn't fit moves into More by priority (D: Save 60, Send to 20, Return FetchXML
- * 10). More always has Copy FetchXML.
+ * order of a model-driven app's command bar: Run | New · Open view · Save · Send to · Return
+ * FetchXML … More | Settings. Run comes first, is the one primary button and never overflows;
+ * Settings never does either. What doesn't fit moves into More by priority (D: Save 60, New 40,
+ * Open view 30, Send to 20, Return FetchXML 10). More always has Copy FetchXML.
  *
- * Save and Send to keep their editor sync (EditorSyncContext), so AppShell renders this inside the
- * provider. New and Open view join in #278's next PRs; Operations in #296.
+ * New and Open view ask before they discard unsaved changes. Save and Send to keep their editor
+ * sync (EditorSyncContext), so AppShell renders this inside the provider. Operations joins in #296.
  */
 import { useRef, useState } from "react";
 import { Badge, Body1Strong, MenuItem, makeStyles, tokens } from "@fluentui/react-components";
@@ -14,6 +14,8 @@ import {
 	Add20Filled,
 	Add20Regular,
 	Copy20Regular,
+	FolderOpen20Filled,
+	FolderOpen20Regular,
 	Play20Filled,
 	Play20Regular,
 	Settings20Filled,
@@ -31,10 +33,13 @@ import {
 import { useReturnFetchXmlCommand } from "../Toolbar/useReturnFetchXmlCommand";
 import { DiscardChangesDialog } from "../Dialogs/DiscardChangesDialog";
 import { useNotify } from "../../../../shared/feedback/useNotify";
-import { discardedToast } from "./appBarRules";
+import { discardedToast, openViewDisabledReason } from "./appBarRules";
+import { OpenViewPanel } from "./OpenViewPanel";
+import { toLoadedViewInfo, type LoadedViewInfo, type SavedView } from "../../api/pptbClient";
 
 const RunIcon = bundleIcon(Play20Filled, Play20Regular);
 const NewIcon = bundleIcon(Add20Filled, Add20Regular);
+const OpenViewIcon = bundleIcon(FolderOpen20Filled, FolderOpen20Regular);
 const SettingsIcon = bundleIcon(Settings20Filled, Settings20Regular);
 
 /** Every group the bar can show, in bar order (OverflowToolbar learns them up front) */
@@ -87,6 +92,23 @@ export interface AppBarProps {
 	hasUnsavedChanges?: () => boolean;
 	/** Start a new query: the caller resets the tree, the editor and the results */
 	onNewQuery: () => void;
+	/** Open view: the query's entity and what loading one of its views needs */
+	openView: OpenViewOptions;
+}
+
+export interface OpenViewOptions {
+	/** The query's entity; Open view waits for one */
+	entityLogicalName?: string;
+	entityDisplayName?: string;
+	/** From the entity's metadata: Open view waits for it too (running a view by ID needs it) */
+	entitySetName?: string;
+	/** The view the query is, checked in the list */
+	currentViewId?: string;
+	/**
+	 * Load the view: its FetchXML, layout and identity, and drop the editor's text (AppShell). False
+	 * when its FetchXML couldn't be loaded and the query stays as it was.
+	 */
+	onOpen: (viewInfo: LoadedViewInfo) => boolean | void;
 }
 
 export function AppBar({
@@ -100,31 +122,57 @@ export function AppBar({
 	unsaved,
 	hasUnsavedChanges,
 	onNewQuery,
+	openView,
 }: AppBarProps) {
 	const styles = useStyles();
 	const copy = useCopy();
 	const { notify } = useNotify();
-	// New with unsaved changes asks first (#278); "Save and start new" starts new once the save is done
-	const [confirmNew, setConfirmNew] = useState(false);
-	const newAfterSave = useRef(false);
+	// New and Open view with unsaved changes ask first (#278). "Save and start new" / "Save and open"
+	// continue once their own save is done, never after a later one.
+	const [confirm, setConfirm] = useState<
+		{ intent: "new" } | { intent: "open"; view: LoadedViewInfo } | null
+	>(null);
+	const afterSave = useRef<(() => void) | null>(null);
+	// What the dialog last asked about: its wording stays while it closes
+	const lastConfirm = useRef<NonNullable<typeof confirm>>({ intent: "new" });
+	if (confirm) lastConfirm.current = confirm;
+	const asked = lastConfirm.current;
+	const [openViewOpen, setOpenViewOpen] = useState(false);
 	const save = useSaveViewCommand({
 		...saveView,
 		onSaveComplete: (...args) => {
 			saveView.onSaveComplete?.(...args);
-			if (newAfterSave.current) {
-				newAfterSave.current = false;
-				onNewQuery();
-			}
+			const next = afterSave.current;
+			afterSave.current = null;
+			next?.();
 		},
 		onCancel: () => {
-			newAfterSave.current = false;
+			afterSave.current = null;
 			saveView.onCancel?.();
 		},
 	});
+	const isUnsaved = () => (hasUnsavedChanges ? hasUnsavedChanges() : unsaved);
 	const handleNew = () => {
-		if (hasUnsavedChanges ? hasUnsavedChanges() : unsaved) setConfirmNew(true);
+		if (isUnsaved()) setConfirm({ intent: "new" });
 		else onNewQuery();
 	};
+	const handlePickView = (view: SavedView) => {
+		setOpenViewOpen(false);
+		if (!openView.entitySetName) return;
+		const viewInfo = toLoadedViewInfo(view, openView.entitySetName);
+		if (isUnsaved()) setConfirm({ intent: "open", view: viewInfo });
+		else openView.onOpen(viewInfo);
+	};
+	/** Continue with New or Open view; false when the view couldn't be opened (nothing was replaced) */
+	const proceed = (choice: NonNullable<typeof confirm>): boolean => {
+		if (choice.intent === "open") return openView.onOpen(choice.view) !== false;
+		onNewQuery();
+		return true;
+	};
+	const openViewReason = openViewDisabledReason(
+		openView.entityLogicalName,
+		openView.entitySetName,
+	);
 	const send = useSendToToolCommand(
 		sendToTool ?? { fetchXml: "", entityLogicalName: "", tools: [] },
 	);
@@ -154,6 +202,27 @@ export function AppBar({
 			kind: "button",
 			hint: "Start a new query",
 			onClick: handleNew,
+		},
+		{
+			id: "open-view",
+			label: "Open view",
+			icon: OpenViewIcon,
+			group: "file",
+			priority: 30,
+			kind: "popover",
+			hint: "Open a view of this entity",
+			disabledReason: openViewReason,
+			popoverOpen: openViewOpen,
+			onPopoverOpenChange: setOpenViewOpen,
+			popover:
+				openView.entityLogicalName && !openViewReason ? (
+					<OpenViewPanel
+						entityLogicalName={openView.entityLogicalName}
+						entityDisplayName={openView.entityDisplayName ?? openView.entityLogicalName}
+						currentViewId={openView.currentViewId}
+						onPick={handlePickView}
+					/>
+				) : null,
 		},
 		{ ...save.command, group: "file" },
 	];
@@ -208,10 +277,12 @@ export function AppBar({
 			/>
 			{save.dialog}
 			<DiscardChangesDialog
-				open={confirmNew}
-				intent="new"
+				open={confirm !== null}
+				intent={asked.intent}
 				viewName={viewName}
+				targetViewName={asked.intent === "open" ? asked.view.name : undefined}
 				onSave={() => {
+					if (!confirm) return;
 					// Save can't run yet (no entity metadata, say): say why, and keep the choice open
 					if (save.command.disabledReason) {
 						notify.warning({
@@ -220,16 +291,17 @@ export function AppBar({
 						});
 						return;
 					}
-					setConfirmNew(false);
-					newAfterSave.current = true;
+					setConfirm(null);
+					afterSave.current = () => void proceed(confirm);
 					save.command.onClick?.();
 				}}
 				onDiscard={() => {
-					setConfirmNew(false);
-					onNewQuery();
-					notify.info(discardedToast(viewName));
+					if (!confirm) return;
+					setConfirm(null);
+					// A view that couldn't be loaded replaced nothing: its own error toast says so
+					if (proceed(confirm)) notify.info(discardedToast(viewName));
 				}}
-				onCancel={() => setConfirmNew(false)}
+				onCancel={() => setConfirm(null)}
 			/>
 		</>
 	);
