@@ -3,25 +3,26 @@
  * of `S` by reference (the builder state is structurally shared, so a snapshot costs only its
  * references) and never reads the clock; callers pass `now`.
  *
- * Not wired yet. The #192 wiring PR (after #301) wraps `builderReducer` with it, roughly:
+ * builderHistory.ts wraps `builderReducer` with it (#192), as follows:
  *
  *   S = BuilderState (the whole state), with `createHistory(state, { restore })` (see Restore).
  *   Each action applies the reducer, then one of:
  *
  *   - **record** (one undo step, labelled in sentence case, with a `target` node): SET_ENTITY
- *     "Change entity", ADD_* "Add condition" / "Add filter" / … (target: the new node's parent),
- *     REMOVE_NODE "Delete filter group" / … (target: the deleted node), UPDATE_ATTRIBUTES "Select
- *     attributes", ADD_ALL_ATTRIBUTES "Add all attributes", LOAD_FETCHXML "Parse to tree", SET_SORT
+ *     "Change entity", ADD_* "Add condition" / "Add filter" / … (target: the new node, so undo
+ *     selects its parent and redo selects it), REMOVE_NODE "Delete filter" / … (target: the deleted
+ *     node), UPDATE_ATTRIBUTES "Select attributes", ADD_ALL_ATTRIBUTES "Add all attributes",
+ *     LOAD_FETCHXML "Parse to tree" (also the editor-mode sync before Run / Save / Send), SET_SORT
  *     "Sort by column", ADD/REMOVE/CLEAR_COLUMN_FILTER(S) "Filter column" / …, SET_COLUMN_CONFIG
- *     "Add columns" / "Remove columns", REORDER_COLUMNS "Reorder columns".
- *     The label is what the toolbar shows: "Undo: Delete filter group (Ctrl+Z)".
+ *     "Edit columns" (the grid's callers name theirs: "Remove columns", "Reorder columns" …).
+ *     The label is what the toolbar shows: "Undo: Delete filter (Ctrl+Z)".
  *   - **merge**: UPDATE_NODE (target: the edited node) is recorded with
  *     `mergeKey = nodeId + ":" + sorted update keys`, so typing into one field is one step while the
  *     edits are at most 1 s apart. Another field, another node, any other step, a skip that ends the
  *     merge (the default), undo or redo starts a new step.
  *   - **transaction**: multi-dispatch edits (alias rename, aggregate-off plan, many-to-many join,
- *     remove columns, add related columns, editor-mode sync before Execute / Save / Send) run
- *     between `beginTransaction` and `commitTransaction` (in a `finally`), so they are one step.
+ *     the grid's column edits) run between `beginTransaction` and `commitTransaction` (in a
+ *     `finally`), so they are one step.
  *   - **skip, keeping redo, not ending a merge** (`{ keepRedo: true, endsMerge: false }`):
  *     SYNC_LAYOUT_WITH_FETCHXML. Every UPDATE_NODE sets `layoutNeedsSync`, and useViewLayout's effect (AppShell)
  *     dispatches the sync after the render, so ending the merge would make each keystroke its own
@@ -236,7 +237,8 @@ export function beginTransaction<S>(h: History<S>, options: RecordOptions): Hist
 /**
  * Ends the innermost transaction. The outermost commit records one step if a `record` inside it
  * changed `present` and `present` differs from where it began (merging by its key, unless a skip
- * inside it ended the merge); otherwise it records nothing and ends any merge.
+ * inside it ended the merge); otherwise it records nothing and ends any merge, except the merge of
+ * its own key: a keystroke that changed nothing doesn't split the typing around it into two steps.
  * Throws if no transaction is open: that is a bug in the caller.
  */
 export function commitTransaction<S>(h: History<S>): History<S> {
@@ -244,7 +246,10 @@ export function commitTransaction<S>(h: History<S>): History<S> {
 	if (!tx) throw new Error("commitTransaction: no transaction is open");
 	if (tx.depth > 1) return { ...h, transaction: { ...tx, depth: tx.depth - 1 } };
 	const closed: History<S> = { ...h, transaction: null };
-	if (!tx.recorded || Object.is(h.present, tx.base)) return { ...closed, openMerge: null };
+	if (!tx.recorded || Object.is(h.present, tx.base)) {
+		const sameField = tx.mergeKey !== undefined && h.openMerge?.key === tx.mergeKey;
+		return { ...closed, openMerge: sameField ? h.openMerge : null };
+	}
 	return pushStep(closed, tx.base, tx);
 }
 

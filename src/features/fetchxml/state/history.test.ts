@@ -430,6 +430,16 @@ describe("transactions", () => {
 		expect(h.past).toHaveLength(2);
 	});
 
+	it("keeps the merge of its own key on a commit that records nothing (a no-op keystroke)", () => {
+		const key = "n1:value";
+		let h = createHistory(snap(""));
+		h = at(h, "a", 0, key);
+		h = commitTransaction(beginTransaction(h, { label: "Edit", mergeKey: key, now: 100 }));
+		expect(h.openMerge?.key).toBe(key);
+		h = at(h, "ab", 200, key);
+		expect(h.past).toHaveLength(1);
+	});
+
 	it("ends a merge on an outermost commit that records nothing", () => {
 		const key = "n1:value";
 		let h = createHistory(snap(""));

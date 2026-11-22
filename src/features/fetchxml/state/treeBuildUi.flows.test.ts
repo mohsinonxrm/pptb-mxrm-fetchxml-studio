@@ -287,6 +287,12 @@ describe("UI: building nested link-entities from the tree (#345)", { timeout: 30
 				"      </link-entity>",
 			].join("\n"),
 		);
+		// The intersect entity and the related entity inside it are one undo step (#192)
+		expect(builder!.history.undoLabel).toBe("Edit link-entity");
+		await act(async () => builder!.history.undo());
+		expect(xml()).not.toContain("teammembership");
+		expect(xml()).not.toContain('name="team"');
+		expect(builder!.history.undoLabel).toBe("Add link-entity");
 	});
 
 	it("the same relationship picked twice gets a second, unique alias", async () => {

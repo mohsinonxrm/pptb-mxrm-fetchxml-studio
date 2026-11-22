@@ -113,7 +113,7 @@ export function LinkEntityEditor({
 	onUpdate,
 }: LinkEntityEditorProps) {
 	const styles = useEditorStyles();
-	const { addLinkEntityWithConfig, fetchQuery, updateNode } = useBuilder();
+	const { addLinkEntityWithConfig, fetchQuery, updateNode, history } = useBuilder();
 	// The conditions and orders that use this link-entity's alias, taken when an alias edit starts:
 	// they follow the rename by node, even if the alias briefly matches another one while typing
 	const aliasReferences = useRef<LinkAliasReference[] | null>(null);
@@ -136,8 +136,16 @@ export function LinkEntityEditor({
 		aliasReferences.current ??= node.alias
 			? findLinkAliasReferences(fetchQuery, node.id, node.alias)
 			: [];
-		onUpdate({ alias });
-		renameAliasReferences(aliasReferences.current, alias);
+		const references = aliasReferences.current;
+		// One undo step with the references it renames, merging while typing like any field (#192)
+		history.transaction(
+			"Edit link-entity",
+			() => {
+				onUpdate({ alias });
+				renameAliasReferences(references, alias);
+			},
+			{ mergeKey: `${node.id}:alias`, target: node.id },
+		);
 	};
 	const [pendingLinkType, setPendingLinkType] = useState<LinkType | null>(null);
 	const [relationshipError, setRelationshipError] = useState<string | null>(null);
@@ -215,21 +223,28 @@ export function LinkEntityEditor({
 			);
 			if (!join)
 				throw new Error(`${parentEntityName} isn't part of ${relationship.schemaName}.`);
-			onUpdate({
-				name: join.intersect.name,
-				from: join.intersect.from,
-				to: join.intersect.to,
-				intersect: true,
-				alias: undefined,
-				relationshipType: "NN",
-			});
-			addLinkEntityWithConfig(
-				node.id,
-				join.target.name,
-				join.target.from,
-				join.target.to,
-				"inner",
-				"NN",
+			// One undo step (#192)
+			history.transaction(
+				"Edit link-entity",
+				() => {
+					onUpdate({
+						name: join.intersect.name,
+						from: join.intersect.from,
+						to: join.intersect.to,
+						intersect: true,
+						alias: undefined,
+						relationshipType: "NN",
+					});
+					addLinkEntityWithConfig(
+						node.id,
+						join.target.name,
+						join.target.from,
+						join.target.to,
+						"inner",
+						"NN",
+					);
+				},
+				{ target: node.id },
 			);
 			setUseRelationshipPicker(false);
 		} catch (error) {

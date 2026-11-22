@@ -193,6 +193,24 @@ describe("columns", () => {
 		await act_(() => edits.reorderColumns([...before.columns].reverse()));
 		expect(builder.columnConfig!.columns.map((c) => c.name)).toEqual(["revenue", "name"]);
 		expect(builder.columnConfig).toEqual({ ...before, columns: [...before.columns].reverse() });
+		// An undo step of its own (#192)
+		expect(builder.history.undoLabel).toBe("Reorder columns");
+		await act_(() => builder.history.undo());
+		expect(builder.columnConfig!.columns.map((c) => c.name)).toEqual(["name", "revenue"]);
+	});
+
+	it("removes some column filters in one undo step (#192)", async () => {
+		await fresh();
+		await load(ACCOUNT_XML);
+		await act_(() => edits.addColumnFilter(nameFilter));
+		await act_(() => edits.addColumnFilter(revenueFilter));
+		await act_(() => edits.addColumnFilter({ ...nameFilter, value: "%b%" }));
+		const [, second, third] = edits.columnFilters;
+		await act_(() => edits.removeColumnFilters([second.id, third.id]));
+		expect(builder.history.undoLabel).toBe("Remove column filters");
+		await act_(() => builder.history.undo());
+		expect(edits.columnFilters).toHaveLength(3);
+		expect(builder.history.undoLabel).toBe("Filter column");
 	});
 
 	it("doesn't reorder without a column config", async () => {
@@ -210,6 +228,18 @@ describe("columns", () => {
 		await act_(() => edits.removeColumns(["pc.fullname", "pc.hobbies", "nothere"]));
 		expect(xml()).not.toContain("link-entity");
 		expect(xml()).toContain('<attribute name="name"');
+	});
+
+	it("removes them in one undo step (#192)", async () => {
+		await fresh();
+		await load(WITH_CONTACT);
+		const before = xml();
+		await act_(() => edits.removeColumns(["pc.fullname", "pc.hobbies"]));
+		expect(builder.history.undoLabel).toBe("Remove columns");
+		await act_(() => builder.history.undo());
+		expect(xml()).toBe(before);
+		await act_(() => edits.removeColumns(["name"]));
+		expect(builder.history.undoLabel).toBe("Remove column");
 	});
 
 	it("removes root columns", async () => {
@@ -338,6 +368,25 @@ describe("related columns", () => {
 			["contactid", ["fullname", "telephone1"]],
 			["parentcustomerid", ["lastname"]],
 		]);
+	});
+
+	it("adds every link-entity and attribute in one undo step (#192)", async () => {
+		await fresh();
+		await load(ACCOUNT_XML);
+		const before = xml();
+		await act_(() =>
+			edits.addRelatedColumns([
+				related(PRIMARY_CONTACT, "N1", "fullname"),
+				related(CONTACTS, "1N", "lastname"),
+			]),
+		);
+		expect(builder.history.undoLabel).toBe("Add columns");
+		await act_(() => builder.history.undo());
+		expect(xml()).toBe(before);
+		await act_(() => edits.addRelatedColumns([related(PRIMARY_CONTACT, "N1", "fullname")]));
+		expect(builder.history.undoLabel).toBe("Add column");
+		await act_(() => edits.addColumn("revenue"));
+		expect(builder.history.undoLabel).toBe("Add column");
 	});
 
 	it("keeps an intersect entity's two joins apart (#57)", async () => {
