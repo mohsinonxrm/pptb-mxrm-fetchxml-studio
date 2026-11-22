@@ -149,23 +149,21 @@ export function AppShell() {
 	);
 }
 
-/** connectionKey: "" with no connection, undefined until the host answers (usePptbContext) */
-/** Focus moving into a peek: the selected tree item, else the first control that isn't the pane's
- * own Pin (the scope and Entity picker, or the first property) */
+/** Focus moving into a peek (#234): the selected tree item, else the first control. The tree peek's
+ * first control is the scope chip (Pin comes after it); the Properties peek is searched from its
+ * properties, below its Pin. */
 function focusInside(container: HTMLElement | null) {
 	if (!container) return;
-	const controls = [
-		...container.querySelectorAll<HTMLElement>(
-			'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]',
-		),
-	].filter((element) => !element.closest("[data-pane-command]"));
 	const target =
 		container.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
 		container.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ??
-		controls[0];
+		container.querySelector<HTMLElement>(
+			'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]',
+		);
 	target?.focus();
 }
 
+/** connectionKey: "" with no connection, undefined until the host answers (usePptbContext) */
 function AppContent({
 	carryOver,
 	connectionKey,
@@ -658,13 +656,13 @@ function AppContent({
 							}
 						>
 							{scopeSelector(
-								<span data-pane-command="">
+								<>
 									{layout.pane === "peek" ? (
 										<PinButton onClick={dockPane} />
 									) : (
 										<CollapseButton ref={collapseRef} onClick={collapsePane} />
 									)}
-								</span>,
+								</>,
 							)}
 							{treeBody}
 						</div>
@@ -704,7 +702,7 @@ function AppContent({
 							<div className={styles.leftPaneBottom}>
 								<div className={mergeClasses(styles.toolbar, styles.peekBar)}>
 									<span style={{ fontWeight: 600 }}>Properties</span>
-									<span className={styles.peekBarEnd} data-pane-command="">
+									<span className={styles.peekBarEnd}>
 										<PinButton onClick={dockPane} />
 									</span>
 								</div>

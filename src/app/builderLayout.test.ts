@@ -231,7 +231,6 @@ describe("the builder pane's layout", () => {
 			expect(document.getElementById("fxs-query-tree")?.style.display).toBe("none");
 			expect(peek("Properties")?.contains(document.activeElement)).toBe(true);
 			expect(document.activeElement).not.toBe(named("Pin the builder pane open"));
-			expect(document.activeElement?.closest("[data-pane-command]")).toBeNull();
 			// Its rail button again closes it
 			await click(named("Properties"));
 			await app.waitFor(() => !peek("Properties"));
@@ -261,6 +260,26 @@ describe("the builder pane's layout", () => {
 			await click(named("Expand the builder pane"));
 			await app.waitFor(() => !!builder() && builder()?.style.display !== "none");
 			expect(document.activeElement).toBe(named("Collapse the builder pane"));
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"with no entity yet, a tree peek focuses the scope or Entity picker, not Pin",
+		async () => {
+			Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+			const app = await renderApp();
+			const named = (name: string) =>
+				document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+			await app.waitFor(() => !!named("Collapse the builder pane"));
+			await click(named("Collapse the builder pane"));
+			await app.waitFor(() => !!named("Query tree"));
+			await click(named("Query tree"));
+			const peek = () =>
+				document.querySelector<HTMLElement>('aside[aria-label="Query tree"]');
+			await app.waitFor(() => !!peek());
+			expect(peek()?.contains(document.activeElement)).toBe(true);
+			expect(document.activeElement).not.toBe(named("Pin the builder pane open"));
 		},
 		FLOW_TIMEOUT,
 	);
