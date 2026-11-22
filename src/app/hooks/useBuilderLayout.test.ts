@@ -183,10 +183,12 @@ describe("collapsing the pane (#234)", () => {
 		expect(latest.pane).toBe("docked");
 		expect(latest.peekPart).toBeNull();
 		expect(latest.propertiesHost).toBe("docked");
-		// A peek asked for while docked doesn't open
+		// A peek asked for while docked doesn't open, and doesn't open later by itself
 		await act(async () => latest.openPeek("tree"));
 		expect(latest.pane).toBe("docked");
 		expect(latest.peekPart).toBeNull();
+		await act(async () => latest.collapse());
+		expect(latest.pane).toBe("collapsed");
 	});
 
 	it("peeks at the pane's width, at least 340 px, within the window", async () => {
@@ -227,6 +229,16 @@ describe("collapsing the pane (#234)", () => {
 		await render(createElement(Probe, { forceCollapsed: false }));
 		await flush(2);
 		expect(latest.pane).toBe("docked");
+		// A peek open when the force ended doesn't come back with the next force
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await act(async () => latest.openPeek("tree"));
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await flush(2);
+		expect(latest.pane).toBe("collapsed");
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
 		// Collapsed by choice stays collapsed when a force ends
 		await act(async () => latest.collapse());
 		await render(createElement(Probe, { forceCollapsed: true }));

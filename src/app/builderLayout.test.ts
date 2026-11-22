@@ -35,6 +35,8 @@ afterEach(() => {
 
 const FLOW_TIMEOUT = 120000;
 const query = "<fetch><entity name='account'><attribute name='name'/></entity></fetch>";
+const linkedQuery =
+	"<fetch><entity name='account'><attribute name='name'/><link-entity name='systemuser' from='systemuserid' to='createdby' link-type='outer' alias='cb'><attribute name='fullname'/></link-entity></entity></fetch>";
 const builder = () => document.querySelector<HTMLElement>('aside[aria-label="Query builder"]');
 const splitter = (label: string) =>
 	document.querySelector<HTMLElement>(`[role="separator"][aria-label="${label}"]`);
@@ -173,7 +175,7 @@ describe("the builder pane's layout", () => {
 		"collapses to a rail that peeks at the tree or Properties, and Pin docks it again",
 		async () => {
 			Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
-			const app = await renderApp({ launch: { fetchXml: query } });
+			const app = await renderApp({ launch: { fetchXml: linkedQuery } });
 			await app.waitFor(() => document.querySelectorAll('[role="treeitem"]').length > 0);
 			const named = (name: string) =>
 				document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
@@ -182,11 +184,22 @@ describe("the builder pane's layout", () => {
 			const peek = (label: string) =>
 				document.querySelector<HTMLElement>(`aside[aria-label="${label}"]`);
 
+			// A branch opened while docked stays open through collapsing and peeking (one tree)
+			const cbRow = () =>
+				[...document.querySelectorAll<HTMLElement>('[role="treeitem"]')].find((r) =>
+					r
+						.querySelector(".fui-TreeItemLayout__main")
+						?.textContent?.trim()
+						.startsWith("cb"),
+				);
+			if (cbRow()?.getAttribute("aria-expanded") !== "true") await click(treeItem("cb"));
+			await app.waitFor(() => cbRow()?.getAttribute("aria-expanded") === "true");
+
 			// Collapse sits beside the scope chip; it leaves the rail, with focus on Expand
 			expect(rail()).toBeNull();
 			await click(named("Collapse the builder pane"));
 			await app.waitFor(() => !!rail());
-			expect(builder()).toBeNull();
+			expect(builder()?.style.display).toBe("none");
 			expect(splitter(WIDTH)).toBeNull();
 			expect(document.activeElement).toBe(named("Expand the builder pane"));
 
@@ -197,19 +210,28 @@ describe("the builder pane's layout", () => {
 			expect(named("Query tree")?.getAttribute("aria-controls")).toBe(peek("Query tree")?.id);
 			expect(peek("Query tree")?.contains(document.activeElement)).toBe(true);
 			expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
+			expect(cbRow()?.getAttribute("aria-expanded")).toBe("true");
+			// The scope isn't checked again: no access spinner
+			expect(peek("Query tree")?.textContent).not.toContain("Checking access");
 			// Escape closes it and returns focus to its rail button
 			await key(document.activeElement as HTMLElement, "Escape");
 			await app.waitFor(() => !peek("Query tree"));
 			expect(document.activeElement).toBe(named("Query tree"));
 
-			// Properties peek: select a node first, then open its properties
+			// Properties peek: select a node first, then open its properties; focus on the first
+			// property, not Pin
 			await click(named("Query tree"));
 			await app.waitFor(() => !!peek("Query tree"));
-			await click(treeItem("account"));
+			await click(treeItem("cb"));
 			await click(named("Properties"));
 			await app.waitFor(() => !!peek("Properties"));
 			expect(peek("Query tree")).toBeNull();
-			expect(peek("Properties")?.textContent).toContain("account");
+			expect(peek("Properties")?.textContent).toContain("Link-entity");
+			// The tree stays mounted, hidden
+			expect(document.getElementById("fxs-query-tree")?.style.display).toBe("none");
+			expect(peek("Properties")?.contains(document.activeElement)).toBe(true);
+			expect(document.activeElement).not.toBe(named("Pin the builder pane open"));
+			expect(document.activeElement?.closest("[data-pane-command]")).toBeNull();
 			// Its rail button again closes it
 			await click(named("Properties"));
 			await app.waitFor(() => !peek("Properties"));
@@ -228,7 +250,7 @@ describe("the builder pane's layout", () => {
 			await click(named("Properties"));
 			await app.waitFor(() => !!peek("Properties"));
 			await click(named("Pin the builder pane open"));
-			await app.waitFor(() => !!builder());
+			await app.waitFor(() => !!builder() && builder()?.style.display !== "none");
 			expect(rail()).toBeNull();
 			expect(splitter(WIDTH)).toBeTruthy();
 			expect(document.activeElement).toBe(named("Collapse the builder pane"));
@@ -237,7 +259,7 @@ describe("the builder pane's layout", () => {
 			await click(named("Collapse the builder pane"));
 			await app.waitFor(() => !!rail());
 			await click(named("Expand the builder pane"));
-			await app.waitFor(() => !!builder());
+			await app.waitFor(() => !!builder() && builder()?.style.display !== "none");
 			expect(document.activeElement).toBe(named("Collapse the builder pane"));
 		},
 		FLOW_TIMEOUT,

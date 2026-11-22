@@ -150,16 +150,20 @@ export function AppShell() {
 }
 
 /** connectionKey: "" with no connection, undefined until the host answers (usePptbContext) */
-/** Focus moving into a peek: the selected tree item, else the first control */
+/** Focus moving into a peek: the selected tree item, else the first control that isn't the pane's
+ * own Pin (the scope and Entity picker, or the first property) */
 function focusInside(container: HTMLElement | null) {
 	if (!container) return;
+	const controls = [
+		...container.querySelectorAll<HTMLElement>(
+			'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]',
+		),
+	].filter((element) => !element.closest("[data-pane-command]"));
 	const target =
 		container.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
 		container.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ??
-		container.querySelector<HTMLElement>(
-			'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]',
-		);
-	(target ?? container).focus();
+		controls[0];
+	target?.focus();
 }
 
 function AppContent({
@@ -227,7 +231,9 @@ function AppContent({
 	const expandRef = useRef<HTMLButtonElement>(null);
 	const railTreeRef = useRef<HTMLButtonElement>(null);
 	const railPropertiesRef = useRef<HTMLButtonElement>(null);
-	const peekRef = useRef<HTMLElement>(null);
+	const paneRef = useRef<HTMLElement>(null);
+	const treeRegionRef = useRef<HTMLDivElement>(null);
+	const peekPropertiesRef = useRef<HTMLDivElement>(null);
 	const pendingFocus = useRef<"collapse" | "expand" | "peek" | null>(null);
 	const railButton = (part: PeekPart) =>
 		part === "tree" ? railTreeRef.current : railPropertiesRef.current;
@@ -251,14 +257,18 @@ function AppContent({
 		const target = pendingFocus.current;
 		if (!target) return;
 		pendingFocus.current = null;
-		if (target === "collapse") collapseRef.current?.focus();
+		// Docking while the pane is forced collapsed (#296) leaves it collapsed: focus stays on the rail
+		if (target === "collapse") (collapseRef.current ?? expandRef.current)?.focus();
 		else if (target === "expand") expandRef.current?.focus();
-		else focusInside(peekRef.current);
+		else
+			focusInside(
+				layout.peekPart === "props" ? peekPropertiesRef.current : treeRegionRef.current,
+			);
 	}, [layout.pane, layout.peekPart]);
 	// Escape in the peek closes it (unless something inside handled it, like an open dropdown)
 	const { closePeek, peekPart } = layout;
 	useEffect(() => {
-		const peek = peekRef.current;
+		const peek = paneRef.current;
 		if (!peek || !peekPart) return;
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -613,105 +623,110 @@ function AppContent({
 							propertiesRef={railPropertiesRef}
 						/>
 					)}
-					{layout.pane === "docked" && (
-						<>
-							<aside
-								id={BUILDER_PANE_ID}
-								aria-label="Query builder"
-								className={styles.leftPane}
-								style={{ width: `${layout.builderWidth}px` }}
-							>
-								<div
-									id={QUERY_TREE_ID}
-									className={styles.leftPaneTop}
-									style={
-										layout.propertiesHost === "docked"
-											? { height: `${layout.treeHeight}px` }
-											: { flex: "1 1 0" }
-									}
-								>
-									{scopeSelector(
-										<CollapseButton ref={collapseRef} onClick={collapsePane} />,
-									)}
-									{treeBody}
-								</div>
-								{layout.propertiesHost === "docked" ? (
-									<>
-										<PaneSplitter
-											orientation="horizontal"
-											value={layout.treeHeight}
-											min={layout.treeHeightLimits.min}
-											max={layout.treeHeightLimits.max}
-											defaultValue={layout.treeHeightLimits.defaultValue}
-											onChange={layout.setTreeHeight}
-											onCommit={layout.commitTreeHeight}
-											label="Resize the query tree (size is remembered)"
-											description="Drag or use arrow keys; double-click resets."
-											controls={QUERY_TREE_ID}
-										/>
-										<div className={styles.leftPaneBottom}>
-											<div className={styles.toolbar}>
-												<span style={{ fontWeight: 600 }}>Properties</span>
-											</div>
-											<div className={styles.propertiesContent}>
-												{propertiesPanel}
-											</div>
-										</div>
-									</>
-								) : (
-									<SelectionBar
-										ref={editPropertiesRef}
-										label={selectionLabel(builder.selectedNode)}
-										hasSelection={!!builder.selectedNode}
-										onEdit={() => layout.setInspectorOpen(true)}
-									/>
-								)}
-							</aside>
-							<PaneSplitter
-								orientation="vertical"
-								value={layout.builderWidth}
-								min={layout.builderWidthLimits.min}
-								max={layout.builderWidthLimits.max}
-								defaultValue={layout.builderWidthLimits.defaultValue}
-								onChange={layout.setBuilderWidth}
-								onCommit={layout.commitBuilderWidth}
-								label="Resize the builder pane (size is remembered)"
-								description="Drag or use arrow keys; double-click resets."
-								controls={BUILDER_PANE_ID}
-							/>
-						</>
-					)}
-					{layout.pane === "peek" && (
-						<aside
-							id={BUILDER_PANE_ID}
-							ref={peekRef}
-							aria-label={layout.peekPart === "props" ? "Properties" : "Query tree"}
-							className={mergeClasses(styles.leftPane, styles.peek)}
-							style={{ width: `${layout.peekWidth}px` }}
+					{/* One pane in every state, so the tree and the scope keep their state (open
+					    branches, the access check): hidden while collapsed, over the output in a peek */}
+					<aside
+						id={BUILDER_PANE_ID}
+						ref={paneRef}
+						aria-label={
+							layout.pane !== "peek"
+								? "Query builder"
+								: layout.peekPart === "props"
+									? "Properties"
+									: "Query tree"
+						}
+						className={
+							layout.pane === "peek"
+								? mergeClasses(styles.leftPane, styles.peek)
+								: styles.leftPane
+						}
+						style={{
+							width: `${layout.pane === "peek" ? layout.peekWidth : layout.builderWidth}px`,
+							display: layout.pane === "collapsed" ? "none" : undefined,
+						}}
+					>
+						<div
+							id={QUERY_TREE_ID}
+							ref={treeRegionRef}
+							className={styles.leftPaneTop}
+							style={
+								layout.peekPart === "props"
+									? { display: "none" }
+									: layout.pane === "docked" && layout.propertiesHost === "docked"
+										? { height: `${layout.treeHeight}px` }
+										: { flex: "1 1 0" }
+							}
 						>
-							{layout.peekPart === "props" ? (
-								<div className={styles.leftPaneBottom}>
-									<div className={mergeClasses(styles.toolbar, styles.peekBar)}>
-										<span style={{ fontWeight: 600 }}>Properties</span>
-										<span className={styles.peekBarEnd}>
-											<PinButton onClick={dockPane} />
-										</span>
-									</div>
-									<div className={styles.propertiesContent}>
-										{propertiesPanel}
-									</div>
-								</div>
-							) : (
-								<div
-									id={QUERY_TREE_ID}
-									className={styles.leftPaneTop}
-									style={{ flex: "1 1 0" }}
-								>
-									{scopeSelector(<PinButton onClick={dockPane} />)}
-									{treeBody}
-								</div>
+							{scopeSelector(
+								<span data-pane-command="">
+									{layout.pane === "peek" ? (
+										<PinButton onClick={dockPane} />
+									) : (
+										<CollapseButton ref={collapseRef} onClick={collapsePane} />
+									)}
+								</span>,
 							)}
-						</aside>
+							{treeBody}
+						</div>
+						{layout.pane === "docked" ? (
+							layout.propertiesHost === "docked" ? (
+								<>
+									<PaneSplitter
+										orientation="horizontal"
+										value={layout.treeHeight}
+										min={layout.treeHeightLimits.min}
+										max={layout.treeHeightLimits.max}
+										defaultValue={layout.treeHeightLimits.defaultValue}
+										onChange={layout.setTreeHeight}
+										onCommit={layout.commitTreeHeight}
+										label="Resize the query tree (size is remembered)"
+										description="Drag or use arrow keys; double-click resets."
+										controls={QUERY_TREE_ID}
+									/>
+									<div className={styles.leftPaneBottom}>
+										<div className={styles.toolbar}>
+											<span style={{ fontWeight: 600 }}>Properties</span>
+										</div>
+										<div className={styles.propertiesContent}>
+											{propertiesPanel}
+										</div>
+									</div>
+								</>
+							) : (
+								<SelectionBar
+									ref={editPropertiesRef}
+									label={selectionLabel(builder.selectedNode)}
+									hasSelection={!!builder.selectedNode}
+									onEdit={() => layout.setInspectorOpen(true)}
+								/>
+							)
+						) : layout.peekPart === "props" ? (
+							<div className={styles.leftPaneBottom}>
+								<div className={mergeClasses(styles.toolbar, styles.peekBar)}>
+									<span style={{ fontWeight: 600 }}>Properties</span>
+									<span className={styles.peekBarEnd} data-pane-command="">
+										<PinButton onClick={dockPane} />
+									</span>
+								</div>
+								<div ref={peekPropertiesRef} className={styles.propertiesContent}>
+									{propertiesPanel}
+								</div>
+							</div>
+						) : null}
+					</aside>
+					{layout.pane === "docked" && (
+						<PaneSplitter
+							orientation="vertical"
+							value={layout.builderWidth}
+							min={layout.builderWidthLimits.min}
+							max={layout.builderWidthLimits.max}
+							defaultValue={layout.builderWidthLimits.defaultValue}
+							onChange={layout.setBuilderWidth}
+							onCommit={layout.commitBuilderWidth}
+							label="Resize the builder pane (size is remembered)"
+							description="Drag or use arrow keys; double-click resets."
+							controls={BUILDER_PANE_ID}
+						/>
 					)}
 					<main
 						aria-label="Query output"

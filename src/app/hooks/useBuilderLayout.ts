@@ -153,6 +153,8 @@ export function useBuilderLayout({
 	const treeHeight = clampTreeHeight(height ?? TREE_HEIGHT_DEFAULT);
 	const collapsed = forceCollapsed || choice === "collapsed";
 	const pane: BuilderPaneState = !collapsed ? "docked" : peekPart ? "peek" : "collapsed";
+	// A peek doesn't outlive a docked pane (asked for while docked, or open when a force ended)
+	if (pane === "docked" && peekPart) setPeekPart(null);
 	const host = hostFor({ pane, windowWidth, builderWidth });
 	const peekWidth = Math.max(
 		Math.min(Math.max(builderWidth, PEEK_MIN_WIDTH), windowWidth - RAIL_WIDTH - 48),

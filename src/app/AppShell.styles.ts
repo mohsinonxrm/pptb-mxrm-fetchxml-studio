@@ -79,7 +79,9 @@ export const useStyles = makeStyles({
 		flex: 1,
 		overflow: "hidden",
 	},
+	// Its own stacking context: what's raised inside (Monaco's widgets, the drawer) stays under the peek
 	rightPane: {
+		isolation: "isolate",
 		flex: 1,
 		display: "flex",
 		flexDirection: "column",
