@@ -15,7 +15,9 @@ export type BarCommandKind =
 	/** SplitButton → submenu whose first item is the primary action */
 	| "split"
 	/** ToolbarToggleButton → MenuItemCheckbox; with `radioName`, ToolbarRadioButton → MenuItemRadio */
-	| "toggle";
+	| "toggle"
+	/** MenuButton that opens a Popover → MenuItem that opens the same Popover, anchored to More */
+	| "popover";
 
 interface BarCommandBase {
 	/** Unique in the bar; also the OverflowItem id */
@@ -48,6 +50,12 @@ interface BarCommandBase {
 	menuHasPrimary?: boolean;
 	/** menu / split: open state changes (e.g. to load the menu's items lazily) */
 	onMenuOpenChange?: (open: boolean) => void;
+	/** popover: the PopoverSurface's content, mounted while it's open */
+	popover?: ReactNode;
+	/** popover: whether it's open (controlled, so the caller can close it after a choice) */
+	popoverOpen?: boolean;
+	/** popover: open state changes, from the bar, More, Escape or a click outside */
+	onPopoverOpenChange?: (open: boolean) => void;
 	/** toggle: on or off (for a radio, whether this one is the chosen one) */
 	checked?: boolean;
 	/** toggle: makes it a radio; toggles sharing a radioName are one group */

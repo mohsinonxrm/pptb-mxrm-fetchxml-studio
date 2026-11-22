@@ -22,16 +22,14 @@ import { LockClosed20Regular } from "@fluentui/react-icons";
 import { useAccessMode } from "../../../../shared/hooks/useAccessMode";
 import type { EntityScopeMode } from "../../model/displaySettings";
 import { isEntityInScope } from "../../state/metadataScope";
-import { metadataCache } from "../../state/cache";
 import { usePublisherFilter } from "../../../../shared/hooks/usePublisherFilter";
 import { useSolutionFilter } from "../../../../shared/hooks/useSolutionFilter";
 import { useLazyMetadata } from "../../../../shared/hooks/useLazyMetadata";
 import { useRememberedScope } from "../../../../shared/hooks/useRememberedScope";
 import { useScopeTip } from "../../../../shared/hooks/useScopeTip";
 import type { RememberedScope } from "../../model/scopeSelection";
-import { LoadViewPicker } from "./LoadViewPicker";
 import { ScopeChip } from "./ScopeChip";
-import type { EntityMetadata, LoadedViewInfo } from "../../api/pptbClient";
+import type { EntityMetadata } from "../../api/pptbClient";
 
 const useStyles = makeStyles({
 	container: {
@@ -96,18 +94,11 @@ const useStyles = makeStyles({
 		fontSize: "14px",
 		textAlign: "center",
 	},
-	viewPickerRow: {
-		display: "flex",
-		gap: "12px",
-		alignItems: "flex-end",
-	},
 });
 
 interface EntitySelectorProps {
 	selectedEntity: string | null;
 	onEntityChange: (entityLogicalName: string) => void;
-	/** Callback when a saved view should be loaded - provides full view info for execution optimization */
-	onViewLoad?: (viewInfo: LoadedViewInfo) => void;
 	/** User-preferred entity scope mode (may be clamped to privilege ceiling) */
 	entityScopeMode: EntityScopeMode;
 	/** Change the entity source (#227: the scope chip's popover) */
@@ -120,7 +111,6 @@ interface EntitySelectorProps {
 export function EntitySelector({
 	selectedEntity,
 	onEntityChange,
-	onViewLoad,
 	entityScopeMode,
 	onEntityScopeModeChange,
 	advancedFindOnly,
@@ -193,36 +183,6 @@ export function EntitySelector({
 		solutionFilter.entities,
 		allEntities,
 	]);
-
-	// Get full entity metadata for the selected entity (needed for LoadViewPicker). An entity outside
-	// the selected solutions (from Parse to Tree, a file, a view) comes from the full entity list (#57).
-	const selectedEntityMetadata = useMemo(() => {
-		if (!selectedEntity) return null;
-		return (
-			availableEntities.find((e) => e.LogicalName === selectedEntity) ??
-			metadataCache.getAllEntityMetadata()?.find((e) => e.LogicalName === selectedEntity) ??
-			allEntities.find((e) => e.LogicalName === selectedEntity) ??
-			null
-		);
-	}, [selectedEntity, availableEntities, allEntities]);
-
-	// Handle view selection from LoadViewPicker
-	const handleViewSelect = useCallback(
-		(viewInfo: LoadedViewInfo) => {
-			if (onViewLoad) {
-				onViewLoad(viewInfo);
-			}
-		},
-		[onViewLoad],
-	);
-
-	// Handle view clear from LoadViewPicker - resets tree to default entity state
-	const handleViewClear = useCallback(() => {
-		// Re-set the same entity to reset tree to fresh state while keeping entity selected
-		if (selectedEntity) {
-			onEntityChange(selectedEntity);
-		}
-	}, [selectedEntity, onEntityChange]);
 
 	// Get current solutions based on mode
 	const currentSolutions =
@@ -477,17 +437,6 @@ export function EntitySelector({
 				</Text>
 				{entityError && <div className={styles.errorText}>{entityError}</div>}
 			</div>
-
-			{/* Load View Picker - only show when entity is selected */}
-			{selectedEntityMetadata && onViewLoad && (
-				<div className={styles.viewPickerRow}>
-					<LoadViewPicker
-						selectedEntityMetadata={selectedEntityMetadata}
-						onViewSelect={handleViewSelect}
-						onViewClear={handleViewClear}
-					/>
-				</div>
-			)}
 		</div>
 	);
 }

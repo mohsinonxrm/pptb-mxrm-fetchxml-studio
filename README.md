@@ -235,7 +235,7 @@ FetchXML Studio is available as a tool in Power Platform ToolBox. In Power Platf
 2. In **Entity**, pick the table to query, for example *Account*. The query tree shows a **Fetch query** node with that entity under it.
 3. Add columns: right-click the entity node (or use its **+** (Add…) button) and choose **All attributes** or **Select attributes…**. Add an **Order by** the same way. To filter, add a **Filter**, then choose **Condition** from the filter's own menu, and set the attribute, operator and value in the properties panel below the tree.
 4. Select **Run** in the app bar, or press **Ctrl+Enter**. The rows appear on the **Results** tab; scroll to load more. To load every page, select the **Fetch query** node, turn on **Retrieve all records** and select **Run** again.
-5. Optional: open a saved view with **Load view**, edit the FetchXML on the **FetchXML** tab (turn on **Editor mode**, then **Parse to tree**), or copy generated code from the **Code** tab.
+5. Optional: open a saved view with **Open view** in the app bar, edit the FetchXML on the **FetchXML** tab (turn on **Editor mode**, then **Parse to tree**), or copy generated code from the **Code** tab.
 
 Nothing is written to Dataverse until you choose one of the operations under **What this tool changes**, and each one asks first.
 
@@ -382,7 +382,7 @@ src/
 │       │       └── useEditorMetadata.ts # Attribute / entity metadata hooks
 │       ├── RightPane/            # Monaco editor, LayoutXML viewer, results grid,
 │       │                         # code generation panel, Power Automate pane
-│       ├── Toolbar/              # Entity selector, load view picker, save button,
+│       ├── Toolbar/              # Entity selector, save button,
 │       │                         # send-to-tool button
 
 │       ├── Dialogs/              # Save view, select attributes, delete, bulk
@@ -442,7 +442,7 @@ FetchXML Studio declares a PPTB [Inter-Tool Invocation](https://github.com/Power
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `fetchXml` | `string` | One of these three | Full serialized FetchXML query string. The root entity is parsed from this. |
-| `viewRef` | `object` | One of these three | EntityReference to an existing view. The view opens as **Load view** opens it: its FetchXML, its column layout, execution by ID while unchanged, and **Save** offering to overwrite it. If it doesn't exist, you can't read it, or Dataverse returns an error, a message above the tree says so; it stays until a query starts or you press **New**. A query that can't be parsed is reported the same way. |
+| `viewRef` | `object` | One of these three | EntityReference to an existing view. The view opens as **Open view** opens it: its FetchXML, its column layout, execution by ID while unchanged, and **Save** offering to overwrite it. If it doesn't exist, you can't read it, or Dataverse returns an error, a message above the tree says so; it stays until a query starts or you press **New**. A query that can't be parsed is reported the same way. |
 | `entityLogicalName` | `string` | One of these three | Root entity logical name (e.g. `"account"`). Starts a fresh query on that entity. **Ignored when `fetchXml` is present** — the root entity is then derived from the FetchXML, since a mismatched value would break this metadata-driven tool's lookups. |
 | `viewRef.id` | `string` (uuid) | Required if viewRef | GUID of the view record |
 | `viewRef.entityLogicalName` | `"savedquery"` \| `"userquery"` | Required if viewRef | Dataverse entity logical name — `savedquery` = system/public view, `userquery` = personal view |

@@ -399,6 +399,13 @@ function AppContent({
 					unsaved={unsaved}
 					hasUnsavedChanges={hasUnsavedChanges}
 					onNewQuery={startNewQuery}
+					openView={{
+						entityLogicalName: builder.fetchQuery?.entity?.name,
+						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
+						entitySetName: entityMetadata?.EntitySetName,
+						currentViewId: viewIdentity?.view?.id,
+						onOpen: applyLoadedView,
+					}}
 				/>
 				<div className={styles.root} data-app-root>
 					{/* Left Pane */}
@@ -425,7 +432,6 @@ function AppContent({
 									onAdvancedFindOnlyChange={(advancedFindOnly) =>
 										setDisplaySettings({ ...displaySettings, advancedFindOnly })
 									}
-									onViewLoad={applyLoadedView}
 								/>
 							</PaneErrorBoundary>
 							<TreeNoticeBar
