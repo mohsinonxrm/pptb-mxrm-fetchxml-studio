@@ -197,6 +197,29 @@ function AppContent({
 		layout.setInspectorOpen(false);
 		editPropertiesRef.current?.focus();
 	};
+	// The drawer has nothing to show once nothing is selected (New, Open view, a deleted node)
+	const { setInspectorOpen } = layout;
+	const hasSelection = !!builder.selectedNode;
+	useEffect(() => {
+		if (!hasSelection) setInspectorOpen(false);
+	}, [hasSelection, setInspectorOpen]);
+	// When Properties move between the pane and the drawer, focus that was in them would fall to the
+	// page: it goes to Edit properties, or to the selected tree item when Properties are docked
+	const lastHost = useRef(layout.propertiesHost);
+	useEffect(() => {
+		if (lastHost.current === layout.propertiesHost) return;
+		lastHost.current = layout.propertiesHost;
+		if (document.activeElement && document.activeElement !== document.body) return;
+		if (layout.propertiesHost === "drawer") {
+			editPropertiesRef.current?.focus();
+			return;
+		}
+		const tree = document.getElementById(QUERY_TREE_ID);
+		const item =
+			tree?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
+			tree?.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]');
+		item?.focus();
+	}, [layout.propertiesHost]);
 
 	// Check Dataverse API on mount. WhoAmI is memoized per connection, so this shares the startup
 	// request with the privilege checks (#71); the details are debug output only.

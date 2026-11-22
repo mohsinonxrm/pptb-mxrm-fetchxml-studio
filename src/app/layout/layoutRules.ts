@@ -1,6 +1,5 @@
 /**
- * Pure layout rules for the builder pane (#234). Not used yet: the hook and
- * components that consume these come later.
+ * Pure layout rules for the builder pane (#234), used by useBuilderLayout.
  *
  * Owner decisions (2026-11-07, #234):
  * - The builder pane always starts docked. Docked/collapsed/peek is NOT

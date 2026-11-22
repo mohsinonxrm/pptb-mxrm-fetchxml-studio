@@ -23,6 +23,9 @@ const useStyles = makeStyles({
 		inset: 0,
 		pointerEvents: "none",
 		overflow: "hidden",
+		// Above what the tab's content raises (the results info bar, Monaco's scrollbars)
+		zIndex: 20,
+		isolation: "isolate",
 	},
 	drawer: {
 		pointerEvents: "auto",

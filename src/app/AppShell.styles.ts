@@ -48,7 +48,9 @@ export const useStyles = makeStyles({
 		overflow: "hidden",
 		minHeight: 0, // Important for flex child with overflow
 	},
+	// Properties take the height the tree leaves (the tree has its own height while docked)
 	leftPaneBottom: {
+		flex: "1 1 0",
 		display: "flex",
 		flexDirection: "column",
 		minHeight: "100px",

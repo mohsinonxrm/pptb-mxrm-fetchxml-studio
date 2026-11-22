@@ -125,6 +125,46 @@ describe("the builder pane's layout", () => {
 			await key(inside ?? null, "Escape");
 			await app.waitFor(() => !drawer());
 			expect(document.activeElement).toBe(button("Edit properties", bar() ?? undefined));
+
+			// Widening the window while focus is in the drawer docks Properties; focus goes to the
+			// selected tree item instead of the page
+			await click(button("Edit properties", bar() ?? undefined));
+			await app.waitFor(() => !!drawer());
+			drawer()?.querySelector<HTMLElement>("button")?.focus();
+			Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+			await act(async () => {
+				window.dispatchEvent(new Event("resize"));
+			});
+			await app.waitFor(() => !!splitter(TREE));
+			expect(drawer()).toBeNull();
+			expect(document.activeElement?.closest('[role="treeitem"]')?.textContent).toContain(
+				"account",
+			);
+
+			// New clears the selection: the drawer closes instead of showing nothing
+			Object.defineProperty(window, "innerWidth", { configurable: true, value: 900 });
+			await act(async () => {
+				window.dispatchEvent(new Event("resize"));
+			});
+			await app.waitFor(() => !!bar());
+			await click(button("Edit properties", bar() ?? undefined));
+			await app.waitFor(() => !!drawer());
+			const appBar = document.querySelector<HTMLElement>(
+				'[role="toolbar"][aria-label="Query commands"]',
+			);
+			await click(button("New", appBar ?? undefined));
+			const discard = () =>
+				[
+					...(document
+						.querySelector('[role="alertdialog"]')
+						?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+				].find((b) => b.textContent?.trim() === "Discard changes");
+			await app.waitFor(() => !!discard() || !document.querySelector('[role="treeitem"]'));
+			if (discard()) await click(discard());
+			await app.waitFor(() => !document.querySelector('[role="treeitem"]'));
+			await app.waitFor(() => !drawer());
+			expect(bar()?.textContent).toContain("Nothing selected");
+			expect(document.querySelector('[aria-label^="Properties:"]')).toBeNull();
 		},
 		FLOW_TIMEOUT,
 	);

@@ -64,6 +64,12 @@ function useWindowWidth(): number {
 	return width;
 }
 
+function write(layout: PersistedLayout) {
+	window.toolboxAPI?.settings
+		?.set?.(LAYOUT_KEY, layout)
+		?.catch((error: unknown) => console.warn("Couldn't save the pane sizes:", error));
+}
+
 export function useBuilderLayout(): BuilderLayout {
 	const windowWidth = useWindowWidth();
 	// What the user chose (or what was saved), raw; undefined means the default for the window
@@ -73,6 +79,8 @@ export function useBuilderLayout(): BuilderLayout {
 	// The saved layout is read once; nothing is saved before that, and a size the user set while it
 	// was being read wins over the saved one
 	const loaded = useRef(false);
+	// A size settled while the saved layout was being read, to save once it has been read
+	const pending = useRef(false);
 	const touched = useRef({ width: false, height: false });
 	const saved = useRef<PersistedLayout>({});
 
@@ -89,10 +97,11 @@ export function useBuilderLayout(): BuilderLayout {
 					setWidth(layout.builderWidth);
 				if (!touched.current.height && layout.treeHeight !== undefined)
 					setHeight(layout.treeHeight);
+				loaded.current = true;
+				if (pending.current) write(saved.current);
 			} catch (error) {
+				// Not saved this session either: saving now would overwrite the sizes that couldn't be read
 				console.warn("Couldn't read the saved pane sizes:", error);
-			} finally {
-				if (mounted) loaded.current = true;
 			}
 		})();
 		return () => {
@@ -102,16 +111,20 @@ export function useBuilderLayout(): BuilderLayout {
 
 	const save = useCallback((next: PersistedLayout) => {
 		saved.current = { ...saved.current, ...next };
-		if (!loaded.current) return;
-		window.toolboxAPI?.settings
-			?.set?.(LAYOUT_KEY, saved.current)
-			?.catch((error: unknown) => console.warn("Couldn't save the pane sizes:", error));
+		if (loaded.current) write(saved.current);
+		else pending.current = true;
 	}, []);
 
 	const widthLimits = builderWidthLimits(windowWidth);
 	const builderWidth = clampBuilderWidth(width ?? widthLimits.defaultValue, windowWidth);
 	const treeHeight = clampTreeHeight(height ?? TREE_HEIGHT_DEFAULT);
 	const host = hostFor({ pane: "docked", windowWidth, builderWidth });
+	// The drawer closes when Properties move out of it, and doesn't reopen when they come back
+	const [lastHost, setLastHost] = useState(host);
+	if (host !== lastHost) {
+		setLastHost(host);
+		setInspectorOpen(false);
+	}
 
 	return {
 		builderWidth,

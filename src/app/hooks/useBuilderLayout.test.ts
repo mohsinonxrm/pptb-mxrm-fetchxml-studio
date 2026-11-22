@@ -103,11 +103,29 @@ describe("the builder pane's sizes", () => {
 		await flush(3);
 		expect(latest.builderWidth).toBe(500);
 		expect(latest.treeHeight).toBe(300);
+		// What was settled meanwhile is saved once the read is done, with the saved tree height
+		expect(settings.set).toHaveBeenCalledTimes(1);
+		expect(settings.set).toHaveBeenLastCalledWith(LAYOUT_KEY, {
+			builderWidth: 500,
+			treeHeight: 300,
+		});
 		await act(async () => latest.commitTreeHeight(260));
 		expect(settings.set).toHaveBeenLastCalledWith(LAYOUT_KEY, {
 			builderWidth: 500,
 			treeHeight: 260,
 		});
+	});
+});
+
+describe("when the saved layout can't be read", () => {
+	it("the sizes still work, but nothing is saved over the ones that couldn't be read", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		settings.get.mockRejectedValue(new Error("settings unavailable"));
+		await render(createElement(Probe));
+		await flush(5);
+		await act(async () => latest.commitBuilderWidth(450));
+		expect(latest.builderWidth).toBe(450);
+		expect(settings.set).not.toHaveBeenCalled();
 	});
 });
 
@@ -135,6 +153,10 @@ describe("where Properties live", () => {
 		await act(async () => latest.setInspectorOpen(true));
 		expect(latest.inspectorOpen).toBe(true);
 		await setWindowWidth(1280);
+		expect(latest.inspectorOpen).toBe(false);
+		// Back in drawer mode, it stays closed until asked for again
+		await setWindowWidth(900);
+		expect(latest.propertiesHost).toBe("drawer");
 		expect(latest.inspectorOpen).toBe(false);
 	});
 });
