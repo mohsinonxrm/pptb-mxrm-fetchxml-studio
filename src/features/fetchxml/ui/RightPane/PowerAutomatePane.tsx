@@ -1,19 +1,21 @@
+/**
+ * Power Automate on the Code tab (#233): what to type into the Microsoft Dataverse connector's "List
+ * rows" action, field by field. Each field is labelled as the connector labels it, with its hint and
+ * its own Copy; Copy all is in the language row (CodePanel).
+ */
 import {
-	Input,
-	Textarea,
-	Label,
 	Button,
-	Tooltip,
+	Caption1,
+	Field,
+	Input,
 	MessageBar,
 	MessageBarBody,
 	MessageBarTitle,
-	Subtitle1,
 	Subtitle2,
-	Caption1,
-	Badge,
-	mergeClasses,
-	tokens,
+	Textarea,
+	Tooltip,
 	makeStyles,
+	tokens,
 } from "@fluentui/react-components";
 import { Copy20Regular, Flash20Filled } from "@fluentui/react-icons";
 import { useCopy } from "../../../../shared/feedback/useCopy";
@@ -22,34 +24,32 @@ import type {
 	PowerAutomateField,
 } from "../../engine/fetchxmlCodeGenerators";
 
-// Form-style view that mirrors the Dataverse connector's "List rows" action UI.
-// Each row is: label | read-only Input (or Textarea) | Copy button.
-
-const usePAStyles = makeStyles({
+const useStyles = makeStyles({
+	root: {
+		display: "flex",
+		flexDirection: "column",
+		gap: tokens.spacingVerticalL,
+		maxWidth: "880px",
+	},
+	heading: {
+		display: "flex",
+		alignItems: "baseline",
+		flexWrap: "wrap",
+		columnGap: tokens.spacingHorizontalS,
+	},
+	headingIcon: { color: tokens.colorBrandForeground1, alignSelf: "center" },
+	connector: { color: tokens.colorNeutralForeground3 },
+	// Field (label, value, hint) | Copy, lined up with the value
 	row: {
 		display: "grid",
-		gridTemplateColumns: "180px minmax(0, 1fr) auto",
-		gap: "12px",
+		gridTemplateColumns: "minmax(0, 1fr) auto",
+		columnGap: tokens.spacingHorizontalS,
 		alignItems: "start",
-		marginBottom: "14px",
 	},
-	rowLabel: {
-		paddingTop: "6px",
-		fontWeight: 500,
-		color: tokens.colorNeutralForeground1,
-	},
-	rowLabelEmpty: {
-		color: tokens.colorNeutralForeground3,
-	},
-	hint: {
-		fontSize: "10px",
-		color: tokens.colorNeutralForeground3,
-		marginTop: "4px",
-		display: "block",
-	},
-	copyBtn: {
-		minWidth: "90px",
-	},
+	value: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200 },
+	// The Field's label line, so Copy sits beside the value rather than the label
+	copy: { marginTop: "22px" },
+	notes: { margin: `${tokens.spacingVerticalXS} 0 0`, paddingLeft: tokens.spacingHorizontalL },
 });
 
 export interface PowerAutomatePaneProps {
@@ -57,81 +57,32 @@ export interface PowerAutomatePaneProps {
 }
 
 export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
-	const copy = useCopy();
-	const s = usePAStyles();
-	const populatedCount = spec.fields.filter((f) => f.value).length;
-	const allAsText = spec.fields
-		.filter((f) => f.value)
-		.map((f) => `${f.label.padEnd(28)} ${f.value}`)
-		.join("\n");
-
+	const styles = useStyles();
 	return (
-		<div>
-			{/* Header — action name + connector context */}
-			<div
-				style={{
-					marginBottom: 16,
-					display: "flex",
-					alignItems: "baseline",
-					gap: 12,
-					flexWrap: "wrap",
-				}}
-			>
-				<Flash20Filled style={{ color: tokens.colorBrandForeground1, marginTop: 6 }} />
-				<Subtitle1 style={{ fontFamily: tokens.fontFamilyBase }}>
-					{spec.actionName}
-				</Subtitle1>
-				<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-					· {spec.connector}
+		<div className={styles.root}>
+			<div className={styles.heading}>
+				<Flash20Filled className={styles.headingIcon} />
+				<Subtitle2 as="h3">{spec.actionName}</Subtitle2>
+				<Caption1 className={styles.connector}>
+					{spec.connector} · labels match the connector
 				</Caption1>
-				<span style={{ flexGrow: 1 }} />
-				<Badge appearance="ghost">
-					{populatedCount} of {spec.fields.length} populated
-				</Badge>
-				<Tooltip
-					content="Copy every populated field as one block"
-					relationship="description"
-				>
-					<Button
-						size="small"
-						appearance="outline"
-						icon={<Copy20Regular />}
-						onClick={() => void copy(allAsText, "all fields")}
-					>
-						Copy all
-					</Button>
-				</Tooltip>
 			</div>
 
 			{spec.banner && (
-				<MessageBar layout="multiline" intent="info" style={{ marginBottom: 14 }}>
+				<MessageBar layout="multiline" intent="info">
 					<MessageBarBody>{spec.banner}</MessageBarBody>
 				</MessageBar>
 			)}
 
-			{/* Section label */}
-			<Subtitle2
-				style={{
-					display: "block",
-					marginBottom: 10,
-					color: tokens.colorNeutralForeground2,
-				}}
-			>
-				{spec.actionName}
-			</Subtitle2>
+			{spec.fields.map((f) => (
+				<PowerAutomateRow key={f.label} field={f} />
+			))}
 
-			<div>
-				{spec.fields.map((f) => (
-					<PARow key={f.label} field={f} styles={s} />
-				))}
-			</div>
-
-			{/* Notes */}
 			{spec.notes && spec.notes.length > 0 && (
-				<MessageBar layout="multiline" intent="info" style={{ marginTop: 14 }}>
+				<MessageBar layout="multiline" intent="info">
 					<MessageBarBody>
 						<MessageBarTitle>Notes</MessageBarTitle>
-						<ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+						<ul className={styles.notes}>
 							{spec.notes.map((n, i) => (
 								<li key={i}>{n}</li>
 							))}
@@ -143,74 +94,36 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 	);
 }
 
-function PARow({
-	field,
-	styles,
-}: {
-	field: PowerAutomateField;
-	styles: ReturnType<typeof usePAStyles>;
-}) {
+function PowerAutomateRow({ field }: { field: PowerAutomateField }) {
+	const styles = useStyles();
 	const copy = useCopy();
-
-	// "Copied {field}" or "Couldn't copy to the clipboard" (#277)
-	const onCopy = () => {
-		if (!field.value) return;
-		void copy(field.value, field.label);
-	};
-
+	const empty = !field.value;
+	const copyName = empty ? `Copy ${field.label}: it's empty` : `Copy ${field.label}`;
 	return (
 		<div className={styles.row}>
-			<Label
-				className={mergeClasses(
-					styles.rowLabel,
-					!field.value ? styles.rowLabelEmpty : undefined,
-				)}
-			>
-				{field.label}
-			</Label>
-
-			<div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+			<Field label={field.label} hint={field.hint}>
 				{field.multiline ? (
 					<Textarea
+						// The font goes on the <textarea> itself, which sets its own
+						textarea={{ className: styles.value }}
 						value={field.value}
 						readOnly
-						rows={Math.min(4, Math.max(1, Math.ceil(field.value.length / 80)))}
-						appearance="filled-lighter"
-						style={{
-							width: "100%",
-							fontFamily: tokens.fontFamilyMonospace,
-							fontSize: 12,
-						}}
+						resize="vertical"
+						rows={Math.min(6, Math.max(2, field.value.split("\n").length))}
 					/>
 				) : (
-					<Input
-						value={field.value}
-						readOnly
-						appearance="filled-lighter"
-						style={{
-							width: "100%",
-							fontFamily: tokens.fontFamilyMonospace,
-							fontSize: 12,
-						}}
-					/>
+					<Input className={styles.value} value={field.value} readOnly />
 				)}
-				{field.hint && <Caption1 className={styles.hint}>{field.hint}</Caption1>}
-			</div>
-
-			<Tooltip
-				content={field.value ? "Copy this value" : "Empty — nothing to copy"}
-				relationship="label"
-			>
+			</Field>
+			<Tooltip content={copyName} relationship="label">
 				<Button
-					size="medium"
-					appearance={field.value ? "outline" : "subtle"}
-					disabled={!field.value}
+					className={styles.copy}
+					appearance="subtle"
 					icon={<Copy20Regular />}
-					onClick={onCopy}
-					className={styles.copyBtn}
-				>
-					Copy
-				</Button>
+					disabledFocusable={empty}
+					// "Copied Fetch Xml Query" or "Couldn't copy to the clipboard" (#277)
+					onClick={empty ? undefined : () => void copy(field.value, field.label)}
+				/>
 			</Tooltip>
 		</div>
 	);

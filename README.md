@@ -130,14 +130,14 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Search & filter** — Real-time filtering across logical name, display name, and data type columns
 
 ### 🔀 Code Generation
-- **Code tab** — New tab in the right pane that generates ready-to-use code from the current query in seven formats
+- **Code tab** — Ready-to-use code from the current query in seven languages, on a row of language tabs in this order: C# QueryExpression, C# FetchExpression, Web API, Xrm.WebApi, Power Automate, pac CLI, SQL (TDS). Languages that don't fit move into **More**, and **Copy** stays at the end of the row (**Copy all** on Power Automate). It opens on C# QueryExpression, or on C# FetchExpression when you aren't connected; the language you pick stays while you switch tabs, until the tool restarts. When Dataverse can't convert the query, the tab says so with **Try again** and **Copy details**
 - **C# QueryExpression** — Full SDK object graph (`QueryExpression`, `ColumnSet`, `FilterExpression`, `ConditionExpression`, `LinkEntity`, `OrderExpression`) via the Dataverse `FetchXmlToQueryExpression` API; supports aggregate queries with `XrmAggregateType` and `XrmDateTimeGrouping`, any/all filters on related rows, paging, query hints and retained data. Values keep the type Dataverse reports (`"00123"` stays a string, decimals get `m`). Converted only while the tab is selected, after typing pauses
 - **C# FetchExpression** — Simple `new FetchExpression(@"...")` wrapper using a verbatim string literal
-- **JavaScript** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
+- **Xrm.WebApi** — `Xrm.WebApi.retrieveMultipleRecords` call for model-driven apps and PCF components
 - **pac CLI** — `pac env fetch --xml '...'` for the Power Platform CLI, as a bash / zsh line and a PowerShell line. The XML is single-quoted, so the shell never expands values such as `$100` or `$(...)`
-- **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI; table name resolved from `EntityDefinitions` metadata (not a heuristic), each field individually copyable; Top Count is taken only from `top` (`count` is a page size)
+- **Power Automate** — Field-by-field form mirroring the Dataverse "List rows" connector UI: each field labelled as the connector labels it, with its hint and its own Copy; table name resolved from `EntityDefinitions` metadata (not a heuristic); Top Count is taken only from `top` (`count` is a page size)
 - **Web API** — Full OData URL with request headers (including `Prefer: odata.include-annotations="*"` for formatted values and paging cookies), the documented paging-cookie steps, a cURL snippet and a PowerShell `Invoke-RestMethod` example; entity set name resolved from metadata
-- **SQL** — Dataverse-generated T-SQL via `FetchXMLToSQL` (undocumented API, labelled Preview); also converted only while selected
+- **SQL (TDS)** — Dataverse-generated T-SQL via `FetchXMLToSQL`. A note says it's a preview, since the API isn't documented, with a link to [Use SQL to query data](https://learn.microsoft.com/power-apps/developer/data-platform/dataverse-sql-query); also converted only while selected
 
 ### 🎨 User Experience
 - **Errors stay contained** — If one panel fails to render, only that panel shows an error, with **Try again** and **Copy details**; the rest of the tool keeps working. If the whole tool fails, **Restart with this query** brings it back with your query, or copy the FetchXML first
