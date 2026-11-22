@@ -39,11 +39,9 @@ import {
 import type { NodeId } from "../../model/nodes";
 
 const useStyles = makeStyles({
+	// Flat on the tab (#233), like the other tabs
 	card: {
-		borderRadius: tokens.borderRadiusMedium,
-		boxShadow: tokens.shadow16,
 		backgroundColor: tokens.colorNeutralBackground1,
-		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		height: "100%",
 		display: "flex",
 		flexDirection: "column",
