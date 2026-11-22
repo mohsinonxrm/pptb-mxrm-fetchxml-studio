@@ -66,48 +66,29 @@ const useStyles = makeStyles({
 		paddingBottom: "8px",
 		borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
 	},
+	// Each tab's content sits flat on the pane (#233): no canvas, no floating cards
 	tabContent: {
 		flex: 1,
 		overflow: "hidden",
-		padding: "6px",
-		backgroundColor: tokens.colorNeutralBackground3, // Neutral canvas background
-	},
-	// Shared surface card styling (floating cards with shadow)
-	surfaceCard: {
-		borderRadius: tokens.borderRadiusMedium,
-		boxShadow: tokens.shadow16,
 		backgroundColor: tokens.colorNeutralBackground1,
-		border: `1px solid ${tokens.colorNeutralStroke2}`,
 	},
-	// Toolbar card styling
+	// The Results command bar, divided from the grid by a thin line
 	toolbarCard: {
-		borderRadius: tokens.borderRadiusMedium,
-		boxShadow: tokens.shadow16,
-		backgroundColor: tokens.colorNeutralBackground1,
-		border: `1px solid ${tokens.colorNeutralStroke2}`,
-		padding: "4px 8px",
+		padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
+		borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 		flexShrink: 0,
 	},
-	// Grid card styling
+	// The results grid takes the rest of the tab
 	gridCard: {
-		borderRadius: tokens.borderRadiusMedium,
-		boxShadow: tokens.shadow16,
-		backgroundColor: tokens.colorNeutralBackground1,
-		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		display: "flex",
 		flexDirection: "column",
 		flex: 1,
 		minHeight: "240px",
-		minWidth: "480px",
+		minWidth: 0,
 		overflow: "hidden",
-		marginTop: "8px",
 	},
-	// Code card for FetchXML tab
+	// A full-height tab body (FetchXML, LayoutXML, Code)
 	codeCard: {
-		borderRadius: tokens.borderRadiusMedium,
-		boxShadow: tokens.shadow16,
-		backgroundColor: tokens.colorNeutralBackground1,
-		border: `1px solid ${tokens.colorNeutralStroke2}`,
 		height: "100%",
 		display: "flex",
 		flexDirection: "column",
@@ -480,7 +461,9 @@ export function PreviewTabs({
 				<PreviewHeader
 					selectedTab={selectedTab}
 					onTabSelect={setSelectedTab}
-					advisoryCount={advisories.length}
+					advisories={advisories}
+					// A run that failed has no rows to count (its message is in the tab)
+					rowCount={executeError ? undefined : result?.rows.length}
 				/>
 				{(isExecuting || isLoadingMore) && (
 					<div className={styles.progressContainer}>
