@@ -149,17 +149,18 @@ export function AppShell() {
 	);
 }
 
-/** Focus moving into a peek (#234): the selected tree item, else the first control. The tree peek's
- * first control is the scope chip (Pin comes after it); the Properties peek is searched from its
- * properties, below its Pin. */
+/** Focus moving into a peek (#234): the selected tree item, else the first field (the Entity picker,
+ * or the first property, not a field's info button), else the first control. The Properties peek is
+ * searched from its properties, below its Pin. */
 function focusInside(container: HTMLElement | null) {
 	if (!container) return;
 	const target =
 		container.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
 		container.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ??
 		container.querySelector<HTMLElement>(
-			'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]',
-		);
+			'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), [role="combobox"]:not([disabled]):not([aria-disabled="true"])',
+		) ??
+		container.querySelector<HTMLElement>('button:not([disabled]), [tabindex="0"]');
 	target?.focus();
 }
 

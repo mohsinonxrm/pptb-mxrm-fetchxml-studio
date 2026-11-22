@@ -231,6 +231,8 @@ describe("the builder pane's layout", () => {
 			expect(document.getElementById("fxs-query-tree")?.style.display).toBe("none");
 			expect(peek("Properties")?.contains(document.activeElement)).toBe(true);
 			expect(document.activeElement).not.toBe(named("Pin the builder pane open"));
+			// The first field (the link-entity's Entity), not a field's info button
+			expect(document.activeElement?.tagName).toBe("INPUT");
 			// Its rail button again closes it
 			await click(named("Properties"));
 			await app.waitFor(() => !peek("Properties"));
