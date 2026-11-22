@@ -462,7 +462,8 @@ export function PreviewTabs({
 					selectedTab={selectedTab}
 					onTabSelect={setSelectedTab}
 					advisories={advisories}
-					rowCount={result?.rows.length}
+					// A run that failed has no rows to count (its message is in the tab)
+					rowCount={executeError ? undefined : result?.rows.length}
 				/>
 				{(isExecuting || isLoadingMore) && (
 					<div className={styles.progressContainer}>

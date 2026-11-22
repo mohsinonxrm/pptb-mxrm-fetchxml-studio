@@ -4,9 +4,9 @@
  * their accessible names too, and keep them in More. The commands are in the app bar (AppBar.test.ts). jsdom has
  * no layout, so widths come from stubOverflowWidths.
  */
-import { createElement } from "react";
+import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, click, render, stubOverflowWidths } from "../../../../shared/testing/ui";
+import { cleanup, click, flush, render, stubOverflowWidths } from "../../../../shared/testing/ui";
 import { PreviewHeader, type PreviewHeaderProps } from "./PreviewHeader";
 import type { Advisory, AdvisoryLevel } from "../../model/advisories";
 
@@ -77,8 +77,10 @@ describe("the header's tabs", () => {
 		expect(tab("Results")?.getAttribute("aria-label")).toBe("Results");
 		cleanup();
 		await renderHeader({ rowCount: 48213 });
-		const results = tab("Results, 48,213 rows");
-		expect(badgeOf(results)?.textContent).toBe(new Intl.NumberFormat().format(48213));
+		// In the machine's own locale: "48,213" here, "48.213" in de-DE
+		const count = new Intl.NumberFormat().format(48213);
+		const results = tab(`Results, ${count} rows`);
+		expect(badgeOf(results)?.textContent).toBe(count);
 		cleanup();
 		await renderHeader({ rowCount: 1 });
 		expect(tab("Results, 1 row")).toBeTruthy();
@@ -111,7 +113,7 @@ describe("the header's tabs", () => {
 		cleanup();
 		await renderHeader({ advisories: [advisory("advice", "a1")] });
 		const advice = badgeOf(tab("Advisories, 1: 1 performance advice"));
-		expect(advice?.dataset.color).toBe("informative");
+		expect(advice?.dataset.color).toBe("brand");
 		expect(advice?.querySelector("svg")).toBeNull();
 		cleanup();
 		await renderHeader({ advisories: [] });
@@ -143,5 +145,39 @@ describe("the header's tabs", () => {
 		].find((i) => i.textContent?.trim() === "FetchXML");
 		await click(fetchXml);
 		expect(onTabSelect).toHaveBeenCalledWith("xml");
+	});
+});
+
+describe("a count that makes a tab wider", () => {
+	it("moves tabs into More without the pane resizing, and back when it goes", async () => {
+		// 5 tabs of 80 px fit in 460 px; Results with "48,213" is 140 px, so one tab no longer fits
+		stubOverflowWidths({
+			container: 460,
+			item: (element) => (element.querySelector(".fui-Badge") ? 140 : 80),
+		});
+		let setRows: (rows: number | undefined) => void = () => {};
+		function Header() {
+			const [rows, set] = useState<number | undefined>(undefined);
+			setRows = set;
+			return createElement(PreviewHeader, {
+				selectedTab: "xml",
+				onTabSelect: () => {},
+				advisories: [],
+				rowCount: rows,
+			});
+		}
+		await render(createElement(Header));
+		await flush(5);
+		expect(overflowed(tab("Code"))).toBe(false);
+		expect(moreTabs()).toBeFalsy();
+
+		await act(async () => setRows(48213));
+		await flush(10);
+		expect(overflowed(tab("Code"))).toBe(true);
+		expect(moreTabs()).toBeTruthy();
+
+		await act(async () => setRows(undefined));
+		await flush(10);
+		expect(overflowed(tab("Code"))).toBe(false);
 	});
 });

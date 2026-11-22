@@ -86,6 +86,6 @@ export interface BarTab {
 	icon?: FluentIcon;
 	/** Extra content after the label inside the tab and its More entry, such as a count badge */
 	content?: ReactNode;
-	/** The accessible name of the tab and its More entry, when `content` would read badly ("Advisories (3)") */
+	/** The accessible name of the tab and its More entry, when `content` would read badly ("Advisories, 3: 1 will be rejected, 2 might be rejected") */
 	ariaLabel?: string;
 }

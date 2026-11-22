@@ -2,6 +2,9 @@
  * The shared tab row (#232): a Fluent TabList inside Overflow, following Fluent's TabList overflow
  * pattern. Tabs that don't fit move into a "More" menu; the selected tab gets a higher priority so it
  * always stays visible, and choosing a tab from More selects it. Never wraps.
+ *
+ * Fluent measures again only when the TabList itself resizes, which a tab growing doesn't do (a count
+ * badge going from 5 to 48,213, #233). So the row measures again whenever a tab's name changes.
  */
 import {
 	Button,
@@ -20,7 +23,9 @@ import {
 	useOverflowVisibility,
 	type TabListProps,
 } from "@fluentui/react-components";
+import { useOverflowContext } from "@fluentui/react-overflow";
 import { MoreHorizontal20Filled, MoreHorizontal20Regular, bundleIcon } from "@fluentui/react-icons";
+import { useEffect } from "react";
 import type { BarTab } from "./types";
 
 const MoreIcon = bundleIcon(MoreHorizontal20Filled, MoreHorizontal20Regular);
@@ -49,6 +54,16 @@ const useStyles = makeStyles({
 		"& > *": { flexShrink: 0, whiteSpace: "nowrap" },
 	},
 });
+
+/** Measures the row again when `signature` changes (a tab's label or name, such as its count) */
+function Remeasure({ signature }: { signature: string }) {
+	const updateOverflow = useOverflowContext((context) => context.updateOverflow);
+	// After layout: Fluent sets updateOverflow up in its own layout effect, which runs after this one's
+	useEffect(() => {
+		updateOverflow();
+	}, [signature, updateOverflow]);
+	return null;
+}
 
 function MoreTabs({
 	tabs,
@@ -141,6 +156,11 @@ export function OverflowTabList({
 					);
 				})}
 				<MoreTabs tabs={tabs} onTabSelect={onTabSelect} size={size} />
+				<Remeasure
+					signature={tabs
+						.map((t) => `${t.value}:${t.label}:${t.ariaLabel ?? ""}`)
+						.join("|")}
+				/>
 			</TabList>
 		</Overflow>
 	);

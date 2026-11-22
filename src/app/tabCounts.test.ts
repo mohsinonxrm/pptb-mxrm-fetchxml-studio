@@ -61,4 +61,33 @@ describe("the right pane's tab counts", () => {
 		},
 		FLOW_TIMEOUT,
 	);
+
+	it(
+		"a run that failed shows no count on Results",
+		async () => {
+			let fail = true;
+			const app = await renderApp({
+				launch: {
+					fetchXml:
+						"<fetch count='50'><entity name='account'><attribute name='name'/></entity></fetch>",
+				},
+				beforePage: () => {
+					if (fail)
+						throw new Error(
+							"0x80041103: 'account' entity doesn't contain attribute with Name = 'nme'.",
+						);
+				},
+			});
+			await app.waitFor(() => !!button("Run", document));
+			await click(button("Run", document));
+			await app.waitFor(() => /didn't run/i.test(document.body.textContent ?? ""));
+			expect(tabNames()).toContain("Results");
+			expect(tabNames().some((n) => n?.startsWith("Results, "))).toBe(false);
+			// Once it runs, the count is back
+			fail = false;
+			await click(button("Run", document));
+			await app.waitFor(() => tabNames().some((n) => /^Results, \d+ rows?$/.test(n ?? "")));
+		},
+		FLOW_TIMEOUT,
+	);
 });
