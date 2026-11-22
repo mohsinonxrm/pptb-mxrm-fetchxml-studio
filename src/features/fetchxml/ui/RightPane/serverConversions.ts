@@ -31,6 +31,20 @@ export interface ConversionResult {
 }
 
 /**
+ * The conversions asked for and their results, kept by the Code tab's parent (PreviewTabs) so they
+ * outlive the tab: going back to Code doesn't ask Dataverse again for the same query (#199, #233).
+ * A request still running when the tab closes lands here, and the tab shows it once it's back.
+ */
+export interface ConversionCache {
+	requested: Partial<Record<ServerConversion, string>>;
+	results: Partial<Record<ServerConversion, ConversionResult>>;
+	/** The open Code tab's state setter, told when a result lands */
+	onChange?: (results: Partial<Record<ServerConversion, ConversionResult>>) => void;
+}
+
+export const createConversionCache = (): ConversionCache => ({ requested: {}, results: {} });
+
+/**
  * Whether to send a request for `key`: not when one was already sent for it, unless that one
  * failed (so selecting the format again retries).
  */

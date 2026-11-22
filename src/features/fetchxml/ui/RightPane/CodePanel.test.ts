@@ -4,7 +4,7 @@
  * note, and a conversion that failed with Try again and Copy details. The connection and the
  * Dataverse conversions are mocked; Monaco is a textarea.
  */
-import { createElement, useState } from "react";
+import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	button,
@@ -17,6 +17,7 @@ import {
 } from "../../../../shared/testing/ui";
 import { CodePanel, type CodeLanguage } from "./CodePanel";
 import { CODE_LANGUAGE_LABELS, CODE_LANGUAGES } from "./codePanelRules";
+import { createConversionCache } from "./serverConversions";
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -188,5 +189,91 @@ describe("a conversion that failed", () => {
 		expect(api.fetchXmlToQueryExpression).toHaveBeenCalledTimes(2);
 		expect(code()).toContain('new QueryExpression("account")');
 		expect(text()).not.toContain("No code to show");
+	});
+});
+
+describe("leaving the Code tab and coming back (#199)", () => {
+	it("doesn't ask Dataverse again for the same query", async () => {
+		const cache = createConversionCache();
+		const panel = () =>
+			createElement(CodePanel, {
+				fetchXml: XML,
+				language: null,
+				onLanguageChange: () => {},
+				cache,
+			});
+		await render(panel());
+		await settle();
+		expect(api.fetchXmlToQueryExpression).toHaveBeenCalledTimes(1);
+		cleanup();
+		stubOverflowWidths({ container: 3000 });
+		await render(panel());
+		// The code is there at once, without a second request
+		expect(code()).toContain('new QueryExpression("account")');
+		await settle();
+		expect(api.fetchXmlToQueryExpression).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows a result that landed while the tab was closed", async () => {
+		const cache = createConversionCache();
+		let resolve: (qe: unknown) => void = () => {};
+		api.fetchXmlToQueryExpression.mockReturnValue(new Promise((r) => (resolve = r)));
+		const panel = () =>
+			createElement(CodePanel, {
+				fetchXml: XML,
+				language: null,
+				onLanguageChange: () => {},
+				cache,
+			});
+		await render(panel());
+		await settle();
+		expect(text()).toContain("Generating…");
+		cleanup();
+		await act(async () => resolve(QE));
+		stubOverflowWidths({ container: 3000 });
+		await render(panel());
+		await flush(5);
+		expect(code()).toContain('new QueryExpression("account")');
+		expect(api.fetchXmlToQueryExpression).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("Try again", () => {
+	it("keeps keyboard focus on the selected language", async () => {
+		api.fetchXmlToQueryExpression.mockRejectedValueOnce(new Error("Broken"));
+		await render(createElement(Code));
+		await settle();
+		await click(button("Try again"));
+		expect(document.activeElement).toBe(selectedTab());
+		expect(labelOf(selectedTab())).toBe("C# QueryExpression");
+	});
+});
+
+describe("SQL's preview note", () => {
+	it("stays while a changed query converts, so it isn't announced again", async () => {
+		let setXml: (xml: string) => void = () => {};
+		function Sql() {
+			const [xml, set] = useState(XML);
+			setXml = set;
+			return createElement(CodePanel, {
+				fetchXml: xml,
+				language: "sql",
+				onLanguageChange: () => {},
+			});
+		}
+		await render(createElement(Sql));
+		await settle();
+		const note = () =>
+			[...document.querySelectorAll(".fui-MessageBar")].find((m) =>
+				m.textContent?.includes("SQL is a preview"),
+			);
+		const before = note();
+		expect(before).toBeTruthy();
+		await act(async () =>
+			setXml("<fetch><entity name='account'><attribute name='accountid'/></entity></fetch>"),
+		);
+		await flush(3);
+		expect(text()).toContain("Generating…");
+		expect(note()).toBe(before);
 	});
 });

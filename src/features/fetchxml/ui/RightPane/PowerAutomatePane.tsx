@@ -48,7 +48,7 @@ const useStyles = makeStyles({
 	},
 	value: { fontFamily: tokens.fontFamilyMonospace, fontSize: tokens.fontSizeBase200 },
 	// The Field's label line, so Copy sits beside the value rather than the label
-	copy: { marginTop: "26px" },
+	copy: { marginTop: "22px" },
 	notes: { margin: `${tokens.spacingVerticalXS} 0 0`, paddingLeft: tokens.spacingHorizontalL },
 });
 
@@ -104,7 +104,8 @@ function PowerAutomateRow({ field }: { field: PowerAutomateField }) {
 			<Field label={field.label} hint={field.hint}>
 				{field.multiline ? (
 					<Textarea
-						className={styles.value}
+						// The font goes on the <textarea> itself, which sets its own
+						textarea={{ className: styles.value }}
 						value={field.value}
 						readOnly
 						resize="vertical"

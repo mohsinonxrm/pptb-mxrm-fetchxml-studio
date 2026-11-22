@@ -55,10 +55,11 @@ import { useCopy } from "../../../../shared/feedback/useCopy";
 import {
 	CONVERSION_DELAY_MS,
 	conversionKey,
+	createConversionCache,
 	needsConversion,
 	serverConversionFor,
+	type ConversionCache,
 	type ConversionResult,
-	type ServerConversion,
 } from "./serverConversions";
 import {
 	CODE_LANGUAGES,
@@ -124,6 +125,7 @@ const useStyles = makeStyles({
 		flexDirection: "column",
 	},
 	editor: { flex: 1, minHeight: 0 },
+	scroll: { flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" },
 	paPane: {
 		flex: 1,
 		overflowY: "auto",
@@ -150,9 +152,19 @@ interface CodePanelProps {
 	/** The language picked this session, or null for the default (the parent keeps it) */
 	language: CodeLanguage | null;
 	onLanguageChange: (language: CodeLanguage) => void;
+	/**
+	 * The conversions asked for and their results, kept by the parent so leaving the tab doesn't
+	 * throw them away (#199). Without it the panel keeps its own, for as long as it's mounted.
+	 */
+	cache?: ConversionCache;
 }
 
-export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelProps) {
+export function CodePanel({
+	fetchXml,
+	language,
+	onLanguageChange,
+	cache: parentCache,
+}: CodePanelProps) {
 	const styles = useStyles();
 	const { isDark } = useTheme();
 	const { connected, environmentUrl } = usePptbContext();
@@ -161,17 +173,28 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 	const copy = useCopy();
 
 	// Dataverse conversions (C# QueryExpression, SQL): for the selected language only, after typing
-	// pauses, and once per query and environment (#199). Try again asks for a failed one again.
-	const [conversions, setConversions] = useState<
-		Partial<Record<ServerConversion, ConversionResult>>
-	>({});
+	// pauses, and once per query and environment, also across visits to the tab (#199). Try again
+	// asks for a failed one again.
+	const [ownCache] = useState(createConversionCache);
+	const cache = parentCache ?? ownCache;
+	const [conversions, setConversions] = useState(() => cache.results);
 	const [retries, setRetries] = useState(0);
-	const lastRequestedRef = useRef<Partial<Record<ServerConversion, string>>>({});
-	const conversionsRef = useRef(conversions);
+	// A result that lands while the tab is closed is in the cache; this tab hears about it while open
 	useEffect(() => {
-		conversionsRef.current = conversions;
-	}, [conversions]);
+		cache.onChange = setConversions;
+		setConversions(cache.results);
+		return () => {
+			if (cache.onChange === setConversions) cache.onChange = undefined;
+		};
+	}, [cache]);
 	const debouncedXml = useDebouncedValue(fetchXml, CONVERSION_DELAY_MS);
+	const tabsRef = useRef<HTMLDivElement>(null);
+	// Try again: focus stays on the selected language while the error goes away (it unmounts with its
+	// button), and the result, or the error again, shows below it
+	const tryAgain = () => {
+		tabsRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+		setRetries((n) => n + 1);
+	};
 
 	// Power Automate and Web API: the entity set name from metadata
 	const [paEntitySetName, setPaEntitySetName] = useState<string | undefined>(undefined);
@@ -201,14 +224,14 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 		// Wait until typing pauses: until then the debounced query is behind the one on screen
 		if (!kind || !debouncedXml || debouncedXml !== fetchXml || !connected) return;
 		const key = conversionKey(debouncedXml, environmentUrl);
-		if (!needsConversion(key, lastRequestedRef.current[kind], conversionsRef.current[kind]))
-			return;
-		lastRequestedRef.current[kind] = key;
+		if (!needsConversion(key, cache.requested[kind], cache.results[kind])) return;
+		cache.requested[kind] = key;
+		const publish = (results: ConversionCache["results"]) => {
+			cache.results = results;
+			cache.onChange?.(results);
+		};
 		// Trying a failed conversion again: show it loading, not the old error
-		if (conversionsRef.current[kind]?.key === key) {
-			conversionsRef.current = { ...conversionsRef.current, [kind]: undefined };
-			setConversions((prev) => ({ ...prev, [kind]: undefined }));
-		}
+		if (cache.results[kind]?.key === key) publish({ ...cache.results, [kind]: undefined });
 
 		const request =
 			kind === "queryexpression"
@@ -218,15 +241,15 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 				: fetchXmlToSQL(debouncedXml);
 		const settle = (result: ConversionResult) => {
 			// A newer request for this language replaces this one
-			if (lastRequestedRef.current[kind] !== key) return;
-			setConversions((prev) => ({ ...prev, [kind]: result }));
+			if (cache.requested[kind] !== key) return;
+			publish({ ...cache.results, [kind]: result });
 		};
 		request.then(
 			(code) => settle({ key, code, error: null }),
 			(err: unknown) =>
 				settle({ key, code: "", error: err instanceof Error ? err.message : String(err) }),
 		);
-	}, [debouncedXml, fetchXml, selected, connected, environmentUrl, retries]);
+	}, [debouncedXml, fetchXml, selected, connected, environmentUrl, retries, cache]);
 
 	// The selected language's conversion, if it's for the query on screen; until then it's loading
 	const conversionKind = serverConversionFor(selected);
@@ -299,7 +322,8 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 		);
 	} else if (error) {
 		body = (
-			<>
+			// A long error scrolls, so Try again and Copy details stay reachable
+			<div className={styles.scroll}>
 				<div className={styles.bar}>
 					<MessageBar intent="error" layout="multiline">
 						<MessageBarBody>
@@ -310,7 +334,7 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 							<Button
 								size="small"
 								icon={<ArrowClockwise20Regular />}
-								onClick={() => setRetries((n) => n + 1)}
+								onClick={tryAgain}
 							>
 								Try again
 							</Button>
@@ -331,7 +355,7 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 					</Text>
 					<Text>Fix the problem above, then try again.</Text>
 				</div>
-			</>
+			</div>
 		);
 	} else if (paSpec) {
 		body = (
@@ -342,29 +366,6 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 	} else {
 		body = (
 			<>
-				{selected === "sql" && (
-					<div className={styles.bar}>
-						<MessageBar intent="info">
-							<MessageBarBody>
-								<MessageBarTitle>SQL is a preview</MessageBarTitle>
-								It comes from FetchXMLToSQL, which isn&apos;t documented and can
-								change.{" "}
-								<Link href={SQL_LEARN_MORE} target="_blank" inline>
-									Learn more
-								</Link>
-							</MessageBarBody>
-						</MessageBar>
-					</div>
-				)}
-				{language === null && !connected && (
-					<div className={styles.bar}>
-						<MessageBar intent="info">
-							<MessageBarBody>
-								Connect to an environment to generate QueryExpression.
-							</MessageBarBody>
-						</MessageBar>
-					</div>
-				)}
 				<div className={styles.editor}>
 					<Editor
 						height="100%"
@@ -392,7 +393,7 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 		<div className={styles.root}>
 			{/* The language tabs, where the code comes from, then Copy (#232, #233) */}
 			<div className={styles.header}>
-				<div className={styles.tabs}>
+				<div className={styles.tabs} ref={tabsRef}>
 					<OverflowTabList
 						ariaLabel="Code languages"
 						size="small"
@@ -429,7 +430,33 @@ export function CodePanel({ fetchXml, language, onLanguageChange }: CodePanelPro
 					/>
 				</div>
 			</div>
-			<div className={styles.body}>{body}</div>
+			<div className={styles.body}>
+				{/* Above the states, so they don't come and go (and get announced again) while loading */}
+				{selected === "sql" && !offline && (
+					<div className={styles.bar}>
+						<MessageBar intent="info">
+							<MessageBarBody>
+								<MessageBarTitle>SQL is a preview</MessageBarTitle>
+								It comes from FetchXMLToSQL, which isn&apos;t documented and can
+								change.{" "}
+								<Link href={SQL_LEARN_MORE} target="_blank" rel="noreferrer" inline>
+									Learn more
+								</Link>
+							</MessageBarBody>
+						</MessageBar>
+					</div>
+				)}
+				{language === null && !connected && (
+					<div className={styles.bar}>
+						<MessageBar intent="info">
+							<MessageBarBody>
+								Connect to an environment to generate QueryExpression.
+							</MessageBarBody>
+						</MessageBar>
+					</div>
+				)}
+				{body}
+			</div>
 		</div>
 	);
 }
