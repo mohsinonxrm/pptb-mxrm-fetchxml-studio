@@ -2,11 +2,17 @@
  * Main application shell with Fluent UI theming and layout
  */
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { FluentProvider, webLightTheme, webDarkTheme } from "@fluentui/react-components";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+	FluentProvider,
+	mergeClasses,
+	webLightTheme,
+	webDarkTheme,
+} from "@fluentui/react-components";
 import { usePptbContext } from "../shared/hooks/usePptbContext";
 import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
-import { useBuilderLayout } from "./hooks/useBuilderLayout";
+import { useBuilderLayout, type PeekPart } from "./hooks/useBuilderLayout";
+import { BuilderRail, CollapseButton, PinButton } from "./layout/BuilderRail";
 import { PaneSplitter } from "../shared/components/PaneSplitter";
 import { InspectorDrawer } from "./layout/InspectorDrawer";
 import { SelectionBar } from "./layout/SelectionBar";
@@ -143,6 +149,21 @@ export function AppShell() {
 	);
 }
 
+/** Focus moving into a peek (#234): the selected tree item, else the first field (the Entity picker,
+ * or the first property, not a field's info button), else the first control. The Properties peek is
+ * searched from its properties, below its Pin. */
+function focusInside(container: HTMLElement | null) {
+	if (!container) return;
+	const target =
+		container.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
+		container.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]') ??
+		container.querySelector<HTMLElement>(
+			'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), [role="combobox"]:not([disabled]):not([aria-disabled="true"])',
+		) ??
+		container.querySelector<HTMLElement>('button:not([disabled]), [tabindex="0"]');
+	target?.focus();
+}
+
 /** connectionKey: "" with no connection, undefined until the host answers (usePptbContext) */
 function AppContent({
 	carryOver,
@@ -203,8 +224,70 @@ function AppContent({
 	useEffect(() => {
 		if (!hasSelection) setInspectorOpen(false);
 	}, [hasSelection, setInspectorOpen]);
+	// Collapse, the rail and the peek (#234). Collapse focuses Expand; Expand and Pin focus Collapse;
+	// a peek takes focus inside itself, and Escape (or its rail button again) returns it there.
+	const collapseRef = useRef<HTMLButtonElement>(null);
+	const expandRef = useRef<HTMLButtonElement>(null);
+	const railTreeRef = useRef<HTMLButtonElement>(null);
+	const railPropertiesRef = useRef<HTMLButtonElement>(null);
+	const paneRef = useRef<HTMLElement>(null);
+	const treeRegionRef = useRef<HTMLDivElement>(null);
+	const peekPropertiesRef = useRef<HTMLDivElement>(null);
+	const pendingFocus = useRef<"collapse" | "expand" | "peek" | null>(null);
+	const railButton = (part: PeekPart) =>
+		part === "tree" ? railTreeRef.current : railPropertiesRef.current;
+	const collapsePane = () => {
+		pendingFocus.current = "expand";
+		layout.collapse();
+	};
+	const dockPane = () => {
+		pendingFocus.current = "collapse";
+		layout.dock();
+	};
+	const togglePeek = (part: PeekPart) => {
+		if (layout.peekPart === part) {
+			layout.closePeek();
+			return;
+		}
+		pendingFocus.current = "peek";
+		layout.openPeek(part);
+	};
+	useEffect(() => {
+		const target = pendingFocus.current;
+		if (!target) return;
+		pendingFocus.current = null;
+		// Docking while the pane is forced collapsed (#296) leaves it collapsed: focus stays on the rail
+		if (target === "collapse") (collapseRef.current ?? expandRef.current)?.focus();
+		else if (target === "expand") expandRef.current?.focus();
+		else
+			focusInside(
+				layout.peekPart === "props" ? peekPropertiesRef.current : treeRegionRef.current,
+			);
+	}, [layout.pane, layout.peekPart]);
+	// Escape in the peek closes it (unless something inside handled it, like an open dropdown)
+	const { closePeek, peekPart } = layout;
+	useEffect(() => {
+		const peek = paneRef.current;
+		if (!peek || !peekPart) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape" || event.defaultPrevented) return;
+			const target = event.target as HTMLElement | null;
+			// An open dropdown or menu trigger closes its popup first (an expanded tree item isn't one)
+			const popupOpen =
+				target?.getAttribute("aria-expanded") === "true" &&
+				(target.getAttribute("role") === "combobox" ||
+					target.hasAttribute("aria-haspopup"));
+			if (popupOpen) return;
+			event.preventDefault();
+			closePeek();
+			railButton(peekPart)?.focus();
+		};
+		peek.addEventListener("keydown", onKeyDown);
+		return () => peek.removeEventListener("keydown", onKeyDown);
+	}, [closePeek, peekPart]);
 	// When Properties move between the pane and the drawer, focus that was in them would fall to the
-	// page: it goes to Edit properties, or to the selected tree item when Properties are docked
+	// page: it goes to Edit properties, to Expand when the pane is collapsed, or to the selected tree
+	// item when Properties are docked
 	const lastHost = useRef(layout.propertiesHost);
 	useEffect(() => {
 		if (lastHost.current === layout.propertiesHost) return;
@@ -212,6 +295,10 @@ function AppContent({
 		if (document.activeElement && document.activeElement !== document.body) return;
 		if (layout.propertiesHost === "drawer") {
 			editPropertiesRef.current?.focus();
+			return;
+		}
+		if (layout.propertiesHost === "peek") {
+			expandRef.current?.focus();
 			return;
 		}
 		const tree = document.getElementById(QUERY_TREE_ID);
@@ -398,6 +485,76 @@ function AppContent({
 		editorSession.resetEditor();
 	};
 
+	// The builder pane's parts (#234): docked, they're one aside; collapsed, the rail opens either
+	// the tree (with the scope) or Properties in a peek over the output
+	const scopeSelector = (action: ReactNode) => (
+		<PaneErrorBoundary
+			where="Query scope"
+			title="The query scope couldn't be shown"
+			resetKey={connectionKey}
+		>
+			<EntitySelector
+				selectedEntity={builder.fetchQuery?.entity.name || null}
+				onEntityChange={builder.setEntity}
+				entityScopeMode={displaySettings.entityScopeMode}
+				onEntityScopeModeChange={(entityScopeMode) =>
+					setDisplaySettings({ ...displaySettings, entityScopeMode })
+				}
+				advancedFindOnly={displaySettings.advancedFindOnly}
+				onAdvancedFindOnlyChange={(advancedFindOnly) =>
+					setDisplaySettings({ ...displaySettings, advancedFindOnly })
+				}
+				headerAction={action}
+			/>
+		</PaneErrorBoundary>
+	);
+	const treeBody = (
+		<>
+			<TreeNoticeBar notice={treeNotice.notice} onDismiss={treeNotice.dismiss} />
+			{builder.fetchQuery ? (
+				<PaneErrorBoundary
+					where="Query tree"
+					title="The query tree couldn't be shown"
+					resetKey={builder.fetchQuery}
+				>
+					<TreeView
+						fetchQuery={builder.fetchQuery}
+						size={treeSizeFor(displaySettings.gridDensity)}
+						iconStyle={displaySettings.treeIconStyle}
+						attributeMetadata={attributeMetadata}
+						selectedNodeId={builder.selectedNodeId}
+						revealSeq={builder.revealSeq}
+						onNodeSelect={builder.selectNode}
+						onAddAttribute={builder.addAttribute}
+						onAddAllAttributes={builder.addAllAttributes}
+						onAddOrder={builder.addOrder}
+						onAddFilter={builder.addFilter}
+						onAddSubfilter={builder.addSubfilter}
+						onAddCondition={builder.addCondition}
+						onAddLinkEntity={builder.addLinkEntity}
+						onRemoveNode={builder.removeNode}
+						onUpdateAttributes={builder.updateAttributes}
+					/>
+				</PaneErrorBoundary>
+			) : (
+				<div className={styles.placeholder}>Select an entity to begin</div>
+			)}
+		</>
+	);
+	const propertiesPanel = (
+		<PaneErrorBoundary
+			where="Properties panel"
+			title="The properties couldn't be shown"
+			resetKey={builder.selectedNodeId}
+		>
+			<PropertiesPanel
+				selectedNode={builder.selectedNode}
+				fetchQuery={builder.fetchQuery}
+				onNodeUpdate={builder.updateNode}
+			/>
+		</PaneErrorBoundary>
+	);
+
 	return (
 		<EditorSyncContext.Provider value={editorSession.syncValue}>
 			<div className={styles.shell}>
@@ -451,129 +608,130 @@ function AppContent({
 					}}
 				/>
 				<div className={styles.root}>
-					{/* The builder pane (#234): the tree, then Properties (or, when narrow, a selection bar
-					    and the inspector drawer) */}
+					{/* The builder pane (#234): docked, the tree then Properties (or, when narrow, a
+					    selection bar and the inspector drawer); collapsed, a rail that opens either part in
+					    a peek over the output */}
+					{layout.pane !== "docked" && (
+						<BuilderRail
+							peekPart={layout.peekPart}
+							peekId={BUILDER_PANE_ID}
+							onExpand={dockPane}
+							onTogglePeek={togglePeek}
+							expandRef={expandRef}
+							treeRef={railTreeRef}
+							propertiesRef={railPropertiesRef}
+						/>
+					)}
+					{/* One pane in every state, so the tree and the scope keep their state (open
+					    branches, the access check): hidden while collapsed, over the output in a peek */}
 					<aside
 						id={BUILDER_PANE_ID}
-						aria-label="Query builder"
-						className={styles.leftPane}
-						style={{ width: `${layout.builderWidth}px` }}
+						ref={paneRef}
+						aria-label={
+							layout.pane !== "peek"
+								? "Query builder"
+								: layout.peekPart === "props"
+									? "Properties"
+									: "Query tree"
+						}
+						className={
+							layout.pane === "peek"
+								? mergeClasses(styles.leftPane, styles.peek)
+								: styles.leftPane
+						}
+						style={{
+							width: `${layout.pane === "peek" ? layout.peekWidth : layout.builderWidth}px`,
+							display: layout.pane === "collapsed" ? "none" : undefined,
+						}}
 					>
 						<div
 							id={QUERY_TREE_ID}
+							ref={treeRegionRef}
 							className={styles.leftPaneTop}
 							style={
-								layout.propertiesHost === "docked"
-									? { height: `${layout.treeHeight}px` }
-									: { flex: "1 1 0" }
+								layout.peekPart === "props"
+									? { display: "none" }
+									: layout.pane === "docked" && layout.propertiesHost === "docked"
+										? { height: `${layout.treeHeight}px` }
+										: { flex: "1 1 0" }
 							}
 						>
-							<PaneErrorBoundary
-								where="Query scope"
-								title="The query scope couldn't be shown"
-								resetKey={connectionKey}
-							>
-								<EntitySelector
-									selectedEntity={builder.fetchQuery?.entity.name || null}
-									onEntityChange={builder.setEntity}
-									entityScopeMode={displaySettings.entityScopeMode}
-									onEntityScopeModeChange={(entityScopeMode) =>
-										setDisplaySettings({ ...displaySettings, entityScopeMode })
-									}
-									advancedFindOnly={displaySettings.advancedFindOnly}
-									onAdvancedFindOnlyChange={(advancedFindOnly) =>
-										setDisplaySettings({ ...displaySettings, advancedFindOnly })
-									}
-								/>
-							</PaneErrorBoundary>
-							<TreeNoticeBar
-								notice={treeNotice.notice}
-								onDismiss={treeNotice.dismiss}
-							/>
-							{builder.fetchQuery ? (
-								<PaneErrorBoundary
-									where="Query tree"
-									title="The query tree couldn't be shown"
-									resetKey={builder.fetchQuery}
-								>
-									<TreeView
-										fetchQuery={builder.fetchQuery}
-										size={treeSizeFor(displaySettings.gridDensity)}
-										iconStyle={displaySettings.treeIconStyle}
-										attributeMetadata={attributeMetadata}
-										selectedNodeId={builder.selectedNodeId}
-										revealSeq={builder.revealSeq}
-										onNodeSelect={builder.selectNode}
-										onAddAttribute={builder.addAttribute}
-										onAddAllAttributes={builder.addAllAttributes}
-										onAddOrder={builder.addOrder}
-										onAddFilter={builder.addFilter}
-										onAddSubfilter={builder.addSubfilter}
-										onAddCondition={builder.addCondition}
-										onAddLinkEntity={builder.addLinkEntity}
-										onRemoveNode={builder.removeNode}
-										onUpdateAttributes={builder.updateAttributes}
-									/>
-								</PaneErrorBoundary>
-							) : (
-								<div className={styles.placeholder}>Select an entity to begin</div>
+							{scopeSelector(
+								<>
+									{layout.pane === "peek" ? (
+										<PinButton onClick={dockPane} />
+									) : (
+										<CollapseButton ref={collapseRef} onClick={collapsePane} />
+									)}
+								</>,
 							)}
+							{treeBody}
 						</div>
-						{layout.propertiesHost === "docked" ? (
-							<>
-								<PaneSplitter
-									orientation="horizontal"
-									value={layout.treeHeight}
-									min={layout.treeHeightLimits.min}
-									max={layout.treeHeightLimits.max}
-									defaultValue={layout.treeHeightLimits.defaultValue}
-									onChange={layout.setTreeHeight}
-									onCommit={layout.commitTreeHeight}
-									label="Resize the query tree (size is remembered)"
-									description="Drag or use arrow keys; double-click resets."
-									controls={QUERY_TREE_ID}
+						{layout.pane === "docked" ? (
+							layout.propertiesHost === "docked" ? (
+								<>
+									<PaneSplitter
+										orientation="horizontal"
+										value={layout.treeHeight}
+										min={layout.treeHeightLimits.min}
+										max={layout.treeHeightLimits.max}
+										defaultValue={layout.treeHeightLimits.defaultValue}
+										onChange={layout.setTreeHeight}
+										onCommit={layout.commitTreeHeight}
+										label="Resize the query tree (size is remembered)"
+										description="Drag or use arrow keys; double-click resets."
+										controls={QUERY_TREE_ID}
+									/>
+									<div className={styles.leftPaneBottom}>
+										<div className={styles.toolbar}>
+											<span style={{ fontWeight: 600 }}>Properties</span>
+										</div>
+										<div className={styles.propertiesContent}>
+											{propertiesPanel}
+										</div>
+									</div>
+								</>
+							) : (
+								<SelectionBar
+									ref={editPropertiesRef}
+									label={selectionLabel(builder.selectedNode)}
+									hasSelection={!!builder.selectedNode}
+									onEdit={() => layout.setInspectorOpen(true)}
 								/>
-								<div className={styles.leftPaneBottom}>
-									<div className={styles.toolbar}>
-										<span style={{ fontWeight: 600 }}>Properties</span>
-									</div>
-									<div className={styles.propertiesContent}>
-										<PaneErrorBoundary
-											where="Properties panel"
-											title="The properties couldn't be shown"
-											resetKey={builder.selectedNodeId}
-										>
-											<PropertiesPanel
-												selectedNode={builder.selectedNode}
-												fetchQuery={builder.fetchQuery}
-												onNodeUpdate={builder.updateNode}
-											/>
-										</PaneErrorBoundary>
-									</div>
+							)
+						) : layout.peekPart === "props" ? (
+							<div className={styles.leftPaneBottom}>
+								<div className={mergeClasses(styles.toolbar, styles.peekBar)}>
+									<span style={{ fontWeight: 600 }}>Properties</span>
+									<span className={styles.peekBarEnd}>
+										<PinButton onClick={dockPane} />
+									</span>
 								</div>
-							</>
-						) : (
-							<SelectionBar
-								ref={editPropertiesRef}
-								label={selectionLabel(builder.selectedNode)}
-								hasSelection={!!builder.selectedNode}
-								onEdit={() => layout.setInspectorOpen(true)}
-							/>
-						)}
+								<div ref={peekPropertiesRef} className={styles.propertiesContent}>
+									{propertiesPanel}
+								</div>
+							</div>
+						) : null}
 					</aside>
-					<PaneSplitter
-						orientation="vertical"
-						value={layout.builderWidth}
-						min={layout.builderWidthLimits.min}
-						max={layout.builderWidthLimits.max}
-						defaultValue={layout.builderWidthLimits.defaultValue}
-						onChange={layout.setBuilderWidth}
-						onCommit={layout.commitBuilderWidth}
-						label="Resize the builder pane (size is remembered)"
-						description="Drag or use arrow keys; double-click resets."
-						controls={BUILDER_PANE_ID}
-					/>
-					<main aria-label="Query output" className={styles.rightPane}>
+					{layout.pane === "docked" && (
+						<PaneSplitter
+							orientation="vertical"
+							value={layout.builderWidth}
+							min={layout.builderWidthLimits.min}
+							max={layout.builderWidthLimits.max}
+							defaultValue={layout.builderWidthLimits.defaultValue}
+							onChange={layout.setBuilderWidth}
+							onCommit={layout.commitBuilderWidth}
+							label="Resize the builder pane (size is remembered)"
+							description="Drag or use arrow keys; double-click resets."
+							controls={BUILDER_PANE_ID}
+						/>
+					)}
+					<main
+						aria-label="Query output"
+						className={styles.rightPane}
+						onPointerDown={layout.pane === "peek" ? layout.closePeek : undefined}
+					>
 						<PreviewTabs
 							bodyOverlay={
 								layout.propertiesHost === "drawer" ? (
@@ -582,17 +740,7 @@ function AppContent({
 										title={selectionLabel(builder.selectedNode)}
 										onClose={closeInspector}
 									>
-										<PaneErrorBoundary
-											where="Properties panel"
-											title="The properties couldn't be shown"
-											resetKey={builder.selectedNodeId}
-										>
-											<PropertiesPanel
-												selectedNode={builder.selectedNode}
-												fetchQuery={builder.fetchQuery}
-												onNodeUpdate={builder.updateNode}
-											/>
-										</PaneErrorBoundary>
+										{propertiesPanel}
 									</InspectorDrawer>
 								) : null
 							}

@@ -9,8 +9,8 @@ import { cleanup, flush, render } from "../../shared/testing/ui";
 import { LAYOUT_KEY, useBuilderLayout, type BuilderLayout } from "./useBuilderLayout";
 
 let latest: BuilderLayout;
-function Probe() {
-	latest = useBuilderLayout();
+function Probe(props: { forceCollapsed?: boolean }) {
+	latest = useBuilderLayout({ forceCollapsed: props.forceCollapsed });
 	return null;
 }
 
@@ -158,5 +158,92 @@ describe("where Properties live", () => {
 		await setWindowWidth(900);
 		expect(latest.propertiesHost).toBe("drawer");
 		expect(latest.inspectorOpen).toBe(false);
+	});
+});
+
+describe("collapsing the pane (#234)", () => {
+	it("starts docked; collapses to the rail, peeks at either part, and docks again", async () => {
+		await render(createElement(Probe));
+		await flush(3);
+		expect(latest.pane).toBe("docked");
+		expect(latest.peekPart).toBeNull();
+		await act(async () => latest.collapse());
+		expect(latest.pane).toBe("collapsed");
+		expect(latest.propertiesHost).toBe("peek");
+		await act(async () => latest.openPeek("tree"));
+		expect(latest.pane).toBe("peek");
+		expect(latest.peekPart).toBe("tree");
+		await act(async () => latest.openPeek("props"));
+		expect(latest.peekPart).toBe("props");
+		await act(async () => latest.closePeek());
+		expect(latest.pane).toBe("collapsed");
+		expect(latest.peekPart).toBeNull();
+		await act(async () => latest.openPeek("tree"));
+		await act(async () => latest.dock());
+		expect(latest.pane).toBe("docked");
+		expect(latest.peekPart).toBeNull();
+		expect(latest.propertiesHost).toBe("docked");
+		// A peek asked for while docked doesn't open, and doesn't open later by itself
+		await act(async () => latest.openPeek("tree"));
+		expect(latest.pane).toBe("docked");
+		expect(latest.peekPart).toBeNull();
+		await act(async () => latest.collapse());
+		expect(latest.pane).toBe("collapsed");
+	});
+
+	it("peeks at the pane's width, at least 340 px, within the window", async () => {
+		await render(createElement(Probe));
+		await flush(3);
+		expect(latest.peekWidth).toBe(380);
+		await act(async () => latest.setBuilderWidth(600));
+		expect(latest.peekWidth).toBe(600);
+		await setWindowWidth(900);
+		await act(async () => latest.setBuilderWidth(260));
+		expect(latest.peekWidth).toBe(340);
+		// 400 - 44 - 48 = 308
+		await setWindowWidth(400);
+		expect(latest.peekWidth).toBe(308);
+	});
+
+	it("closes the drawer when the pane collapses", async () => {
+		await setWindowWidth(900);
+		await render(createElement(Probe));
+		await flush(3);
+		await act(async () => latest.setInspectorOpen(true));
+		expect(latest.inspectorOpen).toBe(true);
+		await act(async () => latest.collapse());
+		expect(latest.inspectorOpen).toBe(false);
+		await act(async () => latest.dock());
+		expect(latest.propertiesHost).toBe("drawer");
+		expect(latest.inspectorOpen).toBe(false);
+	});
+
+	it("stays collapsed while forced; a peek still opens; docking applies once the force ends", async () => {
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await flush(3);
+		expect(latest.pane).toBe("collapsed");
+		await act(async () => latest.openPeek("props"));
+		expect(latest.pane).toBe("peek");
+		await act(async () => latest.dock());
+		expect(latest.pane).toBe("collapsed");
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
+		expect(latest.pane).toBe("docked");
+		// A peek open when the force ended doesn't come back with the next force
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await act(async () => latest.openPeek("tree"));
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await flush(2);
+		expect(latest.pane).toBe("collapsed");
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
+		// Collapsed by choice stays collapsed when a force ends
+		await act(async () => latest.collapse());
+		await render(createElement(Probe, { forceCollapsed: true }));
+		await render(createElement(Probe, { forceCollapsed: false }));
+		await flush(2);
+		expect(latest.pane).toBe("collapsed");
 	});
 });

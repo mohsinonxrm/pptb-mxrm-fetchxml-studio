@@ -8,9 +8,15 @@
  * used, never written back clamped. The pane always starts docked; that isn't saved (owner decision
  * 2026-11-07). Properties move into the drawer when the window is under 1000 px or the docked pane
  * is under 320 px.
+ *
+ * The pane can be collapsed to a rail (PR 2): the rail's Query tree and Properties buttons open
+ * that part in a peek over the output, and Pin or Expand docks the pane again. `forceCollapsed`
+ * (for the operations panel, #296) keeps it collapsed without changing what the user chose:
+ * docking while forced is remembered and applies once the force ends.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	BUILDER_WIDTH_MIN,
 	builderWidthLimits,
 	clampBuilderWidth,
 	clampTreeHeight,
@@ -19,6 +25,7 @@ import {
 	TREE_HEIGHT_DEFAULT,
 	TREE_HEIGHT_MAX,
 	TREE_HEIGHT_MIN,
+	type BuilderPaneState,
 	type PersistedLayout,
 	type PropertiesHost,
 	type SizeLimits,
@@ -40,11 +47,32 @@ export interface BuilderLayout {
 	/** The size has settled: remember it */
 	commitBuilderWidth: (width: number) => void;
 	commitTreeHeight: (height: number) => void;
-	/** Where Properties are: docked below the tree, or in the drawer */
+	/** Where Properties are: docked below the tree, in the drawer, or in the peek */
 	propertiesHost: PropertiesHost;
 	inspectorOpen: boolean;
 	setInspectorOpen: (open: boolean) => void;
+	/** Docked, collapsed to the rail, or a part of it open in a peek over the output */
+	pane: BuilderPaneState;
+	/** The part the peek shows */
+	peekPart: PeekPart | null;
+	/** The peek's width: the pane's width, at least 340 px, within the window */
+	peekWidth: number;
+	collapse: () => void;
+	/** Dock the pane (Expand on the rail, Pin in the peek) */
+	dock: () => void;
+	openPeek: (part: PeekPart) => void;
+	closePeek: () => void;
 }
+
+export type PeekPart = "tree" | "props";
+
+export interface BuilderLayoutOptions {
+	/** Keep the pane collapsed (the operations panel needs the room, #296); a peek still opens */
+	forceCollapsed?: boolean;
+}
+
+const PEEK_MIN_WIDTH = 340;
+const RAIL_WIDTH = 44;
 
 const TREE_LIMITS: SizeLimits = {
 	min: TREE_HEIGHT_MIN,
@@ -70,8 +98,13 @@ function write(layout: PersistedLayout) {
 		?.catch((error: unknown) => console.warn("Couldn't save the pane sizes:", error));
 }
 
-export function useBuilderLayout(): BuilderLayout {
+export function useBuilderLayout({
+	forceCollapsed = false,
+}: BuilderLayoutOptions = {}): BuilderLayout {
 	const windowWidth = useWindowWidth();
+	// What the user chose; the pane always starts docked (not saved)
+	const [choice, setChoice] = useState<"docked" | "collapsed">("docked");
+	const [peekPart, setPeekPart] = useState<PeekPart | null>(null);
 	// What the user chose (or what was saved), raw; undefined means the default for the window
 	const [width, setWidth] = useState<number | undefined>(undefined);
 	const [height, setHeight] = useState<number | undefined>(undefined);
@@ -118,7 +151,15 @@ export function useBuilderLayout(): BuilderLayout {
 	const widthLimits = builderWidthLimits(windowWidth);
 	const builderWidth = clampBuilderWidth(width ?? widthLimits.defaultValue, windowWidth);
 	const treeHeight = clampTreeHeight(height ?? TREE_HEIGHT_DEFAULT);
-	const host = hostFor({ pane: "docked", windowWidth, builderWidth });
+	const collapsed = forceCollapsed || choice === "collapsed";
+	const pane: BuilderPaneState = !collapsed ? "docked" : peekPart ? "peek" : "collapsed";
+	// A peek doesn't outlive a docked pane (asked for while docked, or open when a force ended)
+	if (pane === "docked" && peekPart) setPeekPart(null);
+	const host = hostFor({ pane, windowWidth, builderWidth });
+	const peekWidth = Math.max(
+		Math.min(Math.max(builderWidth, PEEK_MIN_WIDTH), windowWidth - RAIL_WIDTH - 48),
+		BUILDER_WIDTH_MIN,
+	);
 	// The drawer closes when Properties move out of it, and doesn't reopen when they come back
 	const [lastHost, setLastHost] = useState(host);
 	if (host !== lastHost) {
@@ -159,5 +200,18 @@ export function useBuilderLayout(): BuilderLayout {
 		// The drawer exists only while Properties live in it
 		inspectorOpen: host === "drawer" && inspectorOpen,
 		setInspectorOpen,
+		pane,
+		peekPart: pane === "peek" ? peekPart : null,
+		peekWidth,
+		collapse: useCallback(() => {
+			setChoice("collapsed");
+			setPeekPart(null);
+		}, []),
+		dock: useCallback(() => {
+			setChoice("docked");
+			setPeekPart(null);
+		}, []),
+		openPeek: useCallback((part: PeekPart) => setPeekPart(part), []),
+		closePeek: useCallback(() => setPeekPart(null), []),
 	};
 }
