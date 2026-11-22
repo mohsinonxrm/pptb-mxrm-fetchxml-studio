@@ -46,6 +46,8 @@ describe("viewIdentity", () => {
 		await run((x) => void x.loadView(VIEW_XML, viewInfo, LAYOUT));
 		expect(b().viewIdentity).toEqual({
 			name: "My accounts",
+			// The view's details, which Save overwrites (#278 PR 3)
+			view: b().loadedView,
 			baselineFetchXml: b().loadedView?.originalFetchXml,
 			baselineLayoutXml: LAYOUT,
 		});
@@ -83,6 +85,7 @@ describe("viewIdentity", () => {
 		);
 		expect(b().viewIdentity).toEqual({
 			name: "Saved view",
+			view: expect.objectContaining({ id: "v1", name: "Saved view", type: "personal" }),
 			baselineFetchXml: saved,
 			baselineLayoutXml: LAYOUT,
 		});

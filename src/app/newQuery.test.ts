@@ -132,7 +132,7 @@ describe("Save and start new", () => {
 
 			// Later, an ordinary Save as out of editor mode
 			await click(document.querySelector('input[role="switch"]'));
-			await click(button("Save as", appBar() ?? undefined));
+			await click(button("Save", appBar() ?? undefined));
 			await app.waitFor(() => !!document.querySelector('[role="dialog"]'));
 			await typeInto(dialogInput(), "My view");
 			await click(
@@ -164,6 +164,65 @@ describe("Save and start new", () => {
 				),
 			);
 			await app.waitFor(() => treeItems() === 0, 10000);
+		},
+		FLOW_TIMEOUT,
+	);
+});
+
+describe("Save on a personal view you own (#278 PR 3)", () => {
+	const PERSONAL_ID = "22222222-3333-4444-5555-666666666666";
+	const myView = {
+		...activeAccounts,
+		id: PERSONAL_ID,
+		name: "My accounts",
+		type: "personal" as const,
+	};
+	const saveHint = () => {
+		const save = button("Save", appBar() ?? undefined);
+		const id = save?.getAttribute("aria-describedby");
+		return id ? document.getElementById(id)?.textContent?.trim() : undefined;
+	};
+
+	it(
+		"saves the changes to it, also after the editor's FetchXML changed the query",
+		async () => {
+			const app = await renderApp({
+				views: [myView],
+				launch: { viewRef: { id: PERSONAL_ID, entityLogicalName: "userquery" } },
+			});
+			await app.waitFor(() => treeItems() > 0 && saveReady());
+			await app.waitFor(() => saveHint() === 'Save changes to "My accounts"');
+
+			// Change the query in the editor: the view is still the one Save overwrites
+			await pasteIntoEditor(otherQuery);
+			await click(button("Save", appBar() ?? undefined));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"]'), 10000);
+			const text = document.querySelector('[role="dialog"]')?.textContent ?? "";
+			expect(text).toContain('The personal view "My accounts" (overwritten)');
+			expect(text).not.toContain("Save as new view");
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"after Save as a new personal view, Save saves changes to it: it's yours",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => treeItems() > 0 && saveReady());
+			await click(button("Save", appBar() ?? undefined));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"]'));
+			await typeInto(dialogInput(), "Fresh view");
+			await click(
+				[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+					(b) => b.textContent?.trim() === "Save",
+				),
+			);
+			await app.waitFor(() => !document.querySelector('[role="dialog"]'), 10000);
+			// Its own view: no access check, no warning
+			await app.waitFor(() => saveHint() === 'Save changes to "Fresh view"', 10000);
+			expect(app.dataverse.calls.some((c) => c.includes("RetrievePrincipalAccess"))).toBe(
+				false,
+			);
 		},
 		FLOW_TIMEOUT,
 	);
