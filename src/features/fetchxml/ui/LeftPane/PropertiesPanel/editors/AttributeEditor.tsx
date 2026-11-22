@@ -73,7 +73,7 @@ export function AttributeEditor({
 	onUpdate,
 }: AttributeEditorProps) {
 	const styles = useEditorStyles();
-	const { updateNode } = useBuilder();
+	const { updateNode, history } = useBuilder();
 	const entityName = container.name;
 	const typeInfo = useAttributeTypeInfo(entityName, node.name || undefined);
 	const caps = typeInfo ? getAttributeCapabilities(typeInfo) : undefined;
@@ -88,13 +88,20 @@ export function AttributeEditor({
 	const ordersUsingAlias = node.alias
 		? findOrdersUsingAlias(fetchQuery, container, node.alias)
 		: [];
+	// One undo step with the orders it renames, merging while typing like any field (#192)
 	const handleAliasChange = (raw: string) => {
 		const alias = sanitizeAlias(raw) || undefined;
-		if (node.alias && alias) {
-			for (const order of findOrdersUsingAlias(fetchQuery, container, node.alias))
-				updateNode(order.id, { alias });
-		}
-		onUpdate({ alias });
+		history.transaction(
+			"Edit attribute",
+			() => {
+				if (node.alias && alias) {
+					for (const order of findOrdersUsingAlias(fetchQuery, container, node.alias))
+						updateNode(order.id, { alias });
+				}
+				onUpdate({ alias });
+			},
+			{ mergeKey: `${node.id}:alias`, target: node.id },
+		);
 	};
 
 	const aliasRequired = isAggregateQuery || node.rowAggregate !== undefined;

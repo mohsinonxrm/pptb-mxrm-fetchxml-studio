@@ -74,7 +74,8 @@ interface FetchOptionsEditorProps {
 export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEditorProps) {
 	const styles = useEditorStyles();
 	const { options } = node;
-	const { retrieveAllRecords, setRetrieveAllRecords, updateNode, removeNode } = useBuilder();
+	const { retrieveAllRecords, setRetrieveAllRecords, updateNode, removeNode, history } =
+		useBuilder();
 	const entityInfo = useEntityInfo(node.entity.name);
 	const [showTeachingPopover, setShowTeachingPopover] = useState(false);
 	const [aggregateOffPlan, setAggregateOffPlan] = useState<AggregateOffPlan | null>(null);
@@ -104,9 +105,16 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 		onUpdate({ aggregate: undefined });
 	};
 	const applyAggregateOff = (plan: AggregateOffPlan) => {
-		for (const { nodeId, updates } of plan.updates) updateNode(nodeId, updates);
-		for (const nodeId of plan.removeNodeIds) removeNode(nodeId);
-		onUpdate({ aggregate: undefined, aggregateLimit: undefined });
+		// One undo step (#192)
+		history.transaction(
+			"Turn off aggregate",
+			() => {
+				for (const { nodeId, updates } of plan.updates) updateNode(nodeId, updates);
+				for (const nodeId of plan.removeNodeIds) removeNode(nodeId);
+				onUpdate({ aggregate: undefined, aggregateLimit: undefined });
+			},
+			{ target: node.id },
+		);
 		setAggregateOffPlan(null);
 	};
 

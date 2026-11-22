@@ -373,7 +373,10 @@ src/
 │   │   ├── queryExpressionCodegen.ts # C# SDK code emitter (resolveEnum, unwrapODataValue)
 │   │   └── fetchxmlCodeGenerators.ts # Sync generators: FetchExpr, JS, pac, PA, WebAPI
 │   ├── state/
-│   │   ├── builderStore.tsx      # React context + reducer state management
+│   │   ├── builderStore.tsx      # React context: the provider, its actions and the undo API
+│   │   ├── builderReducer.ts     # The builder state and its reducer
+│   │   ├── builderHistory.ts     # Undo/redo: which actions are steps, labels, restoring (#192)
+│   │   ├── history.ts            # The generic undo history (snapshots, merging, transactions)
 │   │   └── cache.ts              # Per-session in-memory metadata cache
 │   └── ui/
 │       ├── LeftPane/             # Tree view + context-aware properties panel

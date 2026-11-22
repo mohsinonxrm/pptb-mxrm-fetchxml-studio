@@ -7,7 +7,9 @@ import { useMemo, useReducer, type ReactNode } from "react";
 import {
 	BuilderContext,
 	type BuilderContextValue,
+	type BuilderHistoryApi,
 	type LoadFetchXmlOptions,
+	type TransactionOptions,
 } from "./builderContext";
 import type { NodeId } from "../model/nodes";
 import type { LayoutXmlConfig } from "../model/layoutxml";
@@ -16,9 +18,15 @@ import { generateFetchXml } from "../model/fetchxml";
 import type { SortPlan } from "../model/queryColumns";
 import type { NewCondition } from "../model/columnFilters";
 import {
-	builderReducer,
+	builderHistoryReducer,
+	createBuilderHistory,
+	type BuilderHistoryMessage,
+} from "./builderHistory";
+import { canRedo, canUndo, lastEntryId, redoLabel, undoLabel } from "./history";
+import {
 	generateId,
 	initialState,
+	type BuilderAction,
 	type ViewLoadInfo,
 	type ViewSourceInfo,
 } from "./builderReducer";
@@ -32,13 +40,20 @@ export type {
 } from "./builderReducer";
 
 export function BuilderProvider({ children }: { children: ReactNode }) {
-	const [state, dispatch] = useReducer(builderReducer, initialState);
+	// Every builder action goes through the undo history (#192, builderHistory.ts)
+	const [history, send] = useReducer(builderHistoryReducer, initialState, createBuilderHistory);
+	const state = history.present;
 
 	// The actions are created once (dispatch never changes) and the context value only changes with the
 	// state, so consumers can list builder actions as hook dependencies without re-running every render (#65)
-	const actions = useMemo(
-		() => ({
-			setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
+	const actions = useMemo(() => {
+		// The time is stamped here, so the history's reducer stays pure
+		const dispatch = (action: BuilderAction, options: { baseline?: boolean } = {}) =>
+			send({ kind: "apply", action, at: Date.now(), baseline: options.baseline });
+		const command = (message: BuilderHistoryMessage) => send(message);
+		return {
+			setEntity: (entityName: string, options?: { baseline?: boolean }) =>
+				dispatch({ type: "SET_ENTITY", entityName }, { baseline: options?.baseline }),
 			selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
 			/** Select a node and reveal it in the tree, even when it is already selected */
 			revealNode: (nodeId: NodeId) => dispatch({ type: "REVEAL_NODE", nodeId }),
@@ -83,11 +98,14 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			loadFetchXml: (xmlString: string, options?: LoadFetchXmlOptions): ParseResult => {
 				const result = parseFetchXml(xmlString);
 				if (result.success && result.fetchNode) {
-					dispatch({
-						type: "LOAD_FETCHXML",
-						fetchNode: result.fetchNode,
-						preserveLayout: options?.preserveLayout,
-					});
+					dispatch(
+						{
+							type: "LOAD_FETCHXML",
+							fetchNode: result.fetchNode,
+							preserveLayout: options?.preserveLayout,
+						},
+						{ baseline: options?.baseline },
+					);
 				}
 				return result;
 			},
@@ -144,12 +162,45 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 			removeColumnFilter: (conditionId: NodeId) =>
 				dispatch({ type: "REMOVE_COLUMN_FILTER", conditionId }),
 			clearColumnFilters: () => dispatch({ type: "CLEAR_COLUMN_FILTERS" }),
+			undo: () => command({ kind: "undo" }),
+			redo: () => command({ kind: "redo" }),
+			undoIfLast: (id: number) => command({ kind: "undoIfLast", id }),
+			transaction: (label: string, fn: () => void, options: TransactionOptions = {}) => {
+				command({
+					kind: "begin",
+					label,
+					at: Date.now(),
+					mergeKey: options.mergeKey,
+					target: options.target,
+				});
+				try {
+					fn();
+				} finally {
+					command({ kind: "commit" });
+				}
+			},
+		};
+	}, []);
+	const { undo, redo, undoIfLast, transaction, ...builderActions } = actions;
+	const historyApi = useMemo<BuilderHistoryApi>(
+		() => ({
+			canUndo: canUndo(history),
+			canRedo: canRedo(history),
+			undoLabel: undoLabel(history),
+			redoLabel: redoLabel(history),
+			lastEntryId: lastEntryId(history),
+			undo,
+			redo,
+			undoIfLast,
+			transaction,
 		}),
-		[],
+		[history, undo, redo, undoIfLast, transaction],
 	);
 	const contextValue = useMemo<BuilderContextValue>(
-		() => ({ ...state, ...actions }),
-		[state, actions],
+		() => ({ ...state, ...builderActions, history: historyApi }),
+		// builderActions is a fresh object each render, but its functions are the memoised ones
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[state, actions, historyApi],
 	);
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;

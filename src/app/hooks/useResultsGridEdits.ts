@@ -11,7 +11,7 @@ import type { AttributeMetadata } from "../../features/fetchxml/api/pptbClient";
 import type { SyncedQuery } from "./useQueryExecution";
 import type { BuilderContextValue } from "../../features/fetchxml/state/builderContext";
 import type { LayoutXmlConfig } from "../../features/fetchxml/model/layoutxml";
-import type { ConditionNode } from "../../features/fetchxml/model/nodes";
+import type { ConditionNode, FetchNode } from "../../features/fetchxml/model/nodes";
 import type { RelatedEntityColumn } from "../../features/fetchxml/ui/RightPane/AddColumnsPanel";
 import type { SortChangeData } from "../../features/fetchxml/ui/RightPane/ResultsGrid";
 import { NON_RETURNING_LINK_TYPES } from "../../features/fetchxml/model/fetchxmlRules";
@@ -74,6 +74,8 @@ export function useResultsGridEdits({
 		addLinkEntityWithConfig,
 		setSort,
 	} = builder;
+	// Each grid edit is one undo step, named as the grid names it (#192); stable like the actions
+	const { transaction } = builder.history;
 
 	// Column filters from the results grid (#23): they change the query, which then runs again.
 	// Running waits for the change to commit, so it runs the new query.
@@ -95,24 +97,23 @@ export function useResultsGridEdits({
 	const removeColumnFilters = useCallback(
 		(conditionIds: string[]) => {
 			if (conditionIds.length === 0) return;
-			if (conditionIds.length === columnFilters.length) clearColumnFilters();
-			else conditionIds.forEach((id) => removeColumnFilter(id));
+			transaction("Remove column filters", () => {
+				if (conditionIds.length === columnFilters.length) clearColumnFilters();
+				else conditionIds.forEach((id) => removeColumnFilter(id));
+			});
 			setColumnFilterRunRequest((n) => n + 1);
 		},
-		[columnFilters.length, clearColumnFilters, removeColumnFilter],
+		[columnFilters.length, clearColumnFilters, removeColumnFilter, transaction],
 	);
 
 	const reorderColumns = useCallback(
 		(columns: LayoutXmlConfig["columns"]) => {
 			// Set the column config with new order
 			if (columnConfig) {
-				setColumnConfig({
-					...columnConfig,
-					columns,
-				});
+				transaction("Reorder columns", () => setColumnConfig({ ...columnConfig, columns }));
 			}
 		},
-		[columnConfig, setColumnConfig],
+		[columnConfig, setColumnConfig, transaction],
 	);
 
 	const removeColumns = useCallback(
@@ -121,26 +122,26 @@ export function useResultsGridEdits({
 			// removed alias and outer link-entities left empty go too (queryColumns.ts, #114)
 			if (!fetchQuery) return;
 			const plan = planRemoveColumns(fetchQuery, columnKeys);
-			plan.removeNodeIds.forEach((id) => removeNode(id));
+			transaction(columnKeys.length === 1 ? "Remove column" : "Remove columns", () =>
+				plan.removeNodeIds.forEach((id) => removeNode(id)),
+			);
 		},
-		[fetchQuery, removeNode],
+		[fetchQuery, removeNode, transaction],
 	);
 
 	const addColumn = useCallback(
 		(attributeName: string) => {
 			// Add the attribute to the root entity
 			if (fetchQuery?.entity.id) {
-				addAttributeByName(fetchQuery.entity.id, attributeName);
+				const entityId = fetchQuery.entity.id;
+				transaction("Add column", () => addAttributeByName(entityId, attributeName));
 			}
 		},
-		[fetchQuery, addAttributeByName],
+		[fetchQuery, addAttributeByName, transaction],
 	);
 
-	const addRelatedColumns = useCallback(
-		(relatedColumns: RelatedEntityColumn[]) => {
-			// Add related entity columns - this requires creating link-entities
-			if (!fetchQuery?.entity.id) return;
-
+	const addRelated = useCallback(
+		(fetchQuery: FetchNode, relatedColumns: RelatedEntityColumn[]) => {
 			// Group by relationship to create link-entities
 			const byRelationship = new Map<string, RelatedEntityColumn[]>();
 			for (const col of relatedColumns) {
@@ -223,7 +224,19 @@ export function useResultsGridEdits({
 				}
 			}
 		},
-		[fetchQuery, addLinkEntityWithConfig, addAttributeByName],
+		[addLinkEntityWithConfig, addAttributeByName],
+	);
+
+	const addRelatedColumns = useCallback(
+		(relatedColumns: RelatedEntityColumn[]) => {
+			// Add related entity columns - this requires creating link-entities
+			if (!fetchQuery?.entity.id) return;
+			// One undo step for every link-entity and attribute it adds (#192)
+			transaction(relatedColumns.length === 1 ? "Add column" : "Add columns", () =>
+				addRelated(fetchQuery, relatedColumns),
+			);
+		},
+		[fetchQuery, transaction, addRelated],
 	);
 
 	const sortByColumn = useCallback(

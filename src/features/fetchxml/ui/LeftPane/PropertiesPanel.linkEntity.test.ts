@@ -123,6 +123,23 @@ describe("renaming a link-entity's alias", () => {
 		expect(fetch.entity.orders[0].entityname).toBe("parent");
 	});
 
+	it("is one undo step with the references it renames, merging while typing (#192)", async () => {
+		recordRelationshipRequests();
+		await loadAndSelect(xml, select);
+		const alias = aliasInput();
+		await typeInto(alias, "p");
+		await typeInto(alias, "parent");
+		expect(builder.history.undoLabel).toBe("Edit link-entity");
+		await act(async () => builder.history.undo());
+		const fetch = builder.fetchQuery!;
+		expect(fetch.entity.links[0].alias).toBe("acct");
+		expect(fetch.entity.filters[0].conditions[0].entityname).toBe("acct");
+		expect(fetch.entity.filters[0].conditions[1].valueof).toBe("acct.name");
+		expect(fetch.entity.orders[0].entityname).toBe("acct");
+		// The step before was loading the query
+		expect(builder.history.undoLabel).toBe("Parse to tree");
+	});
+
 	it("keeps following the same references when the alias briefly matches another one", async () => {
 		recordRelationshipRequests();
 		await loadAndSelect(xml, select);

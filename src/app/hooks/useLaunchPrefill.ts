@@ -69,7 +69,8 @@ export function useLaunchPrefill({
 		const fetchXml = carryOver.fetchXml;
 		if (!fetchXml) return;
 		carryOver.fetchXml = undefined;
-		const result = builder.loadFetchXml(fetchXml);
+		// A starting point, not an undo step (#192)
+		const result = builder.loadFetchXml(fetchXml, { baseline: true });
 		if (!result.success)
 			console.error("Connection change: couldn't reload the query:", result.errors);
 		// builder is intentionally omitted — runs once per session (mount)
@@ -98,7 +99,7 @@ export function useLaunchPrefill({
 				if (!action) return;
 
 				if (action.kind === "entity") {
-					builder.setEntity(action.entityLogicalName);
+					builder.setEntity(action.entityLogicalName, { baseline: true });
 					return;
 				}
 
@@ -136,7 +137,7 @@ export function useLaunchPrefill({
 					return;
 				}
 
-				const result = builder.loadFetchXml(action.fetchXml);
+				const result = builder.loadFetchXml(action.fetchXml, { baseline: true });
 				if (!result.success) {
 					console.error("T2T prefill: failed to parse incoming FetchXML:", result.errors);
 					showLaunchError({

@@ -126,6 +126,8 @@ describe("the query carried over a connection change (#66)", () => {
 		await fresh({ carryOver });
 		expect(rootEntity()).toBe("contact");
 		expect(carryOver.fetchXml).toBeUndefined();
+		// A starting point: the first Ctrl+Z can't blank the tree (#192)
+		expect(builder.history.canUndo).toBe(false);
 	});
 
 	it("logs a query it can't parse and leaves the builder empty", async () => {
@@ -223,6 +225,7 @@ describe("the tool-to-tool prefill (#197)", () => {
 		connect();
 		await fresh({ launch: launchedWith({ entityLogicalName: " contact " }) });
 		expect(rootEntity()).toBe("contact");
+		expect(builder.history.canUndo).toBe(false);
 	});
 
 	it("loads the FetchXML it's given, which wins over an entity hint", async () => {
@@ -233,6 +236,7 @@ describe("the tool-to-tool prefill (#197)", () => {
 		expect(rootEntity()).toBe("contact");
 		expect(builder.loadedView).toBeNull();
 		expect(host.notifications).toEqual([]);
+		expect(builder.history.canUndo).toBe(false);
 	});
 
 	it("says when the FetchXML it's given can't be parsed: an error bar above the tree", async () => {

@@ -14,10 +14,41 @@ import type { NewCondition } from "../model/columnFilters";
 export interface LoadFetchXmlOptions {
 	/** Keep the current column layout, merging new attributes into it (editor sync, #102) */
 	preserveLayout?: boolean;
+	/**
+	 * A starting point, not an undo step: the load clears the undo history (the query carried over a
+	 * connection change, one sent from another tool), so the first Ctrl+Z can't blank the tree (#192)
+	 */
+	baseline?: boolean;
+}
+
+export interface TransactionOptions {
+	mergeKey?: string;
+	target?: NodeId;
+}
+
+/** The query's undo history (#192, builderHistory.ts). The functions keep their identity. */
+export interface BuilderHistoryApi {
+	canUndo: boolean;
+	canRedo: boolean;
+	/** "Delete condition": what Undo would undo, for "Undo: {label}" */
+	undoLabel: string | null;
+	redoLabel: string | null;
+	/** The step Undo would undo, for an Undo toast to check it's still the last one (waves 2–3) */
+	lastEntryId: number | null;
+	undo: () => void;
+	redo: () => void;
+	/** Undo only if step `id` is still the last one (a toast's Undo) */
+	undoIfLast: (id: number) => void;
+	/**
+	 * Runs `fn`'s builder changes as one undo step called `label`. `mergeKey` merges it with edits of
+	 * the same key (typing); `target` is the node to select after undoing or redoing it.
+	 */
+	transaction: (label: string, fn: () => void, options?: TransactionOptions) => void;
 }
 
 export interface BuilderContextValue extends BuilderState {
-	setEntity: (entityName: string) => void;
+	/** Start a query on an entity; `baseline` (a launch with an entity) isn't an undo step (#192) */
+	setEntity: (entityName: string, options?: { baseline?: boolean }) => void;
 	selectNode: (nodeId: NodeId) => void;
 	revealNode: (nodeId: NodeId) => void;
 	addAttribute: (parentId: NodeId) => void;
@@ -78,6 +109,8 @@ export interface BuilderContextValue extends BuilderState {
 	removeColumnFilter: (conditionId: NodeId) => void;
 	/** Remove every column filter */
 	clearColumnFilters: () => void;
+	/** Undo and redo (#192) */
+	history: BuilderHistoryApi;
 }
 
 export const BuilderContext = createContext<BuilderContextValue | null>(null);

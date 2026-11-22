@@ -3,7 +3,7 @@
  * of `S` by reference (the builder state is structurally shared, so a snapshot costs only its
  * references) and never reads the clock; callers pass `now`.
  *
- * Not wired yet. The #192 wiring PR (after #301) wraps `builderReducer` with it, roughly:
+ * builderHistory.ts wraps `builderReducer` with it (#192), as follows:
  *
  *   S = BuilderState (the whole state), with `createHistory(state, { restore })` (see Restore).
  *   Each action applies the reducer, then one of:
