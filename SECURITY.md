@@ -9,7 +9,7 @@
 | Betas (npm `beta`) | Fixed in the next beta |
 | Anything older | ❌ |
 
-1.4.x is no longer supported (ended 2026-11-07, and 1.4.6 is deprecated on npm). Use 1.5.0 or later, which needs Power Platform ToolBox 1.2.7. See [RELEASING.md](RELEASING.md) → *Supported versions*.
+**1.5.x** gets critical and security fixes until 2026-12-22, 30 days after 1.6.0 shipped, through `support/1.5` (npm `support-1.5`), which is created only if a fix is needed. **1.4.x** is no longer supported (ended 2026-11-07, and 1.4.6 is deprecated on npm). Use 1.6.0 or later, which needs Power Platform ToolBox 1.2.7. See [RELEASING.md](RELEASING.md) → *Supported versions*.
 
 ## Reporting a Vulnerability
 
