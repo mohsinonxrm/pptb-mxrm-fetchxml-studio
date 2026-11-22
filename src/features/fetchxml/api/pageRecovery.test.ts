@@ -27,7 +27,9 @@ describe("halvePageSize (#68)", () => {
 	});
 
 	it("halves a first page that set no count from Dataverse's default, keeping page 1 (#183)", () => {
-		const next = halvePageSize(paging({ pageSize: DATAVERSE_DEFAULT_PAGE_SIZE, currentPage: 0, nextPage: 1 }));
+		const next = halvePageSize(
+			paging({ pageSize: DATAVERSE_DEFAULT_PAGE_SIZE, currentPage: 0, nextPage: 1 }),
+		);
 		expect(next?.pageSize).toBe(2500);
 		expect(next?.nextPage).toBe(1);
 	});

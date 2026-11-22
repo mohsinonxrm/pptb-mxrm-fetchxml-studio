@@ -10,7 +10,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Combobox, Input, Link, Option, Spinner } from "@fluentui/react-components";
 import type { EntityMetadata, RecordReference } from "../../../../api/pptbClient";
-import { getHierarchicalRelationship, getRecordName, searchRecordsByName } from "../../../../api/pptbClient";
+import {
+	getHierarchicalRelationship,
+	getRecordName,
+	searchRecordsByName,
+} from "../../../../api/pptbClient";
 import { loadAllEntityAttributes } from "../../../../api/dataverseMetadata";
 import { memoizeForSession } from "../../../../api/sessionCache";
 import { isGuid, normalizeGuid, type RecordSearchTarget } from "../../../../api/recordSearch";
@@ -30,7 +34,8 @@ async function hierarchyLabel(entityName: string): Promise<string> {
 	if (!relationship) return "";
 	const attribute = relationship.referencingAttribute;
 	const attributes = await loadAllEntityAttributes(entityName).catch(() => []);
-	const label = attributes.find((a) => a.LogicalName === attribute)?.DisplayName?.UserLocalizedLabel?.Label;
+	const label = attributes.find((a) => a.LogicalName === attribute)?.DisplayName
+		?.UserLocalizedLabel?.Label;
 	return `Hierarchy: ${label ? `${label} (${attribute})` : attribute}. `;
 }
 
@@ -42,12 +47,21 @@ interface HierarchyValueFieldProps {
 	onChange: (value: string | undefined) => void;
 }
 
-export function HierarchyValueField({ entityName, metadata, value, onChange }: HierarchyValueFieldProps) {
+export function HierarchyValueField({
+	entityName,
+	metadata,
+	value,
+	onChange,
+}: HierarchyValueFieldProps) {
 	const styles = useEditorStyles();
 	const target = useMemo<RecordSearchTarget | undefined>(
 		() =>
 			metadata?.EntitySetName && metadata.PrimaryNameAttribute && metadata.PrimaryIdAttribute
-				? { entitySetName: metadata.EntitySetName, idAttribute: metadata.PrimaryIdAttribute, nameAttribute: metadata.PrimaryNameAttribute }
+				? {
+						entitySetName: metadata.EntitySetName,
+						idAttribute: metadata.PrimaryIdAttribute,
+						nameAttribute: metadata.PrimaryNameAttribute,
+					}
 				: undefined,
 		[metadata],
 	);
@@ -171,8 +185,16 @@ export function HierarchyValueField({ entityName, metadata, value, onChange }: H
 				<InfoField
 					label="Record ID"
 					info={info}
-					hint={notFound ? `No ${entityLabel} record with this ID was found, or you can't read it. ${hint}` : hint}
-					validation={invalid ? { state: "error", message: `Enter an ID like ${GUID_EXAMPLE}.` } : undefined}
+					hint={
+						notFound
+							? `No ${entityLabel} record with this ID was found, or you can't read it. ${hint}`
+							: hint
+					}
+					validation={
+						invalid
+							? { state: "error", message: `Enter an ID like ${GUID_EXAMPLE}.` }
+							: undefined
+					}
 				>
 					<Input
 						className={styles.mono}
@@ -181,7 +203,9 @@ export function HierarchyValueField({ entityName, metadata, value, onChange }: H
 						onChange={(_, data) => {
 							setTyped(data.value);
 							const text = data.value.trim();
-							write(text === "" ? undefined : isGuid(text) ? normalizeGuid(text) : text);
+							write(
+								text === "" ? undefined : isGuid(text) ? normalizeGuid(text) : text,
+							);
 						}}
 					/>
 				</InfoField>
@@ -200,11 +224,14 @@ export function HierarchyValueField({ entityName, metadata, value, onChange }: H
 					selectedOptions={stored ? [normalizeGuid(stored).toLowerCase()] : []}
 					onChange={(ev) => onQueryChange(ev.target.value)}
 					onOpenChange={(_, data) => {
-						if (data.open && results === undefined) search(query === selectedName ? "" : query);
+						if (data.open && results === undefined)
+							search(query === selectedName ? "" : query);
 					}}
 					onOptionSelect={(_, data) => {
 						if (!data.optionValue || data.optionValue === NO_RECORDS) return;
-						const record = results?.find((r) => r.id.toLowerCase() === data.optionValue);
+						const record = results?.find(
+							(r) => r.id.toLowerCase() === data.optionValue,
+						);
 						setSelectedName(record?.name);
 						setQuery(record?.name || data.optionValue);
 						write(data.optionValue);
@@ -216,7 +243,11 @@ export function HierarchyValueField({ entityName, metadata, value, onChange }: H
 						</Option>
 					) : results && results.length > 0 ? (
 						results.map((record) => (
-							<Option key={record.id} value={record.id.toLowerCase()} text={record.name || record.id}>
+							<Option
+								key={record.id}
+								value={record.id.toLowerCase()}
+								text={record.name || record.id}
+							>
 								<span className={styles.optionText}>
 									{record.name || "(No name)"}
 									<span className={styles.optionSecondary}>{record.id}</span>
@@ -225,7 +256,9 @@ export function HierarchyValueField({ entityName, metadata, value, onChange }: H
 						))
 					) : (
 						<Option disabled value={NO_RECORDS} text="">
-							{query ? `No ${entityLabel} records start with "${query}"` : `No ${entityLabel} records found`}
+							{query
+								? `No ${entityLabel} records start with "${query}"`
+								: `No ${entityLabel} records found`}
 						</Option>
 					)}
 				</Combobox>

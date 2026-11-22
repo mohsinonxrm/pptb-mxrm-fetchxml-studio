@@ -19,13 +19,15 @@ export interface LoadFetchXmlOptions {
 export interface BuilderContextValue extends BuilderState {
 	setEntity: (entityName: string) => void;
 	selectNode: (nodeId: NodeId) => void;
+	revealNode: (nodeId: NodeId) => void;
 	addAttribute: (parentId: NodeId) => void;
 	/** Add a specific attribute by name to an entity or link-entity */
 	addAttributeByName: (parentId: NodeId, attributeName: string) => void;
 	/** Update attributes for an entity or link-entity (bulk add/remove) */
 	updateAttributes: (parentId: NodeId, attributeNames: string[]) => void;
 	addAllAttributes: (parentId: NodeId) => void;
-	addOrder: (parentId: NodeId) => void;
+	/** Add an order to an entity or link-entity: on `attribute` when given, else a placeholder to edit */
+	addOrder: (parentId: NodeId, attribute?: string) => void;
 	addFilter: (parentId: NodeId) => void;
 	addSubfilter: (filterId: NodeId) => void;
 	addCondition: (filterId: NodeId) => void;

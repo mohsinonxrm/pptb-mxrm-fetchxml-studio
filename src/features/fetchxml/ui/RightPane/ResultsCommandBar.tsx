@@ -3,7 +3,7 @@
  * Similar to Power Apps Model Driven Apps view command bar
  */
 
-import { useState, useCallback, type ReactElement } from "react";
+import { Fragment, useState, useCallback, type ReactElement } from "react";
 import {
 	Toolbar,
 	ToolbarButton,
@@ -28,6 +28,7 @@ import {
 	Link20Regular,
 	CheckmarkCircle20Regular,
 	DismissCircle20Regular,
+	CircleOff20Regular,
 	Delete20Regular,
 	ColumnTriple20Regular,
 	Play20Regular,
@@ -35,6 +36,7 @@ import {
 	Info20Regular,
 	Stop20Regular,
 	Copy20Regular,
+	TextDensity20Regular,
 } from "@fluentui/react-icons";
 import { ExcelIcon } from "../../../../shared/components/ExcelIcon";
 import { EditColumnsPanel } from "./EditColumnsPanel";
@@ -45,7 +47,10 @@ import {
 } from "./AddColumnsPanel";
 import type { LayoutColumn } from "../../model/layoutxml";
 import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../../api/pptbClient";
+import { useEntityWorkflows } from "./useEntityWorkflows";
 import type { CopyValueMode } from "./copyResults";
+import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
+import { deleteSelectionUnavailableReason } from "../../model/deleteScope";
 
 const useStyles = makeStyles({
 	toolbar: {
@@ -67,6 +72,15 @@ export interface CommandBarProps {
 	activateDisabledReason?: string;
 	/** Why Deactivate is off for this entity (#143) */
 	deactivateDisabledReason?: string;
+	/**
+	 * The entity's close actions (#149). When set, a Close menu takes Deactivate's place: one item
+	 * per action, with the reason as a tooltip when one is off.
+	 */
+	closeActions?: CloseMenuItem[];
+	/** Why the whole Close menu is off (e.g. a one-to-many query), if it is */
+	closeDisabledReason?: string;
+	/** Runs when a close action is chosen, with its key */
+	onCloseAction?: (key: string) => void;
 	/** Delete selected records (or all if none selected) */
 	onDelete?: () => void;
 	/** Bulk delete (creates async job) */
@@ -93,8 +107,8 @@ export interface CommandBarProps {
 	 * ran yet, so it would delete records the grid doesn't show (#174). Selected records still work.
 	 */
 	deleteAllDisabledReason?: string;
-	/** Fetch available workflows for the entity */
-	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
+	/** Fetch the on-demand workflows of an entity (the results' entity, #182) */
+	onFetchWorkflows?: (entityLogicalName?: string) => Promise<WorkflowInfo[]>;
 	/** Export to Excel via Dataverse ExportToExcel API (requires saved view) */
 	onExport?: () => void;
 	/** Export to Excel locally using exceljs (no view required) */
@@ -147,6 +161,20 @@ export interface CommandBarProps {
 	onCopyRows?: (scope: "selected" | "all", mode: CopyValueMode) => void;
 	/** Quick search text (#23): the Copy menu then copies the matching rows */
 	searchText?: string;
+	/** Density of the grid and the query tree (#228) */
+	density?: GridDensity;
+	/** Change the density; the menu is hidden without it */
+	onDensityChange?: (density: GridDensity) => void;
+}
+
+/** One item of the Close menu (#149) */
+export interface CloseMenuItem {
+	key: string;
+	label: string;
+	/** A divider goes above the first destructive item */
+	destructive?: boolean;
+	/** Why this action is off (e.g. a missing privilege), if it is */
+	disabledReason?: string;
 }
 
 /** A toolbar button with a tooltip giving the reason it's off, when there is one */
@@ -166,7 +194,14 @@ function StateButton({
 	reason?: string;
 }) {
 	const button = (
-		<ToolbarButton appearance="subtle" icon={icon} disabled={disabled} disabledFocusable={!!reason} onClick={onClick} aria-label={ariaLabel}>
+		<ToolbarButton
+			appearance="subtle"
+			icon={icon}
+			disabled={disabled}
+			disabledFocusable={!!reason}
+			onClick={onClick}
+			aria-label={ariaLabel}
+		>
 			{label}
 		</ToolbarButton>
 	);
@@ -187,6 +222,9 @@ export function ResultsCommandBar({
 	onDeactivate,
 	activateDisabledReason,
 	deactivateDisabledReason,
+	closeActions,
+	closeDisabledReason,
+	onCloseAction,
 	onDelete,
 	onBulkDelete,
 	canDelete = false,
@@ -203,6 +241,8 @@ export function ResultsCommandBar({
 	loadedCount = 0,
 	onCopyRows,
 	searchText = "",
+	density = "medium",
+	onDensityChange,
 	canExport = false,
 	isExporting = false,
 	exportDisabledReason,
@@ -230,35 +270,27 @@ export function ResultsCommandBar({
 	const singleSelection = selectedCount === 1;
 	const recordActionsUnavailable = !!recordActionsDisabledReason;
 	const deleteAllBlocked = !hasSelection && !!deleteAllDisabledReason;
-	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || deleteAllBlocked;
+	// More than 100 selected without prvBulkDelete (#177): blocked, with the reason, like Delete all
+	const deleteSelectionReason = hasSelection
+		? deleteSelectionUnavailableReason(selectedCount, canBulkDelete)
+		: undefined;
+	const deleteBlockedReason = deleteAllBlocked ? deleteAllDisabledReason : deleteSelectionReason;
+	const isDeleteDisabled = deleteDisabled || recordActionsUnavailable || !!deleteBlockedReason;
 	const isWorkflowDisabled = workflowDisabled || recordActionsUnavailable;
 	// Activate / Deactivate (#143): need a selection, record IDs and the record-action rules delete has
-	const stateButtonsDisabled = !hasSelection || isDeleteDisabled;
+	const stateButtonsDisabled = !hasSelection || deleteDisabled || recordActionsUnavailable;
 	const [editPanelOpen, setEditPanelOpen] = useState(false);
 	const [addPanelOpen, setAddPanelOpen] = useState(false);
 	// Copy menu: values as shown in the grid, or raw (#50)
 	const [copyMode, setCopyMode] = useState<CopyValueMode>("shown");
 
-	// Workflow menu state
-	const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
-	const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
-	const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
-
-	// Load workflows when menu opens (lazy loading)
-	const handleWorkflowMenuOpen = useCallback(async () => {
-		if (workflowsLoaded || isLoadingWorkflows || !onFetchWorkflows) return;
-
-		setIsLoadingWorkflows(true);
-		try {
-			const wfs = await onFetchWorkflows();
-			setWorkflows(wfs);
-			setWorkflowsLoaded(true);
-		} catch (err) {
-			console.error("Failed to load workflows:", err);
-		} finally {
-			setIsLoadingWorkflows(false);
-		}
-	}, [workflowsLoaded, isLoadingWorkflows, onFetchWorkflows]);
+	// Workflow menu: loaded when the menu opens, for the results' entity (#182)
+	const {
+		workflows,
+		isLoading: isLoadingWorkflows,
+		loaded: workflowsLoaded,
+		load: handleWorkflowMenuOpen,
+	} = useEntityWorkflows(entityName, onFetchWorkflows);
 
 	const handleEditColumnsClick = useCallback(() => {
 		setEditPanelOpen(true);
@@ -277,14 +309,16 @@ export function ResultsCommandBar({
 			// Remove the attributes behind removed columns, all at once
 			if (columns && onRemoveColumns) {
 				const updatedNames = new Set(updatedColumns.map((c) => c.name));
-				const removed = columns.filter((col) => !updatedNames.has(col.name)).map((col) => col.name);
+				const removed = columns
+					.filter((col) => !updatedNames.has(col.name))
+					.map((col) => col.name);
 				if (removed.length > 0) onRemoveColumns(removed);
 			}
 			// Apply reordering
 			onReorderColumns?.(updatedColumns);
 			setEditPanelOpen(false);
 		},
-		[columns, onReorderColumns, onRemoveColumns]
+		[columns, onReorderColumns, onRemoveColumns],
 	);
 
 	const handleAddApply = useCallback(
@@ -299,7 +333,7 @@ export function ResultsCommandBar({
 			}
 			setAddPanelOpen(false);
 		},
-		[onAddColumn, onAddRelatedColumns]
+		[onAddColumn, onAddRelatedColumns],
 	);
 
 	const handleOpenAddFromEdit = useCallback(() => {
@@ -311,7 +345,11 @@ export function ResultsCommandBar({
 			<Toolbar className={styles.toolbar} size="medium" aria-label="Record actions">
 				{isRetrieveAllInProgress && onStopRetrieveAll && (
 					<>
-						<ToolbarButton appearance="subtle" icon={<Stop20Regular />} onClick={onStopRetrieveAll}>
+						<ToolbarButton
+							appearance="subtle"
+							icon={<Stop20Regular />}
+							onClick={onStopRetrieveAll}
+						>
 							Stop
 						</ToolbarButton>
 						<ToolbarDivider />
@@ -338,11 +376,12 @@ export function ResultsCommandBar({
 				</ToolbarButton>
 
 				{recordActionsDisabledReason && (
-					<Tooltip content={recordActionsDisabledReason} relationship="description" withArrow>
-						<ToolbarButton
-							appearance="transparent"
-							icon={<Info20Regular />}
-						>
+					<Tooltip
+						content={recordActionsDisabledReason}
+						relationship="description"
+						withArrow
+					>
+						<ToolbarButton appearance="transparent" icon={<Info20Regular />}>
 							Record actions unavailable
 						</ToolbarButton>
 					</Tooltip>
@@ -360,22 +399,89 @@ export function ResultsCommandBar({
 					reason={activateDisabledReason}
 				/>
 
-				<StateButton
-					label="Deactivate"
-					ariaLabel="Deactivate selected records"
-					icon={<DismissCircle20Regular />}
-					onClick={onDeactivate}
-					disabled={stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason}
-					reason={deactivateDisabledReason}
-				/>
+				{closeActions && closeActions.length > 0 && closeDisabledReason ? (
+					<StateButton
+						label="Close"
+						ariaLabel="Close selected records"
+						icon={<CircleOff20Regular />}
+						disabled
+						reason={closeDisabledReason}
+					/>
+				) : closeActions && closeActions.length > 0 ? (
+					// Close (#149): the entity's close messages, in place of Deactivate
+					<Menu positioning="below-start">
+						<MenuTrigger disableButtonEnhancement>
+							<MenuButton
+								appearance="subtle"
+								icon={<CircleOff20Regular />}
+								disabled={stateButtonsDisabled || !onCloseAction}
+								aria-label="Close selected records"
+							>
+								Close
+							</MenuButton>
+						</MenuTrigger>
+						<MenuPopover>
+							<MenuList>
+								<MenuGroup>
+									{entityDisplayName && (
+										<MenuGroupHeader>{entityDisplayName}</MenuGroupHeader>
+									)}
+									{closeActions.map((item, i) => {
+										const menuItem = (
+											<MenuItem
+												disabled={!!item.disabledReason}
+												disabledFocusable={!!item.disabledReason}
+												onClick={() => onCloseAction?.(item.key)}
+											>
+												{item.label}...
+											</MenuItem>
+										);
+										return (
+											<Fragment key={item.key}>
+												{i > 0 &&
+													item.destructive &&
+													!closeActions[i - 1].destructive && (
+														<MenuDivider />
+													)}
+												{item.disabledReason ? (
+													<Tooltip
+														content={item.disabledReason}
+														relationship="description"
+														positioning="after"
+														withArrow
+													>
+														{menuItem}
+													</Tooltip>
+												) : (
+													menuItem
+												)}
+											</Fragment>
+										);
+									})}
+								</MenuGroup>
+							</MenuList>
+						</MenuPopover>
+					</Menu>
+				) : (
+					<StateButton
+						label="Deactivate"
+						ariaLabel="Deactivate selected records"
+						icon={<DismissCircle20Regular />}
+						onClick={onDeactivate}
+						disabled={
+							stateButtonsDisabled || !onDeactivate || !!deactivateDisabledReason
+						}
+						reason={deactivateDisabledReason}
+					/>
+				)}
 
 				<ToolbarDivider />
 
-				{/* Same pattern as "Record actions unavailable": the reason is in the tooltip (#174) */}
-				{canDelete && deleteAllBlocked && !recordActionsDisabledReason && (
-					<Tooltip content={deleteAllDisabledReason} relationship="description" withArrow>
+				{/* Same pattern as "Record actions unavailable": the reason is in the tooltip (#174, #177) */}
+				{canDelete && deleteBlockedReason && !recordActionsDisabledReason && (
+					<Tooltip content={deleteBlockedReason} relationship="description" withArrow>
 						<ToolbarButton appearance="transparent" icon={<Info20Regular />}>
-							Delete all unavailable
+							{deleteAllBlocked ? "Delete all unavailable" : "Delete unavailable"}
 						</ToolbarButton>
 					</Tooltip>
 				)}
@@ -393,7 +499,9 @@ export function ResultsCommandBar({
 									disabled={isDeleteDisabled}
 									icon={<Delete20Regular />}
 									aria-label={
-										hasSelection ? "Delete selected records" : "Delete all records from view"
+										hasSelection
+											? "Delete selected records"
+											: "Delete all records from view"
 									}
 								>
 									{hasSelection ? "Delete" : "Delete all"}
@@ -402,7 +510,11 @@ export function ResultsCommandBar({
 						</MenuTrigger>
 						<MenuPopover>
 							<MenuList>
-								<MenuItem icon={<Delete20Regular />} onClick={onDelete} disabled={isDeleteDisabled}>
+								<MenuItem
+									icon={<Delete20Regular />}
+									onClick={onDelete}
+									disabled={isDeleteDisabled}
+								>
 									Delete{hasSelection ? ` (${selectedCount})` : " All"}
 								</MenuItem>
 								{canBulkDelete && (
@@ -436,10 +548,14 @@ export function ResultsCommandBar({
 						</MenuTrigger>
 						<MenuPopover>
 							<MenuList>
-								{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
-								{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
-									<MenuItem disabled>No workflows available</MenuItem>
+								{isLoadingWorkflows && (
+									<MenuItem disabled>Loading workflows...</MenuItem>
 								)}
+								{!isLoadingWorkflows &&
+									workflows.length === 0 &&
+									workflowsLoaded && (
+										<MenuItem disabled>No workflows available</MenuItem>
+									)}
 								{!isLoadingWorkflows &&
 									workflows.map((wf) => (
 										<MenuItem
@@ -460,20 +576,30 @@ export function ResultsCommandBar({
 				{/* Copy rows as tab-separated values with headers; pastes into Excel (#50) */}
 				<Menu
 					checkedValues={{ copyValues: [copyMode] }}
-					onCheckedValueChange={(_, data) => setCopyMode(data.checkedItems[0] as CopyValueMode)}
+					onCheckedValueChange={(_, data) =>
+						setCopyMode(data.checkedItems[0] as CopyValueMode)
+					}
 				>
 					<MenuTrigger disableButtonEnhancement>
-						<MenuButton appearance="subtle" icon={<Copy20Regular />} disabled={loadedCount === 0}>
+						<MenuButton
+							appearance="subtle"
+							icon={<Copy20Regular />}
+							disabled={loadedCount === 0}
+						>
 							Copy
 						</MenuButton>
 					</MenuTrigger>
 					<MenuPopover>
 						<MenuList>
-							<MenuItem disabled={selectedCount === 0} onClick={() => onCopyRows?.("selected", copyMode)}>
+							<MenuItem
+								disabled={selectedCount === 0}
+								onClick={() => onCopyRows?.("selected", copyMode)}
+							>
 								Selected rows ({selectedCount})
 							</MenuItem>
 							<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
-								{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount})
+								{searchText.trim() ? "All matching rows" : "All loaded rows"} (
+								{loadedCount})
 							</MenuItem>
 							<MenuDivider />
 							<MenuGroup>
@@ -512,7 +638,8 @@ export function ResultsCommandBar({
 								content={
 									canExport
 										? "Export using Dataverse API (all records)"
-										: exportDisabledReason || "Save as a view first to enable server export"
+										: exportDisabledReason ||
+											"Save as a view first to enable server export"
 								}
 								relationship="description"
 								positioning="before"
@@ -538,6 +665,33 @@ export function ResultsCommandBar({
 				>
 					Edit columns
 				</ToolbarButton>
+
+				{/* Density of the grid and the query tree, as in Dataverse Request Studio (#228) */}
+				{onDensityChange && (
+					<Menu
+						checkedValues={{ density: [density] }}
+						onCheckedValueChange={(_, data) =>
+							onDensityChange(data.checkedItems[0] as GridDensity)
+						}
+					>
+						<MenuTrigger disableButtonEnhancement>
+							<Tooltip content="Density (grid and tree)" relationship="description">
+								<MenuButton appearance="subtle" icon={<TextDensity20Regular />}>
+									{GRID_DENSITY_LABELS[density]}
+								</MenuButton>
+							</Tooltip>
+						</MenuTrigger>
+						<MenuPopover>
+							<MenuList>
+								{(Object.keys(GRID_DENSITY_LABELS) as GridDensity[]).map((d) => (
+									<MenuItemRadio key={d} name="density" value={d}>
+										{GRID_DENSITY_LABELS[d]}
+									</MenuItemRadio>
+								))}
+							</MenuList>
+						</MenuPopover>
+					</Menu>
+				)}
 			</Toolbar>
 
 			{/* Edit Columns Panel */}

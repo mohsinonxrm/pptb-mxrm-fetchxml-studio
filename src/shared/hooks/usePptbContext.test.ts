@@ -18,20 +18,28 @@ let latest: PptbContext | undefined;
 let root: Root;
 let container: HTMLDivElement;
 
-const getCurrentTheme = vi.fn(async () => (hostSetting === "system" ? (osDark ? "dark" : "light") : hostSetting));
+const getCurrentTheme = vi.fn(async () =>
+	hostSetting === "system" ? (osDark ? "dark" : "light") : hostSetting,
+);
 
 function Probe() {
 	latest = usePptbContext();
 	return null;
 }
 
-const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+const flush = () =>
+	act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
 const mount = async () => {
 	await act(async () => root.render(createElement(Probe)));
 	await flush();
 };
 const emitSettings = async (data: unknown) => {
-	await act(async () => toolboxListeners.forEach((l) => l({}, { event: "settings:updated", data })));
+	await act(async () =>
+		toolboxListeners.forEach((l) => l({}, { event: "settings:updated", data })),
+	);
 	await flush();
 };
 const changeOs = async (dark: boolean) => {
@@ -52,7 +60,8 @@ beforeEach(() => {
 			return osDark;
 		},
 		addEventListener: (_: string, l: () => void) => schemeListeners.push(l),
-		removeEventListener: (_: string, l: () => void) => (schemeListeners = schemeListeners.filter((x) => x !== l)),
+		removeEventListener: (_: string, l: () => void) =>
+			(schemeListeners = schemeListeners.filter((x) => x !== l)),
 	})) as unknown as typeof window.matchMedia;
 	(window as unknown as { toolboxAPI: unknown }).toolboxAPI = {
 		utils: { getCurrentTheme },
@@ -129,9 +138,16 @@ describe("usePptbContext theme (#67)", () => {
 describe("usePptbContext connection (#66)", () => {
 	type Conn = { id: string; url: string; name: string; environment: "Dev" };
 	let current: Conn | null;
-	const conn = (id: string, url: string): Conn => ({ id, url, name: id.toUpperCase(), environment: "Dev" });
+	const conn = (id: string, url: string): Conn => ({
+		id,
+		url,
+		name: id.toUpperCase(),
+		environment: "Dev",
+	});
 	const emit = async (event: string) => {
-		await act(async () => toolboxListeners.forEach((l) => l({}, { event, data: { id: "any" } })));
+		await act(async () =>
+			toolboxListeners.forEach((l) => l({}, { event, data: { id: "any" } })),
+		);
 		await flush();
 	};
 

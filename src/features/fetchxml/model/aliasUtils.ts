@@ -43,7 +43,9 @@ export function sanitizeAlias(raw: string): string {
  * skipped, so a generated alias could collide with one).
  */
 export function collectLinkEntityAliases(fetch: FetchNode): Set<string> {
-	return new Set(collectAllLinkEntities(fetch).flatMap((link) => (link.alias ? [link.alias] : [])));
+	return new Set(
+		collectAllLinkEntities(fetch).flatMap((link) => (link.alias ? [link.alias] : [])),
+	);
 }
 
 /**

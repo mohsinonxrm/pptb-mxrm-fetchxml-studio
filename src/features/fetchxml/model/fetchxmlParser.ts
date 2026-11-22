@@ -107,6 +107,14 @@ export function getParseToTreeChanges(result: Pick<ParseResult, "warnings">): Pa
 
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 
+/**
+ * A whole number as Dataverse reads top, count, page and utc-offset: optional spaces and sign,
+ * digits only (#181). parseInt accepted "10abc" as 10. Verified live (2026-10-30): top="10abc"
+ * fails ("Input string was not in a correct format"), top=" 10 " and top="+5" run.
+ */
+function parseXmlInt(text: string): number {
+	return /^\s*[+-]?\d+\s*$/.test(text) ? parseInt(text, 10) : NaN;
+}
 
 /**
  * Attributes Dataverse ignores that are ubiquitous in FetchXML exported from Advanced Find and
@@ -218,7 +226,8 @@ function collectElementAttributes(
 		extras[name] = attr.value;
 		if (silent?.has(lower)) continue;
 
-		const isNamespaceDeclaration = attr.namespaceURI === XMLNS_NAMESPACE || lower.startsWith("xmlns:");
+		const isNamespaceDeclaration =
+			attr.namespaceURI === XMLNS_NAMESPACE || lower.startsWith("xmlns:");
 		issues.push({
 			message: isNamespaceDeclaration
 				? `Namespace declaration '${name}' is ignored by Dataverse.`
@@ -236,6 +245,14 @@ function collectElementAttributes(
 }
 
 /** Unknown child element (including namespaced ones): Dataverse rejects it (0x8004111c). */
+/** The comment nodes in a parsed document, before the root element included (#200) */
+function countComments(doc: Document): number {
+	const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT);
+	let count = 0;
+	while (walker.nextNode()) count++;
+	return count;
+}
+
 function reportUnknownChild(child: Element, parentName: string, issues: ParseIssue[]): void {
 	issues.push({
 		message: `Unknown element <${child.nodeName}> inside <${parentName}> isn't valid FetchXML (Dataverse rejects it); Parse to tree drops it.`,
@@ -267,7 +284,11 @@ function updateAliasReferences(fetch: FetchNode, issues: ParseIssue[]): void {
 	};
 	const visitFilter = (filter: FilterNode) => {
 		for (const condition of filter.conditions) {
-			condition.entityname = rename(linkAliasRenames, condition.entityname, "condition entityname");
+			condition.entityname = rename(
+				linkAliasRenames,
+				condition.entityname,
+				"condition entityname",
+			);
 			if (condition.valueof) {
 				// The corrected alias can itself contain dots ("my.acct.name"): match the longest one
 				const valueof = condition.valueof;
@@ -349,7 +370,9 @@ export function parseFetchXml(xmlString: string): ParseResult {
 	} catch (e) {
 		return {
 			success: false,
-			errors: [{ message: `XML parsing error: ${e instanceof Error ? e.message : String(e)}` }],
+			errors: [
+				{ message: `XML parsing error: ${e instanceof Error ? e.message : String(e)}` },
+			],
 			warnings: [],
 		};
 	}
@@ -360,10 +383,25 @@ export function parseFetchXml(xmlString: string): ParseResult {
 		return {
 			success: false,
 			errors: [
-				{ message: `Root element must be <fetch>, found <${fetchElement?.nodeName || "none"}>` },
+				{
+					message: `Root element must be <fetch>, found <${fetchElement?.nodeName || "none"}>`,
+				},
 			],
 			warnings: [],
 		};
+	}
+
+	// XML comments: the tree has nowhere to keep them, so Parse to tree removes them; say so, so the
+	// confirmation lists them rather than dropping them silently (#200)
+	const comments = countComments(doc);
+	if (comments > 0) {
+		issues.push({
+			// Worded for Parse to tree and for loading a saved view (getViewLoadNotice) alike
+			message: `XML comments aren't kept in the tree, so ${comments === 1 ? "1 comment is" : `${comments} comments are`} removed.`,
+			element: "fetch",
+			severity: "info",
+			kind: "dropped",
+		});
 	}
 
 	// Find the entity element (required)
@@ -524,7 +562,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 	// Numeric options
 	const top = fetchElement.getAttribute("top");
 	if (top !== null) {
-		const topNum = parseInt(top, 10);
+		const topNum = parseXmlInt(top);
 		if (!isNaN(topNum)) {
 			options.top = topNum;
 		} else {
@@ -540,7 +578,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const count = fetchElement.getAttribute("count");
 	if (count !== null) {
-		const countNum = parseInt(count, 10);
+		const countNum = parseXmlInt(count);
 		if (!isNaN(countNum)) {
 			options.count = countNum;
 		} else {
@@ -556,7 +594,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const page = fetchElement.getAttribute("page");
 	if (page !== null) {
-		const pageNum = parseInt(page, 10);
+		const pageNum = parseXmlInt(page);
 		if (!isNaN(pageNum)) {
 			options.page = pageNum;
 		} else {
@@ -572,7 +610,7 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 
 	const utcOffset = fetchElement.getAttribute("utc-offset");
 	if (utcOffset !== null) {
-		const utcNum = parseInt(utcOffset, 10);
+		const utcNum = parseXmlInt(utcOffset);
 		if (!isNaN(utcNum)) {
 			options.utcOffset = utcNum;
 		} else {
@@ -593,7 +631,6 @@ function parseFetchOptions(fetchElement: Element, issues: ParseIssue[]): FetchNo
 	if (pagingCookie) {
 		options.pagingCookie = pagingCookie;
 	}
-
 
 	return options;
 }
@@ -804,7 +841,8 @@ function parseOrder(orderElement: Element, issues: ParseIssue[]): OrderNode | nu
 
 	if (!attribute && !alias) {
 		issues.push({
-			message: "Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to tree drops it.",
+			message:
+				"Order element has neither 'attribute' nor 'alias' (Dataverse rejects it); Parse to tree drops it.",
 			element: "order",
 			severity: "error",
 			kind: "dropped",
@@ -933,7 +971,8 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 	}
 	if (!operatorAttr) {
 		issues.push({
-			message: "Condition element missing 'operator' (Dataverse rejects it); Parse to tree uses 'eq'.",
+			message:
+				"Condition element missing 'operator' (Dataverse rejects it); Parse to tree uses 'eq'.",
 			element: "condition",
 			attribute: "operator",
 			severity: "error",
@@ -1002,7 +1041,9 @@ function parseCondition(condElement: Element, issues: ParseIssue[]): ConditionNo
 			}
 			// uiname / uitype on lookup values in saved views, kept verbatim (#181)
 			if (valEl.attributes.length > 0) {
-				valueAttributes[valText] = Object.fromEntries(Array.from(valEl.attributes, (a) => [a.name, a.value]));
+				valueAttributes[valText] = Object.fromEntries(
+					Array.from(valEl.attributes, (a) => [a.name, a.value]),
+				);
 			}
 		}
 		condition.value = values;

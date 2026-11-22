@@ -26,8 +26,17 @@ export function withStringConditionValues<T>(query: T): T {
 		for (const [key, value] of Object.entries(node)) {
 			if (key === "Values" && Array.isArray(value)) {
 				copy[key] = value.map((item) =>
-					item !== null && typeof item === "object" && !Array.isArray(item) && "Value" in item
-						? { ...item, Value: item.Value === null || typeof item.Value === "string" ? item.Value : String(item.Value) }
+					item !== null &&
+					typeof item === "object" &&
+					!Array.isArray(item) &&
+					"Value" in item
+						? {
+								...item,
+								Value:
+									item.Value === null || typeof item.Value === "string"
+										? item.Value
+										: String(item.Value),
+							}
 						: visit(item),
 				);
 			} else {
@@ -43,7 +52,11 @@ export function withStringConditionValues<T>(query: T): T {
  * The query for "Bulk delete the selected records", built here rather than converted from FetchXML:
  * the conversion is a GET with the whole ID list in the URL, which failed above ~530 records (#177).
  */
-export function selectedRecordsQuery(entityLogicalName: string, primaryIdAttribute: string, recordIds: readonly string[]) {
+export function selectedRecordsQuery(
+	entityLogicalName: string,
+	primaryIdAttribute: string,
+	recordIds: readonly string[],
+) {
 	return {
 		"@odata.type": "Microsoft.Dynamics.CRM.QueryExpression",
 		EntityName: entityLogicalName,

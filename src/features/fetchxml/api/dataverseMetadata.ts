@@ -68,6 +68,43 @@ export async function loadAllEntityAttributes(logicalName: string): Promise<Attr
 }
 
 /**
+ * MaxLength per String attribute of an entity (cached and de-duplicated), for the large text
+ * attribute advice (#97).
+ */
+export async function loadStringMaxLengths(logicalName: string): Promise<Map<string, number>> {
+	const cached = metadataCache.getStringMaxLengths(logicalName);
+	if (cached) return cached;
+	const inFlight = metadataCache.getStringMaxLengthsPromise(logicalName);
+	if (inFlight) return inFlight;
+
+	const isCurrent = metadataCache.generationGuard();
+	const promise = pptbClient
+		.getStringAttributeMaxLengths(logicalName)
+		.then(
+			(attributes) =>
+				new Map(
+					attributes.flatMap((a) =>
+						typeof a.MaxLength === "number"
+							? [[a.LogicalName, a.MaxLength] as const]
+							: [],
+					),
+				),
+		);
+	metadataCache.setStringMaxLengthsPromise(logicalName, promise);
+	try {
+		const maxLengths = await promise;
+		if (isCurrent()) {
+			metadataCache.setStringMaxLengths(logicalName, maxLengths);
+			metadataCache.clearStringMaxLengthsPromise(logicalName);
+		}
+		return maxLengths;
+	} catch (error) {
+		if (isCurrent()) metadataCache.clearStringMaxLengthsPromise(logicalName);
+		throw error;
+	}
+}
+
+/**
  * The attributes the pickers offer (#57): readable ones, and only those Advanced Find shows while
  * "Advanced Find only" is on.
  * @param advancedFindOnly - Defaults to the current setting
@@ -152,10 +189,19 @@ type EntityRelationships = {
  * (planIntersectEntityJoins, #57): joining "through" the intersect entity from itself makes no
  * sense, and Dataverse gives it no many-to-one relationships for those attributes.
  */
-async function withIntersectEntityJoins(logicalName: string, relationships: EntityRelationships): Promise<EntityRelationships> {
+async function withIntersectEntityJoins(
+	logicalName: string,
+	relationships: EntityRelationships,
+): Promise<EntityRelationships> {
 	const own = relationships.manyToMany.filter((r) => r.IntersectEntityName === logicalName);
 	if (!own.length) return relationships;
-	const targets = [...new Set(own.flatMap((r) => [r.Entity1LogicalName, r.Entity2LogicalName]).filter((e): e is string => !!e))];
+	const targets = [
+		...new Set(
+			own
+				.flatMap((r) => [r.Entity1LogicalName, r.Entity2LogicalName])
+				.filter((e): e is string => !!e),
+		),
+	];
 	const keys = new Map<string, string>();
 	await Promise.all(
 		targets.map(async (target) => {
@@ -166,7 +212,9 @@ async function withIntersectEntityJoins(logicalName: string, relationships: Enti
 			}
 		}),
 	);
-	const joins = planIntersectEntityJoins(logicalName, own as IntersectRelationship[], (entity) => keys.get(entity));
+	const joins = planIntersectEntityJoins(logicalName, own as IntersectRelationship[], (entity) =>
+		keys.get(entity),
+	);
 	return {
 		oneToMany: relationships.oneToMany,
 		manyToOne: [...relationships.manyToOne, ...joins],
@@ -188,7 +236,10 @@ export async function loadEntityRelationships(
 	let relationships = metadataCache.getEntityRelationships(cacheKey);
 	if (!relationships) {
 		const isCurrent = metadataCache.generationGuard();
-		relationships = await withIntersectEntityJoins(logicalName, await pptbClient.getEntityRelationships(logicalName, false));
+		relationships = await withIntersectEntityJoins(
+			logicalName,
+			await pptbClient.getEntityRelationships(logicalName, false),
+		);
 		if (isCurrent()) metadataCache.setEntityRelationships(cacheKey, relationships);
 	}
 	const inScope = (r: RelationshipMetadata) => isRelationshipInScope(r, advancedFindOnly);

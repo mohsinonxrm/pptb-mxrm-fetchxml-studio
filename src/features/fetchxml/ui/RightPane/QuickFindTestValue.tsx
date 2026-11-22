@@ -53,12 +53,14 @@ export function QuickFindTestValue({
 				label="Quick find value"
 				hint={
 					<>
-						Replaces {placeholder} when you execute. The query keeps {placeholder}, so saving and copying are
-						unchanged.
+						Replaces {placeholder} when you execute. The query keeps {placeholder}, so
+						saving and copying are unchanged.
 					</>
 				}
 				validationState={missing ? "warning" : "none"}
-				validationMessage={missing ? "Enter a value to execute this quick find view." : undefined}
+				validationMessage={
+					missing ? "Enter a value to execute this quick find view." : undefined
+				}
 			>
 				<Input
 					className={styles.input}
@@ -76,7 +78,8 @@ export function QuickFindTestValue({
 			/>
 			{searchValue && (
 				<Text size={200}>
-					Runs with <span className={styles.code}>value="{searchValue}"</span> in each {placeholder} condition.
+					Runs with <span className={styles.code}>value="{searchValue}"</span> in each{" "}
+					{placeholder} condition.
 				</Text>
 			)}
 		</div>

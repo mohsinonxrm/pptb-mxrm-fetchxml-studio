@@ -2,10 +2,11 @@
  * Tabbed preview panel with FetchXML editor and Results grid
  */
 
-import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
 	TabList,
 	Tab,
+	CounterBadge,
 	type SelectTabData,
 	type SelectTabEvent,
 	Button,
@@ -32,8 +33,13 @@ import { returnFetchXmlToInvokingTool } from "../../api/invocation";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel } from "./CodePanel";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
-import { ResultsGrid, type QueryResult, type ResultsGridHandle, type SortChangeData } from "./ResultsGrid";
-import { ResultsCommandBar } from "./ResultsCommandBar";
+import {
+	ResultsGrid,
+	type QueryResult,
+	type ResultsGridHandle,
+	type SortChangeData,
+} from "./ResultsGrid";
+import { ResultsCommandBar, type CloseMenuItem } from "./ResultsCommandBar";
 import type { RelatedEntityColumn } from "./AddColumnsPanel";
 import type { PagingNotice } from "../../api/paging";
 import { isAttributeInScope, useAdvancedFindOnly } from "../../state/metadataScope";
@@ -50,17 +56,33 @@ import {
 	getParseToTreeChanges,
 } from "../../model/fetchxmlParser";
 import { generateFetchXml } from "../../model/fetchxml";
+import { DATAVERSE_DEFAULT_PAGE_SIZE } from "../../api/pageRecovery";
 import type { LoadFetchXmlOptions } from "../../state/builderContext";
 import { ParseChangesDialog } from "./ParseChangesDialog";
-import {
-	EditorSyncContext,
-	type EditorSyncAction,
-	type EditorSyncResult,
-} from "./editorSync";
+import { EditorSyncContext, type EditorSyncAction, type EditorSyncResult } from "./editorSync";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
+import { PaneErrorBoundary } from "../../../../shared/components/ErrorBoundary";
 import type { LayoutXmlConfig } from "../../model/layoutxml";
-import type { WorkflowInfo } from "../../api/pptbClient";
-import type { DisplaySettings } from "../../model/displaySettings";
+import { isDataverseAvailable, type WorkflowInfo } from "../../api/pptbClient";
+import {
+	normalizeGridDensity,
+	type DisplaySettings,
+	type GridDensity,
+} from "../../model/displaySettings";
+import type { NodeId } from "../../model/nodes";
+import { collectAdvisories, mergeDataverseCheck, type Advisory } from "../../model/advisories";
+import { AdvisoriesPanel } from "./AdvisoriesPanel";
+import { useAdvisorMetadata, useDataverseCheck } from "./useAdvisories";
+
+type PreviewTab = "xml" | "layout" | "results" | "advisories" | "code";
+
+/** FetchXML as the tree writes it, to compare meaning rather than formatting; null if it doesn't parse */
+function parseForAdvisories(xmlText: string): { fetchNode: FetchNode; canonical: string } | null {
+	const result = parseFetchXml(xmlText);
+	return result.success && result.fetchNode
+		? { fetchNode: result.fetchNode, canonical: generateFetchXml(result.fetchNode) }
+		: null;
+}
 
 const useStyles = makeStyles({
 	container: {
@@ -245,6 +267,8 @@ interface PreviewTabsProps {
 	onLoadMore?: () => void;
 	/** Paging notice above the grid: failed page, Stop, simple paging (#60) */
 	pagingNotice?: PagingNotice | null;
+	/** Retrieve All is waiting this long to retry a throttled page (#183) */
+	pagingWaitSeconds?: number;
 	isRetrieveAllInProgress?: boolean;
 	onStopRetrieveAll?: () => void;
 	onRetryPaging?: () => void;
@@ -288,6 +312,12 @@ interface PreviewTabsProps {
 	activateDisabledReason?: string;
 	/** Why Deactivate is off for this entity (#143) */
 	deactivateDisabledReason?: string;
+	/** Close menu items for close-message entities (#149); replaces Deactivate */
+	closeActions?: CloseMenuItem[];
+	/** Why the Close menu is off (#149) */
+	closeDisabledReason?: string;
+	/** Callback when user picks a close action, with the selected record IDs (#149) */
+	onCloseRecords?: (actionKey: string, recordIds: string[]) => void;
 	/** Callback when user wants to run a specific workflow directly */
 	onRunSpecificWorkflow?: (workflow: WorkflowInfo, recordIds: string[]) => void;
 	/** Whether user can delete records */
@@ -297,7 +327,7 @@ interface PreviewTabsProps {
 	/** Whether user can run workflows */
 	canRunWorkflow?: boolean;
 	/** Fetch available workflows for the entity */
-	onFetchWorkflows?: () => Promise<WorkflowInfo[]>;
+	onFetchWorkflows?: (entityLogicalName?: string) => Promise<WorkflowInfo[]>;
 	/** Whether the current query is an aggregate query (disables delete/workflow) */
 	isAggregateQuery?: boolean;
 	/** Whether the query has 1-N or N-N relationships that cause row duplication */
@@ -314,8 +344,18 @@ interface PreviewTabsProps {
 	onOpenSettings?: () => void;
 	/** Display settings (logical names, value format) */
 	displaySettings?: DisplaySettings;
+	/** Change the grid and tree density (#228) */
+	onGridDensityChange?: (density: GridDensity) => void;
 	/** Primary key attribute from Dataverse entity metadata (e.g. "activityid" for activity entities) */
 	primaryIdAttribute?: string;
+	/** Identity of the tool's connection: "" with none (usePptbContext); Check with Dataverse needs one (#97) */
+	connectionKey?: string;
+	/** The tree's selected node, highlighted in the Advisories tab (#97) */
+	selectedNodeId?: NodeId | null;
+	/** Select a node in the tree: an advisory's location (#97) */
+	onSelectNode?: (nodeId: NodeId) => void;
+	/** Add an order on an attribute: the Advisories tab's quick fix (#97) */
+	onAddOrder?: (parentId: NodeId, attribute: string) => void;
 }
 
 export function PreviewTabs({
@@ -347,6 +387,7 @@ export function PreviewTabs({
 	isCallee,
 	onLoadMore,
 	pagingNotice,
+	pagingWaitSeconds,
 	isRetrieveAllInProgress,
 	onStopRetrieveAll,
 	onRetryPaging,
@@ -372,6 +413,9 @@ export function PreviewTabs({
 	onDeactivateRecords,
 	activateDisabledReason,
 	deactivateDisabledReason,
+	closeActions,
+	closeDisabledReason,
+	onCloseRecords,
 	onRunSpecificWorkflow,
 	canDelete,
 	canBulkDelete,
@@ -385,11 +429,16 @@ export function PreviewTabs({
 	getSelectedRecordIds,
 	onOpenSettings,
 	displaySettings,
+	onGridDensityChange,
 	primaryIdAttribute,
+	connectionKey,
+	selectedNodeId,
+	onSelectNode,
+	onAddOrder,
 }: PreviewTabsProps) {
 	const styles = useStyles();
 	const advancedFindOnly = useAdvancedFindOnly();
-	const [selectedTab, setSelectedTab] = useState<"xml" | "layout" | "results" | "code">("xml");
+	const [selectedTab, setSelectedTab] = useState<PreviewTab>("xml");
 	const [toolbarSelectedCount, setToolbarSelectedCount] = useState(0);
 	const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
@@ -416,7 +465,11 @@ export function PreviewTabs({
 			new Set(
 				(fetchQuery?.entity.links ?? [])
 					.filter((link) => !NON_RETURNING_LINK_TYPES.has(link.linkType))
-					.flatMap((link) => link.attributes.map((a) => `${link.name}|${link.from}|${link.to}|${a.name}`)),
+					.flatMap((link) =>
+						link.attributes.map(
+							(a) => `${link.name}|${link.from}|${link.to}|${a.name}`,
+						),
+					),
 			),
 		[fetchQuery],
 	);
@@ -438,6 +491,11 @@ export function PreviewTabs({
 		return isEditorModeActive ? editorXmlRef.current || xml : xml;
 	}, [isEditorModeActive, xml]);
 
+	// The editor's text for the Advisories tab (#97), a moment after typing stops
+	const [editorText, setEditorText] = useState("");
+	const editorTextTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	useEffect(() => () => clearTimeout(editorTextTimer.current), []);
+
 	const handleEditorStateChange = useCallback((isActive: boolean, editorXml: string) => {
 		editorXmlRef.current = editorXml;
 		setIsEditorModeActive((prev) => (prev !== isActive ? isActive : prev));
@@ -447,10 +505,83 @@ export function PreviewTabs({
 		if (!isActive) {
 			setEditorValidationError(null);
 		}
+		clearTimeout(editorTextTimer.current);
+		editorTextTimer.current = setTimeout(() => setEditorText(isActive ? editorXml : ""), 300);
 	}, []);
 
+	// ---- Advisories (#97): what the user is looking at, the editor's FetchXML in editor mode
+	const advisorySubject = useMemo(() => {
+		if (!isEditorModeActive)
+			return { fetch: fetchQuery ?? null, key: xml, inTree: true, editorInvalid: false };
+		const parsed = parseForAdvisories(editorText);
+		if (!parsed)
+			return {
+				fetch: null,
+				key: editorText,
+				inTree: false,
+				editorInvalid: editorText.trim() !== "",
+			};
+		// The editor means the same as the tree: use the tree's nodes, so locations and fixes work
+		if (fetchQuery && parsed.canonical === xml)
+			return { fetch: fetchQuery, key: xml, inTree: true, editorInvalid: false };
+		return {
+			fetch: parsed.fetchNode,
+			key: parsed.canonical,
+			inTree: false,
+			editorInvalid: false,
+		};
+	}, [isEditorModeActive, editorText, fetchQuery, xml]);
+	// The metadata rules' metadata loads from the tab's first open (#170)
+	const [advisoriesOpened, setAdvisoriesOpened] = useState(false);
+	if (selectedTab === "advisories" && !advisoriesOpened) setAdvisoriesOpened(true);
+	const advisorMetadata = useAdvisorMetadata(advisorySubject.fetch, advisoriesOpened);
+	const dataverseCheck = useDataverseCheck();
+	const checkResult = dataverseCheck.result;
+	const checkStale = !!checkResult && checkResult.key !== advisorySubject.key;
+	// The results of this query are paged: more pages loaded or available (Load more, Retrieve All, #170)
+	const resultQueryXml = useMemo(
+		() => (result?.query ? generateFetchXml(result.query) : undefined),
+		[result?.query],
+	);
+	const resultsPaged =
+		!!result &&
+		(result.moreRecords === true || result.rows.length > DATAVERSE_DEFAULT_PAGE_SIZE) &&
+		resultQueryXml === advisorySubject.key;
+	const { advisories, added } = useMemo((): { advisories: Advisory[]; added: number } => {
+		const subject = advisorySubject.fetch;
+		if (!subject) return { advisories: [], added: 0 };
+		const own = collectAdvisories(subject, advisorMetadata, { resultsPaged });
+		// A check of an earlier query isn't shown or counted until Check again (#170); its status
+		// line still says when it was
+		return checkResult && !checkStale
+			? mergeDataverseCheck(subject, own, checkResult.check)
+			: { advisories: own, added: 0 };
+	}, [advisorySubject.fetch, advisorMetadata, checkResult, checkStale, resultsPaged]);
+	const checkDisabledReason = !isDataverseAvailable()
+		? "Dataverse isn't available here. Open FetchXML Studio in Power Platform ToolBox."
+		: connectionKey === ""
+			? "Connect to an environment to check with Dataverse."
+			: undefined;
+	/** Check the FetchXML the user is looking at: the editor's text in editor mode, otherwise the tree's */
+	const handleCheckWithDataverse = () => {
+		if (isEditorModeActive) {
+			// Flush the debounce, so the list and the stale check use the text that's checked
+			const text = editorXmlRef.current;
+			clearTimeout(editorTextTimer.current);
+			setEditorText(text);
+			void dataverseCheck.run(text, parseForAdvisories(text)?.canonical ?? text);
+		} else {
+			void dataverseCheck.run(xml, xml);
+		}
+	};
+	const handleAdvisoryFix = (advisory: Advisory) => {
+		if (advisory.fix?.kind === "add-root-order" && fetchQuery && advisorySubject.inTree) {
+			onAddOrder?.(fetchQuery.entity.id, advisory.fix.attribute);
+		}
+	};
+
 	const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-		setSelectedTab(data.value as "xml" | "layout" | "results" | "code");
+		setSelectedTab(data.value as PreviewTab);
 		// Clear the editor validation error when returning to the XML tab so it
 		// doesn't linger as a banner on top of the editor.
 		if (data.value === "xml") {
@@ -497,7 +628,11 @@ export function PreviewTabs({
 
 			const result = onParseToTree?.(editorXml, { preserveLayout: true });
 			if (!result?.success || !result.fetchNode) {
-				setEditorValidationError(result?.errors ?? [{ message: "The FetchXML couldn't be loaded into the tree." }]);
+				setEditorValidationError(
+					result?.errors ?? [
+						{ message: "The FetchXML couldn't be loaded into the tree." },
+					],
+				);
 				return { status: "cancelled" };
 			}
 			const syncedXml = generateFetchXml(result.fetchNode);
@@ -512,7 +647,10 @@ export function PreviewTabs({
 	);
 
 	const editorSyncValue = useMemo(
-		() => ({ sync: syncEditorToTree, editorHasContent: isEditorModeActive && editorHasContent }),
+		() => ({
+			sync: syncEditorToTree,
+			editorHasContent: isEditorModeActive && editorHasContent,
+		}),
 		[syncEditorToTree, isEditorModeActive, editorHasContent],
 	);
 
@@ -526,7 +664,11 @@ export function PreviewTabs({
 		const synced = await syncEditorToTree("execute");
 		if (synced.status === "cancelled") return;
 		setSelectedTab("results");
-		onExecute?.(synced.status === "synced" ? { xml: synced.fetchXml, fetchQuery: synced.fetchQuery } : undefined);
+		onExecute?.(
+			synced.status === "synced"
+				? { xml: synced.fetchXml, fetchQuery: synced.fetchQuery }
+				: undefined,
+		);
 	};
 
 	/** Run the editor XML despite warnings; Dataverse's own error is shown if it fails. */
@@ -583,6 +725,15 @@ export function PreviewTabs({
 						<Tab value="xml">FetchXML</Tab>
 						<Tab value="layout">LayoutXML</Tab>
 						<Tab value="results">Results</Tab>
+						<Tab value="advisories" aria-label={`Advisories (${advisories.length})`}>
+							Advisories{" "}
+							<CounterBadge
+								count={advisories.length}
+								size="small"
+								appearance="ghost"
+								color="brand"
+							/>
+						</Tab>
 						<Tab value="code" icon={<Code20Regular />}>
 							Code
 						</Tab>
@@ -604,7 +755,11 @@ export function PreviewTabs({
 								appearance="primary"
 								icon={<Play24Regular />}
 								onClick={handleExecute}
-								disabled={isExecuting || isLoadingMore || (isEditorModeActive ? !editorHasContent : !xml)}
+								disabled={
+									isExecuting ||
+									isLoadingMore ||
+									(isEditorModeActive ? !editorHasContent : !xml)
+								}
 							>
 								{isExecuting ? "Executing…" : "Execute"}
 							</Button>
@@ -641,7 +796,9 @@ export function PreviewTabs({
 						<ProgressBar />
 					</div>
 				)}
-				{quickFindTestValue && <div className={styles.messageBarContainer}>{quickFindTestValue}</div>}
+				{quickFindTestValue && (
+					<div className={styles.messageBarContainer}>{quickFindTestValue}</div>
+				)}
 				{/* Export status MessageBar */}
 				{isExporting && (
 					<div className={styles.messageBarContainer}>
@@ -743,177 +900,274 @@ export function PreviewTabs({
 						className={styles.codeCard}
 						style={selectedTab !== "xml" ? { display: "none" } : undefined}
 					>
-						<FetchXmlEditor
-							xml={xml}
-							onParseToTree={onParseToTree}
-							onEditorStateChange={handleEditorStateChange}
-							replaceRequest={editorReplace}
-						/>
+						<PaneErrorBoundary
+							where="FetchXML editor"
+							title="The FetchXML editor couldn't be shown"
+						>
+							<FetchXmlEditor
+								xml={xml}
+								onParseToTree={onParseToTree}
+								onEditorStateChange={handleEditorStateChange}
+								replaceRequest={editorReplace}
+								onViewAdvisories={() => setSelectedTab("advisories")}
+							/>
+						</PaneErrorBoundary>
 					</div>
+					{selectedTab === "advisories" && (
+						<PaneErrorBoundary
+							where="Advisories panel"
+							title="The advisories couldn't be shown"
+							resetKey={advisorySubject.key}
+						>
+							<AdvisoriesPanel
+								advisories={advisories}
+								noQuery={!fetchQuery}
+								editorInvalid={advisorySubject.editorInvalid}
+								inTree={advisorySubject.inTree}
+								selectedNodeId={selectedNodeId}
+								onSelectNode={onSelectNode}
+								onFix={handleAdvisoryFix}
+								checking={dataverseCheck.checking}
+								checkedAt={checkResult?.checkedAt}
+								stale={checkStale}
+								added={added}
+								checkError={dataverseCheck.error}
+								onDismissCheckError={dataverseCheck.dismissError}
+								onCheck={handleCheckWithDataverse}
+								checkDisabledReason={checkDisabledReason}
+							/>
+						</PaneErrorBoundary>
+					)}
 					{selectedTab === "layout" && (
 						<div className={styles.codeCard}>
-							<LayoutXmlViewer layoutXml={layoutXml || ""} />
+							<PaneErrorBoundary
+								where="LayoutXML panel"
+								title="The LayoutXML couldn't be shown"
+								resetKey={layoutXml}
+							>
+								<LayoutXmlViewer layoutXml={layoutXml || ""} />
+							</PaneErrorBoundary>
 						</div>
 					)}
 					{selectedTab === "code" && (
 						<div className={styles.codeCard}>
-							<CodePanel fetchXml={xml} />
+							<PaneErrorBoundary
+								where="Code panel"
+								title="The code couldn't be generated"
+								resetKey={xml}
+							>
+								<CodePanel fetchXml={xml} />
+							</PaneErrorBoundary>
 						</div>
 					)}
 					{selectedTab === "results" && (
-						<div className={styles.resultsLayout}>
-							<div className={styles.toolbarCard}>
-								<ResultsCommandBar
-									selectedCount={toolbarSelectedCount}
-									onOpen={() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onOpenRecord) {
-											onOpenRecord(ids);
-										}
-									}}
-									onCopyUrl={() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onCopyRecordUrl) {
-											onCopyRecordUrl(ids);
-										}
-									}}
-									onActivate={onActivateRecords && (() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onActivateRecords) {
-											onActivateRecords(ids);
-										}
-									})}
-									onDeactivate={onDeactivateRecords && (() => {
-										const ids = getSelectedIds();
-										if (ids?.length && onDeactivateRecords) {
-											onDeactivateRecords(ids);
-										}
-									})}
-									activateDisabledReason={activateDisabledReason}
-									deactivateDisabledReason={deactivateDisabledReason}
-									onDelete={() => {
-										const ids = getSelectedIds();
-										// For delete, we allow empty selection to trigger "delete all" dialog
-										if (onDeleteRecords) {
-											onDeleteRecords(ids || []);
-										}
-									}}
-									onBulkDelete={() => {
-										const ids = getSelectedIds();
-										if (onBulkDeleteRecords) {
-											onBulkDeleteRecords(ids || []);
-										}
-									}}
-									canDelete={canDelete}
-									canBulkDelete={canBulkDelete}
-									deleteDisabled={isAggregateQuery || hasOneToManyRelationship}
-									onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
-										const ids = getSelectedIds();
-										if (ids?.length && onRunSpecificWorkflow) {
-											onRunSpecificWorkflow(workflow, ids);
-										}
-									}}
-									canRunWorkflow={canRunWorkflow}
-									workflowDisabled={isAggregateQuery || hasOneToManyRelationship}
-									recordActionsDisabledReason={recordActionsDisabledReason}
-									deleteAllDisabledReason={deleteAllDisabledReason}
-									onFetchWorkflows={onFetchWorkflows}
-									onExport={onExport}
-									onExportLocal={onExportLocal}
-									loadedCount={searchText.trim() ? visibleRowCount : (result?.rows.length ?? 0)}
-									searchText={searchText}
-									onCopyRows={(scope, mode) => resultsGridRef.current?.copyRows(scope, mode)}
-									canExport={canExport}
-									isExporting={isExporting}
-									exportDisabledReason={exportDisabledReason}
-									entityName={result?.entityLogicalName}
-									entityDisplayName={entityDisplayName}
-									columns={columnConfig?.columns}
-									onReorderColumns={onReorderColumns}
-									onRemoveColumns={onRemoveColumns}
-									availableAttributes={
-										// Root entity attributes to offer, per "Advanced Find only" (#57)
-										attributeMetadata && fetchQuery?.entity?.name
-											? Array.from(attributeMetadata.get(fetchQuery.entity.name)?.values() || []).filter((a) =>
-													isAttributeInScope(a, advancedFindOnly),
-												)
-											: undefined
-									}
-									selectedAttributes={fetchQuery?.entity.attributes.map((a) => a.name)}
-									onAddColumn={onAddColumn}
-									onAddRelatedColumns={onAddRelatedColumns}
-									lookupRelationships={lookupRelationships}
-									oneToManyRelationships={oneToManyRelationships}
-									isLoadingRelationships={isLoadingRelationships}
-									onLoadRelatedAttributes={onLoadRelatedAttributes}
-									onResetToDefault={onResetToDefault}
-									addColumnsDisabledReason={
-										isAggregateQuery
-											? "Aggregate queries only return Group by and aggregate attributes, with aliases: add them in the tree."
-											: undefined
-									}
-									existingRelatedColumns={existingRelatedColumns}
-									isRetrieveAllInProgress={isRetrieveAllInProgress}
-									onStopRetrieveAll={onStopRetrieveAll}
-								/>
-							</div>
-							{pagingNotice && (
-								<div className={styles.messageBarContainer}>
-									<MessageBar intent={pagingNotice.kind === "error" ? "error" : pagingNotice.kind === "stopped" ? "warning" : "info"} layout="multiline">
-										<MessageBarBody>
-											<MessageBarTitle>
-												{pagingNotice.kind === "error"
-													? "Couldn't load all records"
-													: pagingNotice.kind === "stopped"
-														? "Retrieve all stopped"
-														: "Paging without a paging cookie"}
-											</MessageBarTitle>
-											{pagingNotice.kind === "error"
-												? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
-												: pagingNotice.kind === "stopped"
-													? `Stopped after ${result?.rows.length ?? 0} rows. Scroll to the end of the grid to load more, or execute again.`
-													: pagingNotice.message}
-										</MessageBarBody>
-										<MessageBarActions
-											containerAction={
-												<Button
-													appearance="transparent"
-													icon={<Dismiss16Regular />}
-													onClick={onDismissPagingNotice}
-													aria-label="Dismiss"
-												/>
+						<PaneErrorBoundary
+							where="Results panel"
+							title="The results couldn't be shown"
+							resetKey={result}
+						>
+							<div className={styles.resultsLayout}>
+								<div className={styles.toolbarCard}>
+									<ResultsCommandBar
+										selectedCount={toolbarSelectedCount}
+										density={normalizeGridDensity(displaySettings?.gridDensity)}
+										onDensityChange={onGridDensityChange}
+										onOpen={() => {
+											const ids = getSelectedIds();
+											if (ids?.length && onOpenRecord) {
+												onOpenRecord(ids);
 											}
-										>
-											{pagingNotice.kind === "error" && onRetryPaging && <Button onClick={onRetryPaging}>Retry</Button>}
-										</MessageBarActions>
-									</MessageBar>
+										}}
+										onCopyUrl={() => {
+											const ids = getSelectedIds();
+											if (ids?.length && onCopyRecordUrl) {
+												onCopyRecordUrl(ids);
+											}
+										}}
+										onActivate={
+											onActivateRecords &&
+											(() => {
+												const ids = getSelectedIds();
+												if (ids?.length && onActivateRecords) {
+													onActivateRecords(ids);
+												}
+											})
+										}
+										onDeactivate={
+											onDeactivateRecords &&
+											(() => {
+												const ids = getSelectedIds();
+												if (ids?.length && onDeactivateRecords) {
+													onDeactivateRecords(ids);
+												}
+											})
+										}
+										activateDisabledReason={activateDisabledReason}
+										deactivateDisabledReason={deactivateDisabledReason}
+										closeActions={closeActions}
+										closeDisabledReason={closeDisabledReason}
+										onCloseAction={
+											onCloseRecords &&
+											((key) => {
+												const ids = getSelectedIds();
+												if (ids?.length) onCloseRecords(key, ids);
+											})
+										}
+										onDelete={() => {
+											const ids = getSelectedIds();
+											// For delete, we allow empty selection to trigger "delete all" dialog
+											if (onDeleteRecords) {
+												onDeleteRecords(ids || []);
+											}
+										}}
+										onBulkDelete={() => {
+											const ids = getSelectedIds();
+											if (onBulkDeleteRecords) {
+												onBulkDeleteRecords(ids || []);
+											}
+										}}
+										canDelete={canDelete}
+										canBulkDelete={canBulkDelete}
+										deleteDisabled={
+											isAggregateQuery || hasOneToManyRelationship
+										}
+										onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
+											const ids = getSelectedIds();
+											if (ids?.length && onRunSpecificWorkflow) {
+												onRunSpecificWorkflow(workflow, ids);
+											}
+										}}
+										canRunWorkflow={canRunWorkflow}
+										workflowDisabled={
+											isAggregateQuery || hasOneToManyRelationship
+										}
+										recordActionsDisabledReason={recordActionsDisabledReason}
+										deleteAllDisabledReason={deleteAllDisabledReason}
+										onFetchWorkflows={onFetchWorkflows}
+										onExport={onExport}
+										onExportLocal={onExportLocal}
+										loadedCount={
+											searchText.trim()
+												? visibleRowCount
+												: (result?.rows.length ?? 0)
+										}
+										searchText={searchText}
+										onCopyRows={(scope, mode) =>
+											resultsGridRef.current?.copyRows(scope, mode)
+										}
+										canExport={canExport}
+										isExporting={isExporting}
+										exportDisabledReason={exportDisabledReason}
+										entityName={result?.entityLogicalName}
+										entityDisplayName={entityDisplayName}
+										columns={columnConfig?.columns}
+										onReorderColumns={onReorderColumns}
+										onRemoveColumns={onRemoveColumns}
+										availableAttributes={
+											// Root entity attributes to offer, per "Advanced Find only" (#57)
+											attributeMetadata && fetchQuery?.entity?.name
+												? Array.from(
+														attributeMetadata
+															.get(fetchQuery.entity.name)
+															?.values() || [],
+													).filter((a) =>
+														isAttributeInScope(a, advancedFindOnly),
+													)
+												: undefined
+										}
+										selectedAttributes={fetchQuery?.entity.attributes.map(
+											(a) => a.name,
+										)}
+										onAddColumn={onAddColumn}
+										onAddRelatedColumns={onAddRelatedColumns}
+										lookupRelationships={lookupRelationships}
+										oneToManyRelationships={oneToManyRelationships}
+										isLoadingRelationships={isLoadingRelationships}
+										onLoadRelatedAttributes={onLoadRelatedAttributes}
+										onResetToDefault={onResetToDefault}
+										addColumnsDisabledReason={
+											isAggregateQuery
+												? "Aggregate queries only return Group by and aggregate attributes, with aliases: add them in the tree."
+												: undefined
+										}
+										existingRelatedColumns={existingRelatedColumns}
+										isRetrieveAllInProgress={isRetrieveAllInProgress}
+										onStopRetrieveAll={onStopRetrieveAll}
+									/>
 								</div>
-							)}
-							<div className={styles.gridCard}>
-								<ResultsGrid
-									ref={resultsGridRef}
-									result={result}
-									isLoading={isExecuting}
-									isLoadingMore={isLoadingMore}
-									attributeMetadata={attributeMetadata}
-									fetchQuery={fetchQuery}
-									primaryIdAttribute={primaryIdAttribute}
-									onSelectedCountChange={setToolbarSelectedCount}
-									onSelectionChange={handleSelectionChange}
-									columnConfig={columnConfig}
-									onColumnResize={onColumnResize}
-									onSortChange={onSortChange}
-									onLoadMore={onLoadMore}
-									displaySettings={displaySettings}
-									searchText={searchText}
-									onSearchTextChange={setSearchText}
-									columnFilters={columnFilters}
-									onAddColumnFilter={onAddColumnFilter}
-									onRemoveColumnFilters={onRemoveColumnFilters}
-									onVisibleCountChange={setVisibleRowCount}
-								/>
+								{pagingNotice && (
+									<div className={styles.messageBarContainer}>
+										<MessageBar
+											intent={
+												pagingNotice.kind === "error"
+													? "error"
+													: pagingNotice.kind === "stopped" ||
+														  pagingNotice.kind === "limit"
+														? "warning"
+														: "info"
+											}
+											layout="multiline"
+										>
+											<MessageBarBody>
+												<MessageBarTitle>
+													{pagingNotice.kind === "error"
+														? "Couldn't load all records"
+														: pagingNotice.kind === "stopped"
+															? "Retrieve all stopped"
+															: pagingNotice.kind === "limit"
+																? `Retrieve all stopped at ${result?.rows.length.toLocaleString() ?? 0} rows`
+																: "Paging without a paging cookie"}
+												</MessageBarTitle>
+												{pagingNotice.kind === "error"
+													? `Loaded ${result?.rows.length ?? 0} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
+													: pagingNotice.kind === "stopped"
+														? `Stopped after ${result?.rows.length ?? 0} rows. Scroll to the end of the grid to load more, or execute again.`
+														: pagingNotice.message}
+											</MessageBarBody>
+											<MessageBarActions
+												containerAction={
+													<Button
+														appearance="transparent"
+														icon={<Dismiss16Regular />}
+														onClick={onDismissPagingNotice}
+														aria-label="Dismiss"
+													/>
+												}
+											>
+												{pagingNotice.kind === "error" && onRetryPaging && (
+													<Button onClick={onRetryPaging}>Retry</Button>
+												)}
+											</MessageBarActions>
+										</MessageBar>
+									</div>
+								)}
+								<div className={styles.gridCard}>
+									<ResultsGrid
+										ref={resultsGridRef}
+										result={result}
+										isLoading={isExecuting}
+										isLoadingMore={isLoadingMore}
+										throttleWaitSeconds={pagingWaitSeconds}
+										attributeMetadata={attributeMetadata}
+										fetchQuery={fetchQuery}
+										primaryIdAttribute={primaryIdAttribute}
+										onSelectedCountChange={setToolbarSelectedCount}
+										onSelectionChange={handleSelectionChange}
+										columnConfig={columnConfig}
+										onColumnResize={onColumnResize}
+										onSortChange={onSortChange}
+										onLoadMore={onLoadMore}
+										displaySettings={displaySettings}
+										searchText={searchText}
+										onSearchTextChange={setSearchText}
+										columnFilters={columnFilters}
+										onAddColumnFilter={onAddColumnFilter}
+										onRemoveColumnFilters={onRemoveColumnFilters}
+										onVisibleCountChange={setVisibleRowCount}
+									/>
+								</div>
 							</div>
-						</div>
+						</PaneErrorBoundary>
 					)}
 				</div>
 			</div>

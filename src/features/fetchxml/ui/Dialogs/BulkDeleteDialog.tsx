@@ -4,7 +4,7 @@
  * Supports both selected records and "all records from view" scenarios
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
 	Dialog,
 	DialogSurface,
@@ -34,6 +34,7 @@ import {
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { copyText, openUrl } from "../../api/host";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { defaultBulkDeleteJobName } from "./bulkDeleteJobName";
 
 const useStyles = makeStyles({
 	// A grid item's min-width is auto, so the long warning text pushed the MessageBar body 1px past the
@@ -120,15 +121,20 @@ export function BulkDeleteDialog({
 }: BulkDeleteDialogProps) {
 	const styles = useStyles();
 	const [state, setState] = useState<DialogState>("confirm");
-	const [jobName, setJobName] = useState(
-		`Bulk Delete ${entityDisplayName || "Records"} - ${new Date().toLocaleString()}`
-	);
+	const [jobName, setJobName] = useState(() => defaultBulkDeleteJobName(entityDisplayName));
 	const [error, setError] = useState<string | null>(null);
 	const [result, setResult] = useState<{ asyncOperationId: string; jobUrl: string } | null>(null);
 	const [copied, setCopied] = useState(false);
 	const [confirmAllRecords, setConfirmAllRecords] = useState(false);
 	// Type-to-confirm for Production, more than 100 records or an unknown total (#69)
 	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+
+	// The dialog stays mounted, so the default name is made each time it opens, for the entity and
+	// time of this job (#182). A name typed while it's open is kept.
+	useEffect(() => {
+		if (open) setJobName(defaultBulkDeleteJobName(entityDisplayName));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open]);
 
 	const handleConfirm = useCallback(async () => {
 		setState("submitting");
@@ -180,7 +186,11 @@ export function BulkDeleteDialog({
 							entityDisplayName={entityDisplayName}
 							scope={
 								isAllRecords
-									? { kind: "allMatching", loadedCount: totalViewRecords, moreRecords }
+									? {
+											kind: "allMatching",
+											loadedCount: totalViewRecords,
+											moreRecords,
+										}
 									: { kind: "records", count: recordCount }
 							}
 							onConfirmationChange={setScopeConfirmed}
@@ -191,7 +201,8 @@ export function BulkDeleteDialog({
 								<MessageBar intent="error">
 									<MessageBarBody className={styles.messageBarBody}>
 										<MessageBarTitle>Danger zone</MessageBarTitle>
-										This will delete ALL records matching your current FetchXML query!
+										This will delete ALL records matching your current FetchXML
+										query!
 									</MessageBarBody>
 								</MessageBar>
 
@@ -199,20 +210,28 @@ export function BulkDeleteDialog({
 									<div className={styles.warningRow}>
 										<ErrorCircle20Regular />
 										<Text weight="semibold">
-											You have not selected any records. This will delete ALL records returned from
-											the view.
+											You have not selected any records. This will delete ALL
+											records returned from the view.
 										</Text>
 									</div>
-									<Text style={{ marginTop: tokens.spacingVerticalS, display: "block" }}>
-										This is a destructive operation that cannot be undone. The bulk delete job will
-										delete every record that matches your FetchXML query.
+									<Text
+										style={{
+											marginTop: tokens.spacingVerticalS,
+											display: "block",
+										}}
+									>
+										This is a destructive operation that cannot be undone. The
+										bulk delete job will delete every record that matches your
+										FetchXML query.
 									</Text>
 								</div>
 
 								<Checkbox
 									className={styles.confirmCheckbox}
 									checked={confirmAllRecords}
-									onChange={(_, data) => setConfirmAllRecords(data.checked === true)}
+									onChange={(_, data) =>
+										setConfirmAllRecords(data.checked === true)
+									}
 									label="I understand that this will delete ALL records from the view"
 								/>
 							</>
@@ -224,8 +243,9 @@ export function BulkDeleteDialog({
 								</div>
 
 								<Text>
-									You are about to delete {recordCount} {entityDisplayName || "records"}. This will
-									create a background job to process the deletion.
+									You are about to delete {recordCount}{" "}
+									{entityDisplayName || "records"}. This will create a background
+									job to process the deletion.
 								</Text>
 							</>
 						)}
@@ -247,7 +267,13 @@ export function BulkDeleteDialog({
 			case "submitting":
 				return (
 					<div className={styles.infoBox}>
-						<div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
+						<div
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: tokens.spacingHorizontalS,
+							}}
+						>
 							<Spinner size="small" />
 							<Text>Submitting bulk delete job...</Text>
 						</div>
@@ -264,8 +290,8 @@ export function BulkDeleteDialog({
 
 						<div className={styles.infoBox}>
 							<Text>
-								The bulk delete job has been submitted and will run in the background. You can track
-								its progress using the link below.
+								The bulk delete job has been submitted and will run in the
+								background. You can track its progress using the link below.
 							</Text>
 
 							{result?.jobUrl && (
@@ -308,8 +334,8 @@ export function BulkDeleteDialog({
 						<Text className={styles.errorMessage}>{error}</Text>
 
 						<Text size={200}>
-							Please check your permissions and try again. You need the prvBulkDelete privilege to
-							submit bulk delete jobs.
+							Please check your permissions and try again. You need the prvBulkDelete
+							privilege to submit bulk delete jobs.
 						</Text>
 					</>
 				);
@@ -327,7 +353,11 @@ export function BulkDeleteDialog({
 						<Button
 							appearance="primary"
 							onClick={handleConfirm}
-							disabled={!jobName.trim() || (isAllRecords && !confirmAllRecords) || !scopeConfirmed}
+							disabled={
+								!jobName.trim() ||
+								(isAllRecords && !confirmAllRecords) ||
+								!scopeConfirmed
+							}
 						>
 							Submit bulk delete
 						</Button>

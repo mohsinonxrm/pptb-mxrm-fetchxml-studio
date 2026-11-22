@@ -25,25 +25,57 @@ import { responseHasFormattedValues } from "./formattedValues";
 import { metadataCache } from "../state/cache";
 import { nextLinkToQueryPath, parseFetchXmlPagingCookie } from "./paging";
 import { formatDataverseError } from "./dataverseErrors";
-import { withThrottleRetry } from "./throttleRetry";
+import { LONG_RUNNING_RETRY, withThrottleRetry, type ThrottleRetryOptions } from "./throttleRetry";
 import { memoizeForSession } from "./sessionCache";
 import { selectedRecordsQuery, withStringConditionValues } from "./bulkDeleteQuery";
+import { escapeWildcards } from "../model/wildcards";
 
 // Connection-change hook (#71): forget the memoized WhoAmI and privilege answers
 export { resetDataverseSessionCache } from "./sessionCache";
-import { hasWriteAccess, readManagedPropertyValue, sortViewsByQueryType } from "../model/savedViews";
+import {
+	hasWriteAccess,
+	readManagedPropertyValue,
+	sortViewsByQueryType,
+} from "../model/savedViews";
 import { canExecuteBatch, connectionGuard, getPrimaryConnection } from "./host";
 import {
+	closeRecordsInBatches,
 	deleteRecordsInBatches,
+	runWorkflowInBatches,
 	updateRecordStatesInBatches,
+	CLOSE_CONNECTION_CHANGED_MESSAGE,
 	CONNECTION_CHANGED_MESSAGE,
 	STATE_CONNECTION_CHANGED_MESSAGE,
 	type ExecuteBatch,
 } from "./batchDelete";
-import { statePatchBody, toEntityStateModel, type EntityStateModel, type StateTarget } from "../model/recordState";
+import {
+	statePatchBody,
+	toEntityStateModel,
+	type EntityStateModel,
+	type StateTarget,
+} from "../model/recordState";
+import {
+	buildCloseParameters,
+	closeRequestUrl,
+	completedByStoppedBatch,
+	COMPETITOR_ENTITY_SET,
+	type CloseMessageAction,
+	type CloseValues,
+} from "../model/closeActions";
 
-import { odataString } from "./odata";
-import { buildRecordNameQuery, buildRecordSearchQuery, isGuid, normalizeGuid, type RecordSearchTarget } from "./recordSearch";
+import { functionWithString, odataString } from "./odata";
+import {
+	buildRecordNameQuery,
+	buildRecordSearchQuery,
+	isGuid,
+	normalizeGuid,
+	type RecordSearchTarget,
+} from "./recordSearch";
+import {
+	USER_SETTINGS_TIME_ZONE_COLUMNS,
+	timeZoneFromUserSettings,
+	type DataverseTimeZone,
+} from "../model/dateTimeValues";
 export interface EntityMetadata {
 	LogicalName: string;
 	SchemaName: string;
@@ -73,6 +105,11 @@ export interface AttributeMetadata {
 	/** Logical attributes include composite ones (address1_composite), which can't be grouped or aggregated */
 	IsLogical?: boolean;
 	IsPrimaryId?: boolean;
+	/**
+	 * 0 simple, 1 calculated, 2 rollup, 3 formula, 4 prompt; null for types that can't be one (#97)
+	 * https://learn.microsoft.com/power-apps/developer/data-platform/specialized-columns#common-elements-and-characteristics
+	 */
+	SourceType?: number | null;
 	MaxLength?: number;
 	Precision?: number;
 	// For Integer, BigInt, Decimal, Double attributes
@@ -137,14 +174,21 @@ export interface FetchXmlResult {
 }
 
 /** Paging fields of a Web API response (#58): the documented annotations, cookie decoded. */
-function pagingFromResponse(result: DataverseFetchXmlResponse): Pick<FetchXmlResult, "moreRecords" | "pagingCookie" | "nextLink"> {
-	const fromAnnotation = parseFetchXmlPagingCookie(result["@Microsoft.Dynamics.CRM.fetchxmlpagingcookie"]);
+function pagingFromResponse(
+	result: DataverseFetchXmlResponse,
+): Pick<FetchXmlResult, "moreRecords" | "pagingCookie" | "nextLink"> {
+	const fromAnnotation = parseFetchXmlPagingCookie(
+		result["@Microsoft.Dynamics.CRM.fetchxmlpagingcookie"],
+	);
 	const legacy = result["@Microsoft.Dynamics.CRM.pagingcookie"];
 	const nextLink = result["@odata.nextLink"];
 	return {
 		// An empty page ends paging even if more is claimed, so a loop can never spin on it
-		moreRecords: (result["@Microsoft.Dynamics.CRM.morerecords"] === true || !!nextLink) && (result.value?.length ?? 0) > 0,
-		pagingCookie: fromAnnotation.cookie ?? (typeof legacy === "string" && legacy ? legacy : undefined),
+		moreRecords:
+			(result["@Microsoft.Dynamics.CRM.morerecords"] === true || !!nextLink) &&
+			(result.value?.length ?? 0) > 0,
+		pagingCookie:
+			fromAnnotation.cookie ?? (typeof legacy === "string" && legacy ? legacy : undefined),
 		nextLink: typeof nextLink === "string" ? nextLink : undefined,
 	};
 }
@@ -283,7 +327,7 @@ export async function getEntityAttributes(
 	}
 
 	// Build OData query with server-side filtering
-	let query = `EntityDefinitions(LogicalName='${odataString(logicalName)}')/Attributes?$select=LogicalName,SchemaName,DisplayName,AttributeType,AttributeTypeName,MetadataId,IsValidForAdvancedFind,IsValidForRead,IsLogical,IsPrimaryId`;
+	let query = `EntityDefinitions(LogicalName='${odataString(logicalName)}')/Attributes?$select=LogicalName,SchemaName,DisplayName,AttributeType,AttributeTypeName,MetadataId,IsValidForAdvancedFind,IsValidForRead,IsLogical,IsPrimaryId,SourceType`;
 
 	// Add server-side filter for IsValidForAdvancedFind
 	if (advancedFindOnly) {
@@ -313,6 +357,24 @@ export async function getEntityAttributes(
 }
 
 /**
+ * MaxLength of every String attribute of an entity (#97: conditions on String attributes longer
+ * than 850 characters are slow). MaxLength is only on the String / Memo types, so it's read with
+ * the StringAttributeMetadata cast; only LogicalName and MaxLength are returned.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query-metadata-web-api
+ */
+export async function getStringAttributeMaxLengths(
+	logicalName: string,
+): Promise<AttributeMetadata[]> {
+	if (!isDataverseAvailable()) {
+		throw new Error("PPTB Dataverse API not available");
+	}
+	const query = `EntityDefinitions(LogicalName='${odataString(logicalName)}')/Attributes/Microsoft.Dynamics.CRM.StringAttributeMetadata?$select=LogicalName,MaxLength`;
+	debugLog("metadataAPI", `📡 GET String MaxLength for '${logicalName}': ${query}`);
+	const result = await window.dataverseAPI!.queryData(query);
+	return result.value as unknown as AttributeMetadata[];
+}
+
+/**
  * Get a single attribute with full metadata including OptionSet expansion
  * Required for loading picklist/boolean option values
  * Uses type casting (BooleanAttributeMetadata or PicklistAttributeMetadata) to access OptionSet
@@ -335,7 +397,9 @@ export async function getAttributeWithOptionSet(
 	const basicAttr = (basicResult.value?.[0] || basicResult) as unknown as AttributeMetadata;
 
 	if (!basicAttr || !basicAttr.LogicalName) {
-		throw new Error(`Attribute ${attributeLogicalName} not found in entity ${entityLogicalName}`);
+		throw new Error(
+			`Attribute ${attributeLogicalName} not found in entity ${entityLogicalName}`,
+		);
 	}
 
 	// Determine the type cast needed based on AttributeType
@@ -455,7 +519,9 @@ export async function getAttributeDetailedMetadata(
 	const detailedAttr = (result.value?.[0] || result) as unknown as AttributeMetadata;
 
 	if (!detailedAttr || !detailedAttr.SchemaName) {
-		throw new Error(`Failed to retrieve detailed metadata for attribute ${attributeLogicalName}`);
+		throw new Error(
+			`Failed to retrieve detailed metadata for attribute ${attributeLogicalName}`,
+		);
 	}
 
 	// Add LogicalName back since it's not included in $select with type casting
@@ -586,7 +652,10 @@ export async function resolveEntitySet(
 		if (isCurrent()) metadataCache.setEntityMetadata(logicalName, metadata);
 	}
 	if (!metadata.EntitySetName) return undefined;
-	return { entitySetName: metadata.EntitySetName, logicalCollectionName: metadata.LogicalCollectionName };
+	return {
+		entitySetName: metadata.EntitySetName,
+		logicalCollectionName: metadata.LogicalCollectionName,
+	};
 }
 
 /** Dataverse's answer when the URL's entity set segment doesn't exist (0x80060888). */
@@ -623,9 +692,13 @@ export async function getHierarchicalRelationship(
 	const result = await window.dataverseAPI!.queryData(
 		`EntityDefinitions(LogicalName='${odataString(logicalName)}')/OneToManyRelationships?$select=SchemaName,ReferencingAttribute&$filter=IsHierarchical eq true`,
 	);
-	const relationship = result.value[0] as { SchemaName?: string; ReferencingAttribute?: string } | undefined;
+	const relationship = result.value[0] as
+		{ SchemaName?: string; ReferencingAttribute?: string } | undefined;
 	return relationship?.SchemaName && relationship.ReferencingAttribute
-		? { schemaName: relationship.SchemaName, referencingAttribute: relationship.ReferencingAttribute }
+		? {
+				schemaName: relationship.SchemaName,
+				referencingAttribute: relationship.ReferencingAttribute,
+			}
 		: undefined;
 }
 
@@ -636,7 +709,10 @@ export interface RecordReference {
 }
 
 /** Records whose primary name starts with the text (recordSearch.ts, #98). */
-export async function searchRecordsByName(target: RecordSearchTarget, text: string): Promise<RecordReference[]> {
+export async function searchRecordsByName(
+	target: RecordSearchTarget,
+	text: string,
+): Promise<RecordReference[]> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
@@ -648,12 +724,17 @@ export async function searchRecordsByName(target: RecordSearchTarget, text: stri
 }
 
 /** One record's primary name, or undefined when the record can't be read (#98). */
-export async function getRecordName(target: RecordSearchTarget, id: string): Promise<string | undefined> {
+export async function getRecordName(
+	target: RecordSearchTarget,
+	id: string,
+): Promise<string | undefined> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
 	try {
-		const record = (await window.dataverseAPI!.queryData(buildRecordNameQuery(target, id))) as unknown as Record<string, unknown>;
+		const record = (await window.dataverseAPI!.queryData(
+			buildRecordNameQuery(target, id),
+		)) as unknown as Record<string, unknown>;
 		const name = record[target.nameAttribute];
 		return name == null ? "" : String(name);
 	} catch (error) {
@@ -685,7 +766,8 @@ export function totalFromRecordCountCollection(
 	collection: { Keys?: string[]; Values?: number[] } | undefined,
 	logicalName: string,
 ): number | undefined {
-	const index = collection?.Keys?.findIndex((key) => key.toLowerCase() === logicalName.toLowerCase()) ?? -1;
+	const index =
+		collection?.Keys?.findIndex((key) => key.toLowerCase() === logicalName.toLowerCase()) ?? -1;
 	const value = index >= 0 ? collection?.Values?.[index] : undefined;
 	return typeof value === "number" ? value : undefined;
 }
@@ -724,7 +806,8 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 			// A few system entities (e.g. archivecleanupinfo) report an EntitySetName the service doesn't
 			// route; their LogicalCollectionName does (verified live). Retry once with it.
 			const fallback = entitySet.logicalCollectionName;
-			if (!fallback || fallback === entitySet.entitySetName || !isUnknownSegmentError(error)) throw error;
+			if (!fallback || fallback === entitySet.entitySetName || !isUnknownSegmentError(error))
+				throw error;
 			response = await query(fallback);
 		}
 	}
@@ -736,14 +819,18 @@ export async function executeFetchXml(fetchXml: string): Promise<FetchXmlResult>
 
 	// The host sends Prefer: odata.include-annotations="*", so formatted values are expected (#71:
 	// the old warning about the host's Prefer header is obsolete)
-	debugLog("fetchXmlAPI", `Response includes formatted values: ${responseHasFormattedValues(result.value)}`);
+	debugLog(
+		"fetchXmlAPI",
+		`Response includes formatted values: ${responseHasFormattedValues(result.value)}`,
+	);
 
 	debugLog("fetchXmlAPI", `✅ FetchXML query executed: ${result.value.length} records retrieved`);
 
 	return {
 		records: result.value,
 		totalRecordCount: result["@Microsoft.Dynamics.CRM.totalrecordcount"],
-		totalRecordCountLimitExceeded: result["@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"],
+		totalRecordCountLimitExceeded:
+			result["@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded"],
 		...pagingFromResponse(result),
 	};
 }
@@ -855,6 +942,87 @@ async function retrieveWhoAmI(): Promise<WhoAmIResponse | null> {
 }
 
 /**
+ * The user's Dataverse time zone (Personal Options), for date-time condition values (#207) and
+ * the Excel export (#184). Memoized per connection; undefined when it can't be read, so callers
+ * fall back to values Dataverse reads in the user's time zone anyway.
+ */
+export function loadUserTimeZone(): Promise<DataverseTimeZone | undefined> {
+	return memoizeForSession("userTimeZone", retrieveUserTimeZone, (tz) => tz !== undefined);
+}
+
+async function retrieveUserTimeZone(): Promise<DataverseTimeZone | undefined> {
+	if (!isDataverseAvailable()) return undefined;
+	try {
+		const user = await whoAmI();
+		if (!user) return undefined;
+		const settings = (await window.dataverseAPI!.queryData(
+			`usersettingscollection(${user.UserId})?$select=${USER_SETTINGS_TIME_ZONE_COLUMNS.join(",")}`,
+		)) as Record<string, unknown>;
+		// The name is only for the hint: without it, the rules still apply
+		let name = "";
+		if (typeof settings.timezonecode === "number") {
+			try {
+				const definitions = (await window.dataverseAPI!.queryData(
+					`timezonedefinitions?$select=standardname&$filter=timezonecode eq ${settings.timezonecode}`,
+				)) as { value?: { standardname?: string }[] };
+				name = definitions.value?.[0]?.standardname ?? "";
+			} catch (error) {
+				console.error("Failed to read the time zone's name:", error);
+			}
+		}
+		return timeZoneFromUserSettings(settings, name);
+	} catch (error) {
+		console.error("Failed to read the user's time zone:", error);
+		return undefined;
+	}
+}
+
+/** Date and money formatting metadata of one attribute, for the Excel export (#184) */
+export interface FormattingMetadata {
+	Format?: "DateOnly" | "DateAndTime";
+	DateTimeBehavior?: { Value?: string };
+	Precision?: number;
+	/** Money: 0 = Precision, 1 = the organization's pricing precision, 2 = the currency's precision */
+	PrecisionSource?: number;
+}
+
+/**
+ * The formats and behaviours of an entity's date attributes, and the precision of its money,
+ * decimal and floating point ones (#184), which the attribute list doesn't include: one request
+ * per type. Memoized per connection.
+ */
+export function loadFormattingMetadata(
+	entityLogicalName: string,
+): Promise<Map<string, FormattingMetadata>> {
+	return memoizeForSession(`formatting:${entityLogicalName}`, async () => {
+		const result = new Map<string, FormattingMetadata>();
+		if (!isDataverseAvailable()) return result;
+		const base = `EntityDefinitions(LogicalName='${odataString(entityLogicalName)}')/Attributes`;
+		const responses = await Promise.all([
+			window.dataverseAPI!.queryData(
+				`${base}/Microsoft.Dynamics.CRM.DateTimeAttributeMetadata?$select=LogicalName,Format,DateTimeBehavior`,
+			),
+			window.dataverseAPI!.queryData(
+				`${base}/Microsoft.Dynamics.CRM.MoneyAttributeMetadata?$select=LogicalName,Precision,PrecisionSource`,
+			),
+			window.dataverseAPI!.queryData(
+				`${base}/Microsoft.Dynamics.CRM.DecimalAttributeMetadata?$select=LogicalName,Precision`,
+			),
+			window.dataverseAPI!.queryData(
+				`${base}/Microsoft.Dynamics.CRM.DoubleAttributeMetadata?$select=LogicalName,Precision`,
+			),
+		]);
+		for (const row of responses.flatMap(
+			(response) => (response as { value?: unknown[] }).value ?? [],
+		)) {
+			const { LogicalName, ...meta } = row as FormattingMetadata & { LogicalName: string };
+			result.set(LogicalName, meta);
+		}
+		return result;
+	});
+}
+
+/**
  * Convert a FetchXML query to Dataverse SQL using the undocumented FetchXMLToSQL
  * Web API function.
  *
@@ -868,11 +1036,10 @@ export async function fetchXmlToSQL(fetchXml: string): Promise<string> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
-	const result = (await window.dataverseAPI!.execute({
-		operationName: "FetchXMLToSQL",
-		operationType: "function",
-		parameters: { FetchXml: fetchXml },
-	})) as unknown as Record<string, unknown>;
+	// Escaped and URL-encoded here, not by the host (#176)
+	const result = (await window.dataverseAPI!.queryData(
+		functionWithString("FetchXMLToSQL", "FetchXml", fetchXml),
+	)) as unknown as Record<string, unknown>;
 
 	// The raw result, to debug the undocumented response shape (debug only, #71)
 	debugLog("fetchXmlAPI", "FetchXMLToSQL raw result:", result);
@@ -901,12 +1068,15 @@ export async function fetchXmlToSQL(fetchXml: string): Promise<string> {
 
 /** RetrieveUserPrivilegeByPrivilegeName: whether the user has the privilege (throws on failure). */
 async function retrieveUserPrivilege(userId: string, privilegeName: string): Promise<boolean> {
-	const query = `systemusers(${userId})/Microsoft.Dynamics.CRM.RetrieveUserPrivilegeByPrivilegeName(PrivilegeName='${privilegeName}')`;
+	const query = `systemusers(${userId})/Microsoft.Dynamics.CRM.RetrieveUserPrivilegeByPrivilegeName(PrivilegeName='${odataString(privilegeName)}')`;
 	const result = await window.dataverseAPI!.queryData(query);
 	// RetrieveUserPrivilegeByPrivilegeName returns the response directly, not wrapped in .value
 	const response = result as unknown as PrivilegeCheckResponse;
 	const hasPrivilege = !!response?.RolePrivileges?.length;
-	debugLog("accessAPI", `checkPrivilegeByName(${privilegeName}): ${hasPrivilege ? "granted" : "denied"}`);
+	debugLog(
+		"accessAPI",
+		`checkPrivilegeByName(${privilegeName}): ${hasPrivilege ? "granted" : "denied"}`,
+	);
 	return hasPrivilege;
 }
 
@@ -931,7 +1101,8 @@ export async function checkPrivilegeByName(
 		// 0x80040203 = privilege name does not exist in this environment — expected for
 		// some entity-specific privileges (e.g. prvDeleteGitorganization). Warn, not error.
 		const message = error instanceof Error ? error.message : String(error);
-		const isMissingPrivilege = message.includes("0x80040203") || message.includes("does not exist");
+		const isMissingPrivilege =
+			message.includes("0x80040203") || message.includes("does not exist");
 		if (isMissingPrivilege) {
 			console.warn(
 				`checkPrivilegeByName(${privilegeName}): privilege not found in environment, treating as denied.`,
@@ -1075,7 +1246,9 @@ export async function getSolutionsByPublishers(publisherIds: string[]): Promise<
 
 		const allSolutions = await Promise.all(
 			chunks.map(async (chunk) => {
-				const publisherFilter = chunk.map((id) => `_publisherid_value eq ${id}`).join(" or ");
+				const publisherFilter = chunk
+					.map((id) => `_publisherid_value eq ${id}`)
+					.join(" or ");
 				const query = `solutions?${SELECT}&$filter=(${publisherFilter}) and ${IS_VISIBLE} and ${HAS_ENTITIES}&$orderby=friendlyname asc`;
 
 				debugLog("solutionAPI", `📡 GET Solutions for publishers: ${chunk.length} IDs`);
@@ -1154,9 +1327,16 @@ export async function getSolutionComponents(solutionIds: string[]): Promise<Solu
 			solutionIds.map(async (solutionId) => {
 				const query = `msdyn_solutioncomponentsummaries?${SELECT}&$filter=msdyn_componenttype eq ${COMPONENT_TYPE_ENTITY} and msdyn_solutionid eq '${odataString(solutionId)}'`;
 
-				debugLog("solutionComponentAPI", `📡 GET Solution components for solution: ${solutionId}`, query);
+				debugLog(
+					"solutionComponentAPI",
+					`📡 GET Solution components for solution: ${solutionId}`,
+					query,
+				);
 				const result = await window.dataverseAPI!.queryData(query);
-				debugLog("solutionComponentAPI", `Solution ${solutionId}: ${result.value.length} components`);
+				debugLog(
+					"solutionComponentAPI",
+					`Solution ${solutionId}: ${result.value.length} components`,
+				);
 				return result.value as unknown as SolutionComponent[];
 			}),
 		);
@@ -1231,14 +1411,21 @@ export async function getAllEntitiesForScopes(): Promise<EntityMetadata[]> {
 export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetadata[] {
 	const allEntities = metadataCache.getAllEntityMetadata();
 	if (!allEntities) {
-		console.warn("[API] filterCachedEntitiesByNames - Global cache not available, returning empty");
+		console.warn(
+			"[API] filterCachedEntitiesByNames - Global cache not available, returning empty",
+		);
 		return [];
 	}
 
 	const nameSet = new Set(logicalNames);
-	const filtered = allEntities.filter((entity: EntityMetadata) => nameSet.has(entity.LogicalName));
+	const filtered = allEntities.filter((entity: EntityMetadata) =>
+		nameSet.has(entity.LogicalName),
+	);
 
-	debugLog("metadataAPI", `filterCachedEntitiesByNames: ${filtered.length} of ${logicalNames.length} entities`);
+	debugLog(
+		"metadataAPI",
+		`filterCachedEntitiesByNames: ${filtered.length} of ${logicalNames.length} entities`,
+	);
 
 	return filtered;
 }
@@ -1307,6 +1494,94 @@ export interface LoadedViewInfo {
 
 // LayoutXML parsing and generation live in model/layoutxml.ts (#81: the copies here were unused)
 
+/** The view columns Load view reads (#93, #142); shared with getViewById (#197) */
+const SYSTEM_VIEW_SELECT =
+	"savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid";
+const PERSONAL_VIEW_SELECT =
+	"userqueryid,name,description,fetchxml,layoutxml,querytype,_ownerid_value";
+
+/** A savedquery row as a system view */
+function toSystemView(record: Record<string, unknown>): SavedView {
+	return {
+		id: record.savedqueryid as string,
+		name: record.name as string,
+		fetchxml: record.fetchxml as string,
+		layoutxml: record.layoutxml as string | undefined,
+		type: "system",
+		description: (record.description as string | null) ?? undefined,
+		isDefault: record.isdefault as boolean | undefined,
+		queryType: record.querytype as number | undefined,
+		isCustomizable: readManagedPropertyValue(record.iscustomizable),
+		isManaged: record.ismanaged as boolean | undefined,
+		solutionId: (record.solutionid as string | null) ?? undefined,
+	};
+}
+
+/** A userquery row as a personal view */
+function toPersonalView(record: Record<string, unknown>): SavedView {
+	return {
+		id: record.userqueryid as string,
+		name: record.name as string,
+		fetchxml: record.fetchxml as string,
+		layoutxml: record.layoutxml as string | undefined,
+		type: "personal",
+		description: (record.description as string | null) ?? undefined,
+		queryType: record.querytype as number | undefined,
+		// The owner's name is the lookup's formatted value: the host asks for all annotations
+		// (Prefer: odata.include-annotations="*"), verified live (#142)
+		// https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query/select-columns#formatted-values
+		ownerId: (record._ownerid_value as string | null) ?? undefined,
+		ownerName:
+			(record["_ownerid_value@OData.Community.Display.V1.FormattedValue"] as
+				string | undefined) ?? undefined,
+	};
+}
+
+/** What Load view passes on for a view (execution by ID, layout, Save view's overwrite details) */
+export function toLoadedViewInfo(view: SavedView, entitySetName: string): LoadedViewInfo {
+	return {
+		id: view.id,
+		type: view.type,
+		originalFetchXml: view.fetchxml,
+		entitySetName,
+		name: view.name,
+		layoutxml: view.layoutxml,
+		queryType: view.queryType,
+		isCustomizable: view.isCustomizable,
+		// Save view: description pre-filled, default view, managed warning, owner (#142)
+		description: view.description,
+		isDefault: view.isDefault,
+		isManaged: view.isManaged,
+		solutionId: view.solutionId,
+		ownerId: view.ownerId,
+		ownerName: view.ownerName,
+	};
+}
+
+/**
+ * One view by id, with the table it returns (returnedtypecode), for a view another tool opens
+ * FetchXML Studio with (#197). Null when it doesn't exist, the user can't read it, or it has no
+ * FetchXML. `id` must already be a GUID: it goes into $filter unquoted (#176).
+ */
+export async function getViewById(
+	type: "system" | "personal",
+	id: string,
+): Promise<{ view: SavedView; entityLogicalName: string } | null> {
+	if (!isDataverseAvailable()) throw new Error("PPTB Dataverse API not available");
+	const query =
+		type === "system"
+			? // Load view lists published, active system views and active personal views
+				`savedqueries?$select=${SYSTEM_VIEW_SELECT},returnedtypecode&$filter=savedqueryid eq ${id} and componentstate eq 0 and statecode eq 0`
+			: `userqueries?$select=${PERSONAL_VIEW_SELECT},returnedtypecode&$filter=userqueryid eq ${id} and statecode eq 0`;
+	const result = await window.dataverseAPI!.queryData(query);
+	const record = result.value?.[0] as Record<string, unknown> | undefined;
+	if (!record || !hasFetchXml(record) || typeof record.returnedtypecode !== "string") return null;
+	return {
+		view: type === "system" ? toSystemView(record) : toPersonalView(record),
+		entityLogicalName: record.returnedtypecode,
+	};
+}
+
 /** Views with FetchXML to load; a record without any can't be loaded into the tree. */
 function hasFetchXml(record: Record<string, unknown>): boolean {
 	return typeof record.fetchxml === "string" && record.fetchxml.trim() !== "";
@@ -1333,7 +1608,7 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 		// componentstate = 0: Published (not unpublished/deleted)
 		// statecode = 0: Active views only
 		const query =
-			`savedqueries?$select=savedqueryid,name,description,fetchxml,layoutxml,isdefault,querytype,iscustomizable,ismanaged,solutionid` +
+			`savedqueries?$select=${SYSTEM_VIEW_SELECT}` +
 			`&$filter=(returnedtypecode eq '${odataString(entityLogicalName)}' and componentstate eq 0 and statecode eq 0)` +
 			`&$orderby=name asc`;
 
@@ -1342,19 +1617,7 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 		const result = await window.dataverseAPI!.queryData(query);
 
 		const views: SavedView[] = sortViewsByQueryType(
-			(result.value || []).filter(hasFetchXml).map((record) => ({
-				id: record.savedqueryid as string,
-				name: record.name as string,
-				fetchxml: record.fetchxml as string,
-				layoutxml: record.layoutxml as string | undefined,
-				type: "system" as const,
-				description: (record.description as string | null) ?? undefined,
-				isDefault: record.isdefault as boolean | undefined,
-				queryType: record.querytype as number | undefined,
-				isCustomizable: readManagedPropertyValue(record.iscustomizable),
-				isManaged: record.ismanaged as boolean | undefined,
-				solutionId: (record.solutionid as string | null) ?? undefined,
-			})),
+			(result.value || []).filter(hasFetchXml).map(toSystemView),
 		);
 
 		debugLog(
@@ -1364,7 +1627,10 @@ export async function getSystemViews(entityLogicalName: string): Promise<SavedVi
 
 		return views;
 	} catch (error) {
-		console.error(`getSystemViews: Failed to get system views for '${entityLogicalName}':`, error);
+		console.error(
+			`getSystemViews: Failed to get system views for '${entityLogicalName}':`,
+			error,
+		);
 		throw error;
 	}
 }
@@ -1390,7 +1656,7 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 		// returnedtypecode: Entity logical name as string
 		// statecode = 0: Active views only
 		const query =
-			`userqueries?$select=userqueryid,name,description,fetchxml,layoutxml,querytype,_ownerid_value` +
+			`userqueries?$select=${PERSONAL_VIEW_SELECT}` +
 			`&$filter=(statecode eq 0 and returnedtypecode eq '${odataString(entityLogicalName)}')` +
 			`&$orderby=name asc`;
 
@@ -1399,21 +1665,7 @@ export async function getPersonalViews(entityLogicalName: string): Promise<Saved
 		const result = await window.dataverseAPI!.queryData(query);
 
 		const views: SavedView[] = sortViewsByQueryType(
-			(result.value || []).filter(hasFetchXml).map((record) => ({
-				id: record.userqueryid as string,
-				name: record.name as string,
-				fetchxml: record.fetchxml as string,
-				layoutxml: record.layoutxml as string | undefined,
-				type: "personal" as const,
-				description: (record.description as string | null) ?? undefined,
-				queryType: record.querytype as number | undefined,
-				// The owner's name is the lookup's formatted value: the host asks for all annotations
-				// (Prefer: odata.include-annotations="*"), verified live (#142)
-				// https://learn.microsoft.com/power-apps/developer/data-platform/webapi/query/select-columns#formatted-values
-				ownerId: (record._ownerid_value as string | null) ?? undefined,
-				ownerName:
-					(record["_ownerid_value@OData.Community.Display.V1.FormattedValue"] as string | undefined) ?? undefined,
-			})),
+			(result.value || []).filter(hasFetchXml).map(toPersonalView),
 		);
 
 		debugLog(
@@ -1491,10 +1743,9 @@ export async function validateFetchXmlExpression(
 	debugLog("viewAPI", `📡 ValidateFetchXmlExpression - Validating FetchXML...`);
 
 	try {
-		// The function requires URL-encoded FetchXML passed as a query parameter
-		// Format: ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='encodedFetchXml'
-		const encodedFetchXml = encodeURIComponent(fetchXml);
-		const query = `ValidateFetchXmlExpression(FetchXml=@FetchXml)?@FetchXml='${encodedFetchXml}'`;
+		// FetchXML as a parameter alias, quotes doubled and URL-encoded: an apostrophe in a value
+		// (O'Brien) used to end the literal, failing with 0x80060888 (#176)
+		const query = functionWithString("ValidateFetchXmlExpression", "FetchXml", fetchXml);
 
 		const result = (await window.dataverseAPI!.queryData(
 			query,
@@ -1584,7 +1835,10 @@ export async function checkSavedQueryPrivileges(): Promise<{
 
 	try {
 		// Check for prvPublishCustomization privilege
-		canPublishCustomization = await checkPrivilegeByName(user.UserId, "prvPublishCustomization");
+		canPublishCustomization = await checkPrivilegeByName(
+			user.UserId,
+			"prvPublishCustomization",
+		);
 	} catch (error) {
 		console.warn("Could not check prvPublishCustomization, assuming false:", error);
 	}
@@ -1646,7 +1900,10 @@ export async function checkUserQueryWriteAccess(userQueryId: string): Promise<bo
 		const response = (await window.dataverseAPI!.queryData(
 			`systemusers(${user.UserId})/Microsoft.Dynamics.CRM.RetrievePrincipalAccess(Target=@tid)?@tid={'@odata.id':'userqueries(${userQueryId})'}`,
 		)) as unknown as { AccessRights?: unknown };
-		debugLog("viewAPI", `RetrievePrincipalAccess(userquery ${userQueryId}): ${String(response?.AccessRights)}`);
+		debugLog(
+			"viewAPI",
+			`RetrievePrincipalAccess(userquery ${userQueryId}): ${String(response?.AccessRights)}`,
+		);
 		return hasWriteAccess(response?.AccessRights);
 	} catch (error) {
 		console.warn("checkUserQueryWriteAccess: couldn't determine, allowing:", error);
@@ -1658,7 +1915,9 @@ export async function checkUserQueryWriteAccess(userQueryId: string): Promise<bo
  * Display and unique name of the solution a managed view belongs to (savedquery.solutionid), for
  * the managed view warning (#142). Null when it can't be read. Memoized per connection.
  */
-export function getSolutionLabel(solutionId: string): Promise<{ friendlyName: string; uniqueName: string } | null> {
+export function getSolutionLabel(
+	solutionId: string,
+): Promise<{ friendlyName: string; uniqueName: string } | null> {
 	return memoizeForSession(
 		`solutionLabel:${solutionId}`,
 		async () => {
@@ -1668,7 +1927,10 @@ export function getSolutionLabel(solutionId: string): Promise<{ friendlyName: st
 					`solutions(${solutionId})?$select=friendlyname,uniquename`,
 				)) as unknown as { friendlyname?: string; uniquename?: string };
 				if (!solution?.uniquename) return null;
-				return { friendlyName: solution.friendlyname || solution.uniquename, uniqueName: solution.uniquename };
+				return {
+					friendlyName: solution.friendlyname || solution.uniquename,
+					uniqueName: solution.uniquename,
+				};
 			} catch (error) {
 				console.warn(`getSolutionLabel(${solutionId}) failed:`, error);
 				return null;
@@ -1684,7 +1946,9 @@ export function getSolutionLabel(solutionId: string): Promise<{ friendlyName: st
  * view" (verified live: one default per query type). Null when there's none or it can't be read.
  * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
  */
-export async function getDefaultPublicView(entityLogicalName: string): Promise<{ id: string; name: string } | null> {
+export async function getDefaultPublicView(
+	entityLogicalName: string,
+): Promise<{ id: string; name: string } | null> {
 	if (!isDataverseAvailable()) return null;
 	try {
 		const result = await window.dataverseAPI!.queryData(
@@ -1712,7 +1976,10 @@ export interface DefaultViewNotCleared {
  * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
  * @returns The views that couldn't be cleared, with Dataverse's error; empty when all were
  */
-export async function clearOtherDefaultPublicViews(entityLogicalName: string, defaultViewId: string): Promise<DefaultViewNotCleared[]> {
+export async function clearOtherDefaultPublicViews(
+	entityLogicalName: string,
+	defaultViewId: string,
+): Promise<DefaultViewNotCleared[]> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
 	}
@@ -1728,7 +1995,11 @@ export async function clearOtherDefaultPublicViews(entityLogicalName: string, de
 		try {
 			await updateSavedQuery(id, { isdefault: false });
 		} catch (error) {
-			notCleared.push({ id, name: view.name as string, error: formatDataverseError(error, "Couldn't clear the default view") });
+			notCleared.push({
+				id,
+				name: view.name as string,
+				error: formatDataverseError(error, "Couldn't clear the default view"),
+			});
 		}
 	}
 	return notCleared;
@@ -1946,7 +2217,10 @@ export async function addSolutionComponent(
 			},
 		});
 
-		debugLog("viewAPI", `✅ Component added to solution: ${componentId} → ${solutionUniqueName}`);
+		debugLog(
+			"viewAPI",
+			`✅ Component added to solution: ${componentId} → ${solutionUniqueName}`,
+		);
 	} catch (error) {
 		console.error("addSolutionComponent: Failed:", error);
 		throw error;
@@ -2259,13 +2533,23 @@ export async function deleteRecord(
 	try {
 		const entitySetName = await deleteEntitySet(entityLogicalName);
 		if (entitySetName) {
-			// The batch path retries service protection errors itself (batchDelete.ts)
-			const result = await deleteRecordsInBatches(entitySetName, [recordId], { executeBatch: hostExecuteBatch, shouldContinue });
-			if (result.failed > 0) throw new Error(result.errors[0]?.replace(`${recordId}: `, "") || "Delete failed");
+			// The batch path retries service protection errors itself (batchDelete.ts); one record the
+			// user is waiting on gets the short policy, not the long one for many records (#183)
+			const result = await deleteRecordsInBatches(entitySetName, [recordId], {
+				executeBatch: hostExecuteBatch,
+				shouldContinue,
+				retry: {},
+			});
+			if (result.failed > 0)
+				throw new Error(result.errors[0]?.replace(`${recordId}: `, "") || "Delete failed");
 		} else {
 			// Retried after service protection errors (#96): Dataverse rejected the request unprocessed
-			if (shouldContinue && !(await shouldContinue())) throw new Error(CONNECTION_CHANGED_MESSAGE);
-			await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), { shouldContinue });
+			if (shouldContinue && !(await shouldContinue()))
+				throw new Error(CONNECTION_CHANGED_MESSAGE);
+			await withThrottleRetry(
+				() => window.dataverseAPI!.delete(entityLogicalName, recordId),
+				{ shouldContinue },
+			);
 		}
 		debugLog("recordAPI", `✅ Record deleted: ${entityLogicalName}(${recordId})`);
 	} catch (error) {
@@ -2289,8 +2573,9 @@ export async function checkBulkDeletePrivilege(): Promise<boolean> {
 }
 
 /**
- * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function.
- * Uses execute() which properly escapes string parameters (single-quote doubling + URL-encode).
+ * Convert FetchXML to QueryExpression using the FetchXmlToQueryExpression function. The FetchXML is
+ * escaped and URL-encoded here (functionWithString), not by the host: PPTB Desktop's execute()
+ * escapes it, the VS Code extension doesn't (#176, #173).
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/fetchxmltoqueryexpression
  */
 export async function fetchXmlToQueryExpression(
@@ -2302,11 +2587,9 @@ export async function fetchXmlToQueryExpression(
 
 	debugLog("recordAPI", `📡 Converting FetchXML to QueryExpression`);
 
-	const result = (await window.dataverseAPI!.execute({
-		operationName: "FetchXmlToQueryExpression",
-		operationType: "function",
-		parameters: { FetchXml: fetchXml },
-	})) as unknown as { Query: Record<string, unknown> };
+	const result = (await window.dataverseAPI!.queryData(
+		functionWithString("FetchXmlToQueryExpression", "FetchXml", fetchXml),
+	)) as unknown as { Query: Record<string, unknown> };
 
 	debugLog("recordAPI", `✅ Converted FetchXML to QueryExpression`, result);
 	return result.Query ?? (result as unknown as Record<string, unknown>);
@@ -2376,7 +2659,11 @@ export async function submitBulkDelete(
 
 	try {
 		// primaryIdAttribute in (the selected IDs), with the IDs as strings (#224, #177)
-		const queryExpression = selectedRecordsQuery(entityLogicalName, primaryIdAttribute, recordIds);
+		const queryExpression = selectedRecordsQuery(
+			entityLogicalName,
+			primaryIdAttribute,
+			recordIds,
+		);
 
 		// Submit BulkDelete with the QueryExpression
 		const result = (await window.dataverseAPI!.execute({
@@ -2434,7 +2721,12 @@ export interface WorkflowInfo {
 	category: number; // 0 = Workflow, 2 = Business Rule, etc.
 	type: number; // 1 = Definition, 2 = Activation, 3 = Template
 	statuscode: number;
+	/** 0 = Background, 1 = Real-time (#264): only background workflows run in $batch requests */
+	mode?: number;
 }
+
+/** workflow.mode for a background (asynchronous) workflow */
+export const WORKFLOW_MODE_BACKGROUND = 0;
 
 /**
  * Check if user has privileges to read and execute workflows
@@ -2473,7 +2765,7 @@ export async function getOnDemandWorkflows(entityLogicalName: string): Promise<W
 		// Query for active, on-demand workflows for this entity using OData
 		// statecode=1 (Activated), statuscode=2 (Activated), ondemand=true, category=0 (Workflow), type=1 (Definition)
 		// primaryentity must be quoted as a string value
-		const odataQuery = `workflows?$select=workflowid,name,description,primaryentity,category,type,statuscode&$filter=(statecode eq 1 and statuscode eq 2 and ondemand eq true and category eq 0 and type eq 1 and primaryentity eq '${odataString(entityLogicalName)}')&$orderby=name asc`;
+		const odataQuery = `workflows?$select=workflowid,name,description,primaryentity,category,type,statuscode,mode&$filter=(statecode eq 1 and statuscode eq 2 and ondemand eq true and category eq 0 and type eq 1 and primaryentity eq '${odataString(entityLogicalName)}')&$orderby=name asc`;
 
 		const result = await window.dataverseAPI!.queryData(odataQuery);
 
@@ -2486,6 +2778,7 @@ export async function getOnDemandWorkflows(entityLogicalName: string): Promise<W
 			category: Number(record.category || 0),
 			type: Number(record.type || 0),
 			statuscode: Number(record.statuscode || 0),
+			mode: typeof record.mode === "number" ? record.mode : undefined,
 		}));
 
 		debugLog("workflowAPI", `✅ Found ${workflows.length} on-demand workflows`);
@@ -2509,6 +2802,8 @@ export async function executeWorkflow(
 	entityLogicalName: string,
 	/** Asked after each throttling wait (#175): false stops instead of retrying */
 	shouldContinue?: () => boolean | Promise<boolean>,
+	/** Back-off after service protection errors; many records use LONG_RUNNING_RETRY (#183) */
+	retry?: ThrottleRetryOptions,
 ): Promise<void> {
 	if (!isDataverseAvailable()) {
 		throw new Error("PPTB Dataverse API not available");
@@ -2521,17 +2816,18 @@ export async function executeWorkflow(
 
 	try {
 		// Retried after service protection errors (#96): Dataverse rejected the request unprocessed
-		await withThrottleRetry(() =>
-			window.dataverseAPI!.execute({
-				operationName: "ExecuteWorkflow",
-				operationType: "action",
-				entityName: "workflow",
-				entityId: workflowId,
-				parameters: {
-					EntityId: recordId,
-				},
-			}),
-			{ shouldContinue }, // not retried after a connection change (#175)
+		await withThrottleRetry(
+			() =>
+				window.dataverseAPI!.execute({
+					operationName: "ExecuteWorkflow",
+					operationType: "action",
+					entityName: "workflow",
+					entityId: workflowId,
+					parameters: {
+						EntityId: recordId,
+					},
+				}),
+			{ ...retry, shouldContinue }, // not retried after a connection change (#175)
 		);
 
 		debugLog("workflowAPI", `✅ Workflow executed successfully`);
@@ -2539,6 +2835,64 @@ export async function executeWorkflow(
 		console.error("executeWorkflow: Failed:", error);
 		throw error;
 	}
+}
+
+/**
+ * How to find this workflow's system jobs (#264): the workflow ids a job can point at
+ * (asyncoperation.workflowactivationid, a workflow lookup: the definition and, when it's activated,
+ * its activation record, activeworkflowid), or why they can't be relied on:
+ * - the workflow couldn't be read: matching by the definition alone could miss every job;
+ * - it deletes its completed jobs (asyncautodelete): a fast run's job can be gone before the check.
+ * Either way a stopped batch then counts as unknown and isn't sent again.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/asyncoperation
+ */
+async function workflowJobIds(
+	workflowId: string,
+): Promise<{ ids: string[] } | { unreliable: string }> {
+	const id = workflowId.replace(/[{}]/g, "");
+	try {
+		const result = await window.dataverseAPI!.queryData(
+			`workflows?$select=workflowid,_activeworkflowid_value,asyncautodelete&$filter=workflowid eq ${id}`,
+		);
+		const workflow = result.value?.[0];
+		if (!workflow) return { unreliable: "The workflow couldn't be read." };
+		if (workflow.asyncautodelete === true)
+			return { unreliable: "The workflow deletes its completed system jobs." };
+		const active = workflow._activeworkflowid_value;
+		return { ids: typeof active === "string" && active !== id ? [id, active] : [id] };
+	} catch (error) {
+		console.warn(
+			"Couldn't read the workflow, so a batch that stops early won't be sent again:",
+			error,
+		);
+		return { unreliable: "The workflow couldn't be read." };
+	}
+}
+
+/** The system jobs (asyncoperation ids) these workflow ids have for each record (#264) */
+export async function getWorkflowJobs(
+	workflowIds: string[],
+	recordIds: string[],
+): Promise<Map<string, Set<string>>> {
+	const jobs = new Map<string, Set<string>>();
+	if (recordIds.length === 0) return jobs;
+	const byWorkflow = workflowIds.map((id) => `_workflowactivationid_value eq ${id}`).join(" or ");
+	const byRecord = recordIds
+		.map((id) => `_regardingobjectid_value eq ${id.replace(/[{}]/g, "")}`)
+		.join(" or ");
+	// Newest first: queryData returns one page (5,000 rows), and a new job is always on it, so past
+	// jobs beyond the page can't hide one
+	const result = await window.dataverseAPI!.queryData(
+		`asyncoperations?$select=asyncoperationid,_regardingobjectid_value&$filter=(${byWorkflow}) and (${byRecord})&$orderby=createdon desc`,
+	);
+	for (const job of result.value ?? []) {
+		const record = String(job._regardingobjectid_value ?? "").toLowerCase();
+		const match = recordIds.find((id) => id.replace(/[{}]/g, "").toLowerCase() === record);
+		if (!match) continue;
+		if (!jobs.has(match)) jobs.set(match, new Set());
+		jobs.get(match)!.add(String(job.asyncoperationid));
+	}
+	return jobs;
 }
 
 /**
@@ -2552,25 +2906,50 @@ export interface WorkflowBatchProgress {
 	batchesCompleted: number;
 	totalBatches: number;
 	estimatedSecondsRemaining?: number;
+	/** Waiting this long before retrying because Dataverse is throttling requests (#183) */
+	throttleWaitSeconds?: number;
 }
 
 /**
- * Execute a workflow on multiple records using $batch requests for parallelization
- * Uses parallel execution via PPTB dataverseAPI for performance
+ * Run an on-demand workflow on multiple records, with progress and ETA.
+ * - Background workflows: $batch requests (runWorkflowInBatches, #264); a batch that stops early is
+ *   checked against the records' system jobs so no workflow runs twice.
+ * - Real-time workflows (and hosts without executeBatch): one ExecuteWorkflow request per record,
+ *   `batchSize` at a time. A real-time workflow leaves no system job to check, so it isn't batched.
  * @see https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api
- * @param workflowId GUID of the workflow to execute
+ * @param workflow The workflow to run (its id and mode)
  * @param recordIds Array of record GUIDs to run the workflow on
  * @param entityLogicalName Logical name of the entity (unused but kept for API compatibility)
  * @param onProgress Callback for progress updates with batch info and ETA
- * @param batchSize Number of concurrent requests per batch (default: 10)
+ * @param batchSize Concurrent requests at a time for one-request-per-record runs (default: 10); background
+ *   workflows use the batch runner's size (DELETE_BATCH_SIZE)
  */
 export async function executeWorkflowBatch(
-	workflowId: string,
+	workflow: Pick<WorkflowInfo, "workflowid" | "mode">,
 	recordIds: string[],
 	entityLogicalName: string,
 	onProgress?: (progress: WorkflowBatchProgress) => void,
 	batchSize: number = 10,
 ): Promise<{ succeeded: number; failed: number; errors: string[] }> {
+	const workflowId = workflow.workflowid;
+	// Background workflows: $batch requests, with a stopped batch checked against system jobs (#264)
+	if (workflow.mode === WORKFLOW_MODE_BACKGROUND && canExecuteBatch()) {
+		debugLog(
+			"workflowAPI",
+			`📡 Executing background workflow ${workflowId} on ${recordIds.length} records in $batch requests`,
+		);
+		const jobs = await workflowJobIds(workflowId);
+		const batchResult = await runWorkflowInBatches(workflowId, recordIds, {
+			executeBatch: hostExecuteBatch,
+			onProgress,
+			shouldContinue: await connectionGuard(),
+			jobsFor: (chunk) =>
+				"ids" in jobs
+					? getWorkflowJobs(jobs.ids, chunk)
+					: Promise.reject(new Error(jobs.unreliable)),
+		});
+		return { ...batchResult, errors: batchResult.errors.map((error) => `Record ${error}`) };
+	}
 	const result = { succeeded: 0, failed: 0, errors: [] as string[] };
 	const total = recordIds.length;
 	let completed = 0;
@@ -2589,6 +2968,15 @@ export async function executeWorkflowBatch(
 	// Track timing for ETA calculation
 	const batchTimes: number[] = [];
 	let batchesCompleted = 0;
+	// The last progress reported, repeated with the wait while Dataverse throttles (#183)
+	let lastProgress: WorkflowBatchProgress = {
+		completed: 0,
+		total,
+		succeeded: 0,
+		failed: 0,
+		batchesCompleted: 0,
+		totalBatches: batches.length,
+	};
 	// Stop if the tool's connection changes in place (PPTB ≥ 1.2.7, #66): later requests would run
 	// the workflow in the new environment, where the same record IDs can exist
 	const stillOnConnection = await connectionGuard();
@@ -2601,7 +2989,9 @@ export async function executeWorkflowBatch(
 		if (!(await stillOnConnection())) {
 			const remaining = batches.slice(batchIndex).flat();
 			result.failed += remaining.length;
-			result.errors.push(...remaining.map((id) => `Record ${id}: Not run: the tool's connection changed`));
+			result.errors.push(
+				...remaining.map((id) => `Record ${id}: Not run: the tool's connection changed`),
+			);
 			break;
 		}
 
@@ -2613,7 +3003,15 @@ export async function executeWorkflowBatch(
 		// Execute workflows in parallel within the batch
 		const workflowPromises = batchRecordIds.map(async (recordId) => {
 			try {
-				await executeWorkflow(workflowId, recordId, entityLogicalName, stillOnConnection);
+				// Many records: the long back-off, with the wait in the progress text (#183)
+				await executeWorkflow(workflowId, recordId, entityLogicalName, stillOnConnection, {
+					...LONG_RUNNING_RETRY,
+					onRetry: ({ delayMs }) =>
+						onProgress?.({
+							...lastProgress,
+							throttleWaitSeconds: Math.ceil(delayMs / 1000),
+						}),
+				});
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -2649,7 +3047,7 @@ export async function executeWorkflowBatch(
 			estimatedSecondsRemaining = Math.ceil((avgBatchTime * remainingBatches) / 1000);
 		}
 
-		onProgress?.({
+		lastProgress = {
 			completed,
 			total,
 			succeeded: result.succeeded,
@@ -2657,7 +3055,8 @@ export async function executeWorkflowBatch(
 			batchesCompleted,
 			totalBatches: batches.length,
 			estimatedSecondsRemaining,
-		});
+		};
+		onProgress?.(lastProgress);
 	}
 
 	debugLog(
@@ -2667,18 +3066,93 @@ export async function executeWorkflowBatch(
 	return result;
 }
 
+/** PrivilegeType members of an entity's Privileges (SecurityPrivilegeMetadata) */
+export type EntityPrivilegeType =
+	"Create" | "Read" | "Write" | "Delete" | "Assign" | "Share" | "Append" | "AppendTo";
+
 /**
- * Check if user has delete privilege for a specific entity
+ * PrivilegeType EnumType values. The Web API answers with the member name ("Delete"); the number is
+ * accepted too.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/privilegetype
+ */
+const PRIVILEGE_TYPE_NUMBERS: Record<EntityPrivilegeType, number> = {
+	Create: 1,
+	Read: 2,
+	Write: 3,
+	Delete: 4,
+	Assign: 5,
+	Share: 6,
+	Append: 7,
+	AppendTo: 8,
+};
+
+/**
+ * The entity's privilege name of this type, from its metadata (EntityMetadata.Privileges:
+ * SecurityPrivilegeMetadata Name and PrivilegeType). Many don't follow prv{Type}{LogicalName}:
+ * savedquery uses prvDeleteQuery, userquery prvDeleteUserQuery, systemuser prvDeleteUser,
+ * activities prvWriteActivity (#143, #327). Privileges is read once per entity for the connection
+ * (memoizeForSession, cleared by resetDataverseSessionCache). Undefined when the entity has no
+ * privilege of that type; throws when the metadata can't be read.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/entitymetadata
+ */
+export async function resolveEntityPrivilegeName(
+	logicalName: string,
+	privilegeType: EntityPrivilegeType,
+): Promise<string | undefined> {
+	const definition = await memoizeForSession(
+		`privileges:${logicalName}`,
+		() =>
+			window.dataverseAPI!.queryData(
+				`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
+			) as unknown as Promise<{
+				Privileges?: { Name?: string; PrivilegeType?: string | number }[];
+			} | null>,
+		// A null or malformed answer isn't kept: the next call reads the metadata again
+		(d) => Array.isArray(d?.Privileges),
+	);
+	if (!Array.isArray(definition?.Privileges)) {
+		throw new Error(`EntityDefinitions(${logicalName}): no Privileges in the response`);
+	}
+	const typeNumber = PRIVILEGE_TYPE_NUMBERS[privilegeType];
+	return (
+		definition.Privileges.find(
+			(p) => p.PrivilegeType === privilegeType || p.PrivilegeType === typeNumber,
+		)?.Name || undefined
+	);
+}
+
+/**
+ * Check if user has delete privilege for a specific entity. The privilege name comes from the
+ * entity's metadata (#327, e.g. savedquery → prvDeleteQuery). Metadata that lists no Delete
+ * privilege means the entity has none: denied. Only when the metadata can't be read is the name
+ * built from the logical name (prvDelete{LogicalName}) checked, as before; a privilege that doesn't
+ * exist is treated as denied (checkPrivilegeByName).
  */
 export async function checkDeletePrivilege(entityLogicalName: string): Promise<boolean> {
 	try {
 		const user = await whoAmI();
 		if (!user) return false;
 
-		// Entity-specific delete privilege (e.g., prvDeleteAccount)
-		const deletePriv = `prvDelete${entityLogicalName
-			.charAt(0)
-			.toUpperCase()}${entityLogicalName.slice(1)}`;
+		let deletePriv: string | undefined;
+		try {
+			deletePriv = await resolveEntityPrivilegeName(entityLogicalName, "Delete");
+			if (!deletePriv) {
+				debugLog(
+					"accessAPI",
+					`checkDeletePrivilege(${entityLogicalName}): no Delete privilege in metadata, denied`,
+				);
+				return false;
+			}
+		} catch (error) {
+			console.warn(
+				`checkDeletePrivilege(${entityLogicalName}): couldn't read the privilege name from metadata, using prvDelete{LogicalName}:`,
+				error,
+			);
+			// Fallback: entity-specific delete privilege built from the logical name (e.g. prvDeleteAccount)
+			deletePriv = `prvDelete${entityLogicalName
+				.charAt(0)
+				.toUpperCase()}${entityLogicalName.slice(1)}`;
+		}
 		return await checkPrivilegeByName(user.UserId, deletePriv);
 	} catch (error) {
 		console.error("checkDeletePrivilege: Failed:", error);
@@ -2698,6 +3172,8 @@ export interface BatchDeleteProgress {
 	batchesCompleted: number;
 	totalBatches: number;
 	estimatedSecondsRemaining?: number;
+	/** Waiting this long before retrying because Dataverse is throttling requests (#183) */
+	throttleWaitSeconds?: number;
 }
 
 export interface BatchDeleteResult {
@@ -2726,14 +3202,20 @@ export async function deleteRecordsBatch(
 ): Promise<BatchDeleteResult> {
 	const entitySetName = await deleteEntitySet(entityLogicalName);
 	if (entitySetName) {
-		debugLog("recordAPI", `📡 Deleting ${recordIds.length} records from ${entitySetName} with $batch`);
+		debugLog(
+			"recordAPI",
+			`📡 Deleting ${recordIds.length} records from ${entitySetName} with $batch`,
+		);
 		const batchResult = await deleteRecordsInBatches(entitySetName, recordIds, {
 			executeBatch: hostExecuteBatch,
 			onProgress,
 			// Stop if the tool's connection changes in place (#66)
 			shouldContinue: await connectionGuard(),
 		});
-		debugLog("recordAPI", `✅ Delete complete: ${batchResult.succeeded} succeeded, ${batchResult.failed} failed`);
+		debugLog(
+			"recordAPI",
+			`✅ Delete complete: ${batchResult.succeeded} succeeded, ${batchResult.failed} failed`,
+		);
 		return batchResult;
 	}
 
@@ -2772,7 +3254,13 @@ export async function deleteRecordsBatch(
 			try {
 				// Retried after service protection errors (#96), like deleteRecord's fallback; not after
 				// a connection change (#175)
-				await withThrottleRetry(() => window.dataverseAPI!.delete(entityLogicalName, recordId), { shouldContinue: stillOnConnection });
+				await withThrottleRetry(
+					() => window.dataverseAPI!.delete(entityLogicalName, recordId),
+					{
+						...LONG_RUNNING_RETRY, // many records (#183)
+						shouldContinue: stillOnConnection,
+					},
+				);
 				return { success: true, recordId };
 			} catch (error) {
 				return {
@@ -2847,7 +3335,9 @@ export async function submitBulkDeleteFromFetchXml(
 	try {
 		// Convert FetchXML to QueryExpression using the Dataverse function. BulkDelete only accepts
 		// condition values as strings; the conversion returns numbers and booleans raw (#224)
-		const queryExpression = withStringConditionValues(await fetchXmlToQueryExpression(fetchXml));
+		const queryExpression = withStringConditionValues(
+			await fetchXmlToQueryExpression(fetchXml),
+		);
 
 		// Submit BulkDelete with the converted QueryExpression
 		const result = (await window.dataverseAPI!.execute({
@@ -2903,7 +3393,9 @@ interface StateOptionsResponse {
 
 /** Dataverse's answer when the entity has no such attribute (the statecode lookup) */
 const isMissingAttributeError = (error: unknown) =>
-	/0x80040217|could not find|does not exist|not found/i.test(error instanceof Error ? error.message : String(error));
+	/0x80040217|could not find|does not exist|not found/i.test(
+		error instanceof Error ? error.message : String(error),
+	);
 
 /**
  * The entity's state model (#143): statecode options (StateAttributeMetadata, with DefaultStatus
@@ -2929,7 +3421,9 @@ export function getEntityStateModel(logicalName: string): Promise<EntityStateMod
 			window.dataverseAPI!.queryData(
 				`${entity}/Attributes(LogicalName='statuscode')/Microsoft.Dynamics.CRM.StatusAttributeMetadata?$select=LogicalName&$expand=OptionSet($select=Options)`,
 			) as unknown as Promise<StateOptionsResponse>,
-			window.dataverseAPI!.queryData(`${entity}?$select=EnforceStateTransitions`) as unknown as Promise<{
+			window.dataverseAPI!.queryData(
+				`${entity}?$select=EnforceStateTransitions`,
+			) as unknown as Promise<{
 				EnforceStateTransitions?: boolean;
 			}>,
 		]);
@@ -2950,24 +3444,34 @@ export function getEntityStateModel(logicalName: string): Promise<EntityStateMod
  * then allowed and Dataverse answers with its own error.
  * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/reference/retrieveuserprivilegebyprivilegename
  */
-export async function checkWritePrivilege(logicalName: string): Promise<boolean | undefined> {
+export function checkWritePrivilege(logicalName: string): Promise<boolean | undefined> {
+	return checkEntityPrivilege(logicalName, "Write");
+}
+
+/**
+ * Whether the user has the entity's privilege of this type (#143, #149), named from the entity's
+ * metadata (Privileges, PrivilegeType). The close activities are activities, so Create is
+ * prvCreateActivity (verified on a sandbox). Undefined when it can't be determined.
+ */
+export async function checkEntityPrivilege(
+	logicalName: string,
+	privilegeType: "Write" | "Create",
+): Promise<boolean | undefined> {
 	if (!isDataverseAvailable()) return undefined;
 	try {
 		const user = await whoAmI();
 		if (!user) return undefined;
-		const definition = await memoizeForSession(
-			`privileges:${logicalName}`,
-			() =>
-				window.dataverseAPI!.queryData(
-					`EntityDefinitions(LogicalName='${odataString(logicalName)}')?$select=Privileges`,
-				) as unknown as Promise<{ Privileges?: { Name?: string; PrivilegeType?: string }[] }>,
-		);
-		const name = definition.Privileges?.find((p) => p.PrivilegeType === "Write")?.Name;
+		const name = await resolveEntityPrivilegeName(logicalName, privilegeType);
 		if (!name) return undefined;
 		// Same session key as checkPrivilegeByName; a failed call isn't kept (#71)
-		return await memoizeForSession(`privilege:${user.UserId}:${name}`, () => retrieveUserPrivilege(user.UserId, name));
+		return await memoizeForSession(`privilege:${user.UserId}:${name}`, () =>
+			retrieveUserPrivilege(user.UserId, name),
+		);
 	} catch (error) {
-		console.warn(`checkWritePrivilege(${logicalName}): couldn't determine, allowing:`, error);
+		console.warn(
+			`checkEntityPrivilege(${logicalName}, ${privilegeType}): couldn't determine, allowing:`,
+			error,
+		);
 		return undefined;
 	}
 }
@@ -3005,6 +3509,40 @@ export async function getRecordStatuses(
 }
 
 /**
+ * The current statecode of each record by ID (#149), in groups of 50 like getRecordStatuses.
+ * Throws when it can't be read.
+ */
+export async function getRecordStateCodes(
+	entitySetName: string,
+	primaryIdAttribute: string,
+	recordIds: string[],
+): Promise<Map<string, number>> {
+	const states = new Map<string, number>();
+	const normalize = (id: string) => id.replace(/[{}]/g, "").toLowerCase();
+	for (let i = 0; i < recordIds.length; i += 50) {
+		const filter = recordIds
+			.slice(i, i + 50)
+			.map((id) => `${primaryIdAttribute} eq ${id.replace(/[{}]/g, "")}`)
+			.join(" or ");
+		const result = await window.dataverseAPI!.queryData(
+			`${entitySetName}?$select=statecode&$filter=${encodeURIComponent(filter)}`,
+		);
+		for (const row of result.value) {
+			const id = row[primaryIdAttribute];
+			if (typeof id === "string" && typeof row.statecode === "number")
+				states.set(normalize(id), row.statecode);
+		}
+	}
+	// Keyed as the caller passed them
+	const byCallerId = new Map<string, number>();
+	for (const id of recordIds) {
+		const state = states.get(normalize(id));
+		if (state !== undefined) byCallerId.set(id, state);
+	}
+	return byCallerId;
+}
+
+/**
  * Activate / Deactivate (#143): sets `statecode` and `statuscode` on each record with
  * `PATCH {EntitySetName}(id)`. PPTB ≥ 1.2.7: $batch requests through executeBatch with the
  * metadata EntitySetName (like delete, #61), retried while throttled and stopped if the connection
@@ -3033,21 +3571,57 @@ export async function setRecordsState(
 		});
 	}
 
+	return runOneByOne(
+		recordIds,
+		(recordId) =>
+			window.dataverseAPI!.update(entityLogicalName, recordId, statePatchBody(target)),
+		STATE_CONNECTION_CHANGED_MESSAGE,
+		shouldContinue,
+		onProgress,
+	);
+}
+
+/**
+ * Hosts without executeBatch: one request per record, retried after service protection errors
+ * (#96), stopped when the connection changes (#66), with the same progress shape as the batches.
+ */
+async function runOneByOne(
+	recordIds: string[],
+	send: (recordId: string) => Promise<unknown>,
+	stoppedMessage: string,
+	shouldContinue: () => boolean | Promise<boolean>,
+	onProgress?: (progress: BatchDeleteProgress) => void,
+): Promise<BatchDeleteResult> {
 	const result: BatchDeleteResult = { succeeded: 0, failed: 0, errors: [] };
 	const started = Date.now();
+	let lastProgress: BatchDeleteProgress = {
+		completed: 0,
+		total: recordIds.length,
+		succeeded: 0,
+		failed: 0,
+		batchesCompleted: 0,
+		totalBatches: recordIds.length,
+	};
 	for (const [index, recordId] of recordIds.entries()) {
 		if (!(await shouldContinue())) {
 			for (const id of recordIds.slice(index)) {
 				result.failed++;
-				result.errors.push(`${id}: ${STATE_CONNECTION_CHANGED_MESSAGE}`);
+				result.errors.push(`${id}: ${stoppedMessage}`);
 			}
 			break;
 		}
 		try {
-			await withThrottleRetry(
-				() => window.dataverseAPI!.update(entityLogicalName, recordId, statePatchBody(target)),
-				{ shouldContinue }, // not retried after a connection change (#175)
-			);
+			// Many records: the long back-off, with the wait in the progress text (#183); not retried
+			// after a connection change (#175)
+			await withThrottleRetry(() => send(recordId), {
+				...LONG_RUNNING_RETRY,
+				shouldContinue,
+				onRetry: ({ delayMs }) =>
+					onProgress?.({
+						...lastProgress,
+						throttleWaitSeconds: Math.ceil(delayMs / 1000),
+					}),
+			});
 			result.succeeded++;
 		} catch (error) {
 			result.failed++;
@@ -3055,7 +3629,7 @@ export async function setRecordsState(
 		}
 		const completed = index + 1;
 		const average = (Date.now() - started) / completed;
-		onProgress?.({
+		lastProgress = {
 			completed,
 			total: recordIds.length,
 			succeeded: result.succeeded,
@@ -3063,8 +3637,127 @@ export async function setRecordsState(
 			batchesCompleted: completed,
 			totalBatches: recordIds.length,
 			estimatedSecondsRemaining:
-				completed >= 2 ? Math.ceil((average * (recordIds.length - completed)) / 1000) : undefined,
-		});
+				completed >= 2
+					? Math.ceil((average * (recordIds.length - completed)) / 1000)
+					: undefined,
+		};
+		onProgress?.(lastProgress);
 	}
 	return result;
+}
+
+// ============================================================================
+// CLOSE ACTIONS (#149)
+// ============================================================================
+
+export interface CompetitorOption {
+	id: string;
+	name: string;
+	website?: string;
+}
+
+/** Competitors whose name contains the text (Lose opportunity), up to 25, by name */
+export async function searchCompetitors(text: string): Promise<CompetitorOption[]> {
+	if (!isDataverseAvailable()) return [];
+	const term = text.trim();
+	// contains() is a LIKE: %, _ and [ in the term are matched literally (#200), as in recordSearch.ts
+	const filter = term
+		? `&$filter=${encodeURIComponent(`contains(name,'${odataString(escapeWildcards(term))}')`)}`
+		: "";
+	const result = await window.dataverseAPI!.queryData(
+		`${COMPETITOR_ENTITY_SET}?$select=name,websiteurl&$orderby=name&$top=25${filter}`,
+	);
+	return result.value.flatMap((row) =>
+		typeof row.competitorid === "string"
+			? [
+					{
+						id: row.competitorid,
+						name: typeof row.name === "string" ? row.name : row.competitorid,
+						website: typeof row.websiteurl === "string" ? row.websiteurl : undefined,
+					},
+				]
+			: [],
+	);
+}
+
+/**
+ * Runs a close message on each record (#149) with the same values: POST {action} (or the
+ * collection-bound action) with the close activity bound to the record and Status. PPTB ≥ 1.2.7:
+ * $batch requests through executeBatch with throttle retry and the connection guard; a batch that
+ * stops early isn't redone for records it already closed, read from their statecode before and
+ * after (completedByStoppedBatch). Older hosts: dataverseAPI.execute per record.
+ * @see https://learn.microsoft.com/power-apps/developer/data-platform/webapi/use-web-api-actions
+ */
+export async function closeRecords(
+	entityLogicalName: string,
+	primaryIdAttribute: string | undefined,
+	recordIds: string[],
+	action: CloseMessageAction,
+	values: CloseValues,
+	onProgress?: (progress: BatchDeleteProgress) => void,
+): Promise<BatchDeleteResult> {
+	if (!isDataverseAvailable()) throw new Error("PPTB Dataverse API not available");
+	const shouldContinue = await connectionGuard();
+	const entitySetName = (await resolveEntitySet(entityLogicalName))?.entitySetName;
+	if (!entitySetName)
+		throw new Error(`The ${entityLogicalName} metadata has no entity set name.`);
+	debugLog(
+		"recordAPI",
+		`📡 ${action.message} on ${recordIds.length} ${entityLogicalName} records`,
+	);
+	const parameters = (recordId: string) =>
+		buildCloseParameters(action, entitySetName, recordId, values);
+
+	if (canExecuteBatch()) {
+		let before: Map<string, number> | undefined;
+		if (primaryIdAttribute) {
+			try {
+				before = await getRecordStateCodes(entitySetName, primaryIdAttribute, recordIds);
+			} catch (error) {
+				console.warn(
+					"Close: couldn't read the records' states first; a stopped batch is redone in full:",
+					error,
+				);
+			}
+		}
+		const url = closeRequestUrl(action, entitySetName);
+		return closeRecordsInBatches(
+			recordIds,
+			(id) => ({ method: "POST", url, body: parameters(id) }),
+			{
+				executeBatch: hostExecuteBatch,
+				onProgress,
+				shouldContinue,
+				completedInStoppedBatch:
+					before && primaryIdAttribute
+						? async (ids) =>
+								completedByStoppedBatch(
+									before!,
+									await getRecordStateCodes(
+										entitySetName,
+										primaryIdAttribute,
+										ids,
+									),
+									action.targetState,
+									ids,
+								)
+						: undefined,
+			},
+		);
+	}
+
+	return runOneByOne(
+		recordIds,
+		(recordId) =>
+			window.dataverseAPI!.execute({
+				operationName: action.message,
+				operationType: "action",
+				// Collection-bound: the host builds {EntitySetName}/Microsoft.Dynamics.CRM.{operationName}
+				entityName: action.boundToCollection ? entityLogicalName : undefined,
+				parameters: parameters(recordId),
+			}),
+		CLOSE_CONNECTION_CHANGED_MESSAGE,
+		shouldContinue,
+		onProgress,
+	);
 }

@@ -43,11 +43,19 @@ export function planManyToManyJoin(
 ): ManyToManyJoin | undefined {
 	const fromEntity1 = relationship.Entity1LogicalName === parentEntity;
 	if (!fromEntity1 && relationship.Entity2LogicalName !== parentEntity) return undefined;
-	const parentAttribute = fromEntity1 ? relationship.Entity1IntersectAttribute : relationship.Entity2IntersectAttribute;
+	const parentAttribute = fromEntity1
+		? relationship.Entity1IntersectAttribute
+		: relationship.Entity2IntersectAttribute;
 	const target = fromEntity1 ? relationship.Entity2LogicalName : relationship.Entity1LogicalName;
-	const targetAttribute = fromEntity1 ? relationship.Entity2IntersectAttribute : relationship.Entity1IntersectAttribute;
+	const targetAttribute = fromEntity1
+		? relationship.Entity2IntersectAttribute
+		: relationship.Entity1IntersectAttribute;
 	return {
-		intersect: { name: relationship.IntersectEntityName, from: parentAttribute, to: parentPrimaryKey },
+		intersect: {
+			name: relationship.IntersectEntityName,
+			from: parentAttribute,
+			to: parentPrimaryKey,
+		},
 		target: { name: target, from: targetPrimaryKey(target), to: targetAttribute },
 	};
 }
@@ -102,8 +110,12 @@ export function planIntersectEntityJoins(
 	for (const relationship of relationships) {
 		if (relationship.IntersectEntityName !== intersectEntity) continue;
 		for (const side of [1, 2] as const) {
-			const target = side === 1 ? relationship.Entity1LogicalName : relationship.Entity2LogicalName;
-			const attribute = side === 1 ? relationship.Entity1IntersectAttribute : relationship.Entity2IntersectAttribute;
+			const target =
+				side === 1 ? relationship.Entity1LogicalName : relationship.Entity2LogicalName;
+			const attribute =
+				side === 1
+					? relationship.Entity1IntersectAttribute
+					: relationship.Entity2IntersectAttribute;
 			const primaryKey = primaryKeyOf(target);
 			if (!target || !attribute || !primaryKey) continue;
 			joins.push({
@@ -126,6 +138,11 @@ export function planIntersectEntityJoins(
  * A key that tells relationships apart in lists: the schema name, plus the side for the two joins an
  * intersect entity's many-to-many relationship gives (they share the schema name, #57).
  */
-export function relationshipKey(relationship: { SchemaName: string; IntersectSide?: 1 | 2 }): string {
-	return relationship.IntersectSide ? `${relationship.SchemaName}#${relationship.IntersectSide}` : relationship.SchemaName;
+export function relationshipKey(relationship: {
+	SchemaName: string;
+	IntersectSide?: 1 | 2;
+}): string {
+	return relationship.IntersectSide
+		? `${relationship.SchemaName}#${relationship.IntersectSide}`
+		: relationship.SchemaName;
 }

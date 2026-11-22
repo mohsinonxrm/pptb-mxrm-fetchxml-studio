@@ -33,7 +33,11 @@ describe("escapeWildcards / unescapeWildcards", () => {
 });
 
 describe("buildWildcardValue", () => {
-	const v = (match: WildcardValue["match"], text: string, literal = false): WildcardValue => ({ match, text, literal });
+	const v = (match: WildcardValue["match"], text: string, literal = false): WildcardValue => ({
+		match,
+		text,
+		literal,
+	});
 	it.each([
 		["like", v("contains", "contoso"), "%contoso%"],
 		["like", v("begins", "contoso"), "contoso%"],
@@ -92,7 +96,9 @@ describe("parseWildcardValue", () => {
 				for (const text of ["contoso", "50% off", "a_b", "[x]", "it's"]) {
 					const value = buildWildcardValue(operator, { match, text, literal: true });
 					const parsed = parseWildcardValue(operator, value);
-					expect(buildWildcardValue(operator, parsed), `${operator} ${value}`).toBe(value);
+					expect(buildWildcardValue(operator, parsed), `${operator} ${value}`).toBe(
+						value,
+					);
 				}
 			}
 		}
@@ -122,7 +128,16 @@ describe("convertWildcardValue", () => {
 
 describe("isWildcardOperator", () => {
 	it("covers the six pattern operators only", () => {
-		expect(["like", "not-like", "begins-with", "not-begin-with", "ends-with", "not-end-with"].every(isWildcardOperator)).toBe(true);
+		expect(
+			[
+				"like",
+				"not-like",
+				"begins-with",
+				"not-begin-with",
+				"ends-with",
+				"not-end-with",
+			].every(isWildcardOperator),
+		).toBe(true);
 		expect(["eq", "ne", "in", "under", "contain-values"].some(isWildcardOperator)).toBe(false);
 	});
 });

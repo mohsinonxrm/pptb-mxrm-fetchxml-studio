@@ -129,11 +129,16 @@ export function SaveViewButton({
 	}, []);
 
 	const handleDialogSaveComplete = useCallback(
-		(viewId: string, viewType: "system" | "personal", viewName: string, details: SavedViewDetails) => {
+		(
+			viewId: string,
+			viewType: "system" | "personal",
+			viewName: string,
+			details: SavedViewDetails,
+		) => {
 			setDialogOpen(false);
 			onSaveComplete?.(viewId, viewType, viewName, details);
 		},
-		[onSaveComplete]
+		[onSaveComplete],
 	);
 
 	// Primary button text based on state
@@ -146,7 +151,11 @@ export function SaveViewButton({
 				<MenuTrigger disableButtonEnhancement>
 					{(triggerProps: MenuButtonProps) => (
 						<Tooltip
-							content={loadedView ? `Save changes to "${loadedView.name}"` : "Save as new view"}
+							content={
+								loadedView
+									? `Save changes to "${loadedView.name}"`
+									: "Save as new view"
+							}
 							relationship="description"
 						>
 							<SplitButton
@@ -167,7 +176,10 @@ export function SaveViewButton({
 				<MenuPopover>
 					<MenuList>
 						{loadedView && (
-							<MenuItem icon={<SaveRegular className={styles.menuIcon} />} onClick={handleSave}>
+							<MenuItem
+								icon={<SaveRegular className={styles.menuIcon} />}
+								onClick={handleSave}
+							>
 								<span className={styles.menuItem}>Save</span>
 							</MenuItem>
 						)}

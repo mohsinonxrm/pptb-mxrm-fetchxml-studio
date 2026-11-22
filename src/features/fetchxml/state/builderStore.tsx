@@ -4,7 +4,11 @@
  */
 
 import { useMemo, useReducer, type ReactNode } from "react";
-import { BuilderContext, type BuilderContextValue, type LoadFetchXmlOptions } from "./builderContext";
+import {
+	BuilderContext,
+	type BuilderContextValue,
+	type LoadFetchXmlOptions,
+} from "./builderContext";
 import type {
 	FetchNode,
 	EntityNode,
@@ -90,6 +94,8 @@ export interface BuilderState {
 	fetchQuery: FetchNode | null;
 	selectedNodeId: NodeId | null;
 	selectedNode: SelectedNode;
+	/** Bumped by revealNode so the tree re-expands and scrolls to the node even if it is already selected */
+	revealSeq: number;
 	/** Loaded view info - null if query was not loaded from a view or has been modified */
 	loadedView: LoadedViewState | null;
 	/** Column layout configuration - generated from FetchXML or loaded from view */
@@ -107,11 +113,12 @@ export interface BuilderState {
 type BuilderAction =
 	| { type: "SET_ENTITY"; entityName: string }
 	| { type: "SELECT_NODE"; nodeId: NodeId }
+	| { type: "REVEAL_NODE"; nodeId: NodeId }
 	| { type: "ADD_ATTRIBUTE"; parentId: NodeId }
 	| { type: "ADD_ATTRIBUTE_BY_NAME"; parentId: NodeId; attributeName: string }
 	| { type: "UPDATE_ATTRIBUTES"; parentId: NodeId; attributeNames: string[] }
 	| { type: "ADD_ALL_ATTRIBUTES"; parentId: NodeId }
-	| { type: "ADD_ORDER"; parentId: NodeId }
+	| { type: "ADD_ORDER"; parentId: NodeId; attribute?: string }
 	| { type: "ADD_FILTER"; parentId: NodeId }
 	| { type: "ADD_SUBFILTER"; filterId: NodeId }
 	| { type: "ADD_CONDITION"; filterId: NodeId }
@@ -164,6 +171,7 @@ const initialState: BuilderState = {
 	fetchQuery: null,
 	selectedNodeId: null,
 	selectedNode: null,
+	revealSeq: 0,
 	loadedView: null,
 	columnConfig: null,
 	layoutNeedsSync: false,
@@ -179,7 +187,9 @@ function withColumnFilterQuery(
 	columnFilterId: NodeId | null,
 	columnFilterWrapperId: NodeId | null,
 ): BuilderState {
-	const selectedNode = state.selectedNodeId ? findNodeById(fetchQuery, state.selectedNodeId) : null;
+	const selectedNode = state.selectedNodeId
+		? findNodeById(fetchQuery, state.selectedNodeId)
+		: null;
 	return {
 		...state,
 		fetchQuery,
@@ -323,7 +333,10 @@ function removeNodeFromTree<T extends { id: NodeId }>(node: T, targetId: NodeId)
 	}
 
 	// Handle allAttributes removal
-	if (nodeRecord.allAttributes && (nodeRecord.allAttributes as AllAttributesNode).id === targetId) {
+	if (
+		nodeRecord.allAttributes &&
+		(nodeRecord.allAttributes as AllAttributesNode).id === targetId
+	) {
 		delete updated.allAttributes;
 		changed = true;
 	}
@@ -343,13 +356,20 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			// Editor sync keeps the user's column widths and order; the layout is merged with the
 			// new attributes afterwards. Otherwise generate the initial layout from the FetchXML.
 			const keepLayout = action.preserveLayout === true && state.columnConfig !== null;
-			const newConfig = keepLayout ? state.columnConfig : generateLayoutFromFetchXml(fetchNode);
+			const newConfig = keepLayout
+				? state.columnConfig
+				: generateLayoutFromFetchXml(fetchNode);
 			// Every node has a new ID: keep the column filters if they're still there (#23)
-			const columnFilterId = relocateColumnFilterGroup(state.fetchQuery, fetchNode, state.columnFilterId);
+			const columnFilterId = relocateColumnFilterGroup(
+				state.fetchQuery,
+				fetchNode,
+				state.columnFilterId,
+			);
 			return {
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
+				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - this was manual edit
 				columnConfig: newConfig,
 				layoutNeedsSync: keepLayout,
@@ -386,6 +406,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: fetchNode.entity.id,
 				selectedNode: fetchNode.entity,
+				revealSeq: state.revealSeq,
 				loadedView: action.viewInfo, // Track the loaded view
 				columnConfig: newConfig,
 				layoutNeedsSync: false,
@@ -437,6 +458,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				fetchQuery: fetchNode,
 				selectedNodeId: entityNode.id,
 				selectedNode: entityNode,
+				revealSeq: state.revealSeq,
 				loadedView: null, // Clear view info - entity changed
 				columnConfig: null, // Reset layout - no attributes yet
 				layoutNeedsSync: false,
@@ -453,6 +475,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				selectedNodeId: action.nodeId,
 				selectedNode: node,
+			};
+		}
+
+		case "REVEAL_NODE": {
+			if (!state.fetchQuery) return state;
+			const node = findNodeById(state.fetchQuery, action.nodeId);
+			return {
+				...state,
+				selectedNodeId: action.nodeId,
+				selectedNode: node,
+				revealSeq: state.revealSeq + 1,
 			};
 		}
 
@@ -521,13 +554,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			};
 
 			// Update the tree immutably
-			const updatedFetchByName = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
-				const n = node as EntityNode | LinkEntityNode;
-				return {
-					...n,
-					attributes: [...n.attributes, newAttrByName],
-				};
-			});
+			const updatedFetchByName = updateNodeInTree(
+				state.fetchQuery,
+				action.parentId,
+				(node) => {
+					const n = node as EntityNode | LinkEntityNode;
+					return {
+						...n,
+						attributes: [...n.attributes, newAttrByName],
+					};
+				},
+			);
 
 			return {
 				...state,
@@ -607,13 +644,17 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			});
 
 			// Update the tree immutably
-			const updatedFetchForBulk = updateNodeInTree(state.fetchQuery, action.parentId, (node) => {
-				const n = node as EntityNode | LinkEntityNode;
-				return {
-					...n,
-					attributes: updatedAttributes,
-				};
-			});
+			const updatedFetchForBulk = updateNodeInTree(
+				state.fetchQuery,
+				action.parentId,
+				(node) => {
+					const n = node as EntityNode | LinkEntityNode;
+					return {
+						...n,
+						attributes: updatedAttributes,
+					};
+				},
+			);
 
 			return {
 				...state,
@@ -633,10 +674,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			}
 
 			// Create new order node
+			// A named attribute comes from the Advisories tab's quick fix (#97)
 			const newOrder: OrderNode = {
 				id: generateId(),
 				type: "order",
-				attribute: "new_attribute",
+				attribute: action.attribute ?? "new_attribute",
 				descending: false,
 			};
 
@@ -774,7 +816,9 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			const parent = findNodeById(state.fetchQuery, action.parentId);
 			if (
 				!parent ||
-				(parent.type !== "entity" && parent.type !== "link-entity" && parent.type !== "filter")
+				(parent.type !== "entity" &&
+					parent.type !== "link-entity" &&
+					parent.type !== "filter")
 			) {
 				return state;
 			}
@@ -877,8 +921,18 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 
 		case "ADD_COLUMN_FILTER": {
 			if (!state.fetchQuery) return state;
-			const result = addColumnFilter(state.fetchQuery, state.columnFilterId, action.condition, generateId);
-			return withColumnFilterQuery(state, result.fetch, result.groupId, result.wrapperId ?? state.columnFilterWrapperId);
+			const result = addColumnFilter(
+				state.fetchQuery,
+				state.columnFilterId,
+				action.condition,
+				generateId,
+			);
+			return withColumnFilterQuery(
+				state,
+				result.fetch,
+				result.groupId,
+				result.wrapperId ?? state.columnFilterWrapperId,
+			);
 		}
 
 		case "REMOVE_COLUMN_FILTER": {
@@ -889,12 +943,21 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				action.conditionId,
 				state.columnFilterWrapperId,
 			);
-			return withColumnFilterQuery(state, result.fetch, result.groupId, state.columnFilterWrapperId);
+			return withColumnFilterQuery(
+				state,
+				result.fetch,
+				result.groupId,
+				state.columnFilterWrapperId,
+			);
 		}
 
 		case "CLEAR_COLUMN_FILTERS": {
 			if (!state.fetchQuery) return state;
-			const fetch = clearColumnFilters(state.fetchQuery, state.columnFilterId, state.columnFilterWrapperId);
+			const fetch = clearColumnFilters(
+				state.fetchQuery,
+				state.columnFilterId,
+				state.columnFilterWrapperId,
+			);
 			return withColumnFilterQuery(state, fetch, null, null);
 		}
 
@@ -906,8 +969,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			if (!updatedFetch) return state;
 
 			// If we're removing the selected node, clear selection
-			const newSelectedId = state.selectedNodeId === action.nodeId ? null : state.selectedNodeId;
-			const newSelectedNode = newSelectedId ? findNodeById(updatedFetch, newSelectedId) : null;
+			const newSelectedId =
+				state.selectedNodeId === action.nodeId ? null : state.selectedNodeId;
+			const newSelectedNode = newSelectedId
+				? findNodeById(updatedFetch, newSelectedId)
+				: null;
 
 			return {
 				...state,
@@ -976,7 +1042,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			if (!state.columnConfig) return state;
 			return {
 				...state,
-				columnConfig: updateLayoutColumnWidth(state.columnConfig, action.columnName, action.width),
+				columnConfig: updateLayoutColumnWidth(
+					state.columnConfig,
+					action.columnName,
+					action.width,
+				),
 			};
 		}
 
@@ -984,7 +1054,11 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			if (!state.columnConfig) return state;
 			return {
 				...state,
-				columnConfig: reorderLayoutColumns(state.columnConfig, action.fromIndex, action.toIndex),
+				columnConfig: reorderLayoutColumns(
+					state.columnConfig,
+					action.fromIndex,
+					action.toIndex,
+				),
 			};
 		}
 
@@ -1036,7 +1110,9 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			const withOrder = (orders: OrderNode[]) => {
 				const existing = orders.findIndex(sameOrder);
 				return existing >= 0
-					? orders.map((o, i) => (i === existing ? { ...o, descending: descending || undefined } : o))
+					? orders.map((o, i) =>
+							i === existing ? { ...o, descending: descending || undefined } : o,
+						)
 					: [...orders, newOrder];
 			};
 			// A single-column sort replaces every order in the query, including orders inside
@@ -1047,11 +1123,16 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			const placeInLinks = (links: LinkEntityNode[]): LinkEntityNode[] =>
 				links.map((l) =>
 					l.id === targetId
-						? { ...l, orders: isMultiSort ? withOrder(l.orders) : [newOrder], links: placeInLinks(l.links) }
+						? {
+								...l,
+								orders: isMultiSort ? withOrder(l.orders) : [newOrder],
+								links: placeInLinks(l.links),
+							}
 						: { ...l, links: placeInLinks(l.links) },
 				);
 			let entity = state.fetchQuery.entity;
-			if (!isMultiSort) entity = { ...entity, orders: [], links: clearLinkOrders(entity.links) };
+			if (!isMultiSort)
+				entity = { ...entity, orders: [], links: clearLinkOrders(entity.links) };
 			entity = targetId
 				? { ...entity, links: placeInLinks(entity.links) }
 				: { ...entity, orders: isMultiSort ? withOrder(entity.orders) : [newOrder] };
@@ -1085,13 +1166,17 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 		() => ({
 			setEntity: (entityName: string) => dispatch({ type: "SET_ENTITY", entityName }),
 			selectNode: (nodeId: NodeId) => dispatch({ type: "SELECT_NODE", nodeId }),
+			/** Select a node and reveal it in the tree, even when it is already selected */
+			revealNode: (nodeId: NodeId) => dispatch({ type: "REVEAL_NODE", nodeId }),
 			addAttribute: (parentId: NodeId) => dispatch({ type: "ADD_ATTRIBUTE", parentId }),
 			addAttributeByName: (parentId: NodeId, attributeName: string) =>
 				dispatch({ type: "ADD_ATTRIBUTE_BY_NAME", parentId, attributeName }),
 			updateAttributes: (parentId: NodeId, attributeNames: string[]) =>
 				dispatch({ type: "UPDATE_ATTRIBUTES", parentId, attributeNames }),
-			addAllAttributes: (parentId: NodeId) => dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
-			addOrder: (parentId: NodeId) => dispatch({ type: "ADD_ORDER", parentId }),
+			addAllAttributes: (parentId: NodeId) =>
+				dispatch({ type: "ADD_ALL_ATTRIBUTES", parentId }),
+			addOrder: (parentId: NodeId, attribute?: string) =>
+				dispatch({ type: "ADD_ORDER", parentId, attribute }),
 			addFilter: (parentId: NodeId) => dispatch({ type: "ADD_FILTER", parentId }),
 			addSubfilter: (filterId: NodeId) => dispatch({ type: "ADD_SUBFILTER", filterId }),
 			addCondition: (filterId: NodeId) => dispatch({ type: "ADD_CONDITION", filterId }),
@@ -1132,7 +1217,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 				}
 				return result;
 			},
-			loadView: (xmlString: string, viewInfo: ViewSourceInfo, layoutXml?: string): ParseResult => {
+			loadView: (
+				xmlString: string,
+				viewInfo: ViewSourceInfo,
+				layoutXml?: string,
+			): ParseResult => {
 				const result = parseFetchXml(xmlString);
 				if (result.success && result.fetchNode) {
 					dispatch({
@@ -1156,24 +1245,37 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 					// originalFetchXml is supplied by the caller, generated from the tree that was saved
 					viewInfo: { ...viewInfo },
 				}),
-			setColumnConfig: (config: LayoutXmlConfig) => dispatch({ type: "SET_COLUMN_CONFIG", config }),
+			setColumnConfig: (config: LayoutXmlConfig) =>
+				dispatch({ type: "SET_COLUMN_CONFIG", config }),
 			updateColumnWidth: (columnName: string, width: number) =>
 				dispatch({ type: "UPDATE_COLUMN_WIDTH", columnName, width }),
 			reorderColumns: (fromIndex: number, toIndex: number) =>
 				dispatch({ type: "REORDER_COLUMNS", fromIndex, toIndex }),
-			syncLayoutWithFetchXml: (attributeTypeMap?: Map<string, string>, primaryIdAttribute?: string) =>
-				dispatch({ type: "SYNC_LAYOUT_WITH_FETCHXML", attributeTypeMap, primaryIdAttribute }),
+			syncLayoutWithFetchXml: (
+				attributeTypeMap?: Map<string, string>,
+				primaryIdAttribute?: string,
+			) =>
+				dispatch({
+					type: "SYNC_LAYOUT_WITH_FETCHXML",
+					attributeTypeMap,
+					primaryIdAttribute,
+				}),
 			setSort: (plan: SortPlan, descending: boolean, isMultiSort: boolean) =>
 				dispatch({ type: "SET_SORT", plan, descending, isMultiSort }),
 			setRetrieveAllRecords: (enabled: boolean) =>
 				dispatch({ type: "SET_RETRIEVE_ALL_RECORDS", enabled }),
-			addColumnFilter: (condition: NewCondition) => dispatch({ type: "ADD_COLUMN_FILTER", condition }),
-			removeColumnFilter: (conditionId: NodeId) => dispatch({ type: "REMOVE_COLUMN_FILTER", conditionId }),
+			addColumnFilter: (condition: NewCondition) =>
+				dispatch({ type: "ADD_COLUMN_FILTER", condition }),
+			removeColumnFilter: (conditionId: NodeId) =>
+				dispatch({ type: "REMOVE_COLUMN_FILTER", conditionId }),
 			clearColumnFilters: () => dispatch({ type: "CLEAR_COLUMN_FILTERS" }),
 		}),
 		[],
 	);
-	const contextValue = useMemo<BuilderContextValue>(() => ({ ...state, ...actions }), [state, actions]);
+	const contextValue = useMemo<BuilderContextValue>(
+		() => ({ ...state, ...actions }),
+		[state, actions],
+	);
 
 	return <BuilderContext.Provider value={contextValue}>{children}</BuilderContext.Provider>;
 }

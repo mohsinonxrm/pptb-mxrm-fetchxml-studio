@@ -176,7 +176,8 @@ function escapeXmlAttribute(value: string): string {
  * Generate LayoutXML string from a LayoutXmlConfig
  */
 export function generateLayoutXml(config: LayoutXmlConfig): string {
-	const attr = (name: string, value: string | number) => `${name}="${escapeXmlAttribute(String(value))}"`;
+	const attr = (name: string, value: string | number) =>
+		`${name}="${escapeXmlAttribute(String(value))}"`;
 	const cells = config.columns
 		.map((col) => {
 			const attrs: string[] = [attr("name", col.name), attr("width", col.width)];

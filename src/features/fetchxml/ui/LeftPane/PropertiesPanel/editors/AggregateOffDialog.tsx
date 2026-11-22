@@ -31,16 +31,26 @@ interface AggregateOffDialogProps {
 	onCancel: () => void;
 }
 
-export function AggregateOffDialog({ plan, onConfirm, onTurnOffOnly, onCancel }: AggregateOffDialogProps) {
+export function AggregateOffDialog({
+	plan,
+	onConfirm,
+	onTurnOffOnly,
+	onCancel,
+}: AggregateOffDialogProps) {
 	const styles = useStyles();
 	return (
-		<Dialog modalType="alert" open={plan !== null} onOpenChange={(_, data) => !data.open && onCancel()}>
+		<Dialog
+			modalType="alert"
+			open={plan !== null}
+			onOpenChange={(_, data) => !data.open && onCancel()}
+		>
 			<DialogSurface>
 				<DialogBody>
 					<DialogTitle>Turn off aggregate query?</DialogTitle>
 					<DialogContent className={styles.content}>
 						<Body1>
-							These settings only work in aggregate queries, and Dataverse rejects some of them in a normal query.
+							These settings only work in aggregate queries, and Dataverse rejects
+							some of them in a normal query.
 						</Body1>
 						{plan && plan.removed.length > 0 && (
 							<div>

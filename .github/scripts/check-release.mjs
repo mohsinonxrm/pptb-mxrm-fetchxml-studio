@@ -20,7 +20,10 @@ const read = (path) => readFileSync(path, "utf8");
 
 const pkg = JSON.parse(read("package.json"));
 const badgeFiles = Object.fromEntries(
-	badges(pkg).map(({ file }) => [file, existsSync(`assets/badges/${file}`) ? read(`assets/badges/${file}`) : undefined]),
+	badges(pkg).map(({ file }) => [
+		file,
+		existsSync(`assets/badges/${file}`) ? read(`assets/badges/${file}`) : undefined,
+	]),
 );
 const problems = checkReleaseFiles({
 	pkg,
@@ -32,7 +35,8 @@ const problems = checkReleaseFiles({
 
 if (args.includes("--dist")) {
 	const source = expectedIconSource(pkg.version);
-	if (!existsSync("dist/icons/icon.svg")) problems.push("dist/icons/icon.svg is missing: run the build first.");
+	if (!existsSync("dist/icons/icon.svg"))
+		problems.push("dist/icons/icon.svg is missing: run the build first.");
 	else if (read("dist/icons/icon.svg") !== read(source)) {
 		problems.push(`dist/icons/icon.svg isn't ${source}, the icon for ${pkg.version}.`);
 	}
@@ -42,7 +46,9 @@ if (problems.length > 0) {
 	for (const problem of problems) console.log(`::error::${problem}`);
 	process.exit(1);
 }
-console.log(`✅ release metadata matches ${pkg.version}${args.includes("--dist") ? ", with the right icon" : ""}`);
+console.log(
+	`✅ release metadata matches ${pkg.version}${args.includes("--dist") ? ", with the right icon" : ""}`,
+);
 
 const notesPath = option("--notes");
 if (notesPath) {
@@ -54,6 +60,7 @@ if (notesPath) {
 	});
 	writeFileSync(notesPath, notes);
 	// A preview in the run summary, so a rehearsal shows the notes the release will get
-	if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Release notes preview\n\n${notes}\n`);
+	if (process.env.GITHUB_STEP_SUMMARY)
+		appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Release notes preview\n\n${notes}\n`);
 	console.log(`Release notes written to ${notesPath}`);
 }

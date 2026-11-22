@@ -25,14 +25,22 @@ export function getCellRenderer(
 	switch (attributeType) {
 		case "Boolean":
 			return (
-				<BooleanCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+				<BooleanCellRenderer
+					value={value}
+					formattedValue={formattedValue}
+					attribute={attribute}
+				/>
 			);
 
 		case "Picklist":
 		case "State":
 		case "Status":
 			return (
-				<PicklistCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+				<PicklistCellRenderer
+					value={value}
+					formattedValue={formattedValue}
+					attribute={attribute}
+				/>
 			);
 
 		case "Lookup":
@@ -46,12 +54,20 @@ export function getCellRenderer(
 		case "Double":
 		case "Money":
 			return (
-				<NumberCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+				<NumberCellRenderer
+					value={value}
+					formattedValue={formattedValue}
+					attribute={attribute}
+				/>
 			);
 
 		case "DateTime":
 			return (
-				<DateTimeCellRenderer value={value} formattedValue={formattedValue} attribute={attribute} />
+				<DateTimeCellRenderer
+					value={value}
+					formattedValue={formattedValue}
+					attribute={attribute}
+				/>
 			);
 
 		default:

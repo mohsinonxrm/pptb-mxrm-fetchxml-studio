@@ -13,6 +13,7 @@ export function searchMatches(text: string, search: string): [number, number][] 
 	if (!q) return [];
 	const lower = text.toLowerCase();
 	const ranges: [number, number][] = [];
-	for (let i = lower.indexOf(q); i >= 0; i = lower.indexOf(q, i + q.length)) ranges.push([i, i + q.length]);
+	for (let i = lower.indexOf(q); i >= 0; i = lower.indexOf(q, i + q.length))
+		ranges.push([i, i + q.length]);
 	return ranges;
 }

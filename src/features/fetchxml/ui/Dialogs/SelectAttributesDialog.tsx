@@ -171,20 +171,31 @@ export function SelectAttributesDialog({
 		const query = searchQuery.trim().toLowerCase();
 		return allRows.filter(
 			(row) =>
-				(!query || row.logicalName.toLowerCase().includes(query) || row.displayName.toLowerCase().includes(query)) &&
+				(!query ||
+					row.logicalName.toLowerCase().includes(query) ||
+					row.displayName.toLowerCase().includes(query)) &&
 				(typeFilter === ALL_TYPES || row.dataType === typeFilter) &&
 				(!selectedOnly || selectedRows.has(row.logicalName)),
 		);
 	}, [allRows, searchQuery, typeFilter, selectedOnly, selectedRows]);
 	// Attributes already in the query but not listed (e.g. hidden by "Advanced Find only") stay selected
-	const listedSelectedCount = useMemo(() => allRows.filter((r) => selectedRows.has(r.logicalName)).length, [allRows, selectedRows]);
+	const listedSelectedCount = useMemo(
+		() => allRows.filter((r) => selectedRows.has(r.logicalName)).length,
+		[allRows, selectedRows],
+	);
 
 	// Define columns
 	const columns = useMemo<TableColumnDefinition<AttributeRow>[]>(() => {
 		const cell = (text: string, mono?: boolean) => (
 			<TableCellLayout truncate>
 				<Tooltip content={text} relationship="description">
-					<span className={mono ? mergeClasses(styles.truncate, styles.mono) : styles.truncate}>{text}</span>
+					<span
+						className={
+							mono ? mergeClasses(styles.truncate, styles.mono) : styles.truncate
+						}
+					>
+						{text}
+					</span>
 				</Tooltip>
 			</TableCellLayout>
 		);
@@ -218,7 +229,7 @@ export function SelectAttributesDialog({
 		(_e: unknown, data: { selectedItems: Iterable<unknown> }) => {
 			setSelectedRows(data.selectedItems as Set<string>);
 		},
-		[]
+		[],
 	);
 
 	const handleApply = useCallback(() => {
@@ -249,7 +260,9 @@ export function SelectAttributesDialog({
 								aria-label="Filter by type"
 								value={typeFilter}
 								selectedOptions={[typeFilter]}
-								onOptionSelect={(_, data) => setTypeFilter(data.optionValue ?? ALL_TYPES)}
+								onOptionSelect={(_, data) =>
+									setTypeFilter(data.optionValue ?? ALL_TYPES)
+								}
 							>
 								{[ALL_TYPES, ...types].map((type) => (
 									<Option key={type} value={type}>
@@ -257,7 +270,11 @@ export function SelectAttributesDialog({
 									</Option>
 								))}
 							</Dropdown>
-							<Switch label="Selected only" checked={selectedOnly} onChange={(_, data) => setSelectedOnly(data.checked)} />
+							<Switch
+								label="Selected only"
+								checked={selectedOnly}
+								onChange={(_, data) => setSelectedOnly(data.checked)}
+							/>
 						</div>
 						<div className={styles.dataGridContainer}>
 							<DataGrid
@@ -276,11 +293,15 @@ export function SelectAttributesDialog({
 								<DataGridHeader>
 									<DataGridRow
 										selectionCell={{
-											checkboxIndicator: { "aria-label": "Select all attributes" },
+											checkboxIndicator: {
+												"aria-label": "Select all attributes",
+											},
 										}}
 									>
 										{({ renderHeaderCell }) => (
-											<DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+											<DataGridHeaderCell>
+												{renderHeaderCell()}
+											</DataGridHeaderCell>
 										)}
 									</DataGridRow>
 								</DataGridHeader>
@@ -289,10 +310,14 @@ export function SelectAttributesDialog({
 										<DataGridRow<AttributeRow>
 											key={rowId}
 											selectionCell={{
-												checkboxIndicator: { "aria-label": `Select ${item.displayName}` },
+												checkboxIndicator: {
+													"aria-label": `Select ${item.displayName}`,
+												},
 											}}
 										>
-											{({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+											{({ renderCell }) => (
+												<DataGridCell>{renderCell(item)}</DataGridCell>
+											)}
 										</DataGridRow>
 									)}
 								</DataGridBody>

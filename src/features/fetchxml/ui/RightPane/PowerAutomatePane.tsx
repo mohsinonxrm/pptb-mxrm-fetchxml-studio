@@ -78,13 +78,20 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 				}}
 			>
 				<Flash20Filled style={{ color: tokens.colorBrandForeground1, marginTop: 6 }} />
-				<Subtitle1 style={{ fontFamily: tokens.fontFamilyBase }}>{spec.actionName}</Subtitle1>
-				<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>· {spec.connector}</Caption1>
+				<Subtitle1 style={{ fontFamily: tokens.fontFamilyBase }}>
+					{spec.actionName}
+				</Subtitle1>
+				<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+					· {spec.connector}
+				</Caption1>
 				<span style={{ flexGrow: 1 }} />
 				<Badge appearance="ghost">
 					{populatedCount} of {spec.fields.length} populated
 				</Badge>
-				<Tooltip content="Copy every populated field as one block" relationship="description">
+				<Tooltip
+					content="Copy every populated field as one block"
+					relationship="description"
+				>
 					<Button
 						size="small"
 						appearance="outline"
@@ -104,7 +111,11 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 
 			{/* Section label */}
 			<Subtitle2
-				style={{ display: "block", marginBottom: 10, color: tokens.colorNeutralForeground2 }}
+				style={{
+					display: "block",
+					marginBottom: 10,
+					color: tokens.colorNeutralForeground2,
+				}}
 			>
 				{spec.actionName}
 			</Subtitle2>
@@ -153,7 +164,10 @@ function PARow({
 	return (
 		<div className={styles.row}>
 			<Label
-				className={mergeClasses(styles.rowLabel, !field.value ? styles.rowLabelEmpty : undefined)}
+				className={mergeClasses(
+					styles.rowLabel,
+					!field.value ? styles.rowLabelEmpty : undefined,
+				)}
 			>
 				{field.label}
 			</Label>
@@ -165,14 +179,22 @@ function PARow({
 						readOnly
 						rows={Math.min(4, Math.max(1, Math.ceil(field.value.length / 80)))}
 						appearance="filled-lighter"
-						style={{ width: "100%", fontFamily: tokens.fontFamilyMonospace, fontSize: 12 }}
+						style={{
+							width: "100%",
+							fontFamily: tokens.fontFamilyMonospace,
+							fontSize: 12,
+						}}
 					/>
 				) : (
 					<Input
 						value={field.value}
 						readOnly
 						appearance="filled-lighter"
-						style={{ width: "100%", fontFamily: tokens.fontFamilyMonospace, fontSize: 12 }}
+						style={{
+							width: "100%",
+							fontFamily: tokens.fontFamilyMonospace,
+							fontSize: 12,
+						}}
 					/>
 				)}
 				{field.hint && <Caption1 className={styles.hint}>{field.hint}</Caption1>}
@@ -188,7 +210,9 @@ function PARow({
 					disabled={!field.value}
 					icon={
 						copied ? (
-							<Checkmark20Filled style={{ color: tokens.colorPaletteGreenForeground1 }} />
+							<Checkmark20Filled
+								style={{ color: tokens.colorPaletteGreenForeground1 }}
+							/>
 						) : (
 							<Copy20Regular />
 						)

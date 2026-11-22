@@ -1,0 +1,5 @@
+# Formatting-only commits, skipped by `git blame` (git config blame.ignoreRevsFile .git-blame-ignore-revs).
+# GitHub uses this file automatically.
+
+# Prettier reformat (#205)
+b5dc5fc30336715c9d4822cd11193186ce94a2cf

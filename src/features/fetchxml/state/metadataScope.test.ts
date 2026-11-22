@@ -3,8 +3,17 @@
  * hidden from Advanced Find but queryable; IsValidForRead = false attributes fail in every query.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isAttributeInScope, isEntityInScope, isRelationshipInScope, metadataScope } from "./metadataScope";
-import { loadAllEntityAttributes, loadEntityAttributes, loadEntityRelationships } from "../api/dataverseMetadata";
+import {
+	isAttributeInScope,
+	isEntityInScope,
+	isRelationshipInScope,
+	metadataScope,
+} from "./metadataScope";
+import {
+	loadAllEntityAttributes,
+	loadEntityAttributes,
+	loadEntityRelationships,
+} from "../api/dataverseMetadata";
 import { metadataCache } from "./cache";
 
 const attr = (name: string, af: boolean, read = true) => ({
@@ -57,7 +66,13 @@ describe("metadata loaders (#57)", () => {
 		metadataCache.clear();
 		queryData = vi.fn(async (query: string) => {
 			if (query.includes("/Attributes?")) {
-				return { value: [attr("name", true), attr("versionnumber", false), attr("isprivate", false, false)] };
+				return {
+					value: [
+						attr("name", true),
+						attr("versionnumber", false),
+						attr("isprivate", false, false),
+					],
+				};
 			}
 			if (query.includes("ManyToManyRelationships")) return { value: [] };
 			if (query.includes("OneToManyRelationships")) {
@@ -82,25 +97,44 @@ describe("metadata loaders (#57)", () => {
 		await loadAllEntityAttributes("account");
 		await loadEntityAttributes("account", true);
 		await loadEntityAttributes("account", false);
-		const attributeQueries = queryData.mock.calls.map(([q]) => q as string).filter((q) => q.includes("/Attributes?"));
+		const attributeQueries = queryData.mock.calls
+			.map(([q]) => q as string)
+			.filter((q) => q.includes("/Attributes?"));
 		expect(attributeQueries).toHaveLength(1);
 		expect(attributeQueries[0]).not.toContain("$filter");
 		expect(attributeQueries[0]).toContain("IsValidForRead");
 	});
 
 	it("pickers get the scoped list; lookups get every attribute", async () => {
-		expect((await loadEntityAttributes("account", true)).map((a) => a.LogicalName)).toEqual(["name"]);
-		expect((await loadEntityAttributes("account", false)).map((a) => a.LogicalName)).toEqual(["name", "versionnumber"]);
-		expect((await loadAllEntityAttributes("account")).map((a) => a.LogicalName)).toEqual(["isprivate", "name", "versionnumber"]);
+		expect((await loadEntityAttributes("account", true)).map((a) => a.LogicalName)).toEqual([
+			"name",
+		]);
+		expect((await loadEntityAttributes("account", false)).map((a) => a.LogicalName)).toEqual([
+			"name",
+			"versionnumber",
+		]);
+		expect((await loadAllEntityAttributes("account")).map((a) => a.LogicalName)).toEqual([
+			"isprivate",
+			"name",
+			"versionnumber",
+		]);
 	});
 
 	it("default to the current setting", async () => {
 		metadataScope.setAdvancedFindOnly(false);
-		expect((await loadEntityAttributes("account")).map((a) => a.LogicalName)).toContain("versionnumber");
-		expect((await loadEntityRelationships("account")).oneToMany.map((r) => r.SchemaName)).toContain("userquery_owner");
+		expect((await loadEntityAttributes("account")).map((a) => a.LogicalName)).toContain(
+			"versionnumber",
+		);
+		expect(
+			(await loadEntityRelationships("account")).oneToMany.map((r) => r.SchemaName),
+		).toContain("userquery_owner");
 		metadataScope.setAdvancedFindOnly(true);
-		expect((await loadEntityRelationships("account")).oneToMany.map((r) => r.SchemaName)).toEqual(["account_contacts"]);
-		const relationshipQueries = queryData.mock.calls.map(([q]) => q as string).filter((q) => q.includes("Relationships?"));
+		expect(
+			(await loadEntityRelationships("account")).oneToMany.map((r) => r.SchemaName),
+		).toEqual(["account_contacts"]);
+		const relationshipQueries = queryData.mock.calls
+			.map(([q]) => q as string)
+			.filter((q) => q.includes("Relationships?"));
 		expect(relationshipQueries).toHaveLength(3); // fetched once (1:N, N:1, N:N), filtered locally
 		expect(relationshipQueries.every((q) => !q.includes("$filter"))).toBe(true);
 	});
@@ -127,8 +161,14 @@ describe("intersect entities get a join to each side of their many-to-many relat
 			}
 			return { value: [] }; // Dataverse gives intersect entities no 1:N / N:1 for these attributes
 		});
-		const getEntityMetadata = vi.fn(async (name: string) => ({ LogicalName: name, PrimaryIdAttribute: `${name}id` }));
-		(window as unknown as { dataverseAPI: unknown }).dataverseAPI = { queryData, getEntityMetadata };
+		const getEntityMetadata = vi.fn(async (name: string) => ({
+			LogicalName: name,
+			PrimaryIdAttribute: `${name}id`,
+		}));
+		(window as unknown as { dataverseAPI: unknown }).dataverseAPI = {
+			queryData,
+			getEntityMetadata,
+		};
 	});
 
 	afterEach(() => {
@@ -138,10 +178,12 @@ describe("intersect entities get a join to each side of their many-to-many relat
 	it("offers role and systemuser as many-to-one joins instead of a join through itself", async () => {
 		const relationships = await loadEntityRelationships("systemuserroles", false);
 		expect(relationships.manyToMany).toEqual([]);
-		expect(relationships.manyToOne.map((r) => `${r.ReferencingAttribute} -> ${r.ReferencedEntity}.${r.ReferencedAttribute}`)).toEqual([
-			"roleid -> role.roleid",
-			"systemuserid -> systemuser.systemuserid",
-		]);
+		expect(
+			relationships.manyToOne.map(
+				(r) =>
+					`${r.ReferencingAttribute} -> ${r.ReferencedEntity}.${r.ReferencedAttribute}`,
+			),
+		).toEqual(["roleid -> role.roleid", "systemuserid -> systemuser.systemuserid"]);
 	});
 
 	it("follow the relationship's Advanced Find flag", async () => {

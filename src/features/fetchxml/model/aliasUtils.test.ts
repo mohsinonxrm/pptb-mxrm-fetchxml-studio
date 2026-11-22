@@ -37,6 +37,8 @@ describe("generateUniqueAlias", () => {
 	it("uses the base name when free, otherwise adds a suffix", () => {
 		expect(generateUniqueAlias("systemuser", new Set())).toBe("systemuser");
 		expect(generateUniqueAlias("systemuser", new Set(["systemuser"]))).toBe("systemuser_a1");
-		expect(generateUniqueAlias("systemuser", new Set(["systemuser", "systemuser_a1"]))).toBe("systemuser_b1");
+		expect(generateUniqueAlias("systemuser", new Set(["systemuser", "systemuser_a1"]))).toBe(
+			"systemuser_b1",
+		);
 	});
 });

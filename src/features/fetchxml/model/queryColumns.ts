@@ -52,7 +52,13 @@ export function collectQueryColumns(fetch: FetchNode): QueryColumn[] {
 		container.links.forEach((link) => {
 			const linkAlias = aliases.get(link.id)!;
 			for (const attribute of link.attributes) {
-				columns.push({ key: attribute.alias || `${linkAlias}.${attribute.name}`, attribute, container: link, isRoot: false, linkAlias });
+				columns.push({
+					key: attribute.alias || `${linkAlias}.${attribute.name}`,
+					attribute,
+					container: link,
+					isRoot: false,
+					linkAlias,
+				});
 			}
 			visit(link);
 		});
@@ -71,7 +77,9 @@ export function resolveColumn(fetch: FetchNode, key: string): QueryColumn | unde
 	const direct = columns.find((c) => c.key === key);
 	if (direct) return direct;
 	const lookup = /^_(.+)_value$/.exec(key)?.[1];
-	const root = lookup ? columns.find((c) => c.isRoot && !c.attribute.alias && c.attribute.name === lookup) : undefined;
+	const root = lookup
+		? columns.find((c) => c.isRoot && !c.attribute.alias && c.attribute.name === lookup)
+		: undefined;
 	if (root || key.includes(".")) return root;
 	const name = key.toLowerCase();
 	return columns.find(
@@ -113,7 +121,9 @@ export function planRemoveColumns(fetch: FetchNode, keys: readonly string[]): Re
 		if (!column) continue;
 		removed.add(column.attribute.id);
 		if (column.attribute.alias) {
-			findOrdersUsingAlias(fetch, column.container, column.attribute.alias).forEach((o) => removed.add(o.id));
+			findOrdersUsingAlias(fetch, column.container, column.attribute.alias).forEach((o) =>
+				removed.add(o.id),
+			);
 		}
 	}
 	// Innermost first, so a parent left empty by removing its child is removed too
@@ -121,14 +131,23 @@ export function planRemoveColumns(fetch: FetchNode, keys: readonly string[]): Re
 	const visit = (container: EntityNode | LinkEntityNode) =>
 		container.links.forEach((link) => {
 			visit(link);
-			if (link.linkType === "outer" && isEmptyLink(link, removed) && link.attributes.some((a) => removed.has(a.id))) {
+			if (
+				link.linkType === "outer" &&
+				isEmptyLink(link, removed) &&
+				link.attributes.some((a) => removed.has(a.id))
+			) {
 				removed.add(link.id);
 				removedLinks.push(link);
 			}
 		});
 	visit(fetch.entity);
 	// Don't list children of removed link-entities separately
-	const insideRemovedLink = new Set(removedLinks.flatMap((l) => [...l.attributes.map((a) => a.id), ...l.orders.map((o) => o.id)]));
+	const insideRemovedLink = new Set(
+		removedLinks.flatMap((l) => [
+			...l.attributes.map((a) => a.id),
+			...l.orders.map((o) => o.id),
+		]),
+	);
 	return { removeNodeIds: [...removed].filter((id) => !insideRemovedLink.has(id)), removedLinks };
 }
 
@@ -159,8 +178,11 @@ export function planSortByColumn(
 	const typeIssue = getOrderMetadataIssue(typeInfo);
 	if (typeIssue) return { reason: typeIssue };
 	const aggregate = fetch.options.aggregate === true;
-	if (aggregate && !column.attribute.alias) return { reason: "Aggregate queries sort by alias; give the attribute an alias first." };
-	const spec: SortSpec = aggregate ? { alias: column.attribute.alias } : { attribute: column.attribute.name };
+	if (aggregate && !column.attribute.alias)
+		return { reason: "Aggregate queries sort by alias; give the attribute an alias first." };
+	const spec: SortSpec = aggregate
+		? { alias: column.attribute.alias }
+		: { attribute: column.attribute.name };
 	if (column.isRoot) return { spec };
 	const link = column.container as LinkEntityNode;
 	const sameName = collectQueryColumnsLinks(fetch).filter((l) => l.name === link.name).length;
@@ -188,13 +210,16 @@ export function sortedColumns(fetch: FetchNode): Map<string, "ascending" | "desc
 		const direction = order.descending ? "descending" : "ascending";
 		for (const column of columns) {
 			if (column.container !== container) continue;
-			const matches = order.alias ? column.attribute.alias === order.alias : column.attribute.name === order.attribute;
+			const matches = order.alias
+				? column.attribute.alias === order.alias
+				: column.attribute.name === order.attribute;
 			if (matches && !result.has(column.key)) result.set(column.key, direction);
 		}
 	};
 	for (const order of fetch.entity.orders) {
 		const target = order.entityname
-			? (links.find((l) => l.alias === order.entityname) ?? links.find((l) => l.name === order.entityname))
+			? (links.find((l) => l.alias === order.entityname) ??
+				links.find((l) => l.name === order.entityname))
 			: fetch.entity;
 		if (target) mark(order, target);
 	}

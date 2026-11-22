@@ -22,7 +22,9 @@ function fetch(root: EntityNode, options: FetchNode["options"] = {}): FetchNode 
 	return { id: nid(), type: "fetch", entity: root, options };
 }
 
-function link(overrides: Partial<LinkEntityNode> & Pick<LinkEntityNode, "name" | "from" | "to">): LinkEntityNode {
+function link(
+	overrides: Partial<LinkEntityNode> & Pick<LinkEntityNode, "name" | "from" | "to">,
+): LinkEntityNode {
 	return {
 		id: nid(),
 		type: "link-entity",
@@ -38,7 +40,12 @@ function link(overrides: Partial<LinkEntityNode> & Pick<LinkEntityNode, "name" |
 describe("generateFetchXml", () => {
 	it("serializes fetch options", () => {
 		const xml = generateFetchXml(
-			fetch(entity("account"), { top: 50, distinct: true, noLock: true, returnTotalRecordCount: true }),
+			fetch(entity("account"), {
+				top: 50,
+				distinct: true,
+				noLock: true,
+				returnTotalRecordCount: true,
+			}),
 		);
 		expect(xml.split("\n")[0]).toBe(
 			'<fetch distinct="true" top="50" returntotalrecordcount="true" no-lock="true">',
@@ -60,8 +67,19 @@ describe("generateFetchXml", () => {
 							type: "filter",
 							conjunction: "and",
 							conditions: [
-								{ id: nid(), type: "condition", attribute: "statecode", operator: "eq", value: 0 },
-								{ id: nid(), type: "condition", attribute: "parentaccountid", operator: "null" },
+								{
+									id: nid(),
+									type: "condition",
+									attribute: "statecode",
+									operator: "eq",
+									value: 0,
+								},
+								{
+									id: nid(),
+									type: "condition",
+									attribute: "parentaccountid",
+									operator: "null",
+								},
 							],
 							subfilters: [
 								{
@@ -69,7 +87,13 @@ describe("generateFetchXml", () => {
 									type: "filter",
 									conjunction: "or",
 									conditions: [
-										{ id: nid(), type: "condition", attribute: "name", operator: "like", value: "a%" },
+										{
+											id: nid(),
+											type: "condition",
+											attribute: "name",
+											operator: "like",
+											value: "a%",
+										},
 									],
 									subfilters: [],
 									links: [],
@@ -112,7 +136,13 @@ describe("generateFetchXml", () => {
 							type: "filter",
 							conjunction: "and",
 							conditions: [
-								{ id: nid(), type: "condition", attribute: "industrycode", operator: "in", value: [1, 2, 3] },
+								{
+									id: nid(),
+									type: "condition",
+									attribute: "industrycode",
+									operator: "in",
+									value: [1, 2, 3],
+								},
 							],
 							subfilters: [],
 							links: [],
@@ -151,9 +181,15 @@ describe("generateFetchXml", () => {
 
 	it("omits link-type for inner joins", () => {
 		const xml = generateFetchXml(
-			fetch(entity("contact", { links: [link({ name: "account", from: "accountid", to: "parentcustomerid" })] })),
+			fetch(
+				entity("contact", {
+					links: [link({ name: "account", from: "accountid", to: "parentcustomerid" })],
+				}),
+			),
 		);
-		expect(xml).toContain('<link-entity name="account" from="accountid" to="parentcustomerid">');
+		expect(xml).toContain(
+			'<link-entity name="account" from="accountid" to="parentcustomerid">',
+		);
 	});
 
 	it("escapes XML special characters in condition values", () => {
@@ -166,7 +202,13 @@ describe("generateFetchXml", () => {
 							type: "filter",
 							conjunction: "and",
 							conditions: [
-								{ id: nid(), type: "condition", attribute: "name", operator: "eq", value: 'A & B <"C">' },
+								{
+									id: nid(),
+									type: "condition",
+									attribute: "name",
+									operator: "eq",
+									value: 'A & B <"C">',
+								},
 							],
 							subfilters: [],
 							links: [],
@@ -188,7 +230,13 @@ describe("generateFetchXml", () => {
 							type: "filter",
 							conjunction: "and",
 							conditions: [
-								{ id: nid(), type: "condition", attribute: "revenue", operator: "gt", value: 0.0000000000012 },
+								{
+									id: nid(),
+									type: "condition",
+									attribute: "revenue",
+									operator: "gt",
+									value: 0.0000000000012,
+								},
 							],
 							subfilters: [],
 							links: [],
@@ -203,7 +251,8 @@ describe("generateFetchXml", () => {
 });
 
 describe("generateFetchXml never adds attributes (#54, #59)", () => {
-	const attributeNames = (xml: string) => [...xml.matchAll(/<attribute name="([^"]+)"/g)].map((m) => m[1]);
+	const attributeNames = (xml: string) =>
+		[...xml.matchAll(/<attribute name="([^"]+)"/g)].map((m) => m[1]);
 
 	it.each([
 		["plain", {}],
@@ -241,8 +290,18 @@ describe("addPagingToFetchXml", () => {
 	});
 
 	it("replaces existing page, count and paging-cookie attributes", () => {
-		const first = addPagingToFetchXml(base, 2, '<cookie page="1"><accountid last="{A}" /></cookie>', 50);
-		const second = addPagingToFetchXml(first, 3, '<cookie page="2"><accountid last="{B}" /></cookie>', 50);
+		const first = addPagingToFetchXml(
+			base,
+			2,
+			'<cookie page="1"><accountid last="{A}" /></cookie>',
+			50,
+		);
+		const second = addPagingToFetchXml(
+			first,
+			3,
+			'<cookie page="2"><accountid last="{B}" /></cookie>',
+			50,
+		);
 		const fetchTag = second.split("\n")[0];
 		expect(fetchTag.match(/page="/g)).toHaveLength(1);
 		expect(fetchTag.match(/count="/g)).toHaveLength(1);

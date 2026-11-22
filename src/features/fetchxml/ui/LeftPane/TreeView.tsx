@@ -3,7 +3,15 @@
  * Displays hierarchical structure: Entity -> Attributes, Orders, Filters, Link-Entities
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactElement, type ReactNode } from "react";
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useMemo,
+	useRef,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import {
 	Badge,
 	Tree,
@@ -17,6 +25,7 @@ import {
 	DialogSurface,
 	DialogTitle,
 	makeStyles,
+	mergeClasses,
 	Menu,
 	MenuDivider,
 	MenuTrigger,
@@ -28,14 +37,13 @@ import {
 	type TreeOpenChangeData,
 } from "@fluentui/react-components";
 import {
-	Table20Regular,
-	TableSimple20Regular,
+	ColumnTriple20Regular,
 	CheckboxChecked20Regular,
 	TextAdd20Regular,
-	Column20Regular,
 	Filter20Regular,
 	ArrowSort20Regular,
-	Link20Regular,
+	MathSymbols20Regular,
+	TableLink20Regular,
 	Add20Regular,
 	Delete20Regular,
 } from "@fluentui/react-icons";
@@ -52,11 +60,24 @@ import type {
 } from "../../model/nodes";
 import { operatorRequiresValue } from "../../model/operators";
 import { NON_RETURNING_LINK_TYPES, validateQueryRules } from "../../model/fetchxmlRules";
-import { countDescendants, deleteConfirmationText, linkEntityLabel, showsNoAttributesHint } from "../../model/treeLabels";
+import {
+	countDescendants,
+	deleteConfirmationText,
+	linkEntityLabel,
+	showsNoAttributesHint,
+} from "../../model/treeLabels";
 import { debugLog, debugWarn } from "../../../../shared/utils/debug";
 import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
 import { metadataCache } from "../../state/cache";
 import type { AttributeMetadata } from "../../api/pptbClient";
+import {
+	NODE_ICONS,
+	attributeIcon,
+	sourceTypeBadge,
+	type TreeIcon,
+	type TreeIconStyle,
+} from "../../model/treeIcons";
+import { TreeNodeIcon } from "./TreeNodeIcon";
 import { loadEntityAttributes } from "../../api/dataverseMetadata";
 
 /**
@@ -91,9 +112,31 @@ const useStyles = makeStyles({
 		// Ensure scrollbars are always visible when content overflows
 		scrollbarGutter: "stable",
 	},
-	treeItem: {
-		"&:hover": {
-			backgroundColor: tokens.colorNeutralBackground1Hover,
+	// The selected node (#229): subtle selected background and a brand indicator bar, like Fluent Nav.
+	// Windows high contrast uses the system highlight colours instead.
+	selected: {
+		position: "relative",
+		backgroundColor: tokens.colorSubtleBackgroundSelected,
+		fontWeight: tokens.fontWeightSemibold,
+		"::before": {
+			content: '""',
+			position: "absolute",
+			left: 0,
+			top: "20%",
+			bottom: "20%",
+			width: "3px",
+			borderRadius: tokens.borderRadiusCircular,
+			backgroundColor: tokens.colorCompoundBrandStroke,
+		},
+		":hover": {
+			backgroundColor: tokens.colorSubtleBackgroundHover,
+		},
+		"@media (forced-colors: active)": {
+			backgroundColor: "Highlight",
+			color: "HighlightText",
+			"::before": {
+				backgroundColor: "HighlightText",
+			},
 		},
 	},
 	actions: {
@@ -133,7 +176,8 @@ const useStyles = makeStyles({
 type NodeBadge = { text: string; color?: "danger" | "brand" | "informative"; title?: string };
 
 /** The badges whose condition holds */
-const badgeList = (...items: (NodeBadge | false | undefined)[]): NodeBadge[] => items.filter((b): b is NodeBadge => !!b);
+const badgeList = (...items: (NodeBadge | false | undefined)[]): NodeBadge[] =>
+	items.filter((b): b is NodeBadge => !!b);
 
 /** An item of a row's Add menu (#24) */
 interface AddItem {
@@ -177,7 +221,8 @@ interface ContextMenuState {
 /** The primary key of an entity, from the cached metadata */
 const primaryIdOf = (logicalName: string): string | undefined =>
 	metadataCache.getEntityMetadata(logicalName)?.PrimaryIdAttribute ??
-	metadataCache.getAllEntityMetadata()?.find((e) => e.LogicalName === logicalName)?.PrimaryIdAttribute;
+	metadataCache.getAllEntityMetadata()?.find((e) => e.LogicalName === logicalName)
+		?.PrimaryIdAttribute;
 
 const FUNCTION_TEXT: Record<string, string> = {
 	count: "Count",
@@ -190,7 +235,15 @@ const FUNCTION_TEXT: Record<string, string> = {
 
 interface TreeViewProps {
 	fetchQuery: FetchNode;
+	/** Fluent Tree size, from the grid and tree density (#228) */
+	size?: "medium" | "small";
+	/** Tinted or Color node icons, from Settings (#230) */
+	iconStyle?: TreeIconStyle;
+	/** Attribute metadata of the query's entities, for the attribute icons (#230) */
+	attributeMetadata?: Map<string, Map<string, AttributeMetadata>>;
 	selectedNodeId: NodeId | null;
+	/** Bump to re-reveal the selected node (expand + scroll) even when the selection is unchanged */
+	revealSeq?: number;
 	onNodeSelect: (nodeId: NodeId) => void;
 	onAddAttribute: (parentId: NodeId) => void;
 	onAddAllAttributes: (parentId: NodeId) => void;
@@ -205,7 +258,11 @@ interface TreeViewProps {
 
 export function TreeView({
 	fetchQuery,
+	size = "medium",
+	iconStyle = "tinted",
+	attributeMetadata,
 	selectedNodeId,
+	revealSeq = 0,
 	onNodeSelect,
 	onAddAttribute,
 	onAddAllAttributes,
@@ -231,12 +288,20 @@ export function TreeView({
 
 	const renderBadges = (nodeId: NodeId, badges: NodeBadge[] = []) => {
 		const errors = errorsByNode.get(nodeId);
-		const all = errors ? [...badges, { text: "Error", color: "danger" as const, title: errors.join(" ") }] : badges;
+		const all = errors
+			? [...badges, { text: "Error", color: "danger" as const, title: errors.join(" ") }]
+			: badges;
 		if (all.length === 0) return undefined;
 		return (
 			<span className={styles.badges}>
 				{all.map((b) => (
-					<Badge key={b.text} size="small" appearance="tint" color={b.color ?? "informative"} title={b.title}>
+					<Badge
+						key={b.text}
+						size="small"
+						appearance="tint"
+						color={b.color ?? "informative"}
+						title={b.title}
+					>
 						{b.text}
 					</Badge>
 				))}
@@ -254,7 +319,7 @@ export function TreeView({
 	// Manage which tree items are open/expanded
 	const treeRef = useRef<HTMLDivElement>(null);
 	const [openItems, setOpenItems] = useState<Set<NodeId>>(
-		new Set([fetchQuery.id, fetchQuery.entity.id])
+		new Set([fetchQuery.id, fetchQuery.entity.id]),
 	);
 
 	// The Add menus render in a portal inside the row, and React events bubble through portals: a
@@ -288,7 +353,14 @@ export function TreeView({
 			debugLog("treeExpansion", "Checking node:", currentId, "type:", n.type);
 
 			// Search in all possible child arrays
-			const arrayProps = ["attributes", "orders", "filters", "conditions", "subfilters", "links"];
+			const arrayProps = [
+				"attributes",
+				"orders",
+				"filters",
+				"conditions",
+				"subfilters",
+				"links",
+			];
 			for (const prop of arrayProps) {
 				if (Array.isArray(n[prop])) {
 					for (const item of n[prop]) {
@@ -357,18 +429,18 @@ export function TreeView({
 			}, 250);
 			return () => clearTimeout(timer);
 		}
-		// Only a new selection expands and scrolls: findPathToNode reads the current tree, and re-running
+		// Only a new selection (or an explicit reveal request) expands and scrolls: findPathToNode reads the current tree, and re-running
 		// on every tree edit would keep re-expanding and scrolling while the user works (#65)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedNodeId]);
+	}, [selectedNodeId, revealSeq]);
 
 	// Handle opening the Select Attributes dialog
 	const handleOpenSelectAttributes = useCallback(
 		async (entityNode: EntityNode | LinkEntityNode) => {
 			const entityName = entityNode.name;
 			const entityDisplayName =
-				metadataCache.getEntityMetadata(entityName)?.DisplayName?.UserLocalizedLabel?.Label ||
-				entityName;
+				metadataCache.getEntityMetadata(entityName)?.DisplayName?.UserLocalizedLabel
+					?.Label || entityName;
 
 			// Get currently selected attribute names
 			const currentAttributeNames = entityNode.attributes.map((attr) => attr.name);
@@ -387,7 +459,7 @@ export function TreeView({
 			setSelectAttrsCurrentNames(currentAttributeNames);
 			setSelectAttrsDialogOpen(true);
 		},
-		[]
+		[],
 	);
 
 	// Handle applying selected attributes from dialog
@@ -395,7 +467,7 @@ export function TreeView({
 		(nodeId: NodeId, selectedAttributes: string[]) => {
 			onUpdateAttributes(nodeId, selectedAttributes);
 		},
-		[onUpdateAttributes]
+		[onUpdateAttributes],
 	);
 
 	const handleOpenChange = (_event: unknown, data: TreeOpenChangeData) => {
@@ -422,11 +494,18 @@ export function TreeView({
 	/** The Add items of an entity or link-entity, in the order of #24 */
 	const entityAddItems = (entity: EntityNode | LinkEntityNode): AddItem[] => {
 		// exists / in / any / not any / all / not all return nothing: attributes and orders fail (0x80041121)
-		const canHaveAttributes = entity.type === "entity" || !NON_RETURNING_LINK_TYPES.has(entity.linkType);
+		const canHaveAttributes =
+			entity.type === "entity" || !NON_RETURNING_LINK_TYPES.has(entity.linkType);
 		// Only one top-level filter per entity / link-entity
 		const hasFilter = entity.filters.length > 0;
 		return [
-			{ key: "all", label: "All attributes", icon: <TableSimple20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAllAttributes(entity.id) },
+			{
+				key: "all",
+				label: "All attributes",
+				icon: <ColumnTriple20Regular />,
+				disabled: !canHaveAttributes,
+				onClick: () => onAddAllAttributes(entity.id),
+			},
 			{
 				key: "select",
 				label: "Select attributes…",
@@ -434,28 +513,76 @@ export function TreeView({
 				disabled: !canHaveAttributes,
 				onClick: () => void handleOpenSelectAttributes(entity),
 			},
-			{ key: "blank", label: "Blank attribute", icon: <TextAdd20Regular />, disabled: !canHaveAttributes, onClick: () => onAddAttribute(entity.id) },
-			{ key: "order", label: "Order by", icon: <ArrowSort20Regular />, disabled: !canHaveAttributes, onClick: () => onAddOrder(entity.id) },
-			{ key: "filter", label: "Filter", icon: <Filter20Regular />, disabled: hasFilter, onClick: () => onAddFilter(entity.id) },
-			{ key: "link", label: "Link-entity", icon: <Link20Regular />, onClick: () => onAddLinkEntity(entity.id) },
+			{
+				key: "blank",
+				label: "Blank attribute",
+				icon: <TextAdd20Regular />,
+				disabled: !canHaveAttributes,
+				onClick: () => onAddAttribute(entity.id),
+			},
+			{
+				key: "order",
+				label: "Order by",
+				icon: <ArrowSort20Regular />,
+				disabled: !canHaveAttributes,
+				onClick: () => onAddOrder(entity.id),
+			},
+			{
+				key: "filter",
+				label: "Filter",
+				icon: <Filter20Regular />,
+				disabled: hasFilter,
+				onClick: () => onAddFilter(entity.id),
+			},
+			{
+				key: "link",
+				label: "Link-entity",
+				icon: <TableLink20Regular />,
+				onClick: () => onAddLinkEntity(entity.id),
+			},
 		];
 	};
 
 	const filterAddItems = (filter: FilterNode): AddItem[] => [
-		{ key: "condition", label: "Condition", icon: <Filter20Regular />, onClick: () => onAddCondition(filter.id) },
-		{ key: "subfilter", label: "Sub-filter", icon: <Filter20Regular />, onClick: () => onAddSubfilter(filter.id) },
-		{ key: "link", label: "Link-entity (any/not any/all)", icon: <Link20Regular />, onClick: () => onAddLinkEntity(filter.id) },
+		{
+			key: "condition",
+			label: "Condition",
+			icon: <MathSymbols20Regular />,
+			onClick: () => onAddCondition(filter.id),
+		},
+		{
+			key: "subfilter",
+			label: "Sub-filter",
+			icon: <Filter20Regular />,
+			onClick: () => onAddSubfilter(filter.id),
+		},
+		{
+			key: "link",
+			label: "Link-entity (any/not any/all)",
+			icon: <TableLink20Regular />,
+			onClick: () => onAddLinkEntity(filter.id),
+		},
 	];
 
 	const renderMenuItems = (items: AddItem[]) =>
 		items.map((item) => (
-			<MenuItem key={item.key} icon={item.icon} disabled={item.disabled} onClick={item.onClick}>
+			<MenuItem
+				key={item.key}
+				icon={item.icon}
+				disabled={item.disabled}
+				onClick={item.onClick}
+			>
 				{item.label}
 			</MenuItem>
 		));
 
 	/** Opens the row's context menu at a point (right-click, Shift+F10 or the context-menu key) */
-	const openContextMenu = (x: number, y: number, row: RowSpec, returnFocusTo: HTMLElement | null) => {
+	const openContextMenu = (
+		x: number,
+		y: number,
+		row: RowSpec,
+		returnFocusTo: HTMLElement | null,
+	) => {
 		onNodeSelect(row.id);
 		contextReturnFocus.current = returnFocusTo;
 		setContextMenu({
@@ -463,7 +590,18 @@ export function TreeView({
 			addItems: row.addItems,
 			deleteTarget: row.deleteTarget,
 			target: {
-				getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0, toJSON: () => ({}) }) as DOMRect,
+				getBoundingClientRect: () =>
+					({
+						x,
+						y,
+						top: y,
+						left: x,
+						bottom: y,
+						right: x,
+						width: 0,
+						height: 0,
+						toJSON: () => ({}),
+					}) as DOMRect,
 			},
 		});
 	};
@@ -481,19 +619,27 @@ export function TreeView({
 				key={row.id}
 				itemType={hasChildren ? "branch" : "leaf"}
 				value={row.id}
+				aria-selected={row.id === selectedNodeId}
 				className={styles.treeItemWithActions}
 				onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
 					// Only the focused row, not the rows it contains (keyboard events bubble up the tree)
-					if (!hasContextMenu || e.target !== e.currentTarget) return;
+					if (e.target !== e.currentTarget) return;
+					// Enter selects the focused node, like a click (#229). Fluent still toggles a branch on Enter.
+					if (e.key === "Enter") onNodeSelect(row.id);
+					if (!hasContextMenu) return;
 					if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
 						e.preventDefault();
-						const layout = e.currentTarget.querySelector<HTMLElement>(":scope > .fui-TreeItemLayout") ?? e.currentTarget;
+						const layout =
+							e.currentTarget.querySelector<HTMLElement>(
+								":scope > .fui-TreeItemLayout",
+							) ?? e.currentTarget;
 						const rect = layout.getBoundingClientRect();
 						openContextMenu(rect.left + 24, rect.bottom, row, e.currentTarget);
 					}
 				}}
 			>
 				<TreeItemLayout
+					className={mergeClasses(row.id === selectedNodeId && styles.selected)}
 					iconBefore={row.icon}
 					actions={
 						row.addItems || row.deleteTarget ? (
@@ -501,7 +647,13 @@ export function TreeView({
 								{row.addItems && (
 									<Menu>
 										<MenuTrigger disableButtonEnhancement>
-											<Button appearance="subtle" size="small" icon={<Add20Regular />} title="Add…" aria-label="Add…" />
+											<Button
+												appearance="subtle"
+												size="small"
+												icon={<Add20Regular />}
+												title="Add…"
+												aria-label="Add…"
+											/>
 										</MenuTrigger>
 										<MenuPopover onClick={stopRowSelect}>
 											<MenuList>{renderMenuItems(row.addItems)}</MenuList>
@@ -531,7 +683,12 @@ export function TreeView({
 							? (e: React.MouseEvent<HTMLDivElement>) => {
 									e.preventDefault();
 									e.stopPropagation();
-									openContextMenu(e.clientX, e.clientY, row, e.currentTarget.closest<HTMLElement>('[role="treeitem"]'));
+									openContextMenu(
+										e.clientX,
+										e.clientY,
+										row,
+										e.currentTarget.closest<HTMLElement>('[role="treeitem"]'),
+									);
 								}
 							: undefined
 					}
@@ -547,10 +704,15 @@ export function TreeView({
 
 	// ============ NODES ============
 
+	/** A node's icon: colour by role, icon by node type (#230) */
+	const nodeIcon = ({ role, icon }: TreeIcon) => (
+		<TreeNodeIcon role={role} icon={icon} iconStyle={iconStyle} />
+	);
+
 	const renderFetchNode = (fetch: FetchNode) =>
 		renderRow({
 			id: fetch.id,
-			icon: <Table20Regular />,
+			icon: nodeIcon(NODE_ICONS.fetch),
 			label: "Fetch query",
 			badges: badgeList(
 				fetch.options.aggregate === true && { text: "Aggregate", color: "brand" },
@@ -564,7 +726,7 @@ export function TreeView({
 	/** Children shared by <entity> and <link-entity> */
 	const containerChildren = (container: EntityNode | LinkEntityNode) => [
 		container.allAttributes?.enabled && renderAllAttributesNode(container.allAttributes),
-		...container.attributes.map((attr) => renderAttributeNode(attr)),
+		...container.attributes.map((attr) => renderAttributeNode(attr, container.name)),
 		...container.orders.map((order) => renderOrderNode(order)),
 		...container.filters.map((filter) => renderFilterNode(filter, container.name)),
 		...container.links.map((link) => renderLinkEntityNode(link, container.name)),
@@ -574,7 +736,7 @@ export function TreeView({
 	const renderEntityNode = (entity: EntityNode) =>
 		renderRow({
 			id: entity.id,
-			icon: <Table20Regular />,
+			icon: nodeIcon(NODE_ICONS.entity),
 			label: entity.name,
 			addItems: entityAddItems(entity),
 			children: containerChildren(entity),
@@ -583,20 +745,31 @@ export function TreeView({
 	const renderAllAttributesNode = (node: AllAttributesNode) =>
 		renderRow({
 			id: node.id,
-			icon: <TableSimple20Regular />,
+			icon: nodeIcon(NODE_ICONS.allAttributes),
 			label: "All attributes",
 			deleteTarget: { id: node.id, title: "Delete all attributes?", descendants: 0 },
 		});
 
-	const renderAttributeNode = (attr: AttributeNode) => {
+	/** @param entityName - The entity / link-entity the attribute belongs to */
+	const renderAttributeNode = (attr: AttributeNode, entityName: string) => {
+		const meta = attributeMetadata?.get(entityName)?.get(attr.name);
 		const badges: NodeBadge[] = [];
-		if (attr.groupby) badges.push({ text: attr.dategrouping ? `Group by · ${attr.dategrouping}` : "Group by", color: "brand" });
-		if (attr.aggregate) badges.push({ text: FUNCTION_TEXT[attr.aggregate] ?? attr.aggregate, color: "brand" });
+		// Calculated, rollup, formula and prompt columns (#230)
+		const computed = sourceTypeBadge(meta);
+		if (computed) badges.push({ text: computed });
+		if (attr.groupby)
+			badges.push({
+				text: attr.dategrouping ? `Group by · ${attr.dategrouping}` : "Group by",
+				color: "brand",
+			});
+		if (attr.aggregate)
+			badges.push({ text: FUNCTION_TEXT[attr.aggregate] ?? attr.aggregate, color: "brand" });
 		if (attr.aggregate === "countcolumn" && attr.distinct) badges.push({ text: "Unique" });
 		if (attr.rowAggregate) badges.push({ text: "Child count" });
 		return renderRow({
 			id: attr.id,
-			icon: <Column20Regular />,
+			// The column type's icon (#230); the generic one while metadata loads
+			icon: nodeIcon({ role: "column", icon: attributeIcon(meta) }),
 			label: attr.alias ? `${attr.name} (as ${attr.alias})` : attr.name,
 			badges,
 			deleteTarget: { id: attr.id, title: `Delete attribute ${attr.name}?`, descendants: 0 },
@@ -610,7 +783,9 @@ export function TreeView({
 		const displayName = order.entityname ? `${order.entityname}.${target}` : target;
 		return renderRow({
 			id: order.id,
-			icon: <ArrowSort20Regular />,
+			icon: nodeIcon(
+				order.descending ? NODE_ICONS.orderDescending : NODE_ICONS.orderAscending,
+			),
 			label: `${displayName} ${direction}`,
 			deleteTarget: { id: order.id, title: `Delete order ${displayName}?`, descendants: 0 },
 		});
@@ -619,11 +794,18 @@ export function TreeView({
 	const renderFilterNode = (filter: FilterNode, containerName: string): ReactElement =>
 		renderRow({
 			id: filter.id,
-			icon: <Filter20Regular />,
+			icon: nodeIcon(NODE_ICONS.filter),
 			label: `Filter (${filter.conjunction})`,
-			badges: badgeList(filter.hint === "union" && { text: "Union" }, filter.isQuickFindFields && { text: "Quick find" }),
+			badges: badgeList(
+				filter.hint === "union" && { text: "Union" },
+				filter.isQuickFindFields && { text: "Quick find" },
+			),
 			addItems: filterAddItems(filter),
-			deleteTarget: { id: filter.id, title: `Delete filter (${filter.conjunction})?`, descendants: countDescendants(filter) },
+			deleteTarget: {
+				id: filter.id,
+				title: `Delete filter (${filter.conjunction})?`,
+				descendants: countDescendants(filter),
+			},
 			children: [
 				...filter.conditions.map((cond) => renderConditionNode(cond)),
 				...filter.subfilters.map((subfilter) => renderFilterNode(subfilter, containerName)),
@@ -641,15 +823,24 @@ export function TreeView({
 		if (requiresValue && condition.valueof) {
 			// Compared to another attribute
 			displayText += ` → ${condition.valueof}`;
-		} else if (requiresValue && condition.value !== undefined && condition.value !== null && condition.value !== "") {
+		} else if (
+			requiresValue &&
+			condition.value !== undefined &&
+			condition.value !== null &&
+			condition.value !== ""
+		) {
 			displayText += ` = ${formatDisplayValue(condition.value)}`;
 		}
 
 		return renderRow({
 			id: condition.id,
-			icon: <Filter20Regular />,
+			icon: nodeIcon(NODE_ICONS.condition),
 			label: displayText,
-			deleteTarget: { id: condition.id, title: `Delete condition ${condition.attribute}?`, descendants: 0 },
+			deleteTarget: {
+				id: condition.id,
+				title: `Delete condition ${condition.attribute}?`,
+				descendants: 0,
+			},
 		});
 	};
 
@@ -657,12 +848,16 @@ export function TreeView({
 	const renderLinkEntityNode = (link: LinkEntityNode, parentName: string): ReactElement =>
 		renderRow({
 			id: link.id,
-			icon: <Link20Regular />,
+			icon: nodeIcon(NODE_ICONS.linkEntity),
 			// Names the lookup when there's no alias (#25)
 			label: linkEntityLabel(link, primaryIdOf(parentName)),
 			hint: showsNoAttributesHint(link) ? "(no attributes)" : undefined,
 			addItems: entityAddItems(link),
-			deleteTarget: { id: link.id, title: `Delete link-entity ${link.alias || link.name}?`, descendants: countDescendants(link) },
+			deleteTarget: {
+				id: link.id,
+				title: `Delete link-entity ${link.alias || link.name}?`,
+				descendants: countDescendants(link),
+			},
 			children: containerChildren(link),
 		});
 
@@ -670,6 +865,7 @@ export function TreeView({
 		<div ref={treeRef} className={styles.container}>
 			<Tree
 				aria-label="FetchXML Query Structure"
+				size={size}
 				openItems={openItems}
 				onOpenChange={handleOpenChange}
 			>
@@ -685,7 +881,12 @@ export function TreeView({
 						// Back to the row, unless the chosen item moved the focus (a dialog)
 						const row = contextReturnFocus.current;
 						requestAnimationFrame(() => {
-							if (row?.isConnected && (!document.activeElement || document.activeElement === document.body)) row.focus();
+							if (
+								row?.isConnected &&
+								(!document.activeElement ||
+									document.activeElement === document.body)
+							)
+								row.focus();
 						});
 					}
 				}}
@@ -699,7 +900,10 @@ export function TreeView({
 							<MenuItem
 								className={styles.danger}
 								icon={<Delete20Regular />}
-								onClick={() => contextMenu.deleteTarget && requestDelete(contextMenu.deleteTarget)}
+								onClick={() =>
+									contextMenu.deleteTarget &&
+									requestDelete(contextMenu.deleteTarget)
+								}
 							>
 								Delete
 							</MenuItem>
@@ -709,11 +913,16 @@ export function TreeView({
 			</Menu>
 
 			{/* Deleting a node with items inside asks first (#24) */}
-			<Dialog open={pendingDelete !== null} onOpenChange={(_, data) => !data.open && setPendingDelete(null)}>
+			<Dialog
+				open={pendingDelete !== null}
+				onOpenChange={(_, data) => !data.open && setPendingDelete(null)}
+			>
 				<DialogSurface>
 					<DialogBody>
 						<DialogTitle>{pendingDelete?.title}</DialogTitle>
-						<DialogContent>{pendingDelete && deleteConfirmationText(pendingDelete.descendants)}</DialogContent>
+						<DialogContent>
+							{pendingDelete && deleteConfirmationText(pendingDelete.descendants)}
+						</DialogContent>
 						<DialogActions>
 							<Button appearance="secondary" onClick={() => setPendingDelete(null)}>
 								Cancel

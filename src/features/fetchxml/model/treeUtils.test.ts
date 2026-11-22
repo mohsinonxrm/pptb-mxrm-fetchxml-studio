@@ -31,10 +31,14 @@ describe("getQueryEntities", () => {
 
 	it("changes the key when root and link are swapped", () => {
 		const a = getQueryEntities(
-			parseFetchXml(`<fetch><entity name="contact"><link-entity name="account" from="accountid" to="parentcustomerid" /></entity></fetch>`).fetchNode!,
+			parseFetchXml(
+				`<fetch><entity name="contact"><link-entity name="account" from="accountid" to="parentcustomerid" /></entity></fetch>`,
+			).fetchNode!,
 		);
 		const b = getQueryEntities(
-			parseFetchXml(`<fetch><entity name="account"><link-entity name="contact" from="parentcustomerid" to="accountid" /></entity></fetch>`).fetchNode!,
+			parseFetchXml(
+				`<fetch><entity name="account"><link-entity name="contact" from="parentcustomerid" to="accountid" /></entity></fetch>`,
+			).fetchNode!,
 		);
 		expect(a.key).not.toBe(b.key);
 		expect(a.rootEntityName).toBe("contact");
@@ -134,16 +138,26 @@ describe("findLinkEntityParent (#345)", () => {
 
 describe("isPlaceholderLinkEntity (#345)", () => {
 	const linkOf = (attrs: string) =>
-		parseFetchXml(`<fetch><entity name="account"><link-entity ${attrs} /></entity></fetch>`).fetchNode!.entity
-			.links[0];
+		parseFetchXml(`<fetch><entity name="account"><link-entity ${attrs} /></entity></fetch>`)
+			.fetchNode!.entity.links[0];
 
 	it("is true only for the link-entity Add > Link-entity inserts", () => {
-		expect(isPlaceholderLinkEntity(linkOf('name="new_entity" from="id_field" to="parent_id_field" alias="new_entity"'))).toBe(true);
+		expect(
+			isPlaceholderLinkEntity(
+				linkOf('name="new_entity" from="id_field" to="parent_id_field" alias="new_entity"'),
+			),
+		).toBe(true);
 	});
 
 	it("is false once any part is set, including a real table called new_entity", () => {
-		expect(isPlaceholderLinkEntity(linkOf('name="contact" from="id_field" to="parent_id_field"'))).toBe(false);
-		expect(isPlaceholderLinkEntity(linkOf('name="new_entity" from="new_entityid" to="new_entityid"'))).toBe(false);
+		expect(
+			isPlaceholderLinkEntity(linkOf('name="contact" from="id_field" to="parent_id_field"')),
+		).toBe(false);
+		expect(
+			isPlaceholderLinkEntity(
+				linkOf('name="new_entity" from="new_entityid" to="new_entityid"'),
+			),
+		).toBe(false);
 	});
 });
 

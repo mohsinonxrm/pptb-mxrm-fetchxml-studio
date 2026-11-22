@@ -18,20 +18,27 @@ describe("planAggregateOff (#90b D4)", () => {
 	const plan = planAggregateOff(fetch);
 
 	it("clears aggregate-only settings on every attribute", () => {
-		const attrIds = [...fetch.entity.attributes, ...fetch.entity.links[0].attributes].map((a) => a.id);
+		const attrIds = [...fetch.entity.attributes, ...fetch.entity.links[0].attributes].map(
+			(a) => a.id,
+		);
 		expect(plan.updates.filter((u) => attrIds.includes(u.nodeId))).toHaveLength(4);
 		expect(plan.removed.some((r) => r.message.includes('dategrouping="month"'))).toBe(true);
 	});
 
 	it("converts orders on Group by aliases to attribute orders", () => {
 		const orderD = fetch.entity.orders[1];
-		expect(plan.updates).toContainEqual({ nodeId: orderD.id, updates: { alias: undefined, attribute: "isdisabled" } });
+		expect(plan.updates).toContainEqual({
+			nodeId: orderD.id,
+			updates: { alias: undefined, attribute: "isdisabled" },
+		});
 	});
 
 	it("removes orders on aggregate values and on aliases outside their scope", () => {
 		const [orderN, , orderG] = fetch.entity.orders;
 		expect(plan.removeNodeIds).toEqual([orderN.id, orderG.id]);
-		expect(plan.removed.find((r) => r.message.startsWith("Sort by g"))?.message).toMatch(/isn't defined/);
+		expect(plan.removed.find((r) => r.message.startsWith("Sort by g"))?.message).toMatch(
+			/isn't defined/,
+		);
 	});
 
 	it("drops aggregatelimit", () => {
@@ -39,7 +46,15 @@ describe("planAggregateOff (#90b D4)", () => {
 	});
 
 	it("has nothing to do for a plain query", () => {
-		expect(hasAggregateOffChanges(planAggregateOff(tree(`<fetch><entity name="account"><attribute name="name" /></entity></fetch>`)))).toBe(false);
+		expect(
+			hasAggregateOffChanges(
+				planAggregateOff(
+					tree(
+						`<fetch><entity name="account"><attribute name="name" /></entity></fetch>`,
+					),
+				),
+			),
+		).toBe(false);
 	});
 });
 
@@ -78,8 +93,13 @@ describe("findOrdersUsingAlias", () => {
 				`</entity></fetch>`,
 		);
 		const link = f.entity.links[0];
-		expect(findOrdersUsingAlias(f, f.entity, "n").map((o) => o.id)).toEqual([f.entity.orders[0].id]);
+		expect(findOrdersUsingAlias(f, f.entity, "n").map((o) => o.id)).toEqual([
+			f.entity.orders[0].id,
+		]);
 		// root <order alias="g"> without entityname is NOT in the link's scope
-		expect(findOrdersUsingAlias(f, link, "g").map((o) => o.id)).toEqual([link.orders[0].id, f.entity.orders[1].id]);
+		expect(findOrdersUsingAlias(f, link, "g").map((o) => o.id)).toEqual([
+			link.orders[0].id,
+			f.entity.orders[1].id,
+		]);
 	});
 });

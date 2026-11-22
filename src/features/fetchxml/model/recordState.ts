@@ -51,45 +51,75 @@ export interface StateTarget {
 export const ACTIVE_STATE = 0;
 
 /**
- * Entities whose closing states go through dedicated messages, so Activate / Deactivate stay off
- * and name the documented action instead (#143). #149 adds dialogs for these messages.
+ * Entities whose closing states go through dedicated messages (#143, #149). Deactivate gives way to
+ * the Close menu (model/closeActions.ts) where `closeMenu` is set; elsewhere it stays off with the
+ * reason. Activate (back to statecode 0) stays on unless `activateReason` says why it doesn't apply.
  *
  * Verified on a sandbox (2026-10-17): PATCH of opportunity to Won / Lost, and of incident to
  * Resolved, is rejected with 0x80040216 ("This message can not be used to set the state of ... use
- * the ... message instead").
+ * the ... message instead"). PATCH back to statecode 0 returns 200 for won and lost opportunities
+ * (their opportunity close activity becomes Canceled, as the opportunityclose statecode description
+ * says), resolved and cancelled cases, fulfilled and canceled orders, and paid and canceled invoices.
+ * https://learn.microsoft.com/dynamics365/developer/reference/entities/opportunityclose
  */
-export const CLOSE_MESSAGE_ENTITIES: Readonly<Record<string, { reason: string; docUrl: string }>> = {
+export const CLOSE_MESSAGE_ENTITIES: Readonly<
+	Record<string, { reason: string; docUrl: string; closeMenu?: boolean; activateReason?: string }>
+> = {
 	opportunity: {
 		reason: "Opportunities close with Win or Lose (WinOpportunity / LoseOpportunity).",
 		docUrl: "https://learn.microsoft.com/dynamics365/developer/reference/entities/opportunity#messages",
+		closeMenu: true,
 	},
 	incident: {
 		reason: "Cases are resolved with Resolve Case (CloseIncident).",
 		docUrl: "https://learn.microsoft.com/dynamics365/developer/reference/entities/incident#messages",
+		closeMenu: true,
 	},
 	quote: {
 		reason: "Quotes close with Win or Close (WinQuote / CloseQuote).",
 		docUrl: "https://learn.microsoft.com/dynamics365/developer/reference/entities/quote#messages",
+		closeMenu: true,
+		// Quote states: 0 Draft, 1 Active, 2 Won, 3 Closed. Statecode 0 is Draft, not what activating a quote means.
+		activateReason:
+			"Activating a quote moves it from Draft to Active, and closed quotes are revised (ReviseQuote), so Activate doesn't apply. Use the model-driven app for now.",
 	},
 	salesorder: {
 		reason: "Orders close with Fulfill or Cancel (FulfillSalesOrder / CancelSalesOrder).",
 		docUrl: "https://learn.microsoft.com/dynamics365/developer/reference/entities/salesorder#messages",
+		closeMenu: true,
 	},
 	invoice: {
 		reason: "Invoices are closed as paid or canceled from the invoice itself.",
 		docUrl: "https://learn.microsoft.com/dynamics365/developer/reference/entities/invoice#messages",
+		closeMenu: true,
 	},
 	contract: {
 		reason: "Contracts follow their own life cycle (Draft, Invoiced, Active), with CancelContract and RenewContract.",
 		docUrl: "https://learn.microsoft.com/dynamics365/customerengagement/on-premises/developer/contract-entities",
+		activateReason:
+			"Contracts follow their own life cycle (Draft, Invoiced, Active), with CancelContract and RenewContract. Use the model-driven app for now.",
 	},
 };
 
-/** Why Activate / Deactivate are off for an entity whose states need dedicated messages, or undefined */
-export function closeMessageReason(entityLogicalName: string | undefined): string | undefined {
-	const entry = entityLogicalName ? CLOSE_MESSAGE_ENTITIES[entityLogicalName.toLowerCase()] : undefined;
-	return entry ? `${entry.reason} Use the model-driven app for now.` : undefined;
+/**
+ * Why Activate or Deactivate is off for an entity whose states need dedicated messages, or
+ * undefined. Deactivate is off for all of them; the Close menu replaces it where there is one.
+ */
+export function closeMessageReason(
+	entityLogicalName: string | undefined,
+	action: StateAction = "deactivate",
+): string | undefined {
+	const entry = entityLogicalName
+		? CLOSE_MESSAGE_ENTITIES[entityLogicalName.toLowerCase()]
+		: undefined;
+	if (!entry) return undefined;
+	if (action === "activate") return entry.activateReason;
+	return `${entry.reason} ${entry.closeMenu ? "Use Close." : "Use the model-driven app for now."}`;
 }
+
+/** Whether the entity gets the Close menu in place of Deactivate (#149) */
+export const hasCloseMenu = (entityLogicalName: string | undefined): boolean =>
+	!!entityLogicalName && !!CLOSE_MESSAGE_ENTITIES[entityLogicalName.toLowerCase()]?.closeMenu;
 
 /**
  * Targets that Dataverse accepts as a plain update but that skip what the app does for them. Shown
@@ -101,20 +131,33 @@ export const STATE_NOTES: Readonly<Record<string, Readonly<Record<number, string
 	},
 };
 
-export const stateNote = (entityLogicalName: string | undefined, statecode: number): string | undefined =>
+export const stateNote = (
+	entityLogicalName: string | undefined,
+	statecode: number,
+): string | undefined =>
 	entityLogicalName ? STATE_NOTES[entityLogicalName.toLowerCase()]?.[statecode] : undefined;
 
-const XML_ENTITIES: Record<string, string> = { "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'", "&amp;": "&" };
+const XML_ENTITIES: Record<string, string> = {
+	"&lt;": "<",
+	"&gt;": ">",
+	"&quot;": '"',
+	"&apos;": "'",
+	"&amp;": "&",
+};
 
 /**
  * The `tostatusid` values of a TransitionData document. Learn notes the XML can arrive escaped, so
  * entities are decoded first. Undefined when there's no document.
  */
-export function parseTransitionData(transitionData: string | null | undefined): number[] | undefined {
+export function parseTransitionData(
+	transitionData: string | null | undefined,
+): number[] | undefined {
 	if (!transitionData || !transitionData.trim()) return undefined;
 	const xml = transitionData.replace(/&(lt|gt|quot|apos|amp);/g, (m) => XML_ENTITIES[m]);
 	const targets: number[] = [];
-	for (const match of xml.matchAll(/<allowedtransition\b[^>]*\btostatusid\s*=\s*["'](-?\d+)["']/gi)) {
+	for (const match of xml.matchAll(
+		/<allowedtransition\b[^>]*\btostatusid\s*=\s*["'](-?\d+)["']/gi,
+	)) {
 		const value = Number(match[1]);
 		if (!targets.includes(value)) targets.push(value);
 	}
@@ -122,11 +165,14 @@ export function parseTransitionData(transitionData: string | null | undefined): 
 }
 
 /** The statuses that belong to a state, in metadata order */
-export const statusesOfState = (model: EntityStateModel, state: number) => model.statuses.filter((s) => s.state === state);
+export const statusesOfState = (model: EntityStateModel, state: number) =>
+	model.statuses.filter((s) => s.state === state);
 
 /** The states the action can move to: Activate the active state, Deactivate every other one */
 export function targetStates(model: EntityStateModel, action: StateAction): StateOption[] {
-	return model.states.filter((s) => (action === "activate" ? s.value === ACTIVE_STATE : s.value !== ACTIVE_STATE));
+	return model.states.filter((s) =>
+		action === "activate" ? s.value === ACTIVE_STATE : s.value !== ACTIVE_STATE,
+	);
 }
 
 /**
@@ -134,13 +180,17 @@ export function targetStates(model: EntityStateModel, action: StateAction): Stat
  * Deactivate then need no choice.
  */
 export function isSimpleStateModel(model: EntityStateModel): boolean {
-	return model.states.length === 2 && model.states.every((s) => statusesOfState(model, s.value).length === 1);
+	return (
+		model.states.length === 2 &&
+		model.states.every((s) => statusesOfState(model, s.value).length === 1)
+	);
 }
 
 /** The state's DefaultStatus, or its first status reason when metadata has no default */
 function defaultStatusOf(model: EntityStateModel, state: StateOption): number | undefined {
 	const statuses = statusesOfState(model, state.value);
-	if (state.defaultStatus !== undefined && statuses.some((s) => s.value === state.defaultStatus)) return state.defaultStatus;
+	if (state.defaultStatus !== undefined && statuses.some((s) => s.value === state.defaultStatus))
+		return state.defaultStatus;
 	return statuses[0]?.value;
 }
 
@@ -159,10 +209,15 @@ export interface TransitionFilter {
  *
  * @param currentStatuses the selected records' current statuscode values; undefined if unknown
  */
-export function transitionFilter(model: EntityStateModel, currentStatuses: number[] | undefined): TransitionFilter {
+export function transitionFilter(
+	model: EntityStateModel,
+	currentStatuses: number[] | undefined,
+): TransitionFilter {
 	if (!model.enforceTransitions) return {};
 	if (!currentStatuses || currentStatuses.length === 0) {
-		return { note: "Status reason transitions are enforced for this entity, but the records' current status reasons couldn't be read. Dataverse rejects targets that aren't allowed." };
+		return {
+			note: "Status reason transitions are enforced for this entity, but the records' current status reasons couldn't be read. Dataverse rejects targets that aren't allowed.",
+		};
 	}
 	const distinct = [...new Set(currentStatuses)];
 	let allowed: Set<number> | undefined;
@@ -208,14 +263,30 @@ export interface StateUndo {
 export function stateUndo(model: EntityStateModel, action: StateAction): StateUndo {
 	const back = targetStates(model, action === "activate" ? "deactivate" : "activate");
 	const reasons = back.flatMap((state) => statusesOfState(model, state.value));
-	return { available: reasons.length > 0, picksStatusReason: reasons.length > 1, transitionsEnforced: model.enforceTransitions };
+	return {
+		available: reasons.length > 0,
+		picksStatusReason: reasons.length > 1,
+		transitionsEnforced: model.enforceTransitions,
+	};
 }
 
 export type StatePlan =
 	/** One target, no choice (simple entities) */
-	| { kind: "simple"; target: StateTarget; stateLabel: string; statusLabel: string; undo: StateUndo }
+	| {
+			kind: "simple";
+			target: StateTarget;
+			stateLabel: string;
+			statusLabel: string;
+			undo: StateUndo;
+	  }
 	/** The user picks a status reason, grouped by state */
-	| { kind: "choose"; groups: StateGroup[]; defaultTarget: StateTarget; note?: string; undo: StateUndo }
+	| {
+			kind: "choose";
+			groups: StateGroup[];
+			defaultTarget: StateTarget;
+			note?: string;
+			undo: StateUndo;
+	  }
 	/** Nothing to do, and why */
 	| { kind: "none"; reason: string };
 
@@ -235,15 +306,20 @@ export function planStateChange(
 	if (states.length === 0) {
 		return {
 			kind: "none",
-			reason: action === "activate" ? "This entity has no active state (statecode 0)." : "This entity has no inactive state.",
+			reason:
+				action === "activate"
+					? "This entity has no active state (statecode 0)."
+					: "This entity has no inactive state.",
 		};
 	}
 
 	if (isSimpleStateModel(model)) {
 		const state = states[0];
 		const statuscode = defaultStatusOf(model, state);
-		if (statuscode === undefined) return { kind: "none", reason: `The ${state.label} state has no status reason.` };
-		const statusLabel = model.statuses.find((s) => s.value === statuscode)?.label ?? String(statuscode);
+		if (statuscode === undefined)
+			return { kind: "none", reason: `The ${state.label} state has no status reason.` };
+		const statusLabel =
+			model.statuses.find((s) => s.value === statuscode)?.label ?? String(statuscode);
 		return {
 			kind: "simple",
 			target: { statecode: state.value, statuscode },
@@ -260,7 +336,8 @@ export function planStateChange(
 		const choices = statusesOfState(model, state.value)
 			.filter((s) => !filter.allowed || filter.allowed.has(s.value))
 			.map((s) => ({ statuscode: s.value, label: s.label, isDefault: s.value === def }));
-		if (choices.length > 0) groups.push({ statecode: state.value, label: state.label, choices });
+		if (choices.length > 0)
+			groups.push({ statecode: state.value, label: state.label, choices });
 	}
 	if (groups.length === 0) {
 		return {
@@ -303,14 +380,25 @@ export function toEntityStateModel(
 	statusOptions: MetadataOption[],
 	enforceTransitions: boolean,
 ): EntityStateModel {
-	const label = (o: MetadataOption) => o.Label?.UserLocalizedLabel?.Label || o.InvariantName || String(o.Value);
+	const label = (o: MetadataOption) =>
+		o.Label?.UserLocalizedLabel?.Label || o.InvariantName || String(o.Value);
 	return {
 		states: stateOptions
-			.map((o) => ({ value: o.Value, label: label(o), invariantName: o.InvariantName, defaultStatus: o.DefaultStatus ?? undefined }))
+			.map((o) => ({
+				value: o.Value,
+				label: label(o),
+				invariantName: o.InvariantName,
+				defaultStatus: o.DefaultStatus ?? undefined,
+			}))
 			.sort((a, b) => a.value - b.value),
 		statuses: statusOptions
 			.filter((o) => typeof o.State === "number")
-			.map((o) => ({ value: o.Value, label: label(o), state: o.State as number, allowedNext: parseTransitionData(o.TransitionData) })),
+			.map((o) => ({
+				value: o.Value,
+				label: label(o),
+				state: o.State as number,
+				allowedNext: parseTransitionData(o.TransitionData),
+			})),
 		enforceTransitions,
 	};
 }
@@ -319,10 +407,15 @@ export function toEntityStateModel(
  * Whether the action can apply at all, before records are chosen (the command bar): undefined when
  * it can, otherwise the reason it's off.
  */
-export function stateActionUnavailableReason(model: EntityStateModel | null, action: StateAction): string | undefined {
+export function stateActionUnavailableReason(
+	model: EntityStateModel | null,
+	action: StateAction,
+): string | undefined {
 	if (!model) return "This entity has no Status (statecode) column.";
 	if (targetStates(model, action).length === 0) {
-		return action === "activate" ? "This entity has no active state (statecode 0)." : "This entity has no inactive state.";
+		return action === "activate"
+			? "This entity has no active state (statecode 0)."
+			: "This entity has no inactive state.";
 	}
 	return undefined;
 }

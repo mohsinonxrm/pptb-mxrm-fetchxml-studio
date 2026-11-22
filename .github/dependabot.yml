@@ -1,0 +1,65 @@
+# Grouped weekly version updates into dev (#76). New versions are proposed only once they
+# have been published for 14 days (cooldown), matching the project's supply-chain rule.
+# Security updates (enabled in repo settings) aren't held back by the cooldown.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      fluentui:
+        patterns: ["@fluentui/*", "@fluentui-contrib/*"]
+      monaco:
+        patterns: ["monaco-editor", "@monaco-editor/*"]
+      pptb:
+        patterns: ["@pptb/*"]
+      build-tooling:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
+          - "typescript-eslint"
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "globals"
+          - "prettier"
+          - "vitest"
+          - "jsdom"
+          - "@types/node"
+    ignore:
+      # React is intentionally pinned to 18 (see PR #8); review majors manually
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scheduler"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

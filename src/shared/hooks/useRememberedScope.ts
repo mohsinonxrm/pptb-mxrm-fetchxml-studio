@@ -36,11 +36,19 @@ interface RememberedScopeOptions {
 	apply: (scope: RememberedScope) => void;
 }
 
-const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+	a.length === b.length && a.every((id, i) => id === b[i]);
 
 const settingsApi = () => (typeof window === "undefined" ? undefined : window.toolboxAPI?.settings);
 
-/** @returns Whether the selection is remembered for this environment */
+export interface RememberedScopeState {
+	/** The selection is remembered for this environment */
+	remembers: boolean;
+	/** The mode's remembered selection has been restored (or there was none to restore), so an empty
+	 * selection now really is empty: the scope chip's first-run tip waits for this (#227) */
+	restored: boolean;
+}
+
 export function useRememberedScope({
 	mode,
 	ready,
@@ -49,7 +57,7 @@ export function useRememberedScope({
 	publisherIds,
 	solutionIds,
 	apply,
-}: RememberedScopeOptions): boolean {
+}: RememberedScopeOptions): RememberedScopeState {
 	// The stored map and this environment's key, read once: the selector remounts when the
 	// connection changes (#66)
 	const [loaded, setLoaded] = useState<{ stored: unknown; envKey: string } | null>(null);
@@ -85,10 +93,21 @@ export function useRememberedScope({
 		if (!loaded || !mode || mode === "all" || !ready || restoredModes.has(mode)) return;
 		const remembered = rememberedScopeFor(stored.current, loaded.envKey);
 		if (remembered) {
-			const publishers = mode === "publisher-solution" ? restorableIds(remembered.publisherIds, availablePublisherIds) : [];
-			const solutions = restorableIds(remembered.solutionIds, availableSolutionIds(publishers));
-			debugLog("entityFilters", "[useRememberedScope] Restoring the selection:", { mode, publishers, solutions });
-			if (mode === "solution-only" || publishers.length > 0) apply({ publisherIds: publishers, solutionIds: solutions });
+			const publishers =
+				mode === "publisher-solution"
+					? restorableIds(remembered.publisherIds, availablePublisherIds)
+					: [];
+			const solutions = restorableIds(
+				remembered.solutionIds,
+				availableSolutionIds(publishers),
+			);
+			debugLog("entityFilters", "[useRememberedScope] Restoring the selection:", {
+				mode,
+				publishers,
+				solutions,
+			});
+			if (mode === "solution-only" || publishers.length > 0)
+				apply({ publisherIds: publishers, solutionIds: solutions });
 		}
 		setRestoredModes((modes) => new Set(modes).add(mode));
 	}, [loaded, mode, ready, restoredModes, availablePublisherIds, availableSolutionIds, apply]);
@@ -99,17 +118,30 @@ export function useRememberedScope({
 		const remembered = rememberedScopeFor(stored.current, loaded.envKey);
 		const next: RememberedScope = {
 			// Solution-only mode has no publisher picker: keep the publishers remembered before
-			publisherIds: mode === "publisher-solution" ? [...publisherIds] : (remembered?.publisherIds ?? []),
+			publisherIds:
+				mode === "publisher-solution"
+					? [...publisherIds]
+					: (remembered?.publisherIds ?? []),
 			solutionIds: [...solutionIds],
 		};
-		if (remembered ? sameIds(remembered.publisherIds, next.publisherIds) && sameIds(remembered.solutionIds, next.solutionIds) : !next.publisherIds.length && !next.solutionIds.length) {
+		if (
+			remembered
+				? sameIds(remembered.publisherIds, next.publisherIds) &&
+					sameIds(remembered.solutionIds, next.solutionIds)
+				: !next.publisherIds.length && !next.solutionIds.length
+		) {
 			return;
 		}
 		stored.current = withRememberedScope(stored.current, loaded.envKey, next);
 		settingsApi()
 			?.set?.(REMEMBERED_SCOPES_KEY, stored.current)
-			.catch((err: unknown) => console.warn("Failed to remember the publisher / solution selection:", err));
+			.catch((err: unknown) =>
+				console.warn("Failed to remember the publisher / solution selection:", err),
+			);
 	}, [loaded, mode, restoredModes, publisherIds, solutionIds]);
 
-	return !!loaded?.envKey;
+	return {
+		remembers: !!loaded?.envKey,
+		restored: mode === "all" || (!!mode && restoredModes.has(mode)),
+	};
 }

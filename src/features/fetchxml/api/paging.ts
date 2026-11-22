@@ -54,11 +54,17 @@ export interface FetchPagingOptions {
 }
 
 /**
+ * The <fetch> start tag. A quoted attribute value may contain a raw ">" (XML allows it), so quoted
+ * values are skipped whole rather than ending the match early (#200).
+ */
+export const FETCH_START_TAG = /<fetch\b(?:[^>"']|"[^"]*"|'[^']*')*>/i;
+
+/**
  * The paging attributes of the FetchXML that actually ran (not the tree's, which can differ),
  * from the <fetch> start tag. Attribute values may use either quote style.
  */
 export function readFetchPagingOptions(fetchXml: string): FetchPagingOptions {
-	const tag = /<fetch\b[^>]*>/i.exec(fetchXml)?.[0] ?? "";
+	const tag = FETCH_START_TAG.exec(fetchXml)?.[0] ?? "";
 	const read = (name: string) => {
 		const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i").exec(tag);
 		const value = Number((match?.[1] ?? match?.[2] ?? "").trim());
@@ -124,7 +130,9 @@ export function hasNextPage(mode: PagingState["mode"], response: PageResponse): 
 /**
  * The position after fetching page `state.nextPage`. The next page is always that page + 1:
  * Dataverse's `pagenumber` hint stays at 2 for queries without a paging cookie (verified), and
- * following it repeated page 2 forever.
+ * following it repeated page 2 forever. A `count` above Dataverse's 5,000-row page is capped, and
+ * page N without a cookie then starts at row (N − 1) × 5,000 + 1, so keeping the query's count
+ * skips nothing (verified with count 6,000 and 10,000, 2026-11-01, #209).
  */
 export function advancePaging(state: PagingState, response: PageResponse): PagingState {
 	return {
@@ -141,4 +149,22 @@ export function advancePaging(state: PagingState, response: PageResponse): Pagin
 export type PagingNotice =
 	| { kind: "error"; page?: number; message: string }
 	| { kind: "stopped"; message: string }
+	| { kind: "limit"; message: string }
 	| { kind: "simple"; message: string };
+
+/**
+ * Retrieve All stops loading once this many rows are loaded (#183): every row is kept in the
+ * webview's memory, with its formatted values, so an unbounded run on a wide table can exhaust it.
+ * Further pages load one at a time by scrolling, as after Stop.
+ */
+export const RETRIEVE_ALL_ROW_LIMIT = 100_000;
+
+/** Whether Retrieve All stops before fetching another page, with this many rows loaded */
+export const retrieveAllLimitReached = (
+	loadedRows: number,
+	limit = RETRIEVE_ALL_ROW_LIMIT,
+): boolean => loadedRows >= limit;
+
+/** The notice when Retrieve All stops at the limit */
+export const RETRIEVE_ALL_LIMIT_MESSAGE =
+	"Retrieve all stops once 100,000 rows or more are loaded, to keep the tool responsive. Scroll to the end of the grid to load more one page at a time. To delete every matching record without loading them, use Bulk delete (job).";

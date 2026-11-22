@@ -27,6 +27,7 @@ import {
 	ReOrder16Regular,
 } from "@fluentui/react-icons";
 import type { LayoutColumn } from "../../model/layoutxml";
+import { mergeColumns } from "./mergeColumns";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -150,12 +151,22 @@ export function EditColumnsPanel({
 	const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 	const dragNodeRef = useRef<HTMLDivElement | null>(null);
 
-	// Initialize local state when panel opens or columns change (also when there are none)
+	// Initialise local state only when the panel opens. While it is open, merge changes to
+	// `columns` (e.g. from Add columns) so unapplied reorders are not thrown away.
+	const wasOpenRef = useRef(false);
 	useEffect(() => {
-		if (open) {
+		if (!open) {
+			wasOpenRef.current = false;
+			return;
+		}
+		if (!wasOpenRef.current) {
+			wasOpenRef.current = true;
 			setLocalColumns([...columns]);
 			setSelectedIndex(null);
+			return;
 		}
+		setLocalColumns((prev) => mergeColumns(prev, columns));
+		setSelectedIndex(null);
 	}, [open, columns]);
 
 	// Drag and drop handlers
@@ -189,7 +200,7 @@ export function EditColumnsPanel({
 				setDragOverIndex(index);
 			}
 		},
-		[draggedIndex]
+		[draggedIndex],
 	);
 
 	const handleDragLeave = useCallback(() => {
@@ -218,7 +229,7 @@ export function EditColumnsPanel({
 			setDraggedIndex(null);
 			setDragOverIndex(null);
 		},
-		[draggedIndex]
+		[draggedIndex],
 	);
 
 	const moveColumn = useCallback((index: number, direction: "up" | "down") => {
@@ -231,12 +242,15 @@ export function EditColumnsPanel({
 			}
 
 			// Swap columns
-			[newColumns[index], newColumns[targetIndex]] = [newColumns[targetIndex], newColumns[index]];
+			[newColumns[index], newColumns[targetIndex]] = [
+				newColumns[targetIndex],
+				newColumns[index],
+			];
 			return newColumns;
 		});
 		// Update selection to follow the moved item
 		setSelectedIndex((prev) =>
-			prev === index ? (direction === "up" ? index - 1 : index + 1) : prev
+			prev === index ? (direction === "up" ? index - 1 : index + 1) : prev,
 		);
 	}, []);
 
@@ -338,7 +352,9 @@ export function EditColumnsPanel({
 									<span className={styles.dragHandle}>
 										<ReOrder16Regular />
 									</span>
-									<span className={styles.columnName}>{column.displayName || column.name}</span>
+									<span className={styles.columnName}>
+										{column.displayName || column.name}
+									</span>
 									<div className={styles.columnActions}>
 										<Button
 											appearance="subtle"
@@ -386,7 +402,8 @@ export function EditColumnsPanel({
 					{columns.length > 0 && localColumns.length === 0 && (
 						// A query with no attributes at all returns every attribute (#114)
 						<Text size={200} className={styles.footerHint}>
-							Keep at least one column: a query without columns returns every attribute.
+							Keep at least one column: a query without columns returns every
+							attribute.
 						</Text>
 					)}
 					<Button appearance="secondary" onClick={onClose}>

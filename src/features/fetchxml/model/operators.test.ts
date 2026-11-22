@@ -54,7 +54,12 @@ describe("getOperatorsForAttributeType", () => {
 // #87: operators per attribute from the live operator × attribute-type matrix (2026-10-15)
 
 describe("every documented operator is selectable (#87)", () => {
-	it.each(["last-x-fiscal-years", "last-x-fiscal-periods", "next-x-fiscal-years", "next-x-fiscal-periods"])("%s", (op) => {
+	it.each([
+		"last-x-fiscal-years",
+		"last-x-fiscal-periods",
+		"next-x-fiscal-years",
+		"next-x-fiscal-periods",
+	])("%s", (op) => {
 		expect(ALL_OPERATORS.map((o) => o.value)).toContain(op);
 	});
 });
@@ -65,31 +70,49 @@ describe("getOperatorsForAttribute (#87)", () => {
 
 	it("contain-values only for multi-select choices (picklist: 0x80048415)", () => {
 		expect(ops({ AttributeType: "Picklist" })).not.toContain("contain-values");
-		const multi = ops({ AttributeType: "Virtual", AttributeTypeName: { Value: "MultiSelectPicklistType" } });
-		expect(multi).toEqual(expect.arrayContaining(["contain-values", "not-contain-values", "null", "not-null"]));
+		const multi = ops({
+			AttributeType: "Virtual",
+			AttributeTypeName: { Value: "MultiSelectPicklistType" },
+		});
+		expect(multi).toEqual(
+			expect.arrayContaining(["contain-values", "not-contain-values", "null", "not-null"]),
+		);
 		expect(multi).not.toContain("like");
 	});
 
 	it("user / team operators aren't offered for Customer lookups (0x8004034b)", () => {
 		const customer = ops({ AttributeType: "Customer" });
-		for (const op of ["eq-userid", "ne-userid", "eq-userteams", "eq-useroruserteams"]) expect(customer).not.toContain(op);
+		for (const op of ["eq-userid", "ne-userid", "eq-userteams", "eq-useroruserteams"])
+			expect(customer).not.toContain(op);
 		expect(ops({ AttributeType: "Owner" })).toContain("eq-userid");
 	});
 
 	it("hierarchy operators only for the primary key of a hierarchical entity", () => {
 		expect(ops({ AttributeType: "Lookup" }, true)).not.toContain("under");
-		expect(ops({ AttributeType: "Uniqueidentifier", IsPrimaryId: true }, true)).toContain("under");
-		expect(ops({ AttributeType: "Uniqueidentifier", IsPrimaryId: true }, false)).not.toContain("under");
+		expect(ops({ AttributeType: "Uniqueidentifier", IsPrimaryId: true }, true)).toContain(
+			"under",
+		);
+		expect(ops({ AttributeType: "Uniqueidentifier", IsPrimaryId: true }, false)).not.toContain(
+			"under",
+		);
 	});
 
 	it("hour / minute operators are left out for date-only behaviour, not for a date-only format", () => {
-		expect(ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "DateOnly" } })).not.toContain("last-x-hours");
-		expect(ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "UserLocal" } })).toContain("olderthan-x-minutes");
-		expect(ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "DateOnly" } })).toContain("last-x-days");
+		expect(
+			ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "DateOnly" } }),
+		).not.toContain("last-x-hours");
+		expect(
+			ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "UserLocal" } }),
+		).toContain("olderthan-x-minutes");
+		expect(
+			ops({ AttributeType: "DateTime", DateTimeBehavior: { Value: "DateOnly" } }),
+		).toContain("last-x-days");
 	});
 
 	it("strings get gt / ge / lt / le (documented)", () => {
-		expect(ops({ AttributeType: "String" })).toEqual(expect.arrayContaining(["gt", "ge", "lt", "le"]));
+		expect(ops({ AttributeType: "String" })).toEqual(
+			expect.arrayContaining(["gt", "ge", "lt", "le"]),
+		);
 	});
 });
 
@@ -119,9 +142,11 @@ describe("value shapes (#87)", () => {
 describe("getOperatorsForAttribute: attribute types shown with Advanced Find only off (#57)", () => {
 	// Verified on the sandbox (2026-10-16) against hidden attributes of 15 entities
 	const ops = (AttributeType: string, typeName: string) =>
-		getOperatorsForAttribute({ AttributeType, AttributeTypeName: { Value: typeName } }).map((o) => o.value);
+		getOperatorsForAttribute({ AttributeType, AttributeTypeName: { Value: typeName } }).map(
+			(o) => o.value,
+		);
 
-	it("Virtual \"...name\" label attributes: null, not-null, eq and like", () => {
+	it('Virtual "...name" label attributes: null, not-null, eq and like', () => {
 		expect(ops("Virtual", "VirtualType").sort()).toEqual(["eq", "like", "not-null", "null"]);
 	});
 

@@ -75,6 +75,35 @@ the workflow of their own commit: they get neither the check nor the notes from 
 Check those by hand against this table, and paste the CHANGELOG section into the GitHub Release
 after it's created.
 
+## Before every tag: the release build in PPTB
+
+Every PR is checked in PPTB on its own branch build. A tag publishes a different build: the
+branch with every merged change and the version bump, built by `release.yml` from a clean
+install, with the Insider icon for betas. Run that exact build in PPTB before pushing any tag
+(beta, rc, stable or hotfix):
+
+1. **Rehearse on the commit you'll tag:** the release-prep merge on `release/X.Y` for a beta,
+   or `main` for a stable release or hotfix: `gh workflow run release.yml --ref <branch>`. Its
+   `build` job uploads the tarball the tag would publish, as the `package` artifact.
+2. **Download and unpack it** in an empty folder: `gh run download <run-id> -n package`, then
+   `tar -xzf *.tgz`.
+3. **Load `package/` in PPTB** as a local tool (Debug → Load Local Tool), in the PPTB version
+   the tool targets (`minAPI`), on a non-production connection. Use temporary records only and
+   delete them afterwards. Check:
+   - it loads with no console errors, follows the light and dark theme, and shows the right
+     icon (the Insider icon for betas);
+   - a query runs, more rows load on scroll, and Retrieve all stops when asked;
+   - each destructive dialog (Delete, Bulk delete, Run workflow, Activate / Deactivate, Close)
+     names the environment and scope; cancel it, or run it on a temporary record;
+   - Load view, and Save view with a temporary personal view;
+   - the changes in this release's CHANGELOG section.
+4. **Record the result** on the release's tracking issue: the PPTB version and what was
+   checked. Then tag **the same commit**. If something fails, fix it by PR first; a new commit
+   needs a new rehearsal and a new check.
+
+The smoke test of the published beta (*Stabilizing*, step 2) stays: it checks the package as
+users install it from npm, before it goes to `latest`.
+
 ## Release lifecycle
 
 ### 1. Feature freeze: cut the release branch
@@ -93,7 +122,7 @@ git switch dev && git pull && git switch -c release/1.5 && git push -u origin re
    rename `## [Unreleased]` to `## [1.5.0-beta.13] - YYYY-MM-DD` (add a new empty
    `## [Unreleased]` above it), run `npm run badges` (see *Every release: what
    changes*), and PR it into `release/1.5`.
-2. Tag the PR's merge commit on `release/1.5`: `git switch release/1.5 && git pull && git tag v1.5.0-beta.13 && git push origin v1.5.0-beta.13`.
+2. Check the release build in PPTB (*Before every tag*), then tag the PR's merge commit on `release/1.5`: `git switch release/1.5 && git pull && git tag v1.5.0-beta.13 && git push origin v1.5.0-beta.13`.
 3. Run *After every release* (below), then merge `release/1.5` into `dev` (merge commit) so `dev` has the fixes.
 
 `-beta.N` and `-rc.N` publish to the npm `beta` tag as a GitHub pre-release; `latest`
@@ -117,14 +146,14 @@ Before promoting a beta to `latest`:
    `[1.5.0]` CHANGELOG section that summarises the betas above their history (see
    `[1.4.2]`), and `npm run badges`.
 2. PR `release/1.5` → `main`, merged with a merge commit.
-3. Tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
+3. Check the release build in PPTB (*Before every tag*), then tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
 4. Run *After every release*, then merge `main` into `dev` (merge commit) and delete `release/1.5`.
 
 ## Hotfixes (to the current stable release)
 
 1. Branch `hotfix/1.4.3` from `main`; fix, set the version (`1.4.3`), date its CHANGELOG
    section, run `npm run badges`; PR into `main` (merge commit).
-2. Tag `v1.4.3` on `main` → npm `latest`, then run *After every release*.
+2. Check the release build in PPTB (*Before every tag*), then tag `v1.4.3` on `main` → npm `latest`, and run *After every release*.
 3. Merge `main` forward into `release/*` (if one is open) and `dev`, keeping the higher version
    (*Resolving forward-merge conflicts*) and each target's `[Unreleased]` entries.
 

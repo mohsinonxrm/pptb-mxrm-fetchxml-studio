@@ -22,8 +22,14 @@ beforeEach(() => {
 			// it requests "feedbacks", "msdyn_conversationdatas" and "archivecleanupinfos".
 			const sets: Record<string, { EntitySetName: string; LogicalCollectionName: string }> = {
 				feedback: { EntitySetName: "feedback", LogicalCollectionName: "feedback" },
-				msdyn_conversationdata: { EntitySetName: "msdyn_conversationsdata", LogicalCollectionName: "msdyn_conversationsdata" },
-				archivecleanupinfo: { EntitySetName: "ArchiveCleanupInfos", LogicalCollectionName: "archivecleanupinfos" },
+				msdyn_conversationdata: {
+					EntitySetName: "msdyn_conversationsdata",
+					LogicalCollectionName: "msdyn_conversationsdata",
+				},
+				archivecleanupinfo: {
+					EntitySetName: "ArchiveCleanupInfos",
+					LogicalCollectionName: "archivecleanupinfos",
+				},
 			};
 			if (!(logicalName in sets)) throw new Error("not found");
 			return { LogicalName: logicalName, ...sets[logicalName] };
@@ -48,7 +54,9 @@ describe("getFetchXmlEntityName", () => {
 
 	it("returns undefined for malformed or non-fetch XML", () => {
 		expect(getFetchXmlEntityName(`<fetch><entity name="account">`)).toBeUndefined();
-		expect(getFetchXmlEntityName(`<savedquery><entity name="account" /></savedquery>`)).toBeUndefined();
+		expect(
+			getFetchXmlEntityName(`<savedquery><entity name="account" /></savedquery>`),
+		).toBeUndefined();
 		expect(getFetchXmlEntityName(`<fetch />`)).toBeUndefined();
 	});
 });
@@ -67,7 +75,9 @@ describe("executeFetchXml (#61)", () => {
 		await executeFetchXml(xml);
 		await executeFetchXml(xml);
 		expect(api.getEntityMetadata).toHaveBeenCalledTimes(1);
-		expect(api.queryData).toHaveBeenLastCalledWith(`msdyn_conversationsdata?fetchXml=${encodeURIComponent(xml)}`);
+		expect(api.queryData).toHaveBeenLastCalledWith(
+			`msdyn_conversationsdata?fetchXml=${encodeURIComponent(xml)}`,
+		);
 	});
 
 	it("falls back to fetchXmlQuery only when metadata is unavailable", async () => {
@@ -78,16 +88,26 @@ describe("executeFetchXml (#61)", () => {
 	});
 
 	it("retries with LogicalCollectionName when the EntitySetName segment doesn't route", async () => {
-		api.queryData.mockRejectedValueOnce(new Error("0x80060888: Resource not found for the segment 'ArchiveCleanupInfos'."));
+		api.queryData.mockRejectedValueOnce(
+			new Error("0x80060888: Resource not found for the segment 'ArchiveCleanupInfos'."),
+		);
 		const xml = `<fetch><entity name="archivecleanupinfo" /></fetch>`;
 		await executeFetchXml(xml);
-		expect(api.queryData).toHaveBeenNthCalledWith(1, `ArchiveCleanupInfos?fetchXml=${encodeURIComponent(xml)}`);
-		expect(api.queryData).toHaveBeenNthCalledWith(2, `archivecleanupinfos?fetchXml=${encodeURIComponent(xml)}`);
+		expect(api.queryData).toHaveBeenNthCalledWith(
+			1,
+			`ArchiveCleanupInfos?fetchXml=${encodeURIComponent(xml)}`,
+		);
+		expect(api.queryData).toHaveBeenNthCalledWith(
+			2,
+			`archivecleanupinfos?fetchXml=${encodeURIComponent(xml)}`,
+		);
 	});
 
 	it("doesn't fall back when the query itself fails", async () => {
 		api.queryData.mockRejectedValueOnce(new Error("0x80041103: attribute not found"));
-		await expect(executeFetchXml(`<fetch><entity name="feedback" /></fetch>`)).rejects.toThrow("0x80041103");
+		await expect(executeFetchXml(`<fetch><entity name="feedback" /></fetch>`)).rejects.toThrow(
+			"0x80041103",
+		);
 		expect(api.fetchXmlQuery).not.toHaveBeenCalled();
 	});
 });

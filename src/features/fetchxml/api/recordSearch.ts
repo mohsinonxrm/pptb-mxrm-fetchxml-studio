@@ -23,10 +23,16 @@ export interface RecordSearchTarget {
 }
 
 /** Web API query for records whose primary name starts with the text (all records when it's empty). */
-export function buildRecordSearchQuery(target: RecordSearchTarget, text: string, top = RECORD_SEARCH_TOP): string {
+export function buildRecordSearchQuery(
+	target: RecordSearchTarget,
+	text: string,
+	top = RECORD_SEARCH_TOP,
+): string {
 	const { entitySetName, idAttribute, nameAttribute } = target;
 	const term = text.trim();
-	const filter = term ? `&$filter=startswith(${nameAttribute},'${encodeURIComponent(odataString(escapeWildcards(term)))}')` : "";
+	const filter = term
+		? `&$filter=startswith(${nameAttribute},'${encodeURIComponent(odataString(escapeWildcards(term)))}')`
+		: "";
 	return `${entitySetName}?$select=${idAttribute},${nameAttribute}${filter}&$orderby=${nameAttribute}&$top=${top}`;
 }
 

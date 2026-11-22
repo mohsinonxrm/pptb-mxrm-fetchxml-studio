@@ -98,7 +98,8 @@ export function OptionSetValuePicker({
 			if (!query) return true;
 			const searchLower = query.toLowerCase();
 			return (
-				opt.label.toLowerCase().includes(searchLower) || String(opt.value).includes(searchLower)
+				opt.label.toLowerCase().includes(searchLower) ||
+				String(opt.value).includes(searchLower)
 			);
 		})
 		.map((opt) => ({
@@ -116,10 +117,9 @@ export function OptionSetValuePicker({
 		setQuery(ev.target.value);
 	};
 
-	const handleOptionSelect: NonNullable<React.ComponentProps<typeof Combobox>["onOptionSelect"]> = (
-		_ev,
-		data
-	) => {
+	const handleOptionSelect: NonNullable<
+		React.ComponentProps<typeof Combobox>["onOptionSelect"]
+	> = (_ev, data) => {
 		if (!data.optionValue) {
 			// Clear button clicked
 			setQuery("");

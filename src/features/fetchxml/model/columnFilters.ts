@@ -30,9 +30,14 @@ export interface ColumnFilterTarget {
 }
 
 /** The condition a column filter targets, or why the column can't be filtered */
-export function columnFilterTarget(fetch: FetchNode, columnKey: string): ColumnFilterTarget | { reason: string } {
+export function columnFilterTarget(
+	fetch: FetchNode,
+	columnKey: string,
+): ColumnFilterTarget | { reason: string } {
 	if (fetch.options?.aggregate) {
-		return { reason: "Column filters aren't available in aggregate queries. Add conditions in the tree instead." };
+		return {
+			reason: "Column filters aren't available in aggregate queries. Add conditions in the tree instead.",
+		};
 	}
 	const column = resolveColumn(fetch, columnKey);
 	if (!column) return { reason: "This column isn't an attribute in the query." };
@@ -50,7 +55,11 @@ export type NewCondition = Omit<ConditionNode, "id" | "type">;
 /** Path to a filter: index in the root entity's filters, then subfilter indexes */
 type FilterPath = number[];
 
-function findPath(filters: FilterNode[], id: NodeId, path: FilterPath = []): FilterPath | undefined {
+function findPath(
+	filters: FilterNode[],
+	id: NodeId,
+	path: FilterPath = [],
+): FilterPath | undefined {
 	for (const [i, filter] of filters.entries()) {
 		if (filter.id === id) return [...path, i];
 		const inner = findPath(filter.subfilters, id, [...path, i]);
@@ -71,7 +80,11 @@ function filterAt(filters: FilterNode[], path: FilterPath): FilterNode | undefin
 }
 
 /** Replaces the filter at a path (undefined removes it) */
-function replaceAt(filters: FilterNode[], path: FilterPath, replace: (f: FilterNode) => FilterNode | undefined): FilterNode[] {
+function replaceAt(
+	filters: FilterNode[],
+	path: FilterPath,
+	replace: (f: FilterNode) => FilterNode | undefined,
+): FilterNode[] {
 	const [i, ...rest] = path;
 	return filters.flatMap((filter, index) => {
 		if (index !== i) return [filter];
@@ -89,14 +102,20 @@ const withRootFilters = (fetch: FetchNode, filters: FilterNode[]): FetchNode => 
 });
 
 /** The column-filter group, if it's still in the query */
-export function findColumnFilterGroup(fetch: FetchNode | null, groupId: NodeId | null): FilterNode | undefined {
+export function findColumnFilterGroup(
+	fetch: FetchNode | null,
+	groupId: NodeId | null,
+): FilterNode | undefined {
 	if (!fetch || !groupId) return undefined;
 	const path = findPath(fetch.entity.filters, groupId);
 	return path ? filterAt(fetch.entity.filters, path) : undefined;
 }
 
 /** The column filters' conditions (none when the group was removed or never added) */
-export function columnFilterConditions(fetch: FetchNode | null, groupId: NodeId | null): ConditionNode[] {
+export function columnFilterConditions(
+	fetch: FetchNode | null,
+	groupId: NodeId | null,
+): ConditionNode[] {
 	return findColumnFilterGroup(fetch, groupId)?.conditions ?? [];
 }
 
@@ -112,7 +131,13 @@ export function addColumnFilter(
 	const path = groupId ? findPath(filters, groupId) : undefined;
 	if (groupId && path) {
 		return {
-			fetch: withRootFilters(fetch, replaceAt(filters, path, (g) => ({ ...g, conditions: [...g.conditions, newCondition] }))),
+			fetch: withRootFilters(
+				fetch,
+				replaceAt(filters, path, (g) => ({
+					...g,
+					conditions: [...g.conditions, newCondition],
+				})),
+			),
 			groupId,
 			conditionId: newCondition.id,
 		};
@@ -126,13 +151,18 @@ export function addColumnFilter(
 		subfilters: [],
 		links: [],
 	};
-	const result = (next: FilterNode[]) => ({ fetch: withRootFilters(fetch, next), groupId: group.id, conditionId: newCondition.id });
+	const result = (next: FilterNode[]) => ({
+		fetch: withRootFilters(fetch, next),
+		groupId: group.id,
+		conditionId: newCondition.id,
+	});
 
 	const [root, ...others] = filters;
 	// No root filter: the group is the root filter
 	if (!root) return result([group]);
 	// An "and" root filter: nest the group in it
-	if (root.conjunction !== "or") return result([{ ...root, subfilters: [...root.subfilters, group] }, ...others]);
+	if (root.conjunction !== "or")
+		return result([{ ...root, subfilters: [...root.subfilters, group] }, ...others]);
 	// An "or" root filter: wrap it, so the column filters still narrow the results
 	const wrapper: FilterNode = {
 		id: generateId(),
@@ -157,13 +187,23 @@ export function removeColumnFilter(
 	const conditions = group.conditions.filter((c) => c.id !== conditionId);
 	if (conditions.length > 0 || group.subfilters.length > 0 || group.links.length > 0) {
 		const path = findPath(fetch.entity.filters, groupId)!;
-		return { fetch: withRootFilters(fetch, replaceAt(fetch.entity.filters, path, (g) => ({ ...g, conditions }))), groupId };
+		return {
+			fetch: withRootFilters(
+				fetch,
+				replaceAt(fetch.entity.filters, path, (g) => ({ ...g, conditions })),
+			),
+			groupId,
+		};
 	}
 	return { fetch: clearColumnFilters(fetch, groupId, wrapperId), groupId: null };
 }
 
 /** Removes the column-filter group, and the "and" wrapper addColumnFilter put around an "or" root filter */
-export function clearColumnFilters(fetch: FetchNode, groupId: NodeId | null, wrapperId: NodeId | null = null): FetchNode {
+export function clearColumnFilters(
+	fetch: FetchNode,
+	groupId: NodeId | null,
+	wrapperId: NodeId | null = null,
+): FetchNode {
 	const path = groupId ? findPath(fetch.entity.filters, groupId) : undefined;
 	if (!path) return fetch;
 	const filters = replaceAt(fetch.entity.filters, path, () => undefined);
@@ -191,7 +231,12 @@ export function clearColumnFilters(fetch: FetchNode, groupId: NodeId | null, wra
 
 const conditionsKey = (filter: FilterNode | undefined) =>
 	JSON.stringify(
-		filter?.conditions.map((c) => [c.attribute, c.operator, c.value ?? null, c.entityname ?? null]) ?? null,
+		filter?.conditions.map((c) => [
+			c.attribute,
+			c.operator,
+			c.value ?? null,
+			c.entityname ?? null,
+		]) ?? null,
 	);
 
 /** The wrapper's ID after the query was loaded again: the new root filter, when the group was relocated */
@@ -202,14 +247,20 @@ export function relocateColumnFilterWrapper(
 	relocatedGroupId: NodeId | null,
 ): NodeId | null {
 	if (!before || !wrapperId || !relocatedGroupId) return null;
-	return before.entity.filters[0]?.id === wrapperId ? (after.entity.filters[0]?.id ?? null) : null;
+	return before.entity.filters[0]?.id === wrapperId
+		? (after.entity.filters[0]?.id ?? null)
+		: null;
 }
 
 /**
  * The group's ID after the query was loaded again (editor sync gives every node a new ID): the
  * filter at the same place, when it has the same conditions.
  */
-export function relocateColumnFilterGroup(before: FetchNode | null, after: FetchNode, groupId: NodeId | null): NodeId | null {
+export function relocateColumnFilterGroup(
+	before: FetchNode | null,
+	after: FetchNode,
+	groupId: NodeId | null,
+): NodeId | null {
 	if (!before || !groupId) return null;
 	const path = findPath(before.entity.filters, groupId);
 	if (!path) return null;

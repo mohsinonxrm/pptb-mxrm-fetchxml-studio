@@ -57,7 +57,9 @@ export function useLazyMetadata(): UseLazyMetadataResult {
 			return metadata;
 		} catch (err) {
 			const error =
-				err instanceof Error ? err : new Error(`Failed to load metadata for ${logicalName}`);
+				err instanceof Error
+					? err
+					: new Error(`Failed to load metadata for ${logicalName}`);
 			setError(error);
 			throw error;
 		} finally {
@@ -73,7 +75,9 @@ export function useLazyMetadata(): UseLazyMetadataResult {
 			return attributes;
 		} catch (err) {
 			const error =
-				err instanceof Error ? err : new Error(`Failed to load attributes for ${logicalName}`);
+				err instanceof Error
+					? err
+					: new Error(`Failed to load attributes for ${logicalName}`);
 			setError(error);
 			throw error;
 		} finally {
@@ -89,7 +93,9 @@ export function useLazyMetadata(): UseLazyMetadataResult {
 			return relationships;
 		} catch (err) {
 			const error =
-				err instanceof Error ? err : new Error(`Failed to load relationships for ${logicalName}`);
+				err instanceof Error
+					? err
+					: new Error(`Failed to load relationships for ${logicalName}`);
 			setError(error);
 			throw error;
 		} finally {

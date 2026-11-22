@@ -5,8 +5,12 @@ import { connectionKey, nextConnectionScope, type ConnectionScope } from "./conn
 
 describe("connectionKey", () => {
 	it("is the id and the normalized environment URL", () => {
-		expect(connectionKey({ id: "c1", url: "https://Org.crm.dynamics.com/" })).toBe("c1|https://org.crm.dynamics.com");
-		expect(connectionKey({ id: "c1", url: "https://org.crm.dynamics.com" })).toBe(connectionKey({ id: "c1", url: "https://ORG.crm.dynamics.com//" }));
+		expect(connectionKey({ id: "c1", url: "https://Org.crm.dynamics.com/" })).toBe(
+			"c1|https://org.crm.dynamics.com",
+		);
+		expect(connectionKey({ id: "c1", url: "https://org.crm.dynamics.com" })).toBe(
+			connectionKey({ id: "c1", url: "https://ORG.crm.dynamics.com//" }),
+		);
 	});
 
 	it("differs for another connection to the same environment, or another environment", () => {

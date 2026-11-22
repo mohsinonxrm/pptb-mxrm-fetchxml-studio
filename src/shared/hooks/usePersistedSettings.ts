@@ -10,8 +10,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
 	defaultDisplaySettings,
+	normalizeGridDensity,
 	type DisplaySettings,
 } from "../../features/fetchxml/model/displaySettings";
+import { normalizeTreeIconStyle } from "../../features/fetchxml/model/treeIcons";
 import { debugLog } from "../utils/debug";
 
 /**
@@ -24,13 +26,19 @@ const SETTINGS_KEY = "fetchxml-studio:displaySettings";
  * Merge persisted value with defaults so any newly added fields always get
  * their default value for users who have an older saved settings object.
  */
-function mergeWithDefaults(persisted: unknown): DisplaySettings {
+export function mergeWithDefaults(persisted: unknown): DisplaySettings {
 	if (!persisted || typeof persisted !== "object") {
 		return { ...defaultDisplaySettings };
 	}
-	return {
+	const merged = {
 		...defaultDisplaySettings,
 		...(persisted as Partial<DisplaySettings>),
+	};
+	// The grid and tree sizes come from this value: never pass an unknown one to Fluent (#228)
+	return {
+		...merged,
+		gridDensity: normalizeGridDensity(merged.gridDensity),
+		treeIconStyle: normalizeTreeIconStyle(merged.treeIconStyle),
 	};
 }
 
@@ -55,7 +63,10 @@ export function usePersistedSettings(): [DisplaySettings, (settings: DisplaySett
 						debugLog("settings", "⚙️ Settings loaded from toolboxAPI:", merged);
 					}
 				} else {
-					debugLog("settings", "⚙️ toolboxAPI.settings not available — using in-memory defaults");
+					debugLog(
+						"settings",
+						"⚙️ toolboxAPI.settings not available — using in-memory defaults",
+					);
 				}
 			} catch (err) {
 				console.warn("⚙️ Failed to load settings from toolboxAPI:", err);

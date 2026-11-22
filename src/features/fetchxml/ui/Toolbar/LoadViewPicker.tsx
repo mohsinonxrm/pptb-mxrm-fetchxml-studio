@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import {
 	getAllViews,
+	toLoadedViewInfo,
 	whoAmI,
 	type SavedView,
 	type EntityMetadata,
@@ -75,7 +76,13 @@ const useStyles = makeStyles({
  * query type / "Default view" for system views (#142, savedViews.ts getViewSecondaryText). Every
  * query type is listed rather than hidden (#93).
  */
-function ViewOption({ view, currentUserId }: { view: SavedView; currentUserId: string | undefined }) {
+function ViewOption({
+	view,
+	currentUserId,
+}: {
+	view: SavedView;
+	currentUserId: string | undefined;
+}) {
 	const styles = useStyles();
 	const secondary = getViewSecondaryText(view, currentUserId);
 	return (
@@ -148,10 +155,8 @@ export function LoadViewPicker({
 			try {
 				debugLog("viewAPI", `Loading views for ${selectedEntityMetadata.LogicalName}`);
 
-				const [{ systemViews: sysViews, personalViews: persViews }, user] = await Promise.all([
-					getAllViews(selectedEntityMetadata.LogicalName),
-					whoAmI(),
-				]);
+				const [{ systemViews: sysViews, personalViews: persViews }, user] =
+					await Promise.all([getAllViews(selectedEntityMetadata.LogicalName), whoAmI()]);
 
 				setSystemViews(sysViews);
 				setPersonalViews(persViews);
@@ -159,7 +164,7 @@ export function LoadViewPicker({
 
 				debugLog(
 					"viewAPI",
-					`Loaded ${sysViews.length} system views and ${persViews.length} personal views`
+					`Loaded ${sysViews.length} system views and ${persViews.length} personal views`,
 				);
 			} catch (err) {
 				const message = err instanceof Error ? err.message : "Failed to load views";
@@ -209,24 +214,11 @@ export function LoadViewPicker({
 
 			const view = allViews.find((v) => v.id === data.optionValue);
 			if (view) {
-				// Create LoadedViewInfo with all needed data for execution optimization
-				const viewInfo: LoadedViewInfo = {
-					id: view.id,
-					type: view.type,
-					originalFetchXml: view.fetchxml,
-					entitySetName: selectedEntityMetadata.EntitySetName,
-					name: view.name,
-					layoutxml: view.layoutxml, // Include layoutxml for column configuration
-					queryType: view.queryType,
-					isCustomizable: view.isCustomizable,
-					// Save view: description pre-filled, default view, managed warning, owner (#142)
-					description: view.description,
-					isDefault: view.isDefault,
-					isManaged: view.isManaged,
-					solutionId: view.solutionId,
-					ownerId: view.ownerId,
-					ownerName: view.ownerName,
-				};
+				// Everything execution by ID, the layout and Save view need (shared with #197's prefill)
+				const viewInfo: LoadedViewInfo = toLoadedViewInfo(
+					view,
+					selectedEntityMetadata.EntitySetName,
+				);
 				onViewSelect(viewInfo);
 				debugLog("viewAPI", `Selected view: ${view.name} (${view.type}) - ID: ${view.id}`);
 				// Set the selected view name to display in the combobox
@@ -234,7 +226,7 @@ export function LoadViewPicker({
 				setInputValue(view.name);
 			}
 		},
-		[allViews, onViewSelect, onViewClear, selectedEntityMetadata]
+		[allViews, onViewSelect, onViewClear, selectedEntityMetadata],
 	);
 
 	// Handle input change for filtering
@@ -246,7 +238,7 @@ export function LoadViewPicker({
 				setSelectedViewName(null);
 			}
 		},
-		[selectedViewName]
+		[selectedViewName],
 	);
 
 	// Don't render if no entity selected
@@ -294,7 +286,9 @@ export function LoadViewPicker({
 
 				{!loading && !error && hasViews && !hasFilteredViews && filterQuery && (
 					<Option key="no-match" value="" text="No matching views" disabled>
-						<span className={styles.noViewsOption}>No views match "{filterQuery.trim()}"</span>
+						<span className={styles.noViewsOption}>
+							No views match "{filterQuery.trim()}"
+						</span>
 					</Option>
 				)}
 

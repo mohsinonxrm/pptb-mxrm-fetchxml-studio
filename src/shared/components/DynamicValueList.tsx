@@ -45,7 +45,9 @@ export function DynamicValueList({
 	inputType = "text",
 }: DynamicValueListProps) {
 	const styles = useStyles();
-	const [internalValues, setInternalValues] = useState<string[]>(values.length > 0 ? values : [""]);
+	const [internalValues, setInternalValues] = useState<string[]>(
+		values.length > 0 ? values : [""],
+	);
 
 	// Sync external changes
 	useEffect(() => {
@@ -57,7 +59,8 @@ export function DynamicValueList({
 		// Only update if values actually changed
 		const currentNonEmpty = internalValues.filter((v) => v.trim() !== "");
 		const valuesChanged =
-			values.length !== currentNonEmpty.length || values.some((v, i) => v !== currentNonEmpty[i]);
+			values.length !== currentNonEmpty.length ||
+			values.some((v, i) => v !== currentNonEmpty[i]);
 
 		if (valuesChanged) {
 			setInternalValues(values.length > 0 ? values : [""]);

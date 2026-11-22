@@ -233,17 +233,17 @@ export function AddColumnsPanel({
 	// Filter attributes based on search and filter type
 	const filteredAttributes = useMemo(() => {
 		let attrs = availableAttributes.filter(
-			(attr) => !selectedAttributes.includes(attr.LogicalName)
+			(attr) => !selectedAttributes.includes(attr.LogicalName),
 		);
 
 		// Apply filter type
 		if (filterType === "standard") {
 			attrs = attrs.filter(
-				(attr) => !attr.LogicalName.startsWith("new_") && !attr.SchemaName.includes("_")
+				(attr) => !attr.LogicalName.startsWith("new_") && !attr.SchemaName.includes("_"),
 			);
 		} else if (filterType === "custom") {
 			attrs = attrs.filter(
-				(attr) => attr.LogicalName.startsWith("new_") || attr.SchemaName.includes("_")
+				(attr) => attr.LogicalName.startsWith("new_") || attr.SchemaName.includes("_"),
 			);
 		}
 
@@ -253,7 +253,9 @@ export function AddColumnsPanel({
 			attrs = attrs.filter(
 				(attr) =>
 					attr.LogicalName.toLowerCase().includes(search) ||
-					(attr.DisplayName?.UserLocalizedLabel?.Label || "").toLowerCase().includes(search)
+					(attr.DisplayName?.UserLocalizedLabel?.Label || "")
+						.toLowerCase()
+						.includes(search),
 			);
 		}
 
@@ -280,7 +282,7 @@ export function AddColumnsPanel({
 		// Process N:1 (lookup/many-to-one) relationships
 		let n1Rels: RelationshipWithType[] = lookupRelationships.map((rel) => {
 			const lookupAttr = availableAttributes.find(
-				(a) => a.LogicalName === rel.ReferencingAttribute
+				(a) => a.LogicalName === rel.ReferencingAttribute,
 			);
 			const displayName =
 				lookupAttr?.DisplayName?.UserLocalizedLabel?.Label || rel.ReferencingAttribute;
@@ -314,13 +316,13 @@ export function AddColumnsPanel({
 				(r) =>
 					r.relatedEntity.toLowerCase().includes(search) ||
 					r.displayName.toLowerCase().includes(search) ||
-					r.relationship.SchemaName.toLowerCase().includes(search)
+					r.relationship.SchemaName.toLowerCase().includes(search),
 			);
 			oneNRels = oneNRels.filter(
 				(r) =>
 					r.relatedEntity.toLowerCase().includes(search) ||
 					r.displayName.toLowerCase().includes(search) ||
-					r.relationship.SchemaName.toLowerCase().includes(search)
+					r.relationship.SchemaName.toLowerCase().includes(search),
 			);
 		}
 
@@ -389,7 +391,7 @@ export function AddColumnsPanel({
 				}
 			}
 		},
-		[relatedAttributesCache, onLoadRelatedAttributes]
+		[relatedAttributesCache, onLoadRelatedAttributes],
 	);
 
 	const handleRelatedAttributeToggle = useCallback(
@@ -397,7 +399,7 @@ export function AddColumnsPanel({
 			relationship: RelationshipMetadata,
 			attribute: AttributeMetadata,
 			relType: "N1" | "1N",
-			relatedEntity: string
+			relatedEntity: string,
 		) => {
 			const attrDisplayName =
 				attribute.DisplayName?.UserLocalizedLabel?.Label || attribute.LogicalName;
@@ -431,7 +433,7 @@ export function AddColumnsPanel({
 				const existingIndex = prev.findIndex(
 					(col) =>
 						relationshipKey(col.relationship) === relationshipKey(relationship) &&
-						col.attribute.LogicalName === attribute.LogicalName
+						col.attribute.LogicalName === attribute.LogicalName,
 				);
 
 				if (existingIndex >= 0) {
@@ -443,7 +445,7 @@ export function AddColumnsPanel({
 				}
 			});
 		},
-		[availableAttributes]
+		[availableAttributes],
 	);
 
 	const isRelatedAttributeSelected = useCallback(
@@ -451,10 +453,10 @@ export function AddColumnsPanel({
 			return selectedRelatedCols.some(
 				(col) =>
 					relationshipKey(col.relationship) === relationshipKey(relationship) &&
-					col.attribute.LogicalName === attribute.LogicalName
+					col.attribute.LogicalName === attribute.LogicalName,
 			);
 		},
-		[selectedRelatedCols]
+		[selectedRelatedCols],
 	);
 
 	const handleApply = useCallback(() => {
@@ -506,7 +508,11 @@ export function AddColumnsPanel({
 						<Combobox
 							className={styles.filterCombo}
 							value={
-								filterType === "all" ? "All" : filterType === "standard" ? "Standard" : "Custom"
+								filterType === "all"
+									? "All"
+									: filterType === "standard"
+										? "Standard"
+										: "Custom"
 							}
 							onOptionSelect={(_e, data) =>
 								setFilterType((data.optionValue as FilterType) || "all")
@@ -523,7 +529,9 @@ export function AddColumnsPanel({
 							{filteredAttributes.length === 0 ? (
 								<div className={styles.emptyState}>
 									<Text>
-										{searchText ? "No matching attributes found" : "All attributes already added"}
+										{searchText
+											? "No matching attributes found"
+											: "All attributes already added"}
 									</Text>
 								</div>
 							) : (
@@ -531,7 +539,9 @@ export function AddColumnsPanel({
 									<div
 										key={attr.LogicalName}
 										className={`${styles.attributeItem} ${
-											selectedRootAttrs.has(attr.LogicalName) ? styles.attributeItemSelected : ""
+											selectedRootAttrs.has(attr.LogicalName)
+												? styles.attributeItemSelected
+												: ""
 										}`}
 										onClick={() => handleRootAttributeToggle(attr.LogicalName)}
 										role="checkbox"
@@ -551,7 +561,10 @@ export function AddColumnsPanel({
 												handleRootAttributeToggle(attr.LogicalName);
 											}}
 										/>
-										<Text>{attr.DisplayName?.UserLocalizedLabel?.Label || attr.LogicalName}</Text>
+										<Text>
+											{attr.DisplayName?.UserLocalizedLabel?.Label ||
+												attr.LogicalName}
+										</Text>
 									</div>
 								))
 							)}
@@ -564,7 +577,8 @@ export function AddColumnsPanel({
 								<div className={styles.loadingContainer}>
 									<Spinner size="small" label="Loading relationships…" />
 								</div>
-							) : filteredN1Relationships.length === 0 && filtered1NRelationships.length === 0 ? (
+							) : filteredN1Relationships.length === 0 &&
+							  filtered1NRelationships.length === 0 ? (
 								<div className={styles.emptyState}>
 									<Text>No relationships found</Text>
 								</div>
@@ -576,7 +590,11 @@ export function AddColumnsPanel({
 											<AccordionHeader size="small">
 												<div className={styles.accordionHeader}>
 													<Text weight="semibold">Lookups (N:1)</Text>
-													<Badge appearance="filled" color="informative" size="small">
+													<Badge
+														appearance="filled"
+														color="informative"
+														size="small"
+													>
 														{filteredN1Relationships.length}
 													</Badge>
 												</div>
@@ -585,24 +603,59 @@ export function AddColumnsPanel({
 												<Tree aria-label="Lookup relationships">
 													{filteredN1Relationships.map((relItem) => {
 														const rel = relItem.relationship;
-														const isExpanded = expandedRelationships.has(relationshipKey(rel));
-														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
-														const isLoading = loadingEntities.has(relItem.relatedEntity);
+														const isExpanded =
+															expandedRelationships.has(
+																relationshipKey(rel),
+															);
+														const relatedAttrs =
+															relatedAttributesCache.get(
+																relItem.relatedEntity,
+															);
+														const isLoading = loadingEntities.has(
+															relItem.relatedEntity,
+														);
 
 														return (
-															<TreeItem key={relationshipKey(rel)} itemType="branch" open={isExpanded}>
+															<TreeItem
+																key={relationshipKey(rel)}
+																itemType="branch"
+																open={isExpanded}
+															>
 																<TreeItemLayout
 																	onClick={() =>
-																		handleExpandRelationship(rel, relItem.relatedEntity)
+																		handleExpandRelationship(
+																			rel,
+																			relItem.relatedEntity,
+																		)
 																	}
 																>
-																	<div className={styles.relationshipHeader}>
-																		<div className={styles.relationshipLabel}>
-																			<span className={styles.relationshipName}>
-																				{relItem.displayName}
+																	<div
+																		className={
+																			styles.relationshipHeader
+																		}
+																	>
+																		<div
+																			className={
+																				styles.relationshipLabel
+																			}
+																		>
+																			<span
+																				className={
+																					styles.relationshipName
+																				}
+																			>
+																				{
+																					relItem.displayName
+																				}
 																			</span>
-																			<span className={styles.relationshipEntity}>
-																				{relItem.relatedEntity}
+																			<span
+																				className={
+																					styles.relationshipEntity
+																				}
+																			>
+																				{
+																					relItem.relatedEntity
+																				}
 																			</span>
 																		</div>
 																	</div>
@@ -612,48 +665,86 @@ export function AddColumnsPanel({
 																		{isLoading ? (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Spinner size="tiny" label="Loading…" />
+																					<Spinner
+																						size="tiny"
+																						label="Loading…"
+																					/>
 																				</TreeItemLayout>
 																			</TreeItem>
-																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																		) : relatedAttrs &&
+																		  relatedAttrs.length >
+																				0 ? (
 																			relatedAttrs
-																				.filter((attr) => attr.AttributeType !== "Virtual" && !isAlreadyReturned(relItem, attr.LogicalName))
+																				.filter(
+																					(attr) =>
+																						attr.AttributeType !==
+																							"Virtual" &&
+																						!isAlreadyReturned(
+																							relItem,
+																							attr.LogicalName,
+																						),
+																				)
 																				.sort((a, b) => {
 																					const aName =
-																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a
+																							.DisplayName
+																							?.UserLocalizedLabel
+																							?.Label ||
 																						a.LogicalName;
 																					const bName =
-																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b
+																							.DisplayName
+																							?.UserLocalizedLabel
+																							?.Label ||
 																						b.LogicalName;
-																					return aName.localeCompare(bName);
+																					return aName.localeCompare(
+																						bName,
+																					);
 																				})
 																				.map((attr) => (
-																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																					<TreeItem
+																						key={
+																							attr.LogicalName
+																						}
+																						itemType="leaf"
+																					>
 																						<TreeItemLayout
 																							onClick={() =>
 																								handleRelatedAttributeToggle(
 																									rel,
 																									attr,
 																									"N1",
-																									relItem.relatedEntity
+																									relItem.relatedEntity,
 																								)
 																							}
 																						>
-																							<div className={styles.attributeItem}>
+																							<div
+																								className={
+																									styles.attributeItem
+																								}
+																							>
 																								<Checkbox
-																									checked={isRelatedAttributeSelected(rel, attr)}
-																									onChange={(e) => {
+																									checked={isRelatedAttributeSelected(
+																										rel,
+																										attr,
+																									)}
+																									onChange={(
+																										e,
+																									) => {
 																										e.stopPropagation();
 																										handleRelatedAttributeToggle(
 																											rel,
 																											attr,
 																											"N1",
-																											relItem.relatedEntity
+																											relItem.relatedEntity,
 																										);
 																									}}
 																								/>
 																								<Text>
-																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																									{attr
+																										.DisplayName
+																										?.UserLocalizedLabel
+																										?.Label ||
 																										attr.LogicalName}
 																								</Text>
 																							</div>
@@ -663,8 +754,14 @@ export function AddColumnsPanel({
 																		) : (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
-																						No attributes available
+																					<Text
+																						style={{
+																							color: tokens.colorNeutralForeground3,
+																						}}
+																					>
+																						No
+																						attributes
+																						available
 																					</Text>
 																				</TreeItemLayout>
 																			</TreeItem>
@@ -685,7 +782,11 @@ export function AddColumnsPanel({
 											<AccordionHeader size="small">
 												<div className={styles.accordionHeader}>
 													<Text weight="semibold">Related (1:N)</Text>
-													<Badge appearance="filled" color="informative" size="small">
+													<Badge
+														appearance="filled"
+														color="informative"
+														size="small"
+													>
 														{filtered1NRelationships.length}
 													</Badge>
 													<Badge
@@ -702,23 +803,56 @@ export function AddColumnsPanel({
 												<Tree aria-label="One-to-many relationships">
 													{filtered1NRelationships.map((relItem) => {
 														const rel = relItem.relationship;
-														const isExpanded = expandedRelationships.has(relationshipKey(rel));
-														const relatedAttrs = relatedAttributesCache.get(relItem.relatedEntity);
-														const isLoading = loadingEntities.has(relItem.relatedEntity);
+														const isExpanded =
+															expandedRelationships.has(
+																relationshipKey(rel),
+															);
+														const relatedAttrs =
+															relatedAttributesCache.get(
+																relItem.relatedEntity,
+															);
+														const isLoading = loadingEntities.has(
+															relItem.relatedEntity,
+														);
 
 														return (
-															<TreeItem key={relationshipKey(rel)} itemType="branch" open={isExpanded}>
+															<TreeItem
+																key={relationshipKey(rel)}
+																itemType="branch"
+																open={isExpanded}
+															>
 																<TreeItemLayout
 																	onClick={() =>
-																		handleExpandRelationship(rel, relItem.relatedEntity)
+																		handleExpandRelationship(
+																			rel,
+																			relItem.relatedEntity,
+																		)
 																	}
 																>
-																	<div className={styles.relationshipHeader}>
-																		<div className={styles.relationshipLabel}>
-																			<span className={styles.relationshipName}>
-																				{relItem.displayName}
+																	<div
+																		className={
+																			styles.relationshipHeader
+																		}
+																	>
+																		<div
+																			className={
+																				styles.relationshipLabel
+																			}
+																		>
+																			<span
+																				className={
+																					styles.relationshipName
+																				}
+																			>
+																				{
+																					relItem.displayName
+																				}
 																			</span>
-																			<span className={styles.relationshipEntity}>
+																			<span
+																				className={
+																					styles.relationshipEntity
+																				}
+																			>
 																				{rel.SchemaName}
 																			</span>
 																		</div>
@@ -729,48 +863,86 @@ export function AddColumnsPanel({
 																		{isLoading ? (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Spinner size="tiny" label="Loading…" />
+																					<Spinner
+																						size="tiny"
+																						label="Loading…"
+																					/>
 																				</TreeItemLayout>
 																			</TreeItem>
-																		) : relatedAttrs && relatedAttrs.length > 0 ? (
+																		) : relatedAttrs &&
+																		  relatedAttrs.length >
+																				0 ? (
 																			relatedAttrs
-																				.filter((attr) => attr.AttributeType !== "Virtual" && !isAlreadyReturned(relItem, attr.LogicalName))
+																				.filter(
+																					(attr) =>
+																						attr.AttributeType !==
+																							"Virtual" &&
+																						!isAlreadyReturned(
+																							relItem,
+																							attr.LogicalName,
+																						),
+																				)
 																				.sort((a, b) => {
 																					const aName =
-																						a.DisplayName?.UserLocalizedLabel?.Label ||
+																						a
+																							.DisplayName
+																							?.UserLocalizedLabel
+																							?.Label ||
 																						a.LogicalName;
 																					const bName =
-																						b.DisplayName?.UserLocalizedLabel?.Label ||
+																						b
+																							.DisplayName
+																							?.UserLocalizedLabel
+																							?.Label ||
 																						b.LogicalName;
-																					return aName.localeCompare(bName);
+																					return aName.localeCompare(
+																						bName,
+																					);
 																				})
 																				.map((attr) => (
-																					<TreeItem key={attr.LogicalName} itemType="leaf">
+																					<TreeItem
+																						key={
+																							attr.LogicalName
+																						}
+																						itemType="leaf"
+																					>
 																						<TreeItemLayout
 																							onClick={() =>
 																								handleRelatedAttributeToggle(
 																									rel,
 																									attr,
 																									"1N",
-																									relItem.relatedEntity
+																									relItem.relatedEntity,
 																								)
 																							}
 																						>
-																							<div className={styles.attributeItem}>
+																							<div
+																								className={
+																									styles.attributeItem
+																								}
+																							>
 																								<Checkbox
-																									checked={isRelatedAttributeSelected(rel, attr)}
-																									onChange={(e) => {
+																									checked={isRelatedAttributeSelected(
+																										rel,
+																										attr,
+																									)}
+																									onChange={(
+																										e,
+																									) => {
 																										e.stopPropagation();
 																										handleRelatedAttributeToggle(
 																											rel,
 																											attr,
 																											"1N",
-																											relItem.relatedEntity
+																											relItem.relatedEntity,
 																										);
 																									}}
 																								/>
 																								<Text>
-																									{attr.DisplayName?.UserLocalizedLabel?.Label ||
+																									{attr
+																										.DisplayName
+																										?.UserLocalizedLabel
+																										?.Label ||
 																										attr.LogicalName}
 																								</Text>
 																							</div>
@@ -780,8 +952,14 @@ export function AddColumnsPanel({
 																		) : (
 																			<TreeItem itemType="leaf">
 																				<TreeItemLayout>
-																					<Text style={{ color: tokens.colorNeutralForeground3 }}>
-																						No attributes available
+																					<Text
+																						style={{
+																							color: tokens.colorNeutralForeground3,
+																						}}
+																					>
+																						No
+																						attributes
+																						available
 																					</Text>
 																				</TreeItemLayout>
 																			</TreeItem>
@@ -810,7 +988,11 @@ export function AddColumnsPanel({
 					<Button appearance="secondary" onClick={onClose}>
 						Close
 					</Button>
-					<Button appearance="primary" onClick={handleApply} disabled={totalSelected === 0}>
+					<Button
+						appearance="primary"
+						onClick={handleApply}
+						disabled={totalSelected === 0}
+					>
 						Add
 					</Button>
 				</div>

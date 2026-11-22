@@ -45,10 +45,7 @@ import { generateFetchXml } from "../../model/fetchxml";
 import { copyText } from "../../api/host";
 import { ParseIssueList, type ParseIssueItem } from "./ParseIssueList";
 import { ParseChangesDialog } from "./ParseChangesDialog";
-import {
-	registerFetchXmlIntellisense,
-	registerFetchXmlHoverProvider,
-} from "../../model/fetchxmlIntellisense";
+import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -57,6 +54,13 @@ function canonicalFetchXml(xmlText: string): string | null {
 }
 
 const TREE_CHANGED_TITLE = "The tree changed while you were editing";
+
+/**
+ * Whether the Advisories tab lists this finding (advisories.ts collectAdvisories): a query-rule
+ * finding (they carry a nodeId) that's an error, a warning or advice, not a setting Dataverse ignores.
+ */
+const listedInAdvisories = (w: ParseWarning) =>
+	w.nodeId !== undefined && (w.severity !== "info" || w.kind === "advice");
 
 const useStyles = makeStyles({
 	container: {
@@ -115,6 +119,8 @@ interface Message {
 	title: string;
 	/** Text, or a list of findings rendered as bullets */
 	body: string | ParseIssueItem[];
+	/** Validate's findings: offer "View all in Advisories" (#97) */
+	advisories?: boolean;
 }
 
 const INVALID_TITLE = "Invalid FetchXML";
@@ -134,6 +140,8 @@ interface FetchXmlEditorProps {
 	 * FetchXML into the tree and the tree changed it (#102). A new `id` triggers the replacement.
 	 */
 	replaceRequest?: { xml: string; id: number } | null;
+	/** Switch to the Advisories tab, from Validate's message bars (#97) */
+	onViewAdvisories?: () => void;
 }
 
 export function FetchXmlEditor({
@@ -141,6 +149,7 @@ export function FetchXmlEditor({
 	onParseToTree,
 	onEditorStateChange,
 	replaceRequest,
+	onViewAdvisories,
 }: FetchXmlEditorProps) {
 	const styles = useStyles();
 	const { isDark } = useTheme();
@@ -163,13 +172,14 @@ export function FetchXmlEditor({
 
 	// Add a message
 	const addMessage = useCallback(
-		(intent: Message["intent"], title: string, body: Message["body"]) => {
-		const newMessage: Message = {
-			id: messageIdRef.current++,
-			intent,
-			title,
-			body,
-		};
+		(intent: Message["intent"], title: string, body: Message["body"], advisories?: boolean) => {
+			const newMessage: Message = {
+				id: messageIdRef.current++,
+				intent,
+				title,
+				body,
+				advisories,
+			};
 			setMessages((prev) => [newMessage, ...prev].slice(0, 5)); // Keep max 5 messages
 		},
 		[],
@@ -337,9 +347,17 @@ export function FetchXmlEditor({
 		const notes = parseResult.warnings.filter((w) => w.severity === "info");
 		const blocking = getBlockingWarnings(parseResult);
 		const executionErrors = getExecutionErrors(parseResult);
-		if (notes.length > 0) addMessage("info", "Notes", notes);
-		if (blocking.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, blocking);
-		if (executionErrors.length > 0) addMessage("error", INVALID_TITLE, executionErrors);
+		// A bar offers "View all in Advisories" when the tab lists one of its findings (#97)
+		if (notes.length > 0) addMessage("info", "Notes", notes, notes.some(listedInAdvisories));
+		if (blocking.length > 0)
+			addMessage("warning", MIGHT_REJECT_TITLE, blocking, blocking.some(listedInAdvisories));
+		if (executionErrors.length > 0)
+			addMessage(
+				"error",
+				INVALID_TITLE,
+				executionErrors,
+				executionErrors.some(listedInAdvisories),
+			);
 		if (blocking.length === 0 && executionErrors.length === 0) {
 			addMessage("success", "Valid", "Dataverse should accept this FetchXML.");
 		}
@@ -370,7 +388,11 @@ export function FetchXmlEditor({
 			if (notes.length > 0) addMessage("info", "Notes", notes);
 			if (stillWarnings.length > 0) addMessage("warning", MIGHT_REJECT_TITLE, stillWarnings);
 			if (stillErrors.length > 0) addMessage("error", INVALID_TITLE, stillErrors);
-			addMessage("success", "Parsed into the tree", "The FetchXML was loaded into the tree builder.");
+			addMessage(
+				"success",
+				"Parsed into the tree",
+				"The FetchXML was loaded into the tree builder.",
+			);
 
 			// Exit editor mode after successful parse
 			onEditorStateChange?.(false, "");
@@ -410,9 +432,9 @@ export function FetchXmlEditor({
 	const handleEditorMount = useCallback(
 		(editor: MonacoEditor.editor.IStandaloneCodeEditor, monaco: typeof MonacoEditor) => {
 			editorRef.current = editor;
-			// Register FetchXML intellisense (only in editor mode, but register once)
-			registerFetchXmlIntellisense(monaco);
-			registerFetchXmlHoverProvider(monaco);
+			// FetchXML completions and hovers for this editor only, released with it (#194)
+			const languageFeatures = attachFetchXmlLanguageFeatures(monaco, editor);
+			editor.onDidDispose(() => languageFeatures.dispose());
 		},
 		[],
 	);
@@ -430,12 +452,18 @@ export function FetchXmlEditor({
 								</ToolbarButton>
 							</Tooltip>
 							<Tooltip content="Paste from clipboard" relationship="label">
-								<ToolbarButton icon={<ClipboardPaste24Regular />} onClick={handlePaste}>
+								<ToolbarButton
+									icon={<ClipboardPaste24Regular />}
+									onClick={handlePaste}
+								>
 									Paste
 								</ToolbarButton>
 							</Tooltip>
 							<Tooltip content="Load from file" relationship="label">
-								<ToolbarButton icon={<FolderOpen24Regular />} onClick={handleLoadFile}>
+								<ToolbarButton
+									icon={<FolderOpen24Regular />}
+									onClick={handleLoadFile}
+								>
 									Load
 								</ToolbarButton>
 							</Tooltip>
@@ -446,11 +474,17 @@ export function FetchXmlEditor({
 							</Tooltip>
 							<ToolbarDivider />
 							<Tooltip content="Validate FetchXML syntax" relationship="label">
-								<ToolbarButton icon={<Checkmark24Regular />} onClick={handleValidate}>
+								<ToolbarButton
+									icon={<Checkmark24Regular />}
+									onClick={handleValidate}
+								>
 									Validate
 								</ToolbarButton>
 							</Tooltip>
-							<Tooltip content="Parse FetchXML into tree builder" relationship="label">
+							<Tooltip
+								content="Parse FetchXML into tree builder"
+								relationship="label"
+							>
 								<ToolbarButton
 									icon={<TreeDeciduous24Regular />}
 									onClick={handleParseToTree}
@@ -462,7 +496,11 @@ export function FetchXmlEditor({
 						</Toolbar>
 					) : (
 						<Tooltip content="Copy FetchXML to clipboard" relationship="label">
-							<Button appearance="subtle" icon={<Copy24Regular />} onClick={handleCopy}>
+							<Button
+								appearance="subtle"
+								icon={<Copy24Regular />}
+								onClick={handleCopy}
+							>
 								Copy
 							</Button>
 						</Tooltip>
@@ -535,7 +573,11 @@ export function FetchXmlEditor({
 							>
 								<MessageBarBody>
 									<MessageBarTitle>{msg.title}</MessageBarTitle>
-									{typeof msg.body === "string" ? msg.body : <ParseIssueList items={msg.body} />}
+									{typeof msg.body === "string" ? (
+										msg.body
+									) : (
+										<ParseIssueList items={msg.body} />
+									)}
 								</MessageBarBody>
 								<MessageBarActions
 									containerAction={
@@ -547,7 +589,13 @@ export function FetchXmlEditor({
 											size="small"
 										/>
 									}
-								/>
+								>
+									{msg.advisories && onViewAdvisories && (
+										<Button size="small" onClick={onViewAdvisories}>
+											View all in Advisories
+										</Button>
+									)}
+								</MessageBarActions>
 							</MessageBar>
 						))}
 					</MessageBarGroup>

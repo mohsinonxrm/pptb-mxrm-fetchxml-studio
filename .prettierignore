@@ -2,3 +2,5 @@ dist/
 node_modules/
 package-lock.json
 *.md
+# Captured or generated test data, kept as written (#205)
+**/__fixtures__/

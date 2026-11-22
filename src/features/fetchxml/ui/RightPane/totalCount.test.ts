@@ -33,7 +33,12 @@ describe("entityTotalText", () => {
 
 describe("totalFromRecordCountCollection", () => {
 	// Shape verified live: RetrieveTotalRecordCount(EntityNames=@p)?@p=["account"]
-	const collection = { Count: 2, IsReadOnly: false, Keys: ["account", "contact"], Values: [158965, 127533] };
+	const collection = {
+		Count: 2,
+		IsReadOnly: false,
+		Keys: ["account", "contact"],
+		Values: [158965, 127533],
+	};
 	it("finds the entity's count", () => {
 		expect(totalFromRecordCountCollection(collection, "contact")).toBe(127533);
 		expect(totalFromRecordCountCollection(collection, "Account")).toBe(158965);

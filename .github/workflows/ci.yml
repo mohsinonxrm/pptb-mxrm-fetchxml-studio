@@ -32,6 +32,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run lint
+      # Formatting follows .prettierrc (#205); `npm run format` fixes it
+      - run: npm run format:check
       - run: npm test
       - run: npm run validate
       - run: npm run build

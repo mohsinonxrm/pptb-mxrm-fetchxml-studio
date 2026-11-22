@@ -91,7 +91,8 @@ export function getViewSecondaryText(
 	currentUserId: string | undefined,
 ): string | undefined {
 	const parts: string[] = [];
-	if (isSharedView(view, currentUserId)) parts.push(view.ownerName ? `Shared by ${view.ownerName}` : "Shared with you");
+	if (isSharedView(view, currentUserId))
+		parts.push(view.ownerName ? `Shared by ${view.ownerName}` : "Shared with you");
 	const typeLabel = getQueryTypeLabel(view.queryType);
 	if (typeLabel) {
 		const known = QUERY_TYPE_LABELS.some(([, label]) => label === typeLabel);
@@ -124,8 +125,14 @@ export function hasWriteAccess(accessRights: unknown): boolean | undefined {
  * property to true." Personal views (userquery) have no isdefault column.
  * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#set-a-public-view-as-the-default-view
  */
-export function canSetDefaultView(view: { type: "system" | "personal"; queryType?: number }): boolean {
-	return view.type === "system" && (view.queryType ?? PUBLIC_VIEW_QUERY_TYPE) === PUBLIC_VIEW_QUERY_TYPE;
+export function canSetDefaultView(view: {
+	type: "system" | "personal";
+	queryType?: number;
+}): boolean {
+	return (
+		view.type === "system" &&
+		(view.queryType ?? PUBLIC_VIEW_QUERY_TYPE) === PUBLIC_VIEW_QUERY_TYPE
+	);
 }
 
 /**
@@ -133,7 +140,10 @@ export function canSetDefaultView(view: { type: "system" | "personal"; queryType
  * too: Dataverse doesn't clear it, and clearing it failed (#307). An entry with no `id` means the
  * other defaults couldn't be read.
  */
-export function defaultViewsNotClearedMessage(viewName: string, notCleared: readonly { id: string; name: string; error: string }[]): string {
+export function defaultViewsNotClearedMessage(
+	viewName: string,
+	notCleared: readonly { id: string; name: string; error: string }[],
+): string {
 	const known = notCleared.filter((view) => view.id);
 	const errors = notCleared.map((view) => view.error).join(" ");
 	if (known.length === 0) {
@@ -242,7 +252,10 @@ export function getValidationStatus(
  * https://learn.microsoft.com/power-apps/developer/model-driven-apps/customize-entity-views#update-views
  * Personal views have no such property, and an unknown value isn't blocked (Dataverse decides).
  */
-export function canOverwriteView(view: { type: "system" | "personal"; isCustomizable?: boolean }): boolean {
+export function canOverwriteView(view: {
+	type: "system" | "personal";
+	isCustomizable?: boolean;
+}): boolean {
 	return view.type !== "system" || view.isCustomizable !== false;
 }
 
@@ -253,7 +266,11 @@ export function canOverwriteView(view: { type: "system" | "personal"; isCustomiz
  */
 export function readManagedPropertyValue(value: unknown): boolean | undefined {
 	if (typeof value === "boolean") return value;
-	if (value && typeof value === "object" && typeof (value as { Value?: unknown }).Value === "boolean") {
+	if (
+		value &&
+		typeof value === "object" &&
+		typeof (value as { Value?: unknown }).Value === "boolean"
+	) {
 		return (value as { Value: boolean }).Value;
 	}
 	return undefined;
@@ -281,7 +298,9 @@ export function getViewLoadNotice(viewName: string, result: ParseResult): ViewLo
 	}
 	const changes = getParseToTreeChanges(result);
 	if (changes.length === 0) return null;
-	const list = changes.map((c) => (c.element ? `<${c.element}> ${c.message}` : c.message)).join(" ");
+	const list = changes
+		.map((c) => (c.element ? `<${c.element}> ${c.message}` : c.message))
+		.join(" ");
 	return {
 		title: "View loaded with changes",
 		body: `The tree can't represent everything in "${viewName}". ${list} Saving the view saves these changes.`,

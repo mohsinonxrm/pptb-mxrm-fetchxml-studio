@@ -39,7 +39,9 @@ type ToolBoxEventPayload = {
  */
 /** The OS colour scheme as the webview sees it. */
 const systemTheme = (): "light" | "dark" =>
-	typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+	typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches
+		? "dark"
+		: "light";
 
 export function usePptbContext(): PptbContext {
 	const [context, setContext] = useState<PptbContext>({
@@ -68,7 +70,8 @@ export function usePptbContext(): PptbContext {
 			try {
 				const hostTheme = await toolboxAPI.utils?.getCurrentTheme?.();
 				if (request !== themeRequest) return;
-				const theme = hostTheme && String(hostTheme).toLowerCase() === "dark" ? "dark" : "light";
+				const theme =
+					hostTheme && String(hostTheme).toLowerCase() === "dark" ? "dark" : "light";
 				setContext((prev) => (prev.theme === theme ? prev : { ...prev, theme }));
 			} catch (err) {
 				console.warn("Failed to get the theme from the host:", err);
@@ -97,7 +100,11 @@ export function usePptbContext(): PptbContext {
 					connectionKey: connectionKey(connection),
 				};
 				setContext((prev) =>
-					(Object.keys(next) as (keyof typeof next)[]).every((key) => prev[key] === next[key]) ? prev : { ...prev, ...next },
+					(Object.keys(next) as (keyof typeof next)[]).every(
+						(key) => prev[key] === next[key],
+					)
+						? prev
+						: { ...prev, ...next },
 				);
 			} catch (err) {
 				console.warn("❌ Failed to get the tool's connection:", err);

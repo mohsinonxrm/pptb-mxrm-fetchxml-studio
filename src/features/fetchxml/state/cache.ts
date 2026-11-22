@@ -40,6 +40,7 @@ class MetadataCache {
 	private solutionsCache: Map<string, CacheEntry<Solution[]>> = new Map(); // keyed by sorted publisher IDs
 	private filteredEntitiesCache: Map<string, CacheEntry<EntityMetadata[]>> = new Map(); // keyed by sorted solution IDs
 	private solutionComponentsCache: Map<string, CacheEntry<string[]>> = new Map(); // Entity names per solution ID
+	private stringMaxLengths: Map<string, CacheEntry<Map<string, number>>> = new Map(); // String MaxLength per entity (#97)
 
 	// Bumped by clear(). A request started before a clear (e.g. on the previous connection, #66)
 	// must not write its answer into the cleared cache.
@@ -132,7 +133,12 @@ class MetadataCache {
 			data: entities,
 			timestamp: Date.now(),
 		};
-		debugLog("metadataAPI", "[Cache] Global entity metadata cached:", entities.length, "entities");
+		debugLog(
+			"metadataAPI",
+			"[Cache] Global entity metadata cached:",
+			entities.length,
+			"entities",
+		);
 	}
 
 	/**
@@ -246,7 +252,7 @@ class MetadataCache {
 			oneToMany: RelationshipMetadata[];
 			manyToOne: RelationshipMetadata[];
 			manyToMany: RelationshipMetadata[];
-		}
+		},
 	): void {
 		const entry = this.getEntityEntry(logicalName);
 		if (!entry.data) entry.data = {};
@@ -280,6 +286,35 @@ class MetadataCache {
 		}
 	}
 
+	/** MaxLength per String attribute of an entity (#97), when cached and not stale */
+	getStringMaxLengths(logicalName: string): Map<string, number> | undefined {
+		const entry = this.stringMaxLengths.get(logicalName);
+		if (!entry || this.isStale(entry.timestamp)) return undefined;
+		return entry.data;
+	}
+
+	setStringMaxLengths(logicalName: string, maxLengths: Map<string, number>): void {
+		this.stringMaxLengths.set(logicalName, { data: maxLengths, timestamp: Date.now() });
+	}
+
+	/** In-flight request for an entity's String MaxLength values */
+	getStringMaxLengthsPromise(logicalName: string): Promise<Map<string, number>> | undefined {
+		return this.stringMaxLengths.get(logicalName)?.promise;
+	}
+
+	setStringMaxLengthsPromise(logicalName: string, promise: Promise<Map<string, number>>): void {
+		const entry = this.stringMaxLengths.get(logicalName) ?? { timestamp: Date.now() };
+		entry.promise = promise;
+		this.stringMaxLengths.set(logicalName, entry);
+	}
+
+	clearStringMaxLengthsPromise(logicalName: string): void {
+		const entry = this.stringMaxLengths.get(logicalName);
+		if (!entry) return;
+		entry.promise = undefined;
+		if (entry.data === undefined) this.stringMaxLengths.delete(logicalName);
+	}
+
 	/**
 	 * Call before starting a request; the returned check says whether the cache hasn't been
 	 * cleared since, i.e. whether the answer may still be cached.
@@ -296,6 +331,7 @@ class MetadataCache {
 	clear(): void {
 		this.generation++;
 		this.entities.clear();
+		this.stringMaxLengths.clear();
 		this.allEntitiesCache = null;
 		this.allEntityMetadataCache = null;
 		this.publishersCache = null;
@@ -310,6 +346,7 @@ class MetadataCache {
 	 */
 	clearEntity(logicalName: string): void {
 		this.entities.delete(logicalName);
+		this.stringMaxLengths.delete(logicalName);
 	}
 
 	/**
