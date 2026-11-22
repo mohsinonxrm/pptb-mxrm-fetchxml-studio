@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import {
+	AriaLiveAnnouncer,
 	FluentProvider,
 	mergeClasses,
 	webLightTheme,
@@ -35,11 +36,14 @@ import { AppBar } from "../features/fetchxml/ui/AppBar/AppBar";
 import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync";
 import { useEditorSession } from "./hooks/useEditorSession";
 import { useRunShortcut } from "./hooks/useRunShortcut";
+import { useUndoRedo } from "./hooks/useUndoRedo";
+import { useUndoShortcuts } from "./hooks/useUndoShortcuts";
 import { isViewDirty } from "../features/fetchxml/model/viewDirty";
 import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
+import { TreeToolbar } from "../features/fetchxml/ui/LeftPane/TreeToolbar";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { clearMetadataLoadErrors } from "../features/fetchxml/ui/LeftPane/PropertiesPanel/metadataLoadErrors";
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
@@ -128,22 +132,26 @@ export function AppShell() {
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
+				{/* One live region for screen reader announcements (#192, #186): Undo and Redo say
+				    what they did, and Fluent's MessageBars announce themselves through it */}
+				<AriaLiveAnnouncer>
+					{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
 				    details still toasts; above the remount, so a new session or a restart clears
 				    toasts whose actions point at the old builder */}
-				<NotifyProvider resetKey={`${session}-${restarts}`}>
-					<ToolErrorBoundary
-						readFetchXml={() => carryOver.current.readFetchXml?.()}
-						onRestart={restart}
-					>
-						<BuilderProvider key={`${session}-${restarts}`}>
-							<AppContent
-								carryOver={carryOver.current}
-								connectionKey={connectionKey}
-							/>
-						</BuilderProvider>
-					</ToolErrorBoundary>
-				</NotifyProvider>
+					<NotifyProvider resetKey={`${session}-${restarts}`}>
+						<ToolErrorBoundary
+							readFetchXml={() => carryOver.current.readFetchXml?.()}
+							onRestart={restart}
+						>
+							<BuilderProvider key={`${session}-${restarts}`}>
+								<AppContent
+									carryOver={carryOver.current}
+									connectionKey={connectionKey}
+								/>
+							</BuilderProvider>
+						</ToolErrorBoundary>
+					</NotifyProvider>
+				</AriaLiveAnnouncer>
 			</ThemeProvider>
 		</FluentProvider>
 	);
@@ -450,6 +458,15 @@ function AppContent({
 		isLoadingMore: queryExecution.isLoadingMore,
 	});
 	useRunShortcut(editorSession.run, editorSession.runDisabledReason);
+	// Undo and Redo (#192): the tree toolbar and Ctrl+Z / Ctrl+Y outside text fields, announced
+	const undoRedo = useUndoRedo(builder.history);
+	useUndoShortcuts({
+		...undoRedo,
+		restoreFocus: () =>
+			treeRegionRef.current
+				?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
+				?.focus(),
+	});
 
 	// The view the query is, and whether it has unsaved changes (#278, owner decision Q4): its
 	// FetchXML (the editor's in editor mode), columns or widths differ from the view as loaded or saved
@@ -508,8 +525,18 @@ function AppContent({
 			/>
 		</PaneErrorBoundary>
 	);
+	const { canUndo, canRedo, undoLabel, redoLabel } = builder.history;
 	const treeBody = (
 		<>
+			<TreeToolbar
+				hasQuery={!!builder.fetchQuery}
+				canUndo={canUndo}
+				canRedo={canRedo}
+				undoLabel={undoLabel}
+				redoLabel={redoLabel}
+				onUndo={undoRedo.undo}
+				onRedo={undoRedo.redo}
+			/>
 			<TreeNoticeBar notice={treeNotice.notice} onDismiss={treeNotice.dismiss} />
 			{builder.fetchQuery ? (
 				<PaneErrorBoundary
