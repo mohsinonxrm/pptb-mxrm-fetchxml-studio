@@ -266,7 +266,8 @@ function AppContent({
 			// An open dropdown or menu trigger closes its popup first (an expanded tree item isn't one)
 			const popupOpen =
 				target?.getAttribute("aria-expanded") === "true" &&
-				(target.getAttribute("role") === "combobox" || target.hasAttribute("aria-haspopup"));
+				(target.getAttribute("role") === "combobox" ||
+					target.hasAttribute("aria-haspopup"));
 			if (popupOpen) return;
 			event.preventDefault();
 			closePeek();

@@ -9,8 +9,8 @@ import { cleanup, flush, render } from "../../shared/testing/ui";
 import { LAYOUT_KEY, useBuilderLayout, type BuilderLayout } from "./useBuilderLayout";
 
 let latest: BuilderLayout;
-function Probe({ forceCollapsed }: { forceCollapsed?: boolean } = {}) {
-	latest = useBuilderLayout({ forceCollapsed });
+function Probe(props: { forceCollapsed?: boolean }) {
+	latest = useBuilderLayout({ forceCollapsed: props.forceCollapsed });
 	return null;
 }
 
