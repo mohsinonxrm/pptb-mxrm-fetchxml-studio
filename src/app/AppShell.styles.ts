@@ -42,6 +42,24 @@ export const useStyles = makeStyles({
 		flexShrink: 0,
 		height: "100%",
 	},
+	// The peek (#234): one part of the collapsed pane, over the output, beside the rail
+	peek: {
+		position: "absolute",
+		top: 0,
+		bottom: 0,
+		left: "44px",
+		zIndex: 30,
+		backgroundColor: tokens.colorNeutralBackground1,
+		boxShadow: tokens.shadow16,
+		borderRight: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
+	},
+	peekBar: {
+		paddingBlock: "6px",
+		paddingRight: "8px",
+	},
+	peekBarEnd: {
+		marginLeft: "auto",
+	},
 	leftPaneTop: {
 		display: "flex",
 		flexDirection: "column",

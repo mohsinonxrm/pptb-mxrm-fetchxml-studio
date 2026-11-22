@@ -6,7 +6,7 @@
  * entity source and Advanced Find only. The selection is remembered per environment (#25).
  */
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import {
 	Combobox,
 	Option,
@@ -46,6 +46,11 @@ const useStyles = makeStyles({
 		alignItems: "center",
 		gap: "6px",
 		minWidth: 0,
+	},
+	// The builder pane's own command (Collapse, or Pin in a peek, #234), at the header's end
+	headerAction: {
+		marginLeft: "auto",
+		flexShrink: 0,
 	},
 	// Fluent's Combobox has a built-in minimum width (~250px); in a narrow left pane it drew over the
 	// "New" button (#53). The comboboxes shrink with the pane instead.
@@ -106,6 +111,8 @@ interface EntitySelectorProps {
 	/** Limit entities and attributes to Advanced Find–eligible ones */
 	advancedFindOnly: boolean;
 	onAdvancedFindOnlyChange: (value: boolean) => void;
+	/** A command beside the scope chip: the builder pane's Collapse or Pin (#234) */
+	headerAction?: ReactNode;
 }
 
 export function EntitySelector({
@@ -115,8 +122,19 @@ export function EntitySelector({
 	onEntityScopeModeChange,
 	advancedFindOnly,
 	onAdvancedFindOnlyChange,
+	headerAction,
 }: EntitySelectorProps) {
 	const styles = useStyles();
+	const action = headerAction ? <div className={styles.headerAction}>{headerAction}</div> : null;
+	// While the chip isn't shown yet (checking access, no access), the action still is. The row has
+	// the loaded header's shape (an empty slot where the chip goes), so the action isn't remounted
+	// when access has been checked: focus on it (Collapse, Pin) stays.
+	const actionRow = action ? (
+		<div className={styles.header}>
+			{null}
+			{action}
+		</div>
+	) : null;
 	const entityComboId = useId("entity-combobox");
 	const entityHintId = useId("entity-hint");
 
@@ -328,6 +346,7 @@ export function EntitySelector({
 	if (accessLoading) {
 		return (
 			<div className={styles.container}>
+				{actionRow}
 				<div className={styles.loadingContainer}>
 					<Spinner size="small" label="Checking access permissions…" />
 				</div>
@@ -339,6 +358,7 @@ export function EntitySelector({
 	if (noAccessMode) {
 		return (
 			<div className={styles.container}>
+				{actionRow}
 				<div className={styles.noAccessMessage}>
 					<LockClosed20Regular style={{ marginBottom: "8px" }} />
 					<div>You don't have permission to read metadata (prvReadCustomization).</div>
@@ -401,6 +421,7 @@ export function EntitySelector({
 					showTip={showScopeTip}
 					onTipDismiss={scopeTip.dismiss}
 				/>
+				{action}
 			</div>
 
 			{/* Entity selector (all modes) */}

@@ -168,4 +168,78 @@ describe("the builder pane's layout", () => {
 		},
 		FLOW_TIMEOUT,
 	);
+
+	it(
+		"collapses to a rail that peeks at the tree or Properties, and Pin docks it again",
+		async () => {
+			Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+			const app = await renderApp({ launch: { fetchXml: query } });
+			await app.waitFor(() => document.querySelectorAll('[role="treeitem"]').length > 0);
+			const named = (name: string) =>
+				document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+			const rail = () =>
+				document.querySelector<HTMLElement>('nav[aria-label="Builder pane"]');
+			const peek = (label: string) =>
+				document.querySelector<HTMLElement>(`aside[aria-label="${label}"]`);
+
+			// Collapse sits beside the scope chip; it leaves the rail, with focus on Expand
+			expect(rail()).toBeNull();
+			await click(named("Collapse the builder pane"));
+			await app.waitFor(() => !!rail());
+			expect(builder()).toBeNull();
+			expect(splitter(WIDTH)).toBeNull();
+			expect(document.activeElement).toBe(named("Expand the builder pane"));
+
+			// Query tree opens the tree in a peek, focus inside it on the tree
+			await click(named("Query tree"));
+			await app.waitFor(() => !!peek("Query tree"));
+			expect(named("Query tree")?.getAttribute("aria-pressed")).toBe("true");
+			expect(named("Query tree")?.getAttribute("aria-controls")).toBe(peek("Query tree")?.id);
+			expect(peek("Query tree")?.contains(document.activeElement)).toBe(true);
+			expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
+			// Escape closes it and returns focus to its rail button
+			await key(document.activeElement as HTMLElement, "Escape");
+			await app.waitFor(() => !peek("Query tree"));
+			expect(document.activeElement).toBe(named("Query tree"));
+
+			// Properties peek: select a node first, then open its properties
+			await click(named("Query tree"));
+			await app.waitFor(() => !!peek("Query tree"));
+			await click(treeItem("account"));
+			await click(named("Properties"));
+			await app.waitFor(() => !!peek("Properties"));
+			expect(peek("Query tree")).toBeNull();
+			expect(peek("Properties")?.textContent).toContain("account");
+			// Its rail button again closes it
+			await click(named("Properties"));
+			await app.waitFor(() => !peek("Properties"));
+
+			// A click on the output closes a peek
+			await click(named("Query tree"));
+			await app.waitFor(() => !!peek("Query tree"));
+			await act(async () => {
+				document
+					.querySelector('main[aria-label="Query output"]')
+					?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+			});
+			await app.waitFor(() => !peek("Query tree"));
+
+			// Pin docks the pane again, with focus on Collapse
+			await click(named("Properties"));
+			await app.waitFor(() => !!peek("Properties"));
+			await click(named("Pin the builder pane open"));
+			await app.waitFor(() => !!builder());
+			expect(rail()).toBeNull();
+			expect(splitter(WIDTH)).toBeTruthy();
+			expect(document.activeElement).toBe(named("Collapse the builder pane"));
+
+			// Expand does the same from the rail
+			await click(named("Collapse the builder pane"));
+			await app.waitFor(() => !!rail());
+			await click(named("Expand the builder pane"));
+			await app.waitFor(() => !!builder());
+			expect(document.activeElement).toBe(named("Collapse the builder pane"));
+		},
+		FLOW_TIMEOUT,
+	);
 });
