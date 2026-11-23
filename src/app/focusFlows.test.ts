@@ -75,6 +75,14 @@ describe("app: Delete on a tree row", () => {
 			await press(active(), { key: "Delete" });
 			await app.waitFor(() => !treeItem("name"));
 			await app.waitFor(() => rowLabel(active()) === "accountid");
+			// That delete's focus move is done: a later change (an undo, from another row) leaves focus
+			// where it is
+			const fetchRow = treeItem("Fetch query");
+			await act(async () => fetchRow?.focus());
+			await press(fetchRow, { key: "z", ctrlKey: true });
+			await app.waitFor(() => !!treeItem("name"));
+			await act(() => new Promise<void>((resolve) => setTimeout(resolve, 150)));
+			expect(active()).toBe(fetchRow);
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,

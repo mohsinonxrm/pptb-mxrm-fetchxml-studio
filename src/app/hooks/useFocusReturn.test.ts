@@ -180,6 +180,25 @@ describe("useFocusReturn", () => {
 		expect(document.activeElement).toBe(byId("toolbar"));
 	});
 
+	it("sees a dialog that arrives inside a wrapper (a portal's container)", async () => {
+		await render(createElement(Probe));
+		await focus(byId("row"));
+		const wrapper = document.createElement("div");
+		wrapper.dataset.testPopup = "";
+		const dialog = document.createElement("div");
+		dialog.setAttribute("role", "dialog");
+		const inside = document.createElement("button");
+		dialog.appendChild(inside);
+		wrapper.appendChild(dialog);
+		await act(async () => {
+			document.body.appendChild(wrapper);
+			inside.focus();
+		});
+		await frames();
+		await close(wrapper);
+		expect(document.activeElement).toBe(byId("row"));
+	});
+
 	it("starts over for the next dialog", async () => {
 		await render(createElement(Probe));
 		await focus(byId("row"));
