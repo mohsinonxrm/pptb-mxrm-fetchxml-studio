@@ -191,7 +191,7 @@ describe("Save on a personal view you own (#278 PR 3)", () => {
 				launch: { viewRef: { id: PERSONAL_ID, entityLogicalName: "userquery" } },
 			});
 			await app.waitFor(() => treeItems() > 0 && saveReady());
-			await app.waitFor(() => saveHint() === 'Save changes to "My accounts"');
+			await app.waitFor(() => saveHint() === 'Save changes to "My accounts" (Ctrl+S)');
 
 			// Change the query in the editor: the view is still the one Save overwrites
 			await pasteIntoEditor(otherQuery);
@@ -219,7 +219,7 @@ describe("Save on a personal view you own (#278 PR 3)", () => {
 			);
 			await app.waitFor(() => !document.querySelector('[role="dialog"]'), 10000);
 			// Its own view: no access check, no warning
-			await app.waitFor(() => saveHint() === 'Save changes to "Fresh view"', 10000);
+			await app.waitFor(() => saveHint() === 'Save changes to "Fresh view" (Ctrl+S)', 10000);
 			expect(app.dataverse.calls.some((c) => c.includes("RetrievePrincipalAccess"))).toBe(
 				false,
 			);

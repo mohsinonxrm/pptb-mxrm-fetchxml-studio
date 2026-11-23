@@ -3,7 +3,7 @@
  * find value (only outside editor mode, #142), and a query that's running or loading more rows.
  */
 import { act, createElement } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
 import {
 	EMPTY_EDITOR_REASON,
@@ -56,5 +56,19 @@ describe("Run's reason", () => {
 		expect(session.isRunning).toBe(true);
 		await show();
 		expect(session.isRunning).toBe(false);
+	});
+});
+
+describe("Ctrl+Enter's Run from the editor (#186)", () => {
+	it("runs as Run does, and not while Run has a reason; the function stays the same", async () => {
+		const onRun = vi.fn();
+		await show({ onRun });
+		const first = session.syncValue.runFromEditor;
+		await act(async () => session.syncValue.runFromEditor?.());
+		expect(onRun).toHaveBeenCalledOnce();
+		await show({ onRun, isRunning: true });
+		await act(async () => session.syncValue.runFromEditor?.());
+		expect(onRun).toHaveBeenCalledOnce();
+		expect(session.syncValue.runFromEditor).toBe(first);
 	});
 });

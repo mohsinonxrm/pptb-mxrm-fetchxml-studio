@@ -72,6 +72,13 @@ describe("matches", () => {
 		expect(matches(ev("s", { ctrlKey: true, altKey: true }), "save", win)).toBe(false);
 	});
 
+	it("lets a punctuation key come with Shift (/ is Shift+7 on German and French layouts), not a letter", () => {
+		expect(matches(ev("/", { ctrlKey: true, shiftKey: true }), "shortcuts", win)).toBe(true);
+		expect(matches(ev("Z", { ctrlKey: true, shiftKey: true }), "undo", win)).toBe(false);
+		expect(matches(ev("S", { ctrlKey: true, shiftKey: true }), "save", win)).toBe(false);
+		expect(matches(ev("F6", { ctrlKey: true, shiftKey: true }), "nextArea", win)).toBe(false);
+	});
+
 	it("treats / and ? as different keys", () => {
 		expect(matches(ev("/", { ctrlKey: true }), "shortcuts", win)).toBe(true);
 		expect(matches(ev("?", { ctrlKey: true, shiftKey: true }), "shortcuts", win)).toBe(false);

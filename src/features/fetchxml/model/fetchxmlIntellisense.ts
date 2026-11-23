@@ -6,6 +6,7 @@
 
 import type * as Monaco from "monaco-editor/editor";
 import { KNOWN_OPERATORS } from "./operators";
+import { formatFetchXml } from "./fetchxmlFormatter";
 
 /**
  * Attribute definition types
@@ -549,6 +550,25 @@ export function registerFetchXmlIntellisense(
 }
 
 /**
+ * Format Document (Shift+Alt+F, #186) for FetchXML editors: the safe formatter, which re-indents and
+ * keeps values, quotes and comments as written. FetchXML that isn't well-formed is left as it is.
+ */
+export function registerFetchXmlFormatter(
+	monaco: typeof Monaco,
+	appliesTo?: ModelFilter,
+): Monaco.IDisposable {
+	return monaco.languages.registerDocumentFormattingEditProvider("xml", {
+		provideDocumentFormattingEdits(model: Monaco.editor.ITextModel) {
+			if (appliesTo && !appliesTo(model)) return [];
+			const text = model.getValue();
+			const result = formatFetchXml(text);
+			if (!result.ok || result.text === text) return [];
+			return [{ range: model.getFullModelRange(), text: result.text }];
+		},
+	});
+}
+
+/**
  * Get FetchXML hover information
  */
 export function registerFetchXmlHoverProvider(
@@ -637,7 +657,7 @@ const isFetchXmlModel: ModelFilter = (model) =>
 	[...fetchXmlEditors].some((editor) => editor.getModel() === model);
 
 /**
- * Gives an editor FetchXML completions and hovers. The providers are registered once, however
+ * Gives an editor FetchXML completions, hovers and Format Document. The providers are registered once, however
  * often editors mount (the editor remounts on every connection change), and removed when the last
  * editor's handle is disposed. Other XML editors, such as the LayoutXML viewer, don't get them.
  */
@@ -652,6 +672,7 @@ export function attachFetchXmlLanguageFeatures(
 			disposables: [
 				registerFetchXmlIntellisense(monaco, isFetchXmlModel),
 				registerFetchXmlHoverProvider(monaco, isFetchXmlModel),
+				registerFetchXmlFormatter(monaco, isFetchXmlModel),
 			],
 		};
 	}

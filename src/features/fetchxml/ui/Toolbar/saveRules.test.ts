@@ -73,8 +73,9 @@ async function menuLabels(): Promise<(string | undefined)[]> {
 		?.closest(".fui-SplitButton")
 		?.querySelector<HTMLElement>(".fui-SplitButton__menuButton");
 	await click(menuHalf);
+	// The label only: the primary action also shows Ctrl+S (#186), checked on its own
 	return [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].map((i) =>
-		i.textContent?.trim(),
+		i.querySelector(".fui-MenuItem__content")?.textContent?.trim(),
 	);
 }
 const dialogText = () => document.querySelector(".fui-DialogSurface")?.textContent ?? "";
@@ -97,13 +98,15 @@ afterEach(() => {
 describe("Save's rules", () => {
 	it("no view: Save saves a new view", async () => {
 		await renderSave(null);
-		expect(hint()).toBe("Save as new view…");
+		expect(hint()).toBe("Save as new view… (Ctrl+S)");
 		expect(await menuLabels()).toEqual(["Save as new view…"]);
 	});
 
 	it("your own personal view: Save saves the changes to it", async () => {
 		await renderSave(personal());
-		expect(hint()).toBe('Save changes to "Mine"');
+		expect(hint()).toBe('Save changes to "Mine" (Ctrl+S)');
+		// Ctrl+S is the primary action's key (#186): on the button and its menu item
+		expect(saveButton()?.getAttribute("aria-keyshortcuts")).toBe("Control+S");
 		expect(await menuLabels()).toEqual(['Save changes to "Mine"', "Save as new view…"]);
 		expect(checks.checkUserQueryWriteAccess).not.toHaveBeenCalled();
 	});
@@ -119,7 +122,7 @@ describe("Save's rules", () => {
 	it("a personal view shared with you read-only: only a new view", async () => {
 		checks.checkUserQueryWriteAccess.mockResolvedValue(false);
 		await renderSave(personal({ ownerId: SOMEONE }));
-		expect(hint()).toBe("Save as new view…");
+		expect(hint()).toBe("Save as new view… (Ctrl+S)");
 		expect(await menuLabels()).toEqual(["Save as new view…"]);
 	});
 
@@ -131,7 +134,7 @@ describe("Save's rules", () => {
 
 	it("a system view you can write: a new view first, and the overwrite in the menu", async () => {
 		await renderSave(system());
-		expect(hint()).toBe("Save as new view…");
+		expect(hint()).toBe("Save as new view… (Ctrl+S)");
 		expect(await menuLabels()).toEqual([
 			"Save as new view…",
 			'Save changes to system view "Sys"…',
@@ -183,7 +186,7 @@ describe("Save's rules", () => {
 	it("a check still running hides the overwrite", async () => {
 		checks.checkUserQueryPrivileges.mockReturnValue(new Promise(() => {}));
 		await renderSave(personal());
-		expect(hint()).toBe("Save as new view…");
+		expect(hint()).toBe("Save as new view… (Ctrl+S)");
 		expect(await menuLabels()).toEqual(["Save as new view…"]);
 	});
 });

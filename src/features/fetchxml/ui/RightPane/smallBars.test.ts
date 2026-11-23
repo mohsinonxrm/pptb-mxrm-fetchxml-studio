@@ -6,7 +6,7 @@
  */
 import { createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, click, render, stubOverflowWidths } from "../../../../shared/testing/ui";
+import { cleanup, click, render, stubOverflowWidths, toasts } from "../../../../shared/testing/ui";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { LayoutXmlViewer } from "./LayoutXmlViewer";
 import { CodePanel, type CodeLanguage } from "./CodePanel";
@@ -97,6 +97,7 @@ describe("the FetchXML editor's bar", () => {
 			"Paste",
 			"Load",
 			"Reset",
+			"Format",
 			"Validate",
 			"Parse to tree",
 		]);
@@ -104,7 +105,7 @@ describe("the FetchXML editor's bar", () => {
 		expect(bar()?.contains(editorMode())).toBe(false);
 	});
 
-	it("moves Load, Reset and Paste into More first, then Parse to tree, and keeps Copy longest", async () => {
+	it("moves Load, Reset, Paste and Format into More first, then Parse to tree, and keeps Copy longest", async () => {
 		const layout = stubOverflowWidths({ container: 2000 });
 		await renderEditor();
 		await click(editorMode());
@@ -112,7 +113,7 @@ describe("the FetchXML editor's bar", () => {
 		await layout.resize({ container: 16 + 3 * 80 + 24 + 40 });
 		expect(shownNames(bar())).toEqual(["Copy", "Validate", "Parse to tree", "More commands"]);
 		await click(control(bar(), "More commands"));
-		expect(menuTexts(menus()[0])).toEqual(["Paste", "Load", "Reset"]);
+		expect(menuTexts(menus()[0])).toEqual(["Paste", "Load", "Reset", "Format"]);
 	});
 
 	it("Paste puts the clipboard's FetchXML in the editor", async () => {
@@ -128,6 +129,53 @@ describe("the FetchXML editor's bar", () => {
 			await click(editorMode());
 			await click(control(bar(), "Paste"));
 			expect(document.querySelector("textarea")?.value).toBe(pasted);
+		} finally {
+			if (original) Object.defineProperty(navigator, "clipboard", original);
+			else delete (navigator as { clipboard?: unknown }).clipboard;
+		}
+	});
+
+	it("Format re-indents the editor's FetchXML (#186), and says why it can't", async () => {
+		stubOverflowWidths({ container: 2000 });
+		const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+		let clipboard =
+			"<fetch><entity name='contact'><attribute name='fullname'/></entity></fetch>";
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { readText: async () => clipboard },
+		});
+		try {
+			await renderEditor();
+			await click(editorMode());
+			const format = () => control(bar(), "Format");
+			expect(format()?.getAttribute("aria-keyshortcuts")).toBe("Shift+Alt+F");
+			expect(description(format())).toBe("Re-indent the FetchXML (Shift+Alt+F)");
+			await click(control(bar(), "Paste"));
+			await click(format());
+			expect(document.querySelector("textarea")?.value).toBe(
+				[
+					"<fetch>",
+					"  <entity name='contact'>",
+					"    <attribute name='fullname' />",
+					"  </entity>",
+					"</fetch>",
+				].join("\n"),
+			);
+			// FetchXML that isn't well-formed stays as it is, with the reason in a toast
+			clipboard = "<fetch><entity name='contact'></fetch>";
+			await click(control(bar(), "Paste"));
+			await click(format());
+			expect(document.querySelector("textarea")?.value).toBe(clipboard);
+			expect(toasts().join(" ")).toContain(
+				"Can't format: the FetchXML isn't well-formed (line 1)",
+			);
+			// Nothing to format: the reason
+			cleanup();
+			stubOverflowWidths({ container: 2000 });
+			await renderEditor({ xml: "" });
+			await click(editorMode());
+			expect(format()?.getAttribute("aria-disabled")).toBe("true");
+			expect(description(format())).toBe("There's no FetchXML to format");
 		} finally {
 			if (original) Object.defineProperty(navigator, "clipboard", original);
 			else delete (navigator as { clipboard?: unknown }).clipboard;

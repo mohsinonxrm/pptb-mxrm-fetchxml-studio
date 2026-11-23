@@ -14,7 +14,7 @@ import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { useBuilderLayout, type PeekPart } from "./hooks/useBuilderLayout";
 import { BuilderRail, CollapseButton, PinButton } from "./layout/BuilderRail";
 import { PaneSplitter } from "../shared/components/PaneSplitter";
-import { InspectorDrawer } from "./layout/InspectorDrawer";
+import { INSPECTOR_HOST_ID, InspectorDrawer } from "./layout/InspectorDrawer";
 import { SelectionBar } from "./layout/SelectionBar";
 import { selectionLabel } from "./layout/selectionLabel";
 import { useResultsExport } from "./hooks/useResultsExport";
@@ -34,9 +34,11 @@ import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { AppBar } from "../features/fetchxml/ui/AppBar/AppBar";
 import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync";
 import { useEditorSession } from "./hooks/useEditorSession";
-import { useRunShortcut } from "./hooks/useRunShortcut";
+import { hasOpenPopup, useShortcuts } from "./hooks/useShortcuts";
+import { useFocusAreas } from "./hooks/useFocusAreas";
 import { useUndoRedo } from "./hooks/useUndoRedo";
-import { useUndoShortcuts } from "./hooks/useUndoShortcuts";
+import { matches } from "./shortcuts/registry";
+import { ShortcutsDialog } from "../features/fetchxml/ui/Dialogs/ShortcutsDialog";
 import { isViewDirty } from "../features/fetchxml/model/viewDirty";
 import { isT2TSupported } from "../features/fetchxml/api/invocation";
 import { useLaunchContext } from "../shared/hooks/useLaunchContext";
@@ -135,7 +137,11 @@ export function AppShell() {
 				{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
 				    details still toasts; above the remount, so a new session or a restart clears
 				    toasts whose actions point at the old builder */}
-				<NotifyProvider resetKey={`${session}-${restarts}`}>
+				{/* F2 goes to the newest toast (#186, as in model-driven apps) */}
+				<NotifyProvider
+					resetKey={`${session}-${restarts}`}
+					focusShortcut={(event) => matches(event, "toasts") && !hasOpenPopup()}
+				>
 					<ToolErrorBoundary
 						readFetchXml={() => carryOver.current.readFetchXml?.()}
 						onRestart={restart}
@@ -207,6 +213,7 @@ function AppContent({
 
 	// Settings drawer state
 	const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
+	const [shortcutsOpen, setShortcutsOpen] = useState(false);
 	const [displaySettings, setDisplaySettings] = usePersistedSettings();
 	// The pickers follow "Advanced Find only" (#57). A layout effect, so the scope is set before the
 	// children's effects load metadata.
@@ -453,10 +460,56 @@ function AppContent({
 		isRunning: queryExecution.isExecuting,
 		isLoadingMore: queryExecution.isLoadingMore,
 	});
-	useRunShortcut(editorSession.run, editorSession.runDisabledReason);
 	// Undo and Redo (#192): the tree toolbar and Ctrl+Z / Ctrl+Y outside text fields, announced
 	const undoRedo = useUndoRedo(builder.history);
-	useUndoShortcuts({
+	// Ctrl+F6 / Ctrl+Shift+F6 between the app bar, the builder (or its rail) and the output (#186)
+	const appBarRef = useRef<HTMLElement>(null);
+	const outputRef = useRef<HTMLElement>(null);
+	const railRef = useRef<HTMLElement>(null);
+	// An area's first stop: the selected tab (the output), else its first enabled control (Run)
+	const focusFirst = (element: HTMLElement) => {
+		const stops = [
+			'[role="tab"][aria-selected="true"]',
+			'button:not([disabled]):not([tabindex="-1"]), [tabindex="0"]',
+		];
+		for (const selector of stops) {
+			const stop = element.querySelector<HTMLElement>(selector);
+			if (stop) return stop.focus();
+		}
+	};
+	const areas = useFocusAreas(() => [
+		{ element: appBarRef.current, focusFirst },
+		// The pane (docked, or the peek with the rail beside it), or the rail while collapsed
+		{
+			element: layout.pane === "collapsed" ? railRef.current : paneRef.current,
+			// The rail, and the Properties drawer (in the output, but it holds the builder's Properties)
+			alsoContains: [railRef.current, document.getElementById(INSPECTOR_HOST_ID)],
+			focusFirst: (element) =>
+				element === paneRef.current ? focusInside(element) : focusFirst(element),
+		},
+		{ element: outputRef.current, focusFirst },
+	]);
+	// Leaving the tree or Properties peek for another area closes it, so focus isn't hidden under it
+	const leavingPeek = (move: () => void) => {
+		const inPeek = () =>
+			layout.pane === "peek" &&
+			[paneRef.current, railRef.current].some(
+				(el) => !!el && el.contains(document.activeElement),
+			);
+		const wasInPeek = inPeek();
+		move();
+		if (wasInPeek && !inPeek()) layout.closePeek();
+	};
+	// Ctrl+S presses the app bar's Save as it is (#186)
+	const saveShortcutRef = useRef<(() => void) | null>(null);
+	// The tool's keys (#186): Run, Save, Undo / Redo, the shortcuts list and the areas
+	useShortcuts({
+		run: editorSession.run,
+		runDisabledReason: editorSession.runDisabledReason,
+		save: () => saveShortcutRef.current?.(),
+		showShortcuts: () => setShortcutsOpen(true),
+		nextArea: () => leavingPeek(areas.next),
+		previousArea: () => leavingPeek(areas.previous),
 		undo: undoRedo.undo,
 		redo: undoRedo.redo,
 		// Focus the undo left on the page goes to the selected tree row, else to the tree toolbar
@@ -595,55 +648,62 @@ function AppContent({
 			<div className={styles.shell}>
 				{/* "Undone: {step}" for screen readers (#192) */}
 				<LiveRegion message={undoRedo.announcement} />
-				<AppBar
-					run={{
-						onClick: editorSession.run,
-						busy: editorSession.isRunning,
-						disabledReason: editorSession.runDisabledReason,
-					}}
-					saveView={{
-						fetchXml,
-						layoutXml,
-						entityLogicalName: builder.fetchQuery?.entity?.name || "",
-						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
-						objectTypeCode: entityMetadata?.ObjectTypeCode || 0,
-						primaryIdAttribute: entityMetadata?.PrimaryIdAttribute || "",
-						// What Save overwrites: the view the query is, kept across edits (#278)
-						targetView: builder.viewIdentity?.view ?? null,
-						onSaveComplete: handleSaveViewComplete,
-						disabled: !fetchXml || !entityMetadata,
-					}}
-					sendToTool={
-						isT2TSupported() && sendToTools.length > 0
-							? {
-									fetchXml,
-									entityLogicalName: builder.fetchQuery?.entity?.name || "",
-									tools: sendToTools,
-									disabled: !fetchXml || !builder.fetchQuery?.entity?.name,
-								}
-							: undefined
-					}
-					isCallee={launch.isCallee}
-					getCurrentXml={editorSession.getCurrentXml}
-					onOpenSettings={() => setSettingsDrawerOpen(true)}
-					viewName={viewIdentity?.name ?? null}
-					unsaved={unsaved}
-					hasUnsavedChanges={hasUnsavedChanges}
-					onNewQuery={startNewQuery}
-					openView={{
-						entityLogicalName: builder.fetchQuery?.entity?.name,
-						entityDisplayName: entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
-						entitySetName: entityMetadata?.EntitySetName,
-						currentViewId: viewIdentity?.view?.id,
-						onOpen: (viewInfo) => {
-							const loaded = applyLoadedView(viewInfo);
-							// The editor follows the view: its text was the previous query's, saved or
-							// discarded by now. A view that couldn't be loaded leaves everything as it was.
-							if (loaded) editorSession.discardEditor();
-							return loaded;
-						},
-					}}
-				/>
+				{/* The app bar is the page's banner landmark (#186) */}
+				<header ref={appBarRef} className={styles.appBar}>
+					<AppBar
+						run={{
+							onClick: editorSession.run,
+							busy: editorSession.isRunning,
+							disabledReason: editorSession.runDisabledReason,
+						}}
+						saveView={{
+							fetchXml,
+							layoutXml,
+							entityLogicalName: builder.fetchQuery?.entity?.name || "",
+							entityDisplayName:
+								entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
+							objectTypeCode: entityMetadata?.ObjectTypeCode || 0,
+							primaryIdAttribute: entityMetadata?.PrimaryIdAttribute || "",
+							// What Save overwrites: the view the query is, kept across edits (#278)
+							targetView: builder.viewIdentity?.view ?? null,
+							onSaveComplete: handleSaveViewComplete,
+							disabled: !fetchXml || !entityMetadata,
+						}}
+						sendToTool={
+							isT2TSupported() && sendToTools.length > 0
+								? {
+										fetchXml,
+										entityLogicalName: builder.fetchQuery?.entity?.name || "",
+										tools: sendToTools,
+										disabled: !fetchXml || !builder.fetchQuery?.entity?.name,
+									}
+								: undefined
+						}
+						isCallee={launch.isCallee}
+						getCurrentXml={editorSession.getCurrentXml}
+						onOpenSettings={() => setSettingsDrawerOpen(true)}
+						viewName={viewIdentity?.name ?? null}
+						unsaved={unsaved}
+						hasUnsavedChanges={hasUnsavedChanges}
+						onNewQuery={startNewQuery}
+						onShowShortcuts={() => setShortcutsOpen(true)}
+						saveShortcutRef={saveShortcutRef}
+						openView={{
+							entityLogicalName: builder.fetchQuery?.entity?.name,
+							entityDisplayName:
+								entityMetadata?.DisplayName?.UserLocalizedLabel?.Label,
+							entitySetName: entityMetadata?.EntitySetName,
+							currentViewId: viewIdentity?.view?.id,
+							onOpen: (viewInfo) => {
+								const loaded = applyLoadedView(viewInfo);
+								// The editor follows the view: its text was the previous query's, saved or
+								// discarded by now. A view that couldn't be loaded leaves everything as it was.
+								if (loaded) editorSession.discardEditor();
+								return loaded;
+							},
+						}}
+					/>
+				</header>
 				<div className={styles.root}>
 					{/* The builder pane (#234): docked, the tree then Properties (or, when narrow, a
 					    selection bar and the inspector drawer); collapsed, a rail that opens either part in
@@ -657,6 +717,7 @@ function AppContent({
 							expandRef={expandRef}
 							treeRef={railTreeRef}
 							propertiesRef={railPropertiesRef}
+							navRef={railRef}
 						/>
 					)}
 					{/* One pane in every state, so the tree and the scope keep their state (open
@@ -765,6 +826,7 @@ function AppContent({
 						/>
 					)}
 					<main
+						ref={outputRef}
 						aria-label="Query output"
 						className={styles.rightPane}
 						onPointerDown={layout.pane === "peek" ? layout.closePeek : undefined}
@@ -880,6 +942,7 @@ function AppContent({
 						entityMetadata={entityMetadata}
 						moreRecords={queryResult?.moreRecords}
 					/>
+					<ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 					{/* Settings Drawer */}
 					<SettingsDrawer
 						open={settingsDrawerOpen}

@@ -8,13 +8,14 @@
  * New and Open view ask before they discard unsaved changes. Save and Send to keep their editor
  * sync (EditorSyncContext), so AppShell renders this inside the provider. Operations joins in #296.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Badge, Body1Strong, MenuItem, makeStyles, tokens } from "@fluentui/react-components";
 import {
 	Add20Filled,
 	Add20Regular,
 	Copy20Regular,
 	FolderOpen20Filled,
+	Keyboard20Regular,
 	FolderOpen20Regular,
 	Play20Filled,
 	Play20Regular,
@@ -94,6 +95,13 @@ export interface AppBarProps {
 	onNewQuery: () => void;
 	/** Open view: the query's entity and what loading one of its views needs */
 	openView: OpenViewOptions;
+	/** More › Keyboard shortcuts (#186) */
+	onShowShortcuts?: () => void;
+	/**
+	 * Ctrl+S (#186): set to what selecting Save does, or null while Save can't be pressed, so the
+	 * app's key handler presses the same Save
+	 */
+	saveShortcutRef?: MutableRefObject<(() => void) | null>;
 }
 
 export interface OpenViewOptions {
@@ -123,6 +131,8 @@ export function AppBar({
 	hasUnsavedChanges,
 	onNewQuery,
 	openView,
+	onShowShortcuts,
+	saveShortcutRef,
 }: AppBarProps) {
 	const styles = useStyles();
 	const copy = useCopy();
@@ -151,6 +161,19 @@ export function AppBar({
 			saveView.onCancel?.();
 		},
 	});
+	// Ctrl+S presses Save as it is now (#186)
+	useEffect(() => {
+		if (!saveShortcutRef) return;
+		saveShortcutRef.current = save.command.disabledReason
+			? null
+			: (save.command.onClick ?? null);
+	});
+	useEffect(
+		() => () => {
+			if (saveShortcutRef) saveShortcutRef.current = null;
+		},
+		[saveShortcutRef],
+	);
 	const isUnsaved = () => (hasUnsavedChanges ? hasUnsavedChanges() : unsaved);
 	const handleNew = () => {
 		if (isUnsaved()) setConfirm({ intent: "new" });
@@ -266,13 +289,25 @@ export function AppBar({
 				endAtEdge
 				className={styles.bar}
 				moreExtra={
-					<MenuItem
-						icon={<Copy20Regular />}
-						disabled={!getCurrentXml()}
-						onClick={() => void copy(getCurrentXml(), "FetchXML")}
-					>
-						Copy FetchXML
-					</MenuItem>
+					<>
+						<MenuItem
+							icon={<Copy20Regular />}
+							disabled={!getCurrentXml()}
+							onClick={() => void copy(getCurrentXml(), "FetchXML")}
+						>
+							Copy FetchXML
+						</MenuItem>
+						{onShowShortcuts && (
+							<MenuItem
+								icon={<Keyboard20Regular />}
+								secondaryContent={formatKeys(getEntry("shortcuts"))[0]}
+								aria-keyshortcuts={getEntry("shortcuts").aria}
+								onClick={onShowShortcuts}
+							>
+								Keyboard shortcuts
+							</MenuItem>
+						)}
+					</>
 				}
 			/>
 			{save.dialog}

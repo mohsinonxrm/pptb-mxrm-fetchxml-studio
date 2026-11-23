@@ -34,6 +34,8 @@ import {
 	ClipboardPaste20Regular,
 	FolderOpen20Filled,
 	FolderOpen20Regular,
+	TextIndentIncrease20Filled,
+	TextIndentIncrease20Regular,
 	ArrowReset20Filled,
 	ArrowReset20Regular,
 	Checkmark20Filled,
@@ -69,6 +71,9 @@ import {
 } from "./editorProblems";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
+import { formatFetchXml } from "../../model/fetchxmlFormatter";
+import { RUNS_ITSELF_ATTRIBUTE, formatKeys, getEntry } from "../../../../app/shortcuts/registry";
+import { useEditorSync } from "./editorSync";
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -91,6 +96,7 @@ const LoadIcon = bundleIcon(FolderOpen20Filled, FolderOpen20Regular);
 const ResetIcon = bundleIcon(ArrowReset20Filled, ArrowReset20Regular);
 const ValidateIcon = bundleIcon(Checkmark20Filled, Checkmark20Regular);
 const ParseIcon = bundleIcon(TreeDeciduous20Filled, TreeDeciduous20Regular);
+const FormatIcon = bundleIcon(TextIndentIncrease20Filled, TextIndentIncrease20Regular);
 
 const useStyles = makeStyles({
 	container: {
@@ -195,6 +201,12 @@ function FetchXmlEditorImpl(
 
 	// Short confirmations go to the app's Toaster; bars here are only for problems in this XML (#277)
 	const { notify } = useNotify();
+	// Ctrl+Enter's Run (#186), read when the key is pressed
+	const { runFromEditor } = useEditorSync();
+	const runFromEditorRef = useRef(runFromEditor);
+	useEffect(() => {
+		runFromEditorRef.current = runFromEditor;
+	});
 	const copy = useCopy();
 
 	// Get current XML value based on mode
@@ -357,6 +369,29 @@ function FetchXmlEditorImpl(
 		notify.info("Reverted to the FetchXML from the tree");
 	}, [xml, clearMessages, notify, onEditorStateChange]);
 
+	// Format (#186): re-indent the editor's FetchXML with the safe formatter, as one step of the
+	// editor's own undo (Ctrl+Z takes it back). Shift+Alt+F does the same through Monaco.
+	const handleFormat = useCallback(() => {
+		const editor = editorRef.current;
+		const model = editor?.getModel();
+		const text = model ? model.getValue() : editedXml;
+		const result = formatFetchXml(text);
+		if (!result.ok) {
+			notify.warning(result.error);
+			return;
+		}
+		if (result.text === text) return;
+		// Monaco's Format Document, as Shift+Alt+F: the same edit, one undo step, and the cursor kept
+		const formatAction =
+			editor && model ? editor.getAction("editor.action.formatDocument") : null;
+		if (formatAction) {
+			void formatAction.run();
+		} else {
+			setEditedXml(result.text);
+			onEditorStateChange?.(true, result.text);
+		}
+	}, [editedXml, notify, onEditorStateChange]);
+
 	// Validate XML
 	const handleValidate = useCallback(() => {
 		// First check syntax
@@ -458,15 +493,42 @@ function FetchXmlEditorImpl(
 	const handleEditorMount = useCallback(
 		(editor: MonacoEditor.editor.IStandaloneCodeEditor, monaco: typeof MonacoEditor) => {
 			editorRef.current = editor;
-			// FetchXML completions and hovers for this editor only, released with it (#194)
+			// FetchXML completions, hovers and Format Document for this editor only, released with it
+			// (#194, #186)
 			const languageFeatures = attachFetchXmlLanguageFeatures(monaco, editor);
 			editor.onDidDispose(() => languageFeatures.dispose());
+			// Ctrl+Enter runs the query (#186): Monaco's own action, so it never inserts a line, and
+			// "Run query" is in the F1 list. In the text only: Find keeps its own Ctrl+Enter. The app's
+			// key handler leaves this editor to it (RUNS_ITSELF).
+			editor.getDomNode()?.setAttribute(RUNS_ITSELF_ATTRIBUTE, "");
+			editor.addAction({
+				id: "fxs.runQuery",
+				label: "Run query",
+				keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+				keybindingContext: "editorTextFocus",
+				run: () => {
+					runFromEditorRef.current?.();
+					// Run opens Results, which hides the editor: focus would fall to the page, so it
+					// goes to the tab that's showing
+					requestAnimationFrame(() =>
+						requestAnimationFrame(() => {
+							const active = document.activeElement;
+							if (active && active !== document.body) return;
+							document
+								.querySelector<HTMLElement>(
+									'main [role="tab"][aria-selected="true"]',
+								)
+								?.focus();
+						}),
+					);
+				},
+			});
 		},
 		[],
 	);
 
-	// Bar order; what overflows first: Load 10, Reset 15, Paste 20, Parse to tree 35, Validate 40,
-	// Copy 50 (#232). Tooltips describe; the label names.
+	// Bar order; what overflows first: Load 10, Reset 15, Paste 20, Format 30, Parse to tree 35,
+	// Validate 40, Copy 50 (#232, #186). Tooltips describe; the label names.
 	const copyCommand: BarCommand = {
 		id: "copy",
 		label: "Copy",
@@ -509,6 +571,18 @@ function FetchXmlEditorImpl(
 					kind: "button",
 					hint: "Reset to tree-generated XML",
 					onClick: handleReset,
+				},
+				{
+					id: "format",
+					label: "Format",
+					icon: FormatIcon,
+					group: "check",
+					priority: 30,
+					kind: "button",
+					hint: `Re-indent the FetchXML (${formatKeys(getEntry("formatXml"))[0]})`,
+					keyShortcuts: getEntry("formatXml").aria,
+					disabledReason: editedXml.trim() ? undefined : "There's no FetchXML to format",
+					onClick: handleFormat,
 				},
 				{
 					id: "validate",

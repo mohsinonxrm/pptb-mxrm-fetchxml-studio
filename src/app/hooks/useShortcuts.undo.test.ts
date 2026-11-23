@@ -2,15 +2,30 @@
  * Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo (#192): from a tree row, a button or the page; not in
  * a text field or Monaco, not while a dialog or menu is open, not when something already handled the
  * key, not on a dropdown whose list is open. The non-modal Properties drawer doesn't hold them
- * (#385). When an undo removes the focused element, focus is put back.
+ * (#385). When an undo removes the focused element, focus is put back. Now part of the one
+ * shortcut handler (#186).
  */
 import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
-import { useUndoShortcuts, type UndoShortcutHandlers } from "./useUndoShortcuts";
+import { useShortcuts } from "./useShortcuts";
 
+interface UndoShortcutHandlers {
+	undo: () => void;
+	redo: () => void;
+	restoreFocus?: () => void;
+}
+
+const noop = () => {};
 function Probe(handlers: UndoShortcutHandlers) {
-	useUndoShortcuts(handlers);
+	useShortcuts({
+		run: noop,
+		save: noop,
+		showShortcuts: noop,
+		nextArea: noop,
+		previousArea: noop,
+		...handlers,
+	});
 	return createElement(
 		"div",
 		null,

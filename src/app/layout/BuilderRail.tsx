@@ -57,6 +57,8 @@ export interface BuilderRailProps {
 	expandRef: React.Ref<HTMLButtonElement>;
 	treeRef: React.Ref<HTMLButtonElement>;
 	propertiesRef: React.Ref<HTMLButtonElement>;
+	/** The rail itself, for Ctrl+F6 (#186) */
+	navRef?: React.Ref<HTMLElement>;
 }
 
 export function BuilderRail({
@@ -67,10 +69,11 @@ export function BuilderRail({
 	expandRef,
 	treeRef,
 	propertiesRef,
+	navRef,
 }: BuilderRailProps) {
 	const styles = useStyles();
 	return (
-		<nav className={styles.rail} aria-label="Builder pane">
+		<nav ref={navRef} className={styles.rail} aria-label="Builder pane">
 			<Tooltip content="Expand the builder pane" relationship="label" positioning="after">
 				<Button
 					ref={expandRef}

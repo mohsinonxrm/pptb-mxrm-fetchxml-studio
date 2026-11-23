@@ -31,6 +31,11 @@ export interface NotifyProviderProps {
 	children: ReactNode;
 	/** Clears every toast when it changes (a new session or a restart: their Undo and Try again are stale) */
 	resetKey?: string;
+	/**
+	 * The key that moves focus to the newest toast (F2 in the tool, #186); Fluent's Toaster listens
+	 * for it on the document.
+	 */
+	focusShortcut?: (event: KeyboardEvent) => boolean;
 }
 
 /** Toasts on screen at once; more wait in the provider's own queue */
@@ -65,7 +70,7 @@ interface Entry {
  * The queue is the provider's: Fluent's own limit queue can't drop a toast that hasn't shown yet,
  * so a duplicate, a dismiss or a reset would leave it to appear later with a stale action.
  */
-export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
+export function NotifyProvider({ children, resetKey, focusShortcut }: NotifyProviderProps) {
 	const styles = useStyles();
 	const toasterId = useId("app-toaster");
 	const { dispatchToast, dismissToast, dismissAllToasts } = useToastController(toasterId);
@@ -247,6 +252,7 @@ export function NotifyProvider({ children, resetKey }: NotifyProviderProps) {
 				offset={{ vertical: 48, horizontal: 16 }}
 				pauseOnHover
 				pauseOnWindowBlur
+				shortcuts={focusShortcut ? { focus: focusShortcut } : undefined}
 			/>
 			{children}
 		</NotifyContext.Provider>

@@ -230,12 +230,16 @@ export function useEditorSession({
 		[isEditorModeActive, xml, onParseToTree, reportToEditor],
 	);
 
+	// Ctrl+Enter in the editor (#186) runs as Run does, through the latest run and reason
+	const runShortcut = useRef<() => void>(() => {});
+	const runFromEditor = useCallback(() => runShortcut.current(), []);
 	const syncValue = useMemo(
 		() => ({
 			sync: syncEditorToTree,
 			editorHasContent: isEditorModeActive && editorHasContent,
+			runFromEditor,
 		}),
-		[syncEditorToTree, isEditorModeActive, editorHasContent],
+		[syncEditorToTree, isEditorModeActive, editorHasContent, runFromEditor],
 	);
 
 	const resolvePendingSync = (confirmed: boolean) => {
@@ -318,6 +322,11 @@ export function useEditorSession({
 					: xml
 						? undefined
 						: NO_QUERY_REASON));
+	useEffect(() => {
+		runShortcut.current = () => {
+			if (!runDisabledReason) run();
+		};
+	});
 
 	return {
 		selectedTab,
