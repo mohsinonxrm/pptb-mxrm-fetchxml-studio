@@ -191,13 +191,14 @@ describe("Ctrl+Z / Ctrl+Y", () => {
 
 describe("focus after a key undo", () => {
 	it("is put back when the undo removed the focused element, in the tree or elsewhere", async () => {
-		const h = await setup({ undo: vi.fn(() => byId("row")?.remove()) });
+		const redo = vi.fn();
+		const h = await setup({ undo: vi.fn(() => byId("row")?.remove()), redo });
 		byId("row")?.focus();
 		await ctrlZ(byId("row"));
 		await frames();
 		expect(h.restoreFocus).toHaveBeenCalledOnce();
 
-		h.redo.mockImplementation(() => byId("button")?.remove());
+		redo.mockImplementation(() => byId("button")?.remove());
 		byId("button")?.focus();
 		await press(byId("button"), { key: "y", ctrlKey: true });
 		await frames();
