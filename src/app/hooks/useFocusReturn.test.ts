@@ -99,6 +99,77 @@ describe("useFocusReturn", () => {
 		expect(document.activeElement).toBe(byId("toolbar"));
 	});
 
+	it("keeps what opened the dialog when focus moves outside while it's still open", async () => {
+		await render(createElement(Probe));
+		await focus(byId("row"));
+		const dialog = await popup("dialog");
+		// Something focuses an element outside while the dialog stays open; the dialog changes
+		await focus(byId("field"));
+		await act(async () => dialog.appendChild(document.createElement("span")));
+		await frames();
+		await close(dialog);
+		expect(document.activeElement).toBe(byId("row"));
+	});
+
+	it("waits when one dialog closes as the next opens, and returns once both are gone", async () => {
+		await render(createElement(Probe));
+		await focus(byId("row"));
+		const first = await popup("dialog");
+		let second!: HTMLElement;
+		// The first goes, and the second comes before two frames have passed
+		await act(async () => first.remove());
+		await act(async () => {
+			second = document.createElement("div");
+			second.setAttribute("role", "dialog");
+			second.dataset.testPopup = "";
+			const inside = document.createElement("button");
+			second.appendChild(inside);
+			document.body.appendChild(second);
+			inside.focus();
+		});
+		await frames();
+		// Still in the second dialog: nothing pulled focus out of it
+		expect(second.contains(document.activeElement)).toBe(true);
+		await close(second);
+		expect(document.activeElement).toBe(byId("row"));
+	});
+
+	it("comes back to a field inside the non-modal Properties drawer", async () => {
+		await render(createElement(Probe));
+		const drawer = document.createElement("div");
+		drawer.setAttribute("role", "dialog");
+		drawer.setAttribute("aria-modal", "false");
+		drawer.dataset.testPopup = "";
+		const field = document.createElement("input");
+		drawer.appendChild(field);
+		await act(async () => document.body.appendChild(drawer));
+		await focus(field);
+		await close(await popup("alertdialog"));
+		expect(document.activeElement).toBe(field);
+	});
+
+	it("falls back to the row that held the control when the control is gone", async () => {
+		await render(createElement(Probe));
+		const row = byId("row");
+		const inline = document.createElement("button");
+		row.appendChild(inline);
+		await focus(inline);
+		const dialog = await popup("dialog");
+		// A tree row's own buttons unmount once focus leaves them
+		await act(async () => inline.remove());
+		await close(dialog);
+		expect(document.activeElement).toBe(row);
+	});
+
+	it("comes back to nothing when focus had fallen to the page", async () => {
+		await render(createElement(Probe));
+		await focus(byId("row"));
+		await act(async () => byId("row").blur());
+		await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+		await close(await popup("dialog"));
+		expect(document.activeElement).toBe(byId("toolbar"));
+	});
+
 	it("starts over for the next dialog", async () => {
 		await render(createElement(Probe));
 		await focus(byId("row"));

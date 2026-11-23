@@ -486,7 +486,6 @@ export function TreeView({
 
 	// ============ ADD / DELETE (#24) ============
 
-	/** Delete a node; one with items inside asks first (#24) */
 	// After a delete, focus goes to the next row at the same level, else the parent (#186, owner
 	// decision Q1): the deleted row, or the button or menu that deleted it, is gone
 	const focusAfterDelete = useRef<NodeId | null>(null);
@@ -507,8 +506,11 @@ export function TreeView({
 		onRemoveNode(id);
 	};
 	useEffect(() => {
+		// This delete's target, taken now: a later change (an undo) cancels it rather than letting it
+		// land late on a row nobody asked for
 		const id = focusAfterDelete.current;
 		if (!id) return;
+		focusAfterDelete.current = null;
 		// Once the confirmation (if any) has closed and the tree has settled
 		let settled = 0;
 		let frame = requestAnimationFrame(function tick() {
@@ -517,13 +519,13 @@ export function TreeView({
 				frame = requestAnimationFrame(tick);
 				return;
 			}
-			focusAfterDelete.current = null;
 			rowElement(id)?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
 		// The tree changing (the delete landing) is what starts it
 	}, [fetchQuery]);
 
+	/** Delete a node; one with items inside asks first (#24) */
 	const requestDelete = (target: DeleteTarget) => {
 		if (target.descendants > 0) setPendingDelete(target);
 		else removeNode(target.id);
@@ -675,11 +677,15 @@ export function TreeView({
 						!e.shiftKey
 					) {
 						e.preventDefault();
-						requestDelete(row.deleteTarget);
+						// Held down, it would go on deleting the row focus moves to: once per press
+						if (!e.repeat) requestDelete(row.deleteTarget);
 						return;
 					}
 					if (!hasContextMenu) return;
-					if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+					if (
+						e.key === "ContextMenu" ||
+						(e.shiftKey && e.key === "F10" && !e.ctrlKey && !e.altKey && !e.metaKey)
+					) {
 						e.preventDefault();
 						const layout =
 							e.currentTarget.querySelector<HTMLElement>(

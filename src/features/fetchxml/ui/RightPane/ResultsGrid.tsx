@@ -462,9 +462,31 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		return map;
 	}, [fetchQuery]);
 
-	/** aria-sort for a column header: the query's order on it, else "none" (#186) */
-	const ariaSortOf = (columnId: string): "ascending" | "descending" | "none" =>
-		(sortStateMap.get(columnId) ?? sortStateMap.get(queryKeyOf(columnId)))?.direction ?? "none";
+	/**
+	 * aria-sort for a column header (#186): only the query's first order is announced, as ARIA asks
+	 * for one sorted header at a time; the arrows still show every order. Others say "none".
+	 */
+	const primarySort = useMemo(() => {
+		const first = fetchQuery?.entity
+			? sortedColumns(fetchQuery).entries().next().value
+			: undefined;
+		return first ? { key: first[0], direction: first[1] } : null;
+	}, [fetchQuery]);
+	const ariaSortOf = (columnId: string): "ascending" | "descending" | "none" => {
+		if (!primarySort) return "none";
+		const sort = sortStateMap.get(columnId) ?? sortStateMap.get(queryKeyOf(columnId));
+		const isPrimary =
+			sort &&
+			[columnId, queryKeyOf(columnId)].some(
+				(k) => k === primarySort.key || k === rootLookupKey(primarySort.key),
+			);
+		return isPrimary ? primarySort.direction : "none";
+	};
+	/** A root lookup's result column, _name_value, for its order key */
+	const rootLookupKey = (key: string) => {
+		const column = fetchQuery ? resolveColumn(fetchQuery, key) : undefined;
+		return column?.isRoot && !column.attribute.alias ? `_${column.attribute.name}_value` : key;
+	};
 
 	// Unique, stable row IDs; selection is translated back to real record IDs (#59).
 	const rowIdentity = useMemo(

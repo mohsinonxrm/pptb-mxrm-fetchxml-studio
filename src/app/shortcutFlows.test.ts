@@ -63,6 +63,8 @@ const ready = async (app: Awaited<ReturnType<typeof renderApp>>) => {
 	);
 	if (gotIt) await click(gotIt);
 	await app.waitFor(() => !document.querySelector('[role="dialog"][aria-modal="true"]'));
+	// Let the tip's close settle, as it would before a person's next key press
+	await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
 };
 
 describe("app: keyboard shortcuts", () => {

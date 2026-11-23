@@ -6,7 +6,8 @@
  * Fluent's own restore goes to the last control marked to receive it (toolbar buttons are), which
  * after a dialog opened from the tree or Properties is a toolbar button clicked earlier. So this
  * hook remembers the last element focused outside any popup, and when every modal dialog, menu and
- * trapped popover has closed, focuses it again if it's still in the page and shown.
+ * trapped popover has closed, focuses it again; if that control is gone (a tree row's own Delete
+ * button), the row or cell that held it. A hidden one can't take focus, so focus then stays put.
  *
  * Popups in a row (a menu, then the dialog its item opens; "Load into the tree?" before Save) count
  * as one: it waits two frames after the last one closes. Non-modal surfaces (the Properties drawer)
@@ -16,16 +17,17 @@ import { useEffect } from "react";
 import { hasOpenPopup } from "./useShortcuts";
 
 const POPUP_ROOTS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+/** A row or cell that holds the control: where focus goes when the control itself is gone */
+const HOLDERS = '[role="treeitem"], [role="gridcell"], [role="row"]';
 
-/** Inside a popup: its focus isn't the place to come back to */
-const inPopup = (el: Element) => !!el.closest(POPUP_ROOTS);
-
-function isShown(el: HTMLElement): boolean {
-	if (!el.isConnected) return false;
-	for (let node: HTMLElement | null = el; node; node = node.parentElement) {
-		if (node.hidden || getComputedStyle(node).display === "none") return false;
-	}
-	return true;
+/**
+ * Inside a popup that's in front: its focus isn't the place to come back to. The same rules as
+ * hasOpenPopup: a non-modal surface (the Properties drawer) and Monaco's Find box don't count, so a
+ * field in the drawer is a place to come back to.
+ */
+function inPopup(el: Element): boolean {
+	const root = el.closest(POPUP_ROOTS);
+	return !!root && root.getAttribute("aria-modal") !== "false" && !root.closest(".monaco-editor");
 }
 
 export function useFocusReturn(doc: Document = document): void {
@@ -33,19 +35,32 @@ export function useFocusReturn(doc: Document = document): void {
 		/** The last element focused outside every popup, and the one to return to */
 		let lastOutside: HTMLElement | null = null;
 		let returnTo: HTMLElement | null = null;
+		/** The tree row or grid cell holding returnTo: a row's own buttons unmount once they blur */
+		let returnToHolder: HTMLElement | null = null;
 		let anyOpen = hasOpenPopup(doc);
 		let settling = false;
+		let scheduled = false;
 
 		const onFocusIn = (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (target && target !== doc.body && !inPopup(target)) lastOutside = target;
 		};
+		// Focus that falls to the page (a click on empty space) leaves nothing to come back to
+		const onFocusOut = () =>
+			queueMicrotask(() => {
+				const active = doc.activeElement;
+				if ((!active || active === doc.body) && !hasOpenPopup(doc)) lastOutside = null;
+			});
 
 		const check = () => {
 			const nowOpen = hasOpenPopup(doc);
-			// A popup appears where none was: what had focus is what opened it. In a run (a menu,
-			// then its dialog) focus is back on the menu's trigger in between, so that's kept.
-			if (nowOpen && !anyOpen) returnTo = lastOutside;
+			// A popup appears where none was: what had focus is what opened it. A popup that follows
+			// another within the settle (a menu, then its dialog) keeps the first one's target.
+			if (nowOpen && !anyOpen && !settling) {
+				returnTo = lastOutside;
+				returnToHolder =
+					(returnTo?.parentElement?.closest(HOLDERS) as HTMLElement | null) ?? null;
+			}
 			anyOpen = nowOpen;
 			if (nowOpen || settling || !returnTo) return;
 			settling = true;
@@ -53,15 +68,26 @@ export function useFocusReturn(doc: Document = document): void {
 				requestAnimationFrame(() => {
 					settling = false;
 					if (hasOpenPopup(doc)) return;
-					const target = returnTo;
+					const target = returnTo?.isConnected ? returnTo : returnToHolder;
 					returnTo = null;
-					if (target && isShown(target) && doc.activeElement !== target) target.focus();
+					returnToHolder = null;
+					if (target && doc.activeElement !== target) target.focus();
 				}),
 			);
 		};
+		// At most once a frame: the body changes constantly (grid scrolling, Monaco's cursor)
+		const schedule = () => {
+			if (scheduled) return;
+			scheduled = true;
+			requestAnimationFrame(() => {
+				scheduled = false;
+				check();
+			});
+		};
 
 		doc.addEventListener("focusin", onFocusIn, true);
-		const observer = new MutationObserver(check);
+		doc.addEventListener("focusout", onFocusOut, true);
+		const observer = new MutationObserver(schedule);
 		observer.observe(doc.body, {
 			childList: true,
 			subtree: true,
@@ -70,6 +96,7 @@ export function useFocusReturn(doc: Document = document): void {
 		});
 		return () => {
 			doc.removeEventListener("focusin", onFocusIn, true);
+			doc.removeEventListener("focusout", onFocusOut, true);
 			observer.disconnect();
 		};
 	}, [doc]);

@@ -60,6 +60,8 @@ const ready = async (app: Awaited<ReturnType<typeof renderApp>>) => {
 	);
 	if (gotIt) await click(gotIt);
 	await app.waitFor(() => !document.querySelector('[role="dialog"][aria-modal="true"]'));
+	// Let the tip's close settle, as it would before a person's next key press
+	await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
 };
 
 describe("app: Delete on a tree row", () => {
@@ -89,7 +91,11 @@ describe("app: Delete on a tree row", () => {
 			const field = document.querySelector<HTMLInputElement>(
 				'aside input[type="text"], aside input:not([type])',
 			);
+			expect(field).toBeTruthy();
 			await press(field, { key: "Delete" });
+			// Held down, it deletes once, not row after row
+			await act(async () => treeItem("name")?.focus());
+			await press(active(), { key: "Delete", repeat: true });
 			expect(treeItem("name")).toBeTruthy();
 			app.expectClean();
 		},
@@ -145,6 +151,25 @@ describe("app: the results grid", () => {
 			await app.waitFor(() => !menu());
 			await press(cell, { key: "ContextMenu" });
 			await app.waitFor(() => !!menu());
+			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"with two orders, only the first one's header is announced as sorted",
+		async () => {
+			const twoOrders = QUERY.replace(
+				"<order attribute='name'/>",
+				"<order attribute='name'/><order attribute='accountid' descending='true'/>",
+			);
+			const app = await renderApp({ launch: { fetchXml: twoOrders } });
+			await ready(app);
+			await runQuery(app);
+			const sorted = [...document.querySelectorAll<HTMLElement>('[role="columnheader"]')]
+				.map((h) => h.getAttribute("aria-sort"))
+				.filter((sort) => sort === "ascending" || sort === "descending");
+			expect(sorted).toEqual(["ascending"]);
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,
