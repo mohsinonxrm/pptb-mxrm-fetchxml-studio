@@ -43,7 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **F2** moves focus to the newest notification.
   - **Ctrl+Enter** now runs from the FetchXML editor too, instead of adding a line: it's the editor's own **Run query** action, also in its F1 list. In the editor's Find box it stays Find's. Held down, or while a query runs, it does nothing. When Run opens Results and hides the editor, focus moves to the Results tab.
   - **Format** in the FetchXML editor (editor mode), and **Shift+Alt+F**, re-indent the FetchXML with the safe formatter: values, quotes, comments and attribute order stay as written, and the cursor stays where it was. It's one step of the editor's undo. FetchXML that isn't well-formed stays as it is: **Format** says which line, **Shift+Alt+F** just leaves it.
-  - When Ctrl+S or Ctrl+/ opens a dialog, focus comes back to where you pressed the key once it closes.
+  - **Delete** on a focused tree row deletes it, as its Delete button does; a node with items inside still asks first. Afterwards focus moves to the next row at the same level, else the parent, for the button and the menu's Delete too. Only on a focused row, never while typing.
+  - **Shift+F10** or the menu key on a focused results cell opens the cell menu at the cell, as right-click does.
+  - **Focus returns** to whatever opened a dialog or drawer once it closes: the tree row whose menu opened it, the Properties field, the row where Ctrl+S was pressed. Fluent sent it to the last toolbar button clicked.
+  - **Screen readers** hear the results grid as "Results: {entity}", and the column the query sorts by as sorted (`aria-sort` ascending or descending; the others say not sorted).
   - The keys wait while a modal dialog or a menu is open, such as the first-run scope tip; F2 too. **Ctrl+/** also works on layouts where `/` needs Shift (German, French).
 
 ### 🔧 Fixed

@@ -37,8 +37,8 @@ describe("ShortcutsDialog", () => {
 		expect(local.rows.map((r) => r.label)).toEqual(
 			SHORTCUTS.filter((s) => s.scope === "documented" && !s.pending).map((s) => s.label),
 		);
-		// A planned key that doesn't work yet isn't listed
-		expect(local.rows.map((r) => r.label)).not.toContain("Remove the node");
+		// Delete on a tree row works now (#186 PR 2), so it's listed
+		expect(local.rows.map((r) => r.label)).toContain("Remove the node");
 	});
 
 	it("shows each key in a kbd, and several keys joined by 'or'", async () => {
