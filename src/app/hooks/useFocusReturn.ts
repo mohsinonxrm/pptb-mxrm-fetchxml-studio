@@ -34,6 +34,8 @@ export function useFocusReturn(doc: Document = document): void {
 	useEffect(() => {
 		/** The last element focused outside every popup, and the one to return to */
 		let lastOutside: HTMLElement | null = null;
+		/** Its tree row or grid cell, found while it's still in the page */
+		let lastOutsideHolder: HTMLElement | null = null;
 		let returnTo: HTMLElement | null = null;
 		/** The tree row or grid cell holding returnTo: a row's own buttons unmount once they blur */
 		let returnToHolder: HTMLElement | null = null;
@@ -43,13 +45,20 @@ export function useFocusReturn(doc: Document = document): void {
 
 		const onFocusIn = (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
-			if (target && target !== doc.body && !inPopup(target)) lastOutside = target;
+			if (target && target !== doc.body && !inPopup(target)) {
+				lastOutside = target;
+				lastOutsideHolder =
+					(target.parentElement?.closest(HOLDERS) as HTMLElement | null) ?? null;
+			}
 		};
 		// Focus that falls to the page (a click on empty space) leaves nothing to come back to
 		const onFocusOut = () =>
 			queueMicrotask(() => {
 				const active = doc.activeElement;
-				if ((!active || active === doc.body) && !hasOpenPopup(doc)) lastOutside = null;
+				if ((!active || active === doc.body) && !hasOpenPopup(doc)) {
+					lastOutside = null;
+					lastOutsideHolder = null;
+				}
 			});
 
 		const check = () => {
@@ -58,8 +67,7 @@ export function useFocusReturn(doc: Document = document): void {
 			// another within the settle (a menu, then its dialog) keeps the first one's target.
 			if (nowOpen && !anyOpen && !settling) {
 				returnTo = lastOutside;
-				returnToHolder =
-					(returnTo?.parentElement?.closest(HOLDERS) as HTMLElement | null) ?? null;
+				returnToHolder = lastOutsideHolder;
 			}
 			anyOpen = nowOpen;
 			if (nowOpen || settling || !returnTo) return;

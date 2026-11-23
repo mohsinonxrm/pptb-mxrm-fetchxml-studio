@@ -154,9 +154,19 @@ describe("useFocusReturn", () => {
 		const inline = document.createElement("button");
 		row.appendChild(inline);
 		await focus(inline);
-		const dialog = await popup("dialog");
-		// A tree row's own buttons unmount once focus leaves them
-		await act(async () => inline.remove());
+		// The button is gone before the dialog is even seen (Fluent unmounts a row's actions on blur)
+		const dialog = await act(async () => {
+			const el = document.createElement("div");
+			el.setAttribute("role", "dialog");
+			el.dataset.testPopup = "";
+			const inside = document.createElement("button");
+			el.appendChild(inside);
+			document.body.appendChild(el);
+			inside.focus();
+			inline.remove();
+			return el;
+		});
+		await frames();
 		await close(dialog);
 		expect(document.activeElement).toBe(row);
 	});
