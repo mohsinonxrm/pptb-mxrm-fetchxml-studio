@@ -101,7 +101,7 @@ const withSync = (sync: Partial<EditorSyncValue>, child: ReactNode) =>
 		EditorSyncContext.Provider,
 		{
 			value: {
-				sync: async () => ({ status: "unchanged" }),
+				sync: async () => ({ status: "unchanged" as const }),
 				editorHasContent: true,
 				...sync,
 			},
