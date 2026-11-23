@@ -11,8 +11,9 @@
  * inside Monaco: Monaco binds it to "rename symbol", but FetchXML (XML) has no rename provider, so
  * nothing is lost. The handler must run before Monaco's own key handling for this to hold.
  * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB 1.2.7 owns
- * (PPTB_RESERVED). PPTB's Edit menu also has Undo and Redo (Electron's undo and redo roles, which run
- * the page's own text undo); the tool's Ctrl+Z / Ctrl+Y take them outside text fields (#192).
+ * (PPTB_RESERVED). PPTB's Edit menu also has Undo and Redo (Ctrl+Z / Ctrl+Y). Checked in PPTB 1.2.7:
+ * the keys reach the tool, and one press is one builder undo; choosing them from the menu doesn't
+ * undo the query (#192).
  */
 
 export type ShortcutScope = "global" | "documented";

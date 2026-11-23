@@ -5,7 +5,8 @@
  *
  * The announcement waits until the presses stop (ANNOUNCE_DELAY_MS), so holding Ctrl+Z reads the
  * last step instead of a queue of them. It's cleared on each press, so the same text read twice in a
- * row ("Undone: Add filter" for two filters) is still a change the screen reader reads.
+ * row ("Undone: Add filter" for two filters) is still a change the screen reader reads. It's cleared
+ * again after CLEAR_AFTER_MS, so someone reading the page later doesn't come across an old step.
  *
  * The functions keep their identity and read the latest history, so a key listener can hold them.
  */
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { BuilderHistoryApi } from "../../features/fetchxml/state/builderContext";
 
 export const ANNOUNCE_DELAY_MS = 300;
+export const CLEAR_AFTER_MS = 5000;
 
 export interface UndoRedo {
 	undo: () => void;
@@ -34,7 +36,10 @@ export function useUndoRedo(history: BuilderHistoryApi): UndoRedo {
 	const announce = useCallback((message: string) => {
 		clearTimeout(timer.current);
 		setAnnouncement("");
-		timer.current = setTimeout(() => setAnnouncement(message), ANNOUNCE_DELAY_MS);
+		timer.current = setTimeout(() => {
+			setAnnouncement(message);
+			timer.current = setTimeout(() => setAnnouncement(""), CLEAR_AFTER_MS);
+		}, ANNOUNCE_DELAY_MS);
 	}, []);
 
 	const undo = useCallback(() => {

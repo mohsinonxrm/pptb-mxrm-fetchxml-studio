@@ -174,7 +174,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 | Format FetchXML | `Shift+Alt+F` | Handled where focus is: the FetchXML editor |
 | Copy | `Ctrl+C` | Handled where focus is: the results grid |
 
-Power Platform ToolBox owns some keys (reload, zoom, settings, tool feedback and the Edit menu's cut, copy, paste and select all), so the tool doesn't use them. Its Edit menu also has Undo and Redo, which act on text fields only; use the tool's Undo and Redo, or the keys outside a text field, for the query.
+Power Platform ToolBox owns some keys (reload, zoom, settings, tool feedback and the Edit menu's cut, copy, paste and select all), so the tool doesn't use them. Its Edit menu also lists Undo and Redo: choosing them from the menu doesn't undo the query, so use the tool's **Undo** and **Redo**, or `Ctrl+Z` / `Ctrl+Y` outside a text field.
 
 ### 🔗 Tool-to-Tool (T2T) Integration
 - **Send to Tool button** — Launch another PPTB tool directly from FetchXML Studio, pre-loading it with the current FetchXML query and active Dataverse connection (one-way handoff).

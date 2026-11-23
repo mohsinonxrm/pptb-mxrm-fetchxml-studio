@@ -5,11 +5,11 @@
  * (#65).
  */
 import { act, createElement } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
 import { BuilderProvider } from "../../features/fetchxml/state/builderStore";
 import { useBuilder, type BuilderContextValue } from "../../features/fetchxml/state/builderContext";
-import { ANNOUNCE_DELAY_MS, useUndoRedo, type UndoRedo } from "./useUndoRedo";
+import { ANNOUNCE_DELAY_MS, CLEAR_AFTER_MS, useUndoRedo, type UndoRedo } from "./useUndoRedo";
 
 afterEach(() => cleanup());
 
@@ -55,6 +55,9 @@ describe("useUndoRedo", () => {
 		await wait(ANNOUNCE_DELAY_MS / 3);
 		expect(undoRedo.announcement).toBe("");
 		await run(() => undoRedo.undo());
+		// When the first press would have spoken, the second has put it off
+		await wait((ANNOUNCE_DELAY_MS * 3) / 4);
+		expect(undoRedo.announcement).toBe("");
 		await settle();
 		expect(undoRedo.announcement).toBe("Undone: Add filter");
 		expect(builder.fetchQuery!.entity.orders).toHaveLength(0);
@@ -72,6 +75,23 @@ describe("useUndoRedo", () => {
 		expect(undoRedo.announcement).toBe("");
 		await settle();
 		expect(undoRedo.announcement).toBe("Undone: Add filter");
+	});
+
+	it("clears the text a while after it was read", async () => {
+		vi.useFakeTimers();
+		try {
+			await show();
+			await run(() => builder.addFilter(builder.fetchQuery!.entity.id));
+			await run(() => undoRedo.undo());
+			await act(async () => vi.advanceTimersByTime(ANNOUNCE_DELAY_MS));
+			expect(undoRedo.announcement).toBe("Undone: Add filter");
+			await act(async () => vi.advanceTimersByTime(CLEAR_AFTER_MS - 10));
+			expect(undoRedo.announcement).toBe("Undone: Add filter");
+			await act(async () => vi.advanceTimersByTime(10));
+			expect(undoRedo.announcement).toBe("");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("does nothing, and says nothing, with nothing to undo or redo", async () => {
