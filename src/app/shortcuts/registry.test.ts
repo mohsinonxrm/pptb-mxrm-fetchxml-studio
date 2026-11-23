@@ -55,6 +55,19 @@ describe("matches", () => {
 		expect(matches(ev("y", { ctrlKey: true, shiftKey: true }), "redo", win)).toBe(false);
 	});
 
+	it("finds the letter by its physical key on a layout whose letters aren't Latin (#192)", () => {
+		// Russian: Ctrl+Z sends "я" from the Z key, Ctrl+Y sends "н"
+		expect(matches(ev("я", { ctrlKey: true, code: "KeyZ" }), "undo", win)).toBe(true);
+		expect(matches(ev("Н", { ctrlKey: true, shiftKey: true, code: "KeyZ" }), "redo", win)).toBe(
+			true,
+		);
+		expect(matches(ev("н", { ctrlKey: true, code: "KeyY" }), "redo", win)).toBe(true);
+		expect(matches(ev("я", { ctrlKey: true }), "undo", win)).toBe(false);
+		// A Latin layout keeps its own letters: AZERTY's Z sits where QWERTY's W is
+		expect(matches(ev("z", { ctrlKey: true, code: "KeyW" }), "undo", win)).toBe(true);
+		expect(matches(ev("w", { ctrlKey: true, code: "KeyZ" }), "undo", win)).toBe(false);
+	});
+
 	it("rejects an extra Alt", () => {
 		expect(matches(ev("s", { ctrlKey: true, altKey: true }), "save", win)).toBe(false);
 	});

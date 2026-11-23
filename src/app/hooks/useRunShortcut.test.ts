@@ -106,4 +106,20 @@ describe("Ctrl+Enter", () => {
 		document.body.appendChild(hiddenDialog);
 		expect(hasOpenPopup()).toBe(false);
 	});
+
+	it("runs beside a non-modal dialog, like the Properties drawer (#385)", async () => {
+		const run = vi.fn();
+		await render(createElement(Probe, { run }));
+		const drawer = document.createElement("div");
+		drawer.setAttribute("role", "dialog");
+		drawer.setAttribute("aria-modal", "false");
+		drawer.dataset.testPopup = "";
+		document.body.appendChild(drawer);
+		expect(hasOpenPopup()).toBe(false);
+		await ctrlEnter(byId("tree"));
+		expect(run).toHaveBeenCalledOnce();
+		// A modal one still holds it
+		drawer.setAttribute("aria-modal", "true");
+		expect(hasOpenPopup()).toBe(true);
+	});
 });
