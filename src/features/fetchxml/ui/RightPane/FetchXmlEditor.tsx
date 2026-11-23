@@ -74,6 +74,14 @@ import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense
 import { formatFetchXml } from "../../model/fetchxmlFormatter";
 import { RUNS_ITSELF_ATTRIBUTE, formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 import { useEditorSync } from "./editorSync";
+import { hasOpenPopup } from "../../../../app/hooks/useShortcuts";
+
+/** It, or an ancestor, is display: none (a hidden tab panel) */
+function isHidden(el: HTMLElement): boolean {
+	for (let node: HTMLElement | null = el; node; node = node.parentElement)
+		if (node.hidden || getComputedStyle(node).display === "none") return true;
+	return false;
+}
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -508,19 +516,20 @@ function FetchXmlEditorImpl(
 				keybindingContext: "editorTextFocus",
 				run: () => {
 					runFromEditorRef.current?.();
-					// Run opens Results, which hides the editor: focus would fall to the page, so it
-					// goes to the tab that's showing
-					requestAnimationFrame(() =>
-						requestAnimationFrame(() => {
-							const active = document.activeElement;
-							if (active && active !== document.body) return;
-							document
-								.querySelector<HTMLElement>(
-									'main [role="tab"][aria-selected="true"]',
-								)
-								?.focus();
-						}),
-					);
+					// Run opens Results, which hides the editor: focus would fall to the page (or stay
+					// in the hidden editor), so it goes to the tab that's showing. After any dialog Run
+					// asks first ("Load into the tree?") has closed.
+					let settled = 0;
+					let frames = 0;
+					requestAnimationFrame(function tick() {
+						settled = hasOpenPopup() ? 0 : settled + 1;
+						if (settled < 2 && ++frames < 600) return void requestAnimationFrame(tick);
+						const active = document.activeElement as HTMLElement | null;
+						if (active && active !== document.body && !isHidden(active)) return;
+						document
+							.querySelector<HTMLElement>('main [role="tab"][aria-selected="true"]')
+							?.focus();
+					});
 				},
 			});
 		},

@@ -462,6 +462,32 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 		return map;
 	}, [fetchQuery]);
 
+	/**
+	 * aria-sort for a column header (#186): only the query's first order is announced, as ARIA asks
+	 * for one sorted header at a time; the arrows still show every order. Others say "none".
+	 */
+	const primarySort = useMemo(() => {
+		const first = fetchQuery?.entity
+			? sortedColumns(fetchQuery).entries().next().value
+			: undefined;
+		return first ? { key: first[0], direction: first[1] } : null;
+	}, [fetchQuery]);
+	const ariaSortOf = (columnId: string): "ascending" | "descending" | "none" => {
+		if (!primarySort) return "none";
+		const sort = sortStateMap.get(columnId) ?? sortStateMap.get(queryKeyOf(columnId));
+		const isPrimary =
+			sort &&
+			[columnId, queryKeyOf(columnId)].some(
+				(k) => k === primarySort.key || k === rootLookupKey(primarySort.key),
+			);
+		return isPrimary ? primarySort.direction : "none";
+	};
+	/** A root lookup's result column, _name_value, for its order key */
+	const rootLookupKey = (key: string) => {
+		const column = fetchQuery ? resolveColumn(fetchQuery, key) : undefined;
+		return column?.isRoot && !column.attribute.alias ? `_${column.attribute.name}_value` : key;
+	};
+
 	// Unique, stable row IDs; selection is translated back to real record IDs (#59).
 	const rowIdentity = useMemo(
 		() => buildRowIdentity(result?.rows ?? [], primaryIdAttribute),
@@ -1098,8 +1124,17 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	);
 
 	const openCellMenu = useCallback(
-		(e: React.MouseEvent<HTMLElement>, item: Record<string, unknown>, columnId: string) => {
+		(
+			e: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+			item: Record<string, unknown>,
+			columnId: string,
+		) => {
 			e.preventDefault();
+			// Shift+F10 or the menu key on a focused cell (#186): at the cell
+			if (!("clientX" in e)) {
+				setCellMenu({ open: true, target: e.currentTarget, item, columnId });
+				return;
+			}
 			// Open at the mouse; the context menu key reports (0, 0), so open at the cell instead
 			const { clientX: x, clientY: y } = e;
 			const target: PositioningVirtualElement | HTMLElement =
@@ -1322,6 +1357,17 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 						onContextMenu={(e: React.MouseEvent<HTMLElement>) =>
 							openCellMenu(e, item, String(columnId))
 						}
+						onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+							// Shift+F10 or the menu key opens the cell menu, as right-click does (#186)
+							const menuKey =
+								e.key === "ContextMenu" ||
+								(e.key === "F10" &&
+									e.shiftKey &&
+									!e.ctrlKey &&
+									!e.altKey &&
+									!e.metaKey);
+							if (menuKey) openCellMenu(e, item, String(columnId));
+						}}
 						onFocus={() => {
 							focusedCellRef.current = { item, columnId: String(columnId) };
 						}}
@@ -1505,7 +1551,11 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					<GridDensityContext.Provider value={density}>
 						<SearchHighlightContext.Provider value={search}>
 							<DataGrid
-								aria-label={result?.entityLogicalName ?? "Results"}
+								aria-label={
+									result?.entityLogicalName
+										? `Results: ${result.entityLogicalName}`
+										: "Results"
+								}
 								size={density}
 								items={visibleRows}
 								columns={columns}
@@ -1537,8 +1587,13 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 											maxHeight: HEADER_HEIGHT[density],
 										}}
 									>
-										{({ renderHeaderCell }) => (
-											<DataGridHeaderCell className={styles.headerCell}>
+										{({ renderHeaderCell, columnId }) => (
+											<DataGridHeaderCell
+												className={styles.headerCell}
+												// The query's sort, for screen readers (#186); Fluent's own sort
+												// state is the sentinel above, so it would say "none" for every column
+												aria-sort={ariaSortOf(String(columnId))}
+											>
 												{renderHeaderCell()}
 											</DataGridHeaderCell>
 										)}

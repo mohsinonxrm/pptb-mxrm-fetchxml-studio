@@ -146,6 +146,30 @@ describe("the FetchXML editor's Monaco hooks (#186)", () => {
 		}
 	});
 
+	it("waits for a dialog Run asks first, then moves focus to the tab", async () => {
+		const tabs = document.createElement("main");
+		tabs.innerHTML = '<button role="tab" aria-selected="true">Results</button>';
+		document.body.appendChild(tabs);
+		const dialog = document.createElement("div");
+		dialog.setAttribute("role", "dialog");
+		try {
+			await render(
+				withSync({ runFromEditor: () => {} }, createElement(FetchXmlEditor, { xml: XML })),
+			);
+			(document.activeElement as HTMLElement | null)?.blur();
+			document.body.appendChild(dialog);
+			await act(async () => fake.actions.find((x) => x.id === "fxs.runQuery")?.run());
+			await act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+			expect(document.activeElement?.textContent).not.toBe("Results");
+			await act(async () => dialog.remove());
+			await act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+			expect(document.activeElement?.textContent).toBe("Results");
+		} finally {
+			tabs.remove();
+			dialog.remove();
+		}
+	});
+
 	it("leaves focus alone after Run when it's still somewhere", async () => {
 		const tabs = document.createElement("main");
 		tabs.innerHTML = '<button role="tab" aria-selected="true">Results</button>';

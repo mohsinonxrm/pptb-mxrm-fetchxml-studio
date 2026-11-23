@@ -79,6 +79,7 @@ import {
 } from "../../model/treeIcons";
 import { TreeNodeIcon } from "./TreeNodeIcon";
 import { loadEntityAttributes } from "../../api/dataverseMetadata";
+import { hasOpenPopup } from "../../../../app/hooks/useShortcuts";
 
 /**
  * Format a value for display, avoiding scientific notation for numbers
@@ -485,10 +486,49 @@ export function TreeView({
 
 	// ============ ADD / DELETE (#24) ============
 
+	// After a delete, focus goes to the next row at the same level, else the parent (#186, owner
+	// decision Q1): the deleted row, or the button or menu that deleted it, is gone
+	const focusAfterDelete = useRef<NodeId | null>(null);
+	const rowElement = (id: NodeId) =>
+		treeRef.current?.querySelector<HTMLElement>(
+			`[role="treeitem"][data-fui-tree-item-value="${CSS.escape(id)}"]`,
+		) ?? null;
+	const removeNode = (id: NodeId) => {
+		const item = rowElement(id);
+		const level = item?.parentElement;
+		const siblings = [...(level?.children ?? [])].filter(
+			(el) => el.getAttribute("role") === "treeitem",
+		);
+		const next = item ? siblings[siblings.indexOf(item) + 1] : undefined;
+		const parent = level?.closest('[role="treeitem"]');
+		focusAfterDelete.current =
+			(next ?? parent)?.getAttribute("data-fui-tree-item-value") ?? null;
+		onRemoveNode(id);
+	};
+	useEffect(() => {
+		// This delete's target, taken now: a later change (an undo) cancels it rather than letting it
+		// land late on a row nobody asked for
+		const id = focusAfterDelete.current;
+		if (!id) return;
+		focusAfterDelete.current = null;
+		// Once the confirmation (if any) has closed and the tree has settled
+		let settled = 0;
+		let frame = requestAnimationFrame(function tick() {
+			settled = hasOpenPopup() ? 0 : settled + 1;
+			if (settled < 3) {
+				frame = requestAnimationFrame(tick);
+				return;
+			}
+			rowElement(id)?.focus();
+		});
+		return () => cancelAnimationFrame(frame);
+		// The tree changing (the delete landing) is what starts it
+	}, [fetchQuery]);
+
 	/** Delete a node; one with items inside asks first (#24) */
 	const requestDelete = (target: DeleteTarget) => {
 		if (target.descendants > 0) setPendingDelete(target);
-		else onRemoveNode(target.id);
+		else removeNode(target.id);
 	};
 
 	/** The Add items of an entity or link-entity, in the order of #24 */
@@ -626,8 +666,26 @@ export function TreeView({
 					if (e.target !== e.currentTarget) return;
 					// Enter selects the focused node, like a click (#229). Fluent still toggles a branch on Enter.
 					if (e.key === "Enter") onNodeSelect(row.id);
+					// Delete removes it, as the row's Delete button does (#186, owner decision Q1). Only on
+					// the focused row, never while typing (WCAG 2.1.4).
+					if (
+						e.key === "Delete" &&
+						row.deleteTarget &&
+						!e.ctrlKey &&
+						!e.metaKey &&
+						!e.altKey &&
+						!e.shiftKey
+					) {
+						e.preventDefault();
+						// Held down, it would go on deleting the row focus moves to: once per press
+						if (!e.repeat) requestDelete(row.deleteTarget);
+						return;
+					}
 					if (!hasContextMenu) return;
-					if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+					if (
+						e.key === "ContextMenu" ||
+						(e.shiftKey && e.key === "F10" && !e.ctrlKey && !e.altKey && !e.metaKey)
+					) {
 						e.preventDefault();
 						const layout =
 							e.currentTarget.querySelector<HTMLElement>(
@@ -930,7 +988,7 @@ export function TreeView({
 							<Button
 								appearance="primary"
 								onClick={() => {
-									if (pendingDelete) onRemoveNode(pendingDelete.id);
+									if (pendingDelete) removeNode(pendingDelete.id);
 									setPendingDelete(null);
 								}}
 							>

@@ -36,6 +36,7 @@ import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync"
 import { useEditorSession } from "./hooks/useEditorSession";
 import { hasOpenPopup, useShortcuts } from "./hooks/useShortcuts";
 import { useFocusAreas } from "./hooks/useFocusAreas";
+import { useFocusReturn } from "./hooks/useFocusReturn";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import { matches } from "./shortcuts/registry";
 import { ShortcutsDialog } from "../features/fetchxml/ui/Dialogs/ShortcutsDialog";
@@ -502,6 +503,8 @@ function AppContent({
 	};
 	// Ctrl+S presses the app bar's Save as it is (#186)
 	const saveShortcutRef = useRef<(() => void) | null>(null);
+	// Closing a dialog or drawer puts focus back on what opened it (#186)
+	useFocusReturn();
 	// The tool's keys (#186): Run, Save, Undo / Redo, the shortcuts list and the areas
 	useShortcuts({
 		run: editorSession.run,

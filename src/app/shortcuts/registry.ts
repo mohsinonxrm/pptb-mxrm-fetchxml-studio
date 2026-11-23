@@ -114,7 +114,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		aria: "Delete",
 		scope: "documented",
 		inEditable: false,
-		pending: true,
 	},
 	{
 		id: "openMenu",
