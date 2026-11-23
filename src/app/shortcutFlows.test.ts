@@ -86,11 +86,15 @@ describe("app: keyboard shortcuts", () => {
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: QUERY } });
 			await ready(app);
-			await press(treeItem("Fetch query"), { key: "/", ctrlKey: true });
+			const row = treeItem("Fetch query");
+			await act(async () => row?.focus());
+			await press(row, { key: "/", ctrlKey: true });
 			await app.waitFor(() => dialogTitle() === "Keyboard shortcuts");
 			expect(openDialog()?.textContent).toContain("Run query");
 			await click(button("Close"));
 			await app.waitFor(() => !openDialog());
+			// Focus goes back to the tree row where the key was pressed
+			await app.waitFor(() => active() === row);
 
 			await click(
 				document.querySelector('header button[aria-label="More commands"]') as HTMLElement,

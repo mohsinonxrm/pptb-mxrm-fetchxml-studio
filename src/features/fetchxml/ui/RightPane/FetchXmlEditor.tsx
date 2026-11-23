@@ -506,7 +506,22 @@ function FetchXmlEditorImpl(
 				label: "Run query",
 				keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
 				keybindingContext: "editorTextFocus",
-				run: () => runFromEditorRef.current?.(),
+				run: () => {
+					runFromEditorRef.current?.();
+					// Run opens Results, which hides the editor: focus would fall to the page, so it
+					// goes to the tab that's showing
+					requestAnimationFrame(() =>
+						requestAnimationFrame(() => {
+							const active = document.activeElement;
+							if (active && active !== document.body) return;
+							document
+								.querySelector<HTMLElement>(
+									'main [role="tab"][aria-selected="true"]',
+								)
+								?.focus();
+						}),
+					);
+				},
 			});
 		},
 		[],

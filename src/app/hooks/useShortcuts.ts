@@ -18,6 +18,11 @@
  * item alone (Enter is that control's own action). Held down, or while Run has a reason (running,
  * say), Ctrl+Enter runs nothing but is still taken, so it doesn't toggle a tree branch either.
  *
+ * Ctrl+S and Ctrl+/ open a dialog from wherever focus is, with no button that opened it. Fluent
+ * would return focus to the last control marked to receive it (a toolbar button clicked earlier),
+ * so the handler puts it back where the key was pressed once the dialog has closed
+ * (`returnFocusAfterDialog`; owner decision: focus returns to whatever opened a dialog).
+ *
  * An undo can remove the focused element (undoing an add removes its tree row, its properties or its
  * grid column). Focus would fall to the page, so `restoreFocus` puts it somewhere useful.
  */
@@ -56,6 +61,52 @@ function hasOpenList(target: EventTarget | null): boolean {
 }
 
 const focusIsLost = () => !document.activeElement || document.activeElement === document.body;
+
+/** How long a key-opened dialog may take to appear (Save first syncs the editor) */
+const DIALOG_WAIT_MS = 5000;
+
+/**
+ * Once a dialog has opened and every one has closed again, focus `target` (where the key was
+ * pressed), if it's still in the page. Dialogs in a row (the editor's "Load into the tree?" before
+ * Save) count as one: it waits two frames after the last one closes. Nothing happens if no dialog
+ * opens in time, or the target is gone.
+ */
+export function returnFocusAfterDialog(target: HTMLElement | null, doc: Document = document): void {
+	if (!target || target === doc.body) return;
+	let opened = false;
+	let settling = false;
+	const observer = new MutationObserver(() => check());
+	const stop = () => {
+		observer.disconnect();
+		clearTimeout(timeout);
+	};
+	const timeout = setTimeout(() => {
+		if (!opened) stop();
+	}, DIALOG_WAIT_MS);
+	const check = () => {
+		if (hasOpenPopup(doc)) {
+			opened = true;
+			return;
+		}
+		if (!opened || settling) return;
+		settling = true;
+		requestAnimationFrame(() =>
+			requestAnimationFrame(() => {
+				settling = false;
+				if (hasOpenPopup(doc)) return;
+				stop();
+				if (target.isConnected) target.focus();
+			}),
+		);
+	};
+	observer.observe(doc.body, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ["hidden", "style"],
+	});
+	check();
+}
 
 export interface ShortcutHandlers {
 	/** Run (Ctrl+Enter); nothing happens while `runDisabledReason` is set */
@@ -99,7 +150,9 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
 				act(event.repeat || h.runDisabledReason ? () => {} : h.run);
 			} else if (matches(event, "save")) {
 				if (event.repeat || hasOpenPopup()) return;
+				const from = document.activeElement as HTMLElement | null;
 				act(h.save);
+				returnFocusAfterDialog(from);
 			} else if (matches(event, "nextArea")) {
 				if (!hasOpenPopup()) act(h.nextArea);
 			} else if (matches(event, "previousArea")) {
@@ -119,7 +172,10 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
 			event.preventDefault();
 			const h = latest.current;
 			if (isList) {
-				if (!event.repeat) h.showShortcuts();
+				if (event.repeat) return;
+				const from = document.activeElement as HTMLElement | null;
+				h.showShortcuts();
+				returnFocusAfterDialog(from);
 				return;
 			}
 			const hadFocus = !focusIsLost();

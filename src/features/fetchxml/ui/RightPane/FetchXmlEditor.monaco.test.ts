@@ -4,7 +4,7 @@
  * is marked so the app's key handler leaves Ctrl+Enter to it; Format runs Monaco's Format Document
  * (one undo step, cursor kept) once the formatter has checked the FetchXML.
  */
-import { createElement, type ReactNode } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, click, render, toasts } from "../../../../shared/testing/ui";
 import { RUNS_ITSELF_ATTRIBUTE } from "../../../../app/shortcuts/registry";
@@ -127,6 +127,34 @@ describe("the FetchXML editor's Monaco hooks (#186)", () => {
 		run?.run();
 		expect(runFromEditor).toHaveBeenCalledOnce();
 		expect(fake.dom?.hasAttribute(RUNS_ITSELF_ATTRIBUTE)).toBe(true);
+	});
+
+	it("after Run hides the editor, focus goes to the tab that's showing, not the page", async () => {
+		const tabs = document.createElement("main");
+		tabs.innerHTML = '<button role="tab" aria-selected="true">Results</button>';
+		document.body.appendChild(tabs);
+		try {
+			await render(
+				withSync({ runFromEditor: () => {} }, createElement(FetchXmlEditor, { xml: XML })),
+			);
+			(document.activeElement as HTMLElement | null)?.blur();
+			await act(async () => fake.actions.find((x) => x.id === "fxs.runQuery")?.run());
+			await act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+			expect(document.activeElement?.textContent).toBe("Results");
+		} finally {
+			tabs.remove();
+		}
+	});
+
+	it("leaves focus alone after Run when it's still somewhere", async () => {
+		await render(
+			withSync({ runFromEditor: () => {} }, createElement(FetchXmlEditor, { xml: XML })),
+		);
+		const toggle = editorMode();
+		toggle?.focus();
+		await act(async () => fake.actions.find((x) => x.id === "fxs.runQuery")?.run());
+		await act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+		expect(document.activeElement).toBe(toggle);
 	});
 
 	it("Format runs Monaco's Format Document when the FetchXML can be formatted", async () => {

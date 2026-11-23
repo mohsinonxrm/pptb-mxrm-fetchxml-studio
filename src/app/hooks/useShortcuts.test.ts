@@ -12,7 +12,12 @@
 import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
-import { hasOpenPopup, useShortcuts, type ShortcutHandlers } from "./useShortcuts";
+import {
+	hasOpenPopup,
+	returnFocusAfterDialog,
+	useShortcuts,
+	type ShortcutHandlers,
+} from "./useShortcuts";
 import { RUNS_ITSELF_ATTRIBUTE } from "../shortcuts/registry";
 
 function Probe(handlers: ShortcutHandlers) {
@@ -256,5 +261,77 @@ describe("the handlers", () => {
 		await press(byId("tree"), { key: "s", ctrlKey: true });
 		expect(next.save).toHaveBeenCalledOnce();
 		expect(first.save).not.toHaveBeenCalled();
+	});
+});
+
+describe("focus after a key-opened dialog", () => {
+	const frames = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+	const openDialog = async () => {
+		const dialog = addPopup({ role: "dialog" });
+		const close = document.createElement("button");
+		dialog.appendChild(close);
+		await act(async () => close.focus());
+		return dialog;
+	};
+
+	it("goes back where the key was pressed once the dialog closes", async () => {
+		await setup();
+		const row = byId("tree") as HTMLElement;
+		returnFocusAfterDialog(row);
+		const dialog = await openDialog();
+		await frames();
+		expect(document.activeElement).not.toBe(row);
+		// Fluent would put focus on a button clicked earlier
+		await act(async () => {
+			dialog.remove();
+			(byId("button") as HTMLElement).focus();
+		});
+		await frames();
+		expect(document.activeElement).toBe(row);
+	});
+
+	it("waits for the last of dialogs in a row", async () => {
+		await setup();
+		const row = byId("tree") as HTMLElement;
+		returnFocusAfterDialog(row);
+		const first = await openDialog();
+		await act(async () => first.remove());
+		const second = await openDialog();
+		await frames();
+		expect(document.activeElement).not.toBe(row);
+		await act(async () => second.remove());
+		await frames();
+		expect(document.activeElement).toBe(row);
+	});
+
+	it("does nothing when the element is gone, or for the page itself", async () => {
+		await setup();
+		const row = byId("tree") as HTMLElement;
+		returnFocusAfterDialog(row);
+		returnFocusAfterDialog(document.body);
+		const dialog = await openDialog();
+		await act(async () => {
+			row.remove();
+			dialog.remove();
+			(byId("button") as HTMLElement).focus();
+		});
+		await frames();
+		expect(document.activeElement).toBe(byId("button"));
+	});
+
+	it("Ctrl+S and Ctrl+/ use it: focus comes back to the tree row", async () => {
+		const showDialog = () => void openDialog();
+		const h = await setup({ save: vi.fn(showDialog), showShortcuts: vi.fn(showDialog) });
+		for (const key of ["s", "/"]) {
+			const row = byId("tree") as HTMLElement;
+			await act(async () => row.focus());
+			await press(row, { key, ctrlKey: true });
+			await frames();
+			await act(async () => document.querySelector("[data-test-popup]")?.remove());
+			await frames();
+			expect(document.activeElement).toBe(row);
+		}
+		expect(h.save).toHaveBeenCalledOnce();
+		expect(h.showShortcuts).toHaveBeenCalledOnce();
 	});
 });
