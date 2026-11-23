@@ -50,11 +50,9 @@ const deleteRow = async (text: string) => {
 	await act(async () => treeItem(text)?.focus());
 	await click(treeItem(text)?.querySelector('button[aria-label="Delete"]'));
 };
-/** What Fluent's announcer last put in its live region (jsdom has no innerText, so read the property it sets) */
-const liveText = () =>
-	[...document.querySelectorAll<HTMLElement>("[aria-live] span")]
-		.map((span) => span.innerText ?? span.textContent ?? "")
-		.join(" ");
+/** The app's polite live region, for screen readers */
+const liveRegion = () =>
+	document.querySelector<HTMLElement>('[role="status"][aria-live="polite"][aria-atomic="true"]');
 const nameOf = (verb: "Undo" | "Redo") => historyButton(verb)?.getAttribute("aria-label");
 const press = (target: Element | null | undefined, init: KeyboardEventInit) =>
 	act(async () => {
@@ -101,15 +99,17 @@ describe("app: undo and redo", () => {
 	);
 
 	it(
-		"screen readers hear what was undone, through the app's live region",
+		"screen readers hear what was undone or redone, from the button or the keys",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: QUERY } });
 			await app.waitFor(() => !!treeItem("name") && !!treeToolbar());
 			await deleteRow("name");
 			await app.waitFor(() => !treeItem("name"));
+			expect(liveRegion()?.textContent).toBe("");
 			await click(historyButton("Undo"));
-			// Fluent's announcer writes the message into a live region for a moment
-			await app.waitFor(() => liveText().includes("Undone: Delete attribute"), 5000);
+			await app.waitFor(() => liveRegion()?.textContent === "Undone: Delete attribute", 5000);
+			await press(treeItem("Fetch query"), { key: "y", ctrlKey: true });
+			await app.waitFor(() => liveRegion()?.textContent === "Redone: Delete attribute", 5000);
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,

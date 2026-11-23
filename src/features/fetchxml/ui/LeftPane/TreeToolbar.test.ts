@@ -45,6 +45,8 @@ describe("TreeToolbar", () => {
 		const undo = named("Undo")!;
 		expect(undo.getAttribute("aria-disabled")).toBe("true");
 		expect(undo.disabled).toBe(false);
+		// No key to advertise while it does nothing
+		expect(undo.hasAttribute("aria-keyshortcuts")).toBe(false);
 		await click(undo);
 		await click(named("Redo"));
 		expect(props.onUndo).not.toHaveBeenCalled();

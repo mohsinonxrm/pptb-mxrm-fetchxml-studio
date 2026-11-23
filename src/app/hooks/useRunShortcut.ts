@@ -9,7 +9,8 @@
  * It doesn't run:
  *  - in Monaco, where Ctrl+Enter inserts a line until #186 binds it there;
  *  - on a button or a menu item: Enter is that control's own action ("Run anyway", say);
- *  - while a dialog or a menu is open: the shortcut belongs to what's in front;
+ *  - while a modal dialog or a menu is open: the shortcut belongs to what's in front (the
+ *    non-modal Properties drawer doesn't count, #385);
  *  - when Run can't be pressed (it has a reason).
  */
 import { useEffect, useRef } from "react";
@@ -22,10 +23,13 @@ const OWN_ENTER = 'button, a[href], [role="button"], [role^="menuitem"]';
  * An open dialog or menu in front. Monaco's Find widget (role="dialog") doesn't count: it stays in
  * the editor after it closes, and the editor keeps its own keys anyway. Hidden ones don't either.
  * (Not aria-hidden: Fluent's modal surfaces can sit in an aria-hidden container while they open.)
+ * A non-modal dialog (aria-modal="false", like the Properties drawer) isn't in front of anything, so
+ * it doesn't count (#385).
  */
 export function hasOpenPopup(doc: Document = document): boolean {
 	return [...doc.querySelectorAll<HTMLElement>(POPUPS)].some(
 		(el) =>
+			el.getAttribute("aria-modal") !== "false" &&
 			!el.closest("[hidden], .monaco-editor") &&
 			doc.defaultView?.getComputedStyle(el).display !== "none",
 	);

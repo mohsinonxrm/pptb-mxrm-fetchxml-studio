@@ -11,7 +11,8 @@
  * inside Monaco: Monaco binds it to "rename symbol", but FetchXML (XML) has no rename provider, so
  * nothing is lost. The handler must run before Monaco's own key handling for this to hold.
  * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB 1.2.7 owns
- * (PPTB_RESERVED).
+ * (PPTB_RESERVED). PPTB's Edit menu also has Undo and Redo (Electron's undo and redo roles, which run
+ * the page's own text undo); the tool's Ctrl+Z / Ctrl+Y take them outside text fields (#192).
  */
 
 export type ShortcutScope = "global" | "documented";
@@ -161,6 +162,8 @@ export const PPTB_RESERVED: readonly string[] = [
 
 export interface KeyEventLike {
 	key: string;
+	/** The physical key ("KeyZ"), for layouts whose letters aren't Latin */
+	code?: string;
 	ctrlKey: boolean;
 	metaKey: boolean;
 	shiftKey: boolean;
@@ -228,6 +231,18 @@ export function detectPlatform(): ShortcutPlatform {
 }
 
 /**
+ * The key's name in lower case. On a layout whose letters aren't Latin (Russian, Greek, Hebrew…),
+ * Ctrl+Z sends `key: "я"`: the physical key then names the letter, as Chromium does for a text
+ * field's own undo. Latin layouts keep `key`, so AZERTY's Z is still Z.
+ */
+function keyOf(event: KeyEventLike): string {
+	const key = event.key.toLowerCase();
+	if (key.length !== 1 || key.charCodeAt(0) < 128) return key;
+	const letter = /^Key([A-Z])$/.exec(event.code ?? "");
+	return letter ? letter[1].toLowerCase() : key;
+}
+
+/**
  * Does the key event press this shortcut? The primary modifier is Ctrl, or Cmd on a Mac (the other
  * one must be up). Shift and Alt must match exactly, so Ctrl+Shift+Z is not Ctrl+Z. `event.key` is
  * compared without case (Shift turns "z" into "Z"). "/" is its own key: Shift+/ ("?") doesn't match.
@@ -241,7 +256,7 @@ export function matches(
 	const primary =
 		platform === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 	const noPrimary = !event.metaKey && !event.ctrlKey;
-	const key = event.key.toLowerCase();
+	const key = keyOf(event);
 	return entry.aria.split(" ").some((text) => {
 		const c = parseCombo(text);
 		return (

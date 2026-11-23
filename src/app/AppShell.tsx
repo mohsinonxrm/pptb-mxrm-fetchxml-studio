@@ -4,7 +4,6 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import {
-	AriaLiveAnnouncer,
 	FluentProvider,
 	mergeClasses,
 	webLightTheme,
@@ -44,6 +43,7 @@ import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { TreeToolbar } from "../features/fetchxml/ui/LeftPane/TreeToolbar";
+import { LiveRegion } from "../shared/components/LiveRegion";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { clearMetadataLoadErrors } from "../features/fetchxml/ui/LeftPane/PropertiesPanel/metadataLoadErrors";
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
@@ -132,26 +132,22 @@ export function AppShell() {
 	return (
 		<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
 			<ThemeProvider isDark={isDark}>
-				{/* One live region for screen reader announcements (#192, #186): Undo and Redo say
-				    what they did, and Fluent's MessageBars announce themselves through it */}
-				<AriaLiveAnnouncer>
-					{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
+				{/* One Toaster for the app (#277): above the error boundary, so the fallback's Copy
 				    details still toasts; above the remount, so a new session or a restart clears
 				    toasts whose actions point at the old builder */}
-					<NotifyProvider resetKey={`${session}-${restarts}`}>
-						<ToolErrorBoundary
-							readFetchXml={() => carryOver.current.readFetchXml?.()}
-							onRestart={restart}
-						>
-							<BuilderProvider key={`${session}-${restarts}`}>
-								<AppContent
-									carryOver={carryOver.current}
-									connectionKey={connectionKey}
-								/>
-							</BuilderProvider>
-						</ToolErrorBoundary>
-					</NotifyProvider>
-				</AriaLiveAnnouncer>
+				<NotifyProvider resetKey={`${session}-${restarts}`}>
+					<ToolErrorBoundary
+						readFetchXml={() => carryOver.current.readFetchXml?.()}
+						onRestart={restart}
+					>
+						<BuilderProvider key={`${session}-${restarts}`}>
+							<AppContent
+								carryOver={carryOver.current}
+								connectionKey={connectionKey}
+							/>
+						</BuilderProvider>
+					</ToolErrorBoundary>
+				</NotifyProvider>
 			</ThemeProvider>
 		</FluentProvider>
 	);
@@ -461,11 +457,23 @@ function AppContent({
 	// Undo and Redo (#192): the tree toolbar and Ctrl+Z / Ctrl+Y outside text fields, announced
 	const undoRedo = useUndoRedo(builder.history);
 	useUndoShortcuts({
-		...undoRedo,
-		restoreFocus: () =>
-			treeRegionRef.current
-				?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
-				?.focus(),
+		undo: undoRedo.undo,
+		redo: undoRedo.redo,
+		// Focus the undo left on the page goes to the selected tree row, else to the tree toolbar
+		// (undoing the first entity pick leaves no tree, but Redo). A hidden pane takes nothing.
+		restoreFocus: () => {
+			const region = treeRegionRef.current;
+			const candidates = [
+				region?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]'),
+				region?.querySelector<HTMLElement>(
+					'[role="toolbar"] button:not([aria-disabled="true"])',
+				),
+			];
+			for (const el of candidates) {
+				el?.focus();
+				if (el && document.activeElement === el) return;
+			}
+		},
 	});
 
 	// The view the query is, and whether it has unsaved changes (#278, owner decision Q4): its
@@ -585,6 +593,8 @@ function AppContent({
 	return (
 		<EditorSyncContext.Provider value={editorSession.syncValue}>
 			<div className={styles.shell}>
+				{/* "Undone: {step}" for screen readers (#192) */}
+				<LiveRegion message={undoRedo.announcement} />
 				<AppBar
 					run={{
 						onClick: editorSession.run,
