@@ -8,8 +8,8 @@
  *
  * Owner decision on #186 Q5 (model-driven app keys): Ctrl+F6 and Ctrl+Shift+F6 move between areas,
  * F2 goes to the newest notification. They type no text, so they work in fields too. F2 also works
- * inside Monaco: Monaco binds it to "rename symbol", but FetchXML (XML) has no rename provider, so
- * nothing is lost. The handler must run before Monaco's own key handling for this to hold.
+ * inside Monaco: Monaco binds it to "rename symbol" only where a rename provider exists, and
+ * FetchXML (XML) has none, so the key reaches the Toaster's document listener.
  * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB 1.2.7 owns
  * (PPTB_RESERVED). PPTB's Edit menu also has Undo and Redo (Ctrl+Z / Ctrl+Y). Checked in PPTB 1.2.7:
  * the keys reach the tool, and one press is one builder undo; choosing them from the menu doesn't
@@ -17,6 +17,12 @@
  */
 
 export type ShortcutScope = "global" | "documented";
+
+/**
+ * On an element that handles Ctrl+Enter itself (the FetchXML editor's Monaco "Run query" action,
+ * #186): the app's key handler leaves Ctrl+Enter inside it alone
+ */
+export const RUNS_ITSELF_ATTRIBUTE = "data-fxs-runs-itself";
 export type ShortcutPlatform = "mac" | "other";
 
 export interface ShortcutEntry {
@@ -29,6 +35,8 @@ export interface ShortcutEntry {
 	scope: ShortcutScope;
 	/** May the shortcut fire while focus is in a text field, contenteditable or Monaco? */
 	inEditable: boolean;
+	/** Planned but not handled yet: the README lists it, the Keyboard shortcuts dialog doesn't */
+	pending?: boolean;
 }
 
 export const SHORTCUTS: readonly ShortcutEntry[] = [
@@ -106,6 +114,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		aria: "Delete",
 		scope: "documented",
 		inEditable: false,
+		pending: true,
 	},
 	{
 		id: "openMenu",
@@ -231,6 +240,8 @@ export function detectPlatform(): ShortcutPlatform {
 	return /mac|iphone|ipad|ipod/i.test(platform) ? "mac" : "other";
 }
 
+const PUNCTUATION = /^[^a-z0-9]$/;
+
 /**
  * The key's name in lower case. On a layout whose letters aren't Latin (Russian, Greek, Hebrew…),
  * Ctrl+Z sends `key: "я"`: the physical key then names the letter, as Chromium does for a text
@@ -245,8 +256,9 @@ function keyOf(event: KeyEventLike): string {
 
 /**
  * Does the key event press this shortcut? The primary modifier is Ctrl, or Cmd on a Mac (the other
- * one must be up). Shift and Alt must match exactly, so Ctrl+Shift+Z is not Ctrl+Z. `event.key` is
- * compared without case (Shift turns "z" into "Z"). "/" is its own key: Shift+/ ("?") doesn't match.
+ * one must be up). Shift and Alt must match exactly, so Ctrl+Shift+Z is not Ctrl+Z; only a
+ * punctuation key may come with Shift (see shiftOk). `event.key` is compared without case (Shift
+ * turns "z" into "Z"). "/" is its own key: US Shift+/ ("?") doesn't match.
  */
 export function matches(
 	event: KeyEventLike,
@@ -260,12 +272,10 @@ export function matches(
 	const key = keyOf(event);
 	return entry.aria.split(" ").some((text) => {
 		const c = parseCombo(text);
-		return (
-			c.key === key &&
-			c.shift === event.shiftKey &&
-			c.alt === event.altKey &&
-			(c.ctrl ? primary : noPrimary)
-		);
+		// A punctuation key names its character: "/" needs Shift on German or French layouts, and US
+		// Shift+/ is "?" anyway. So Shift may be down for it, unless the combination asks for Shift.
+		const shiftOk = c.shift === event.shiftKey || (!c.shift && PUNCTUATION.test(c.key));
+		return c.key === key && shiftOk && c.alt === event.altKey && (c.ctrl ? primary : noPrimary);
 	});
 }
 

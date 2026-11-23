@@ -41,12 +41,15 @@ export interface InspectorDrawerProps {
 	children: ReactNode;
 }
 
+/** The drawer's host in the output: Ctrl+F6 counts it as the builder (#186), whose Properties it holds */
+export const INSPECTOR_HOST_ID = "fxs-inspector-host";
+
 export function InspectorDrawer({ open, title, onClose, children }: InspectorDrawerProps) {
 	const styles = useStyles();
 	const [host, setHost] = useState<HTMLDivElement | null>(null);
 	return (
 		<>
-			<div ref={setHost} className={styles.host} />
+			<div ref={setHost} id={INSPECTOR_HOST_ID} className={styles.host} />
 			{host && (
 				<OverlayDrawer
 					className={styles.drawer}

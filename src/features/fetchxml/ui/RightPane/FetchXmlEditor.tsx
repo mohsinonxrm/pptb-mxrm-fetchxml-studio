@@ -72,7 +72,8 @@ import {
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
 import { formatFetchXml } from "../../model/fetchxmlFormatter";
-import { formatKeys, getEntry } from "../../../../app/shortcuts/registry";
+import { RUNS_ITSELF_ATTRIBUTE, formatKeys, getEntry } from "../../../../app/shortcuts/registry";
+import { useEditorSync } from "./editorSync";
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -200,6 +201,12 @@ function FetchXmlEditorImpl(
 
 	// Short confirmations go to the app's Toaster; bars here are only for problems in this XML (#277)
 	const { notify } = useNotify();
+	// Ctrl+Enter's Run (#186), read when the key is pressed
+	const { runFromEditor } = useEditorSync();
+	const runFromEditorRef = useRef(runFromEditor);
+	useEffect(() => {
+		runFromEditorRef.current = runFromEditor;
+	});
 	const copy = useCopy();
 
 	// Get current XML value based on mode
@@ -374,16 +381,16 @@ function FetchXmlEditorImpl(
 			return;
 		}
 		if (result.text === text) return;
-		if (editor && model) {
-			editor.pushUndoStop();
-			editor.executeEdits("format", [
-				{ range: model.getFullModelRange(), text: result.text },
-			]);
-			editor.pushUndoStop();
+		// Monaco's Format Document, as Shift+Alt+F: the same edit, one undo step, and the cursor kept
+		const formatAction =
+			editor && model ? editor.getAction("editor.action.formatDocument") : null;
+		if (formatAction) {
+			void formatAction.run();
 		} else {
 			setEditedXml(result.text);
+			onEditorStateChange?.(true, result.text);
 		}
-	}, [editedXml, notify]);
+	}, [editedXml, notify, onEditorStateChange]);
 
 	// Validate XML
 	const handleValidate = useCallback(() => {
@@ -486,9 +493,21 @@ function FetchXmlEditorImpl(
 	const handleEditorMount = useCallback(
 		(editor: MonacoEditor.editor.IStandaloneCodeEditor, monaco: typeof MonacoEditor) => {
 			editorRef.current = editor;
-			// FetchXML completions and hovers for this editor only, released with it (#194)
+			// FetchXML completions, hovers and Format Document for this editor only, released with it
+			// (#194, #186)
 			const languageFeatures = attachFetchXmlLanguageFeatures(monaco, editor);
 			editor.onDidDispose(() => languageFeatures.dispose());
+			// Ctrl+Enter runs the query (#186): Monaco's own action, so it never inserts a line, and
+			// "Run query" is in the F1 list. In the text only: Find keeps its own Ctrl+Enter. The app's
+			// key handler leaves this editor to it (RUNS_ITSELF).
+			editor.getDomNode()?.setAttribute(RUNS_ITSELF_ATTRIBUTE, "");
+			editor.addAction({
+				id: "fxs.runQuery",
+				label: "Run query",
+				keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+				keybindingContext: "editorTextFocus",
+				run: () => runFromEditorRef.current?.(),
+			});
 		},
 		[],
 	);

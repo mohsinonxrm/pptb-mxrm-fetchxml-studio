@@ -14,7 +14,7 @@ import { useLazyMetadata } from "../shared/hooks/useLazyMetadata";
 import { useBuilderLayout, type PeekPart } from "./hooks/useBuilderLayout";
 import { BuilderRail, CollapseButton, PinButton } from "./layout/BuilderRail";
 import { PaneSplitter } from "../shared/components/PaneSplitter";
-import { InspectorDrawer } from "./layout/InspectorDrawer";
+import { INSPECTOR_HOST_ID, InspectorDrawer } from "./layout/InspectorDrawer";
 import { SelectionBar } from "./layout/SelectionBar";
 import { selectionLabel } from "./layout/selectionLabel";
 import { useResultsExport } from "./hooks/useResultsExport";
@@ -34,7 +34,7 @@ import { EntitySelector } from "../features/fetchxml/ui/Toolbar/EntitySelector";
 import { AppBar } from "../features/fetchxml/ui/AppBar/AppBar";
 import { EditorSyncContext } from "../features/fetchxml/ui/RightPane/editorSync";
 import { useEditorSession } from "./hooks/useEditorSession";
-import { useShortcuts } from "./hooks/useShortcuts";
+import { hasOpenPopup, useShortcuts } from "./hooks/useShortcuts";
 import { useFocusAreas } from "./hooks/useFocusAreas";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import { matches } from "./shortcuts/registry";
@@ -140,7 +140,7 @@ export function AppShell() {
 				{/* F2 goes to the newest toast (#186, as in model-driven apps) */}
 				<NotifyProvider
 					resetKey={`${session}-${restarts}`}
-					focusShortcut={(event) => matches(event, "toasts")}
+					focusShortcut={(event) => matches(event, "toasts") && !hasOpenPopup()}
 				>
 					<ToolErrorBoundary
 						readFetchXml={() => carryOver.current.readFetchXml?.()}
@@ -482,12 +482,24 @@ function AppContent({
 		// The pane (docked, or the peek with the rail beside it), or the rail while collapsed
 		{
 			element: layout.pane === "collapsed" ? railRef.current : paneRef.current,
-			alsoContains: [railRef.current],
+			// The rail, and the Properties drawer (in the output, but it holds the builder's Properties)
+			alsoContains: [railRef.current, document.getElementById(INSPECTOR_HOST_ID)],
 			focusFirst: (element) =>
 				element === paneRef.current ? focusInside(element) : focusFirst(element),
 		},
 		{ element: outputRef.current, focusFirst },
 	]);
+	// Leaving the tree or Properties peek for another area closes it, so focus isn't hidden under it
+	const leavingPeek = (move: () => void) => {
+		const inPeek = () =>
+			layout.pane === "peek" &&
+			[paneRef.current, railRef.current].some(
+				(el) => !!el && el.contains(document.activeElement),
+			);
+		const wasInPeek = inPeek();
+		move();
+		if (wasInPeek && !inPeek()) layout.closePeek();
+	};
 	// Ctrl+S presses the app bar's Save as it is (#186)
 	const saveShortcutRef = useRef<(() => void) | null>(null);
 	// The tool's keys (#186): Run, Save, Undo / Redo, the shortcuts list and the areas
@@ -496,8 +508,8 @@ function AppContent({
 		runDisabledReason: editorSession.runDisabledReason,
 		save: () => saveShortcutRef.current?.(),
 		showShortcuts: () => setShortcutsOpen(true),
-		nextArea: areas.next,
-		previousArea: areas.previous,
+		nextArea: () => leavingPeek(areas.next),
+		previousArea: () => leavingPeek(areas.previous),
 		undo: undoRedo.undo,
 		redo: undoRedo.redo,
 		// Focus the undo left on the page goes to the selected tree row, else to the tree toolbar

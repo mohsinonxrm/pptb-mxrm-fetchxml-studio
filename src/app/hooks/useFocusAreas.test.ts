@@ -43,6 +43,7 @@ function Probe({ hideBuilder = false, rail = false }: { hideBuilder?: boolean; r
 			createElement("div", { id: "row1", tabIndex: 0 }, "Fetch query"),
 			createElement("div", { id: "row2", tabIndex: -1 }, "account"),
 		),
+		createElement("button", { id: "splitter" }, "Resize"),
 		createElement(
 			"main",
 			{ ref: output },
@@ -115,6 +116,16 @@ describe("useFocusAreas", () => {
 		await focus("outside");
 		await previous();
 		expect(focused()).toBe("tab");
+	});
+
+	it("from between two areas (the pane splitter), goes to the next one after it or the one before", async () => {
+		await render(createElement(Probe));
+		await focus("splitter");
+		await next();
+		expect(focused()).toBe("tab");
+		await focus("splitter");
+		await previous();
+		expect(focused()).toBe("row1");
 	});
 
 	it("counts the rail beside a peek as the builder", async () => {

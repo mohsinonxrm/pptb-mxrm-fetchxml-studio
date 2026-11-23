@@ -12,8 +12,9 @@ import { ShortcutsDialog } from "./ShortcutsDialog";
 afterEach(() => cleanup());
 
 const sections = () =>
-	[...(openDialog()?.querySelectorAll("section") ?? [])].map((section) => ({
+	[...(openDialog()?.querySelectorAll('[role="group"]') ?? [])].map((section) => ({
 		title: section.querySelector("h3")?.textContent,
+		role: section.getAttribute("role"),
 		rows: [...section.querySelectorAll("dt")].map((dt) => ({
 			label: dt.textContent,
 			keys: [...(dt.nextElementSibling?.querySelectorAll("kbd") ?? [])].map(
@@ -34,8 +35,10 @@ describe("ShortcutsDialog", () => {
 			SHORTCUTS.filter((s) => s.scope === "global").map((s) => s.label),
 		);
 		expect(local.rows.map((r) => r.label)).toEqual(
-			SHORTCUTS.filter((s) => s.scope === "documented").map((s) => s.label),
+			SHORTCUTS.filter((s) => s.scope === "documented" && !s.pending).map((s) => s.label),
 		);
+		// A planned key that doesn't work yet isn't listed
+		expect(local.rows.map((r) => r.label)).not.toContain("Remove the node");
 	});
 
 	it("shows each key in a kbd, and several keys joined by 'or'", async () => {

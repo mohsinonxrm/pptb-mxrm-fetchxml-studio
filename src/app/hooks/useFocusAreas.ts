@@ -25,6 +25,14 @@ function isShown(el: HTMLElement): boolean {
 	}
 	return true;
 }
+const follows = (el: Node, ref: Node) =>
+	!!(ref.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) && !el.contains(ref);
+const precedes = (el: Node, ref: Node) =>
+	!!(ref.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) && !el.contains(ref);
+function lastIndex<T>(items: T[], test: (item: T) => boolean, fallback: number): number {
+	for (let i = items.length - 1; i >= 0; i--) if (test(items[i])) return i;
+	return fallback;
+}
 const holds = (area: FocusArea, target: Node) =>
 	[area.element, ...(area.alsoContains ?? [])].some((el) => !!el?.contains(target));
 
@@ -43,8 +51,10 @@ export function useFocusAreas(getAreas: () => FocusArea[]): {
 		const onFocusIn = (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (!target) return;
-			for (const area of latest.current())
-				if (area.element?.contains(target)) lastFocused.current.set(area.element, target);
+			// The first area that holds it: the Properties drawer is the builder's, though it sits in
+			// the output
+			const area = latest.current().find((a) => a.element && holds(a, target));
+			if (area?.element) lastFocused.current.set(area.element, target);
 		};
 		document.addEventListener("focusin", onFocusIn);
 		return () => document.removeEventListener("focusin", onFocusIn);
@@ -59,16 +69,24 @@ export function useFocusAreas(getAreas: () => FocusArea[]): {
 		if (areas.length === 0) return;
 		const active = document.activeElement as HTMLElement | null;
 		const current = areas.findIndex((a) => !!active && holds(a, active));
-		// From outside every area, Ctrl+F6 starts at the first and Ctrl+Shift+F6 at the last
+		// From outside every area (a splitter between two, a toast), the next area after it in the
+		// page, or the previous one before it; past the end, round to the first or the last
 		const index =
-			current === -1
-				? step === 1
-					? 0
-					: areas.length - 1
-				: (current + step + areas.length) % areas.length;
+			current !== -1
+				? (current + step + areas.length) % areas.length
+				: step === 1
+					? Math.max(
+							0,
+							areas.findIndex((a) => !!active && follows(a.element, active)),
+						)
+					: lastIndex(
+							areas,
+							(a) => !!active && precedes(a.element, active),
+							areas.length - 1,
+						);
 		const area = areas[index];
 		const remembered = lastFocused.current.get(area.element);
-		if (remembered && area.element.contains(remembered) && isShown(remembered)) {
+		if (remembered && holds(area, remembered) && isShown(remembered)) {
 			remembered.focus();
 			if (document.activeElement === remembered) return;
 		}

@@ -21,6 +21,11 @@ export interface EditorSyncValue {
 	sync: (action: EditorSyncAction) => Promise<EditorSyncResult>;
 	/** Editor mode is on and the editor has content: actions are available even with an empty tree */
 	editorHasContent: boolean;
+	/**
+	 * Ctrl+Enter in the FetchXML editor (#186, Monaco's own action): Run, unless it has a reason not
+	 * to (running, nothing to run). Stable, so the editor can register it once.
+	 */
+	runFromEditor?: () => void;
 }
 
 export const EditorSyncContext = createContext<EditorSyncValue | null>(null);

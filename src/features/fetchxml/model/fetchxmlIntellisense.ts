@@ -550,11 +550,8 @@ export function registerFetchXmlIntellisense(
 }
 
 /**
- * Get FetchXML hover information
- */
-/**
- * Format Document (Shift+Alt+F, #186) for FetchXML editors: the safe formatter, which changes only
- * whitespace between tags. FetchXML that isn't well-formed is left as it is.
+ * Format Document (Shift+Alt+F, #186) for FetchXML editors: the safe formatter, which re-indents and
+ * keeps values, quotes and comments as written. FetchXML that isn't well-formed is left as it is.
  */
 export function registerFetchXmlFormatter(
 	monaco: typeof Monaco,
@@ -571,6 +568,9 @@ export function registerFetchXmlFormatter(
 	});
 }
 
+/**
+ * Get FetchXML hover information
+ */
 export function registerFetchXmlHoverProvider(
 	monaco: typeof Monaco,
 	appliesTo?: ModelFilter,

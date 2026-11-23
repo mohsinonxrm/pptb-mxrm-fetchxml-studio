@@ -168,6 +168,12 @@ export function AppBar({
 			? null
 			: (save.command.onClick ?? null);
 	});
+	useEffect(
+		() => () => {
+			if (saveShortcutRef) saveShortcutRef.current = null;
+		},
+		[saveShortcutRef],
+	);
 	const isUnsaved = () => (hasUnsavedChanges ? hasUnsavedChanges() : unsaved);
 	const handleNew = () => {
 		if (isUnsaved()) setConfirm({ intent: "new" });
@@ -295,6 +301,7 @@ export function AppBar({
 							<MenuItem
 								icon={<Keyboard20Regular />}
 								secondaryContent={formatKeys(getEntry("shortcuts"))[0]}
+								aria-keyshortcuts={getEntry("shortcuts").aria}
 								onClick={onShowShortcuts}
 							>
 								Keyboard shortcuts

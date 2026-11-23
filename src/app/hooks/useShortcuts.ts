@@ -6,7 +6,8 @@
  * Two listeners on the window:
  *  - Capture phase, for keys that type no text and so also work in fields and the FetchXML editor:
  *    Ctrl+Enter (Run), Ctrl+S (Save), Ctrl+F6 / Ctrl+Shift+F6 (areas). Handled keys stop there, so
- *    Enter doesn't also expand a tree branch and Monaco doesn't insert a line.
+ *    Enter doesn't also expand a tree branch. In the FetchXML editor, Ctrl+Enter is Monaco's own
+ *    "Run query" action (RUNS_ITSELF_ATTRIBUTE), and in a Find box it stays Find's.
  *  - Bubble phase, for keys a focused control may have its own use for: Ctrl+Z / Ctrl+Y /
  *    Ctrl+Shift+Z (Undo, Redo) and Ctrl+/ (the shortcuts list). They act only outside text fields,
  *    contenteditable and Monaco (which keep their own undo and comment toggle), and only when
@@ -14,16 +15,19 @@
  *
  * Nothing acts while a modal dialog or a menu is open: the keys belong to what's in front. The
  * non-modal Properties drawer doesn't count (#385). Ctrl+Enter also leaves a focused button or menu
- * item alone (Enter is that control's own action) and does nothing while Run has a reason.
+ * item alone (Enter is that control's own action). Held down, or while Run has a reason (running,
+ * say), Ctrl+Enter runs nothing but is still taken, so it doesn't toggle a tree branch either.
  *
  * An undo can remove the focused element (undoing an add removes its tree row, its properties or its
  * grid column). Focus would fall to the page, so `restoreFocus` puts it somewhere useful.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { isEditableTarget, matches } from "../shortcuts/registry";
+import { RUNS_ITSELF_ATTRIBUTE, isEditableTarget, matches } from "../shortcuts/registry";
 
 const POPUPS = '[role="dialog"], [role="alertdialog"], [role="menu"]';
 const OWN_ENTER = 'button, a[href], [role="button"], [role^="menuitem"]';
+/** Ctrl+Enter belongs to these: the FetchXML editor's own Run action, and Monaco's Find box */
+const OWN_CTRL_ENTER = `[${RUNS_ITSELF_ATTRIBUTE}], .find-widget`;
 
 /**
  * An open dialog or menu in front. Monaco's Find widget (role="dialog") doesn't count: it stays in
@@ -89,10 +93,10 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
 				fn();
 			};
 			if (matches(event, "run")) {
-				if (event.repeat) return;
-				if ((event.target as Element | null)?.closest?.(OWN_ENTER)) return;
-				if (hasOpenPopup() || h.runDisabledReason) return;
-				act(h.run);
+				const target = event.target as Element | null;
+				if (target?.closest?.(OWN_ENTER) || target?.closest?.(OWN_CTRL_ENTER)) return;
+				if (hasOpenPopup()) return;
+				act(event.repeat || h.runDisabledReason ? () => {} : h.run);
 			} else if (matches(event, "save")) {
 				if (event.repeat || hasOpenPopup()) return;
 				act(h.save);

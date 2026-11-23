@@ -13,6 +13,7 @@ import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
 import { hasOpenPopup, useShortcuts, type ShortcutHandlers } from "./useShortcuts";
+import { RUNS_ITSELF_ATTRIBUTE } from "../shortcuts/registry";
 
 function Probe(handlers: ShortcutHandlers) {
 	useShortcuts(handlers);
@@ -26,6 +27,17 @@ function Probe(handlers: ShortcutHandlers) {
 			"div",
 			{ className: "monaco-editor", id: "monaco" },
 			createElement("textarea"),
+		),
+		// The FetchXML editor runs Ctrl+Enter itself (Monaco's action), and has a Find box
+		createElement(
+			"div",
+			{ className: "monaco-editor", id: "fetchxml", [RUNS_ITSELF_ATTRIBUTE]: "" },
+			createElement("textarea", { id: "fetchxmlText" }),
+			createElement(
+				"div",
+				{ className: "find-widget" },
+				createElement("textarea", { id: "find" }),
+			),
 		),
 	);
 }
@@ -71,7 +83,7 @@ afterEach(() => {
 });
 
 describe("Ctrl+Enter", () => {
-	it("runs from a tree item, a field and the editor, and they don't see the key", async () => {
+	it("runs from a tree item, a field and a read-only editor (LayoutXML), and they don't see the key", async () => {
 		const h = await setup();
 		const seenByTree = vi.fn();
 		const seenByEditor = vi.fn();
@@ -86,19 +98,35 @@ describe("Ctrl+Enter", () => {
 		expect(seenByEditor).not.toHaveBeenCalled();
 	});
 
-	it("doesn't run on a button, when repeated, or with plain Enter", async () => {
+	it("doesn't run on a button or with plain Enter", async () => {
 		const h = await setup();
-		await ctrlEnter(byId("button"));
-		await ctrlEnter(byId("tree"), { repeat: true });
+		const onButton = await ctrlEnter(byId("button"));
 		await ctrlEnter(byId("tree"), { ctrlKey: false });
 		expect(h.run).not.toHaveBeenCalled();
+		expect(onButton.defaultPrevented).toBe(false);
 	});
 
-	it("doesn't run when Run has a reason", async () => {
-		const h = await setup({ runDisabledReason: "Choose an entity first" });
+	it("held down, or while Run has a reason, runs nothing but still takes the key", async () => {
+		const h = await setup({ runDisabledReason: "The query is running" });
+		const seenByTree = vi.fn();
+		byId("tree")?.addEventListener("keydown", seenByTree);
 		const event = await ctrlEnter(byId("tree"));
+		expect(event.defaultPrevented).toBe(true);
 		expect(h.run).not.toHaveBeenCalled();
-		expect(event.defaultPrevented).toBe(false);
+		const ready = await setup();
+		const held = await ctrlEnter(byId("tree"), { repeat: true });
+		expect(held.defaultPrevented).toBe(true);
+		expect(ready.run).not.toHaveBeenCalled();
+		expect(seenByTree).not.toHaveBeenCalled();
+	});
+
+	it("leaves the FetchXML editor's own Run action and Monaco's Find box their Ctrl+Enter", async () => {
+		const h = await setup();
+		const inEditor = await ctrlEnter(byId("fetchxmlText"));
+		const inFind = await ctrlEnter(byId("find"));
+		expect(h.run).not.toHaveBeenCalled();
+		expect(inEditor.defaultPrevented).toBe(false);
+		expect(inFind.defaultPrevented).toBe(false);
 	});
 
 	it("doesn't run while a dialog is open, but a closed Find widget or a hidden one doesn't count", async () => {
@@ -166,6 +194,12 @@ describe("Ctrl+S", () => {
 });
 
 describe("Ctrl+/", () => {
+	it("works on a layout where / needs Shift (German, French)", async () => {
+		const h = await setup();
+		await press(byId("tree"), { key: "/", code: "Digit7", ctrlKey: true, shiftKey: true });
+		expect(h.showShortcuts).toHaveBeenCalledOnce();
+	});
+
 	it("shows the shortcuts from the tree, a button or the page", async () => {
 		const h = await setup();
 		const event = await press(byId("tree"), { key: "/", ctrlKey: true });

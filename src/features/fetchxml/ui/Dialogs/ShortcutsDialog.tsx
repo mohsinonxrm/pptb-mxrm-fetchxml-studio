@@ -1,7 +1,8 @@
 /**
  * The Keyboard shortcuts dialog (#186): Ctrl+/ or More › Keyboard shortcuts. Built from the shortcut
  * table (`src/app/shortcuts/registry.ts`), so it always matches what the keys do: the keys that work
- * anywhere in the tool first, then the ones handled where focus is. A description list of labels
+ * anywhere in the tool first, then the ones handled where focus is. Keys that are planned but not
+ * handled yet (`pending`) aren't listed. A description list of labels
  * and keys (design D's ShortcutList), with each key in a <kbd>; on a Mac, Ctrl shows as ⌘.
  */
 import {
@@ -79,8 +80,9 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
 						{SECTIONS.map(({ scope, title }) => {
 							const headingId = `fxs-shortcuts-${scope}`;
 							return (
-								<section
+								<div
 									key={scope}
+									role="group"
 									className={styles.section}
 									aria-labelledby={headingId}
 								>
@@ -88,7 +90,9 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
 										{title}
 									</Subtitle2>
 									<dl className={styles.list}>
-										{SHORTCUTS.filter((s) => s.scope === scope).map((s) => (
+										{SHORTCUTS.filter(
+											(s) => s.scope === scope && !s.pending,
+										).map((s) => (
 											<Fragment key={s.id}>
 												<dt className={styles.term}>
 													<Body1>{s.label}</Body1>
@@ -104,7 +108,7 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
 											</Fragment>
 										))}
 									</dl>
-								</section>
+								</div>
 							);
 						})}
 					</DialogContent>

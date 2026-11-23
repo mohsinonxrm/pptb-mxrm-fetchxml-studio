@@ -49,6 +49,8 @@ const header = () => document.querySelector<HTMLElement>("header");
 const output = () => document.querySelector<HTMLElement>('main[aria-label="Query output"]');
 const pane = () => document.querySelector<HTMLElement>('aside[aria-label="Query builder"]');
 const active = () => document.activeElement as HTMLElement | null;
+/** The builder pane as a peek over the output */
+const peek = () => document.querySelector<HTMLElement>('aside[aria-label="Query tree"]');
 const dialogTitle = () => openDialog()?.querySelector("h2")?.textContent;
 /**
  * The first-run scope tip traps focus (a modal dialog in front), so the keys wait for it, as they
@@ -150,6 +152,77 @@ describe("app: keyboard shortcuts", () => {
 			await app.waitFor(() => active()?.getAttribute("role") === "listitem");
 			expect(active()?.contains(toast())).toBe(true);
 			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"F2 waits behind a modal dialog, like the other keys",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: QUERY } });
+			await ready(app);
+			await click(
+				document.querySelector('header button[aria-label="More commands"]') as HTMLElement,
+			);
+			await click(
+				[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((i) =>
+					i.textContent?.startsWith("Copy FetchXML"),
+				),
+			);
+			await app.waitFor(() => !!document.querySelector(".fui-Toast"));
+			await press(treeItem("Fetch query"), { key: "/", ctrlKey: true });
+			await app.waitFor(() => dialogTitle() === "Keyboard shortcuts");
+			const close = button("Close");
+			await act(async () => close?.focus());
+			await press(active(), { key: "F2" });
+			expect(active()).toBe(close);
+			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"Ctrl+F6 out of the tree peek closes it, so focus isn't hidden under it",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: QUERY } });
+			await ready(app);
+			await click(
+				document.querySelector<HTMLElement>(
+					'button[aria-label="Collapse the builder pane"]',
+				),
+			);
+			await click(document.querySelector<HTMLElement>('nav button[aria-label="Query tree"]'));
+			await app.waitFor(() => pane() === null && !!peek());
+			await act(async () => treeItem("name")?.focus());
+			await press(active(), { key: "F6", ctrlKey: true });
+			expect(output()?.contains(active())).toBe(true);
+			await app.waitFor(() => !peek());
+			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
+		"Ctrl+F6 from the Properties drawer counts it as the builder: next is the output",
+		async () => {
+			const width = window.innerWidth;
+			Object.defineProperty(window, "innerWidth", { configurable: true, value: 900 });
+			try {
+				const app = await renderApp({ launch: { fetchXml: QUERY } });
+				await ready(app);
+				await click(treeItem("name"));
+				await click(button("Edit properties", document) ?? undefined);
+				const drawer = () =>
+					document.querySelector<HTMLElement>('[role="dialog"][aria-modal="false"]');
+				await app.waitFor(() => !!drawer()?.querySelector("button"));
+				await act(async () => drawer()?.querySelector<HTMLElement>("button")?.focus());
+				expect(drawer()?.contains(active())).toBe(true);
+				await press(active(), { key: "F6", ctrlKey: true });
+				expect(active()?.getAttribute("role")).toBe("tab");
+				app.expectClean();
+			} finally {
+				Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+			}
 		},
 		FLOW_TIMEOUT,
 	);
