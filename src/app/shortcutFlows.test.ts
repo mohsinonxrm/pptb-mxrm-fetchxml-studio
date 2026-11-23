@@ -73,9 +73,15 @@ describe("app: keyboard shortcuts", () => {
 			await ready(app);
 			const save = button("Save", document);
 			expect(save?.getAttribute("aria-keyshortcuts")).toBe("Control+S");
-			await press(treeItem("Fetch query"), { key: "s", ctrlKey: true });
+			const row = treeItem("Fetch query");
+			await act(async () => row?.focus());
+			await press(row, { key: "s", ctrlKey: true });
 			await app.waitFor(() => /Save/.test(dialogTitle() ?? ""));
 			expect(dialogTitle()).toBe("Save as new view");
+			// Cancel: focus goes back to the tree row where the key was pressed
+			await click(button("Cancel"));
+			await app.waitFor(() => !openDialog());
+			await app.waitFor(() => active() === row, 3000);
 			// Not expectClean: the Save dialog's performance check isn't in the fake Dataverse
 		},
 		FLOW_TIMEOUT,
