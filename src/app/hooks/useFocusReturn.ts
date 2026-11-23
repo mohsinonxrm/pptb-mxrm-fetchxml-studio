@@ -41,7 +41,6 @@ export function useFocusReturn(doc: Document = document): void {
 		let returnToHolder: HTMLElement | null = null;
 		let anyOpen = hasOpenPopup(doc);
 		let settling = false;
-		let scheduled = false;
 
 		const onFocusIn = (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -83,19 +82,24 @@ export function useFocusReturn(doc: Document = document): void {
 				}),
 			);
 		};
-		// At most once a frame: the body changes constantly (grid scrolling, Monaco's cursor)
-		const schedule = () => {
-			if (scheduled) return;
-			scheduled = true;
-			requestAnimationFrame(() => {
-				scheduled = false;
-				check();
-			});
-		};
+		// The body changes constantly (grid scrolling, Monaco's cursor): look only at changes that add,
+		// remove or touch a popup, or at any change while one is open. Right away, so a short-lived
+		// dialog isn't missed.
+		const touchesPopup = (record: MutationRecord) =>
+			(record.type === "childList"
+				? [...record.addedNodes, ...record.removedNodes]
+				: [record.target]
+			).some(
+				(node) =>
+					node instanceof Element &&
+					(node.matches(POPUP_ROOTS) || !!node.querySelector(POPUP_ROOTS)),
+			);
 
 		doc.addEventListener("focusin", onFocusIn, true);
 		doc.addEventListener("focusout", onFocusOut, true);
-		const observer = new MutationObserver(schedule);
+		const observer = new MutationObserver((records) => {
+			if (anyOpen || records.some(touchesPopup)) check();
+		});
 		observer.observe(doc.body, {
 			childList: true,
 			subtree: true,
