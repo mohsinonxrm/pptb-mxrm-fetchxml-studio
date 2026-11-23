@@ -24,6 +24,13 @@ export const useStyles = makeStyles({
 		right: 0,
 		bottom: 0,
 	},
+	// The app bar's banner landmark (#186): it keeps its height, as the bar did
+	appBar: {
+		flexShrink: 0,
+		display: "flex",
+		flexDirection: "column",
+		minWidth: 0,
+	},
 	// The two panes, under the app bar
 	root: {
 		display: "flex",

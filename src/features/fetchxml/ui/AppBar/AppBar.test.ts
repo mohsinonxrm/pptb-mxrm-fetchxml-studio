@@ -225,8 +225,8 @@ describe("the app bar's commands", () => {
 		await click(moreByTooltip());
 		const save = menuItems(menus()[0]).find((i) => i.textContent?.trim() === "Save");
 		await click(save);
-		// Save's own menu (the rules are tested in saveRules.test.ts), once
-		expect(menuTexts(menus()[1])).toEqual(["Save as new view…"]);
+		// Save's own menu (the rules are tested in saveRules.test.ts), once; the primary shows Ctrl+S (#186)
+		expect(menuTexts(menus()[1])).toEqual(["Save as new view…Ctrl+S"]);
 	});
 });
 

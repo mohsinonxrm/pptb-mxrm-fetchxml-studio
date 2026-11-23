@@ -28,6 +28,7 @@ import {
 import { useEditorSync } from "../RightPane/editorSync";
 import type { BarCommand } from "../../../../shared/components/commandBar";
 import type { SaveAction } from "../../model/saveTarget";
+import { formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 import { useSaveOptions } from "./useSaveOptions";
 
 const SaveIcon = bundleIcon(Save20Filled, Save20Regular);
@@ -156,8 +157,12 @@ export function useSaveViewCommand({
 		) : (
 			<SaveRegular />
 		);
-	const describe = (action: SaveAction) =>
-		action.warning ? `${action.label}. ${action.warning}` : action.label;
+	// The primary action is Ctrl+S's (#186): its tooltip and menu item show the key
+	const saveKey = formatKeys(getEntry("save"))[0];
+	const describe = (action: SaveAction) => {
+		const label = action === options.primary ? `${action.label} (${saveKey})` : action.label;
+		return action.warning ? `${label}. ${action.warning}` : label;
+	};
 
 	const handleDialogSaveComplete = useCallback(
 		(
@@ -189,6 +194,7 @@ export function useSaveViewCommand({
 		onClick: () => run(options.primary),
 		disabledReason,
 		hint: describe(options.primary),
+		keyShortcuts: getEntry("save").aria,
 		// The menu lists the primary action itself, so More shows it as it is
 		menuHasPrimary: true,
 		menu: (
@@ -198,6 +204,7 @@ export function useSaveViewCommand({
 						<MenuItem
 							key={action.kind}
 							icon={iconFor(action)}
+							secondaryContent={action === options.primary ? saveKey : undefined}
 							onClick={() => run(action)}
 						>
 							{action.label}

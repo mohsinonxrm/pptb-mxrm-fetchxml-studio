@@ -34,6 +34,8 @@ import {
 	ClipboardPaste20Regular,
 	FolderOpen20Filled,
 	FolderOpen20Regular,
+	TextIndentIncrease20Filled,
+	TextIndentIncrease20Regular,
 	ArrowReset20Filled,
 	ArrowReset20Regular,
 	Checkmark20Filled,
@@ -69,6 +71,8 @@ import {
 } from "./editorProblems";
 import { ParseChangesDialog } from "./ParseChangesDialog";
 import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense";
+import { formatFetchXml } from "../../model/fetchxmlFormatter";
+import { formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 
 /** FetchXML as the tree would write it, to compare meaning rather than formatting; null if it doesn't parse. */
 function canonicalFetchXml(xmlText: string): string | null {
@@ -91,6 +95,7 @@ const LoadIcon = bundleIcon(FolderOpen20Filled, FolderOpen20Regular);
 const ResetIcon = bundleIcon(ArrowReset20Filled, ArrowReset20Regular);
 const ValidateIcon = bundleIcon(Checkmark20Filled, Checkmark20Regular);
 const ParseIcon = bundleIcon(TreeDeciduous20Filled, TreeDeciduous20Regular);
+const FormatIcon = bundleIcon(TextIndentIncrease20Filled, TextIndentIncrease20Regular);
 
 const useStyles = makeStyles({
 	container: {
@@ -357,6 +362,29 @@ function FetchXmlEditorImpl(
 		notify.info("Reverted to the FetchXML from the tree");
 	}, [xml, clearMessages, notify, onEditorStateChange]);
 
+	// Format (#186): re-indent the editor's FetchXML with the safe formatter, as one step of the
+	// editor's own undo (Ctrl+Z takes it back). Shift+Alt+F does the same through Monaco.
+	const handleFormat = useCallback(() => {
+		const editor = editorRef.current;
+		const model = editor?.getModel();
+		const text = model ? model.getValue() : editedXml;
+		const result = formatFetchXml(text);
+		if (!result.ok) {
+			notify.warning(result.error);
+			return;
+		}
+		if (result.text === text) return;
+		if (editor && model) {
+			editor.pushUndoStop();
+			editor.executeEdits("format", [
+				{ range: model.getFullModelRange(), text: result.text },
+			]);
+			editor.pushUndoStop();
+		} else {
+			setEditedXml(result.text);
+		}
+	}, [editedXml, notify]);
+
 	// Validate XML
 	const handleValidate = useCallback(() => {
 		// First check syntax
@@ -465,8 +493,8 @@ function FetchXmlEditorImpl(
 		[],
 	);
 
-	// Bar order; what overflows first: Load 10, Reset 15, Paste 20, Parse to tree 35, Validate 40,
-	// Copy 50 (#232). Tooltips describe; the label names.
+	// Bar order; what overflows first: Load 10, Reset 15, Paste 20, Format 30, Parse to tree 35,
+	// Validate 40, Copy 50 (#232, #186). Tooltips describe; the label names.
 	const copyCommand: BarCommand = {
 		id: "copy",
 		label: "Copy",
@@ -509,6 +537,18 @@ function FetchXmlEditorImpl(
 					kind: "button",
 					hint: "Reset to tree-generated XML",
 					onClick: handleReset,
+				},
+				{
+					id: "format",
+					label: "Format",
+					icon: FormatIcon,
+					group: "check",
+					priority: 30,
+					kind: "button",
+					hint: `Re-indent the FetchXML (${formatKeys(getEntry("formatXml"))[0]})`,
+					keyShortcuts: getEntry("formatXml").aria,
+					disabledReason: editedXml.trim() ? undefined : "There's no FetchXML to format",
+					onClick: handleFormat,
 				},
 				{
 					id: "validate",

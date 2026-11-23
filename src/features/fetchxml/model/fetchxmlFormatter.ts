@@ -4,7 +4,7 @@
  * A small tokenizer, not DOMParser + XMLSerializer, because the serializer rewrites entities and
  * quotes. Only whitespace between tags changes; attribute values, text, comments, CDATA, the XML
  * declaration, processing instructions, attribute order and quote characters are kept as written.
- * Not used by the editor yet.
+ * The FetchXML editor's Format command and Shift+Alt+F use it.
  *
  * Parsing and rendering use explicit stacks, so nesting depth is not limited by the call stack.
  *
