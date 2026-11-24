@@ -7,7 +7,7 @@ import { act, createElement, createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../../../shared/testing/ui";
 import { AnnouncerProvider } from "../../../../shared/feedback/Announcer";
-import { FLUSH_MS } from "../../../../shared/feedback/useAnnouncer";
+import { AnnouncerContext, FLUSH_MS } from "../../../../shared/feedback/useAnnouncer";
 import { FetchXmlEditor, type FetchXmlEditorHandle } from "./FetchXmlEditor";
 import type { EditorProblem } from "./editorProblems";
 
@@ -77,6 +77,54 @@ describe("the editor's bars and the announcer", () => {
 		await flushed();
 		await act(async () => ref.current?.report(["notes"], [notes("Second note")]));
 		await flushed();
-		expect(polite()).toBe("Notes. <order> Second note");
+		expect(polite()).toBe("Notes. <order> Second note.");
+	});
+
+	describe("what it doesn't announce itself", () => {
+		const spoken = vi.fn();
+		afterEach(() => spoken.mockReset());
+		const showEditor = async () => {
+			const ref = createRef<FetchXmlEditorHandle>();
+			await render(
+				createElement(
+					AnnouncerContext.Provider,
+					{ value: spoken },
+					createElement(FetchXmlEditor, { xml: XML, ref }),
+				),
+			);
+			return ref;
+		};
+		const treeChanged = (body: string): EditorProblem => ({
+			key: "tree-changed",
+			intent: "warning",
+			title: "The tree changed",
+			body,
+		});
+
+		it("a new bar: it announces itself", async () => {
+			const ref = await showEditor();
+			await act(async () =>
+				ref.current?.report(["error"], [syntax("Line 3: missing quote")]),
+			);
+			expect(spoken).not.toHaveBeenCalled();
+		});
+
+		it("a bar checked again that says the same", async () => {
+			const ref = await showEditor();
+			await act(async () =>
+				ref.current?.report(["error"], [syntax("Line 3: missing quote")]),
+			);
+			await act(async () =>
+				ref.current?.report(["error"], [syntax("Line 3: missing quote")]),
+			);
+			expect(spoken).not.toHaveBeenCalled();
+		});
+
+		it("Tree changed, raised again on each change in Properties", async () => {
+			const ref = await showEditor();
+			await act(async () => ref.current?.report(["tree-changed"], [treeChanged("Once")]));
+			await act(async () => ref.current?.report(["tree-changed"], [treeChanged("Twice")]));
+			expect(spoken).not.toHaveBeenCalled();
+		});
 	});
 });

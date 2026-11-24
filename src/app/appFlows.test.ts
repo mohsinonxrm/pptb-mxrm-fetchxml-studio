@@ -136,7 +136,11 @@ describe("app: running a query", () => {
 			fail = false;
 			await click(button("Run", document));
 			await app.waitFor(() => /Rows: 5\b/.test(app.status()));
-			expect(document.body.textContent).not.toMatch(/doesn't contain attribute/);
+			// No bar says it any more (the screen reader announcement may still hold the text a moment)
+			const bars = [...document.querySelectorAll(".fui-MessageBar")].map(
+				(b) => b.textContent,
+			);
+			expect(bars.join(" ")).not.toMatch(/doesn't contain attribute/);
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,

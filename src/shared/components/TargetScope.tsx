@@ -15,11 +15,11 @@ import {
 	Input,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	Text,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "./BarTitle";
 import { getPrimaryConnection, type Connection } from "../../features/fetchxml/api/host";
 import { metadataCache } from "../../features/fetchxml/state/cache";
 import {
@@ -127,7 +127,7 @@ export function TargetScope({
 			{isProduction && (
 				<MessageBar intent="warning">
 					<MessageBarBody>
-						<MessageBarTitle>Production environment</MessageBarTitle>
+						<BarTitle>Production environment</BarTitle>
 						This changes live data.
 					</MessageBarBody>
 				</MessageBar>

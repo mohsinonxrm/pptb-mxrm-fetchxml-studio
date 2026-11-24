@@ -71,4 +71,17 @@ describe("Ctrl+Enter's Run from the editor (#186)", () => {
 		expect(onRun).toHaveBeenCalledOnce();
 		expect(session.syncValue.runFromEditor).toBe(first);
 	});
+
+	it("says why it didn't run, for screen readers (#186 PR 3)", async () => {
+		const onRun = vi.fn();
+		const onRunBlocked = vi.fn();
+		await show({ onRun, onRunBlocked, xml: "" });
+		await act(async () => session.syncValue.runFromEditor?.());
+		expect(onRun).not.toHaveBeenCalled();
+		expect(onRunBlocked).toHaveBeenCalledExactlyOnceWith(NO_QUERY_REASON);
+		await show({ onRun, onRunBlocked });
+		await act(async () => session.syncValue.runFromEditor?.());
+		expect(onRun).toHaveBeenCalledOnce();
+		expect(onRunBlocked).toHaveBeenCalledOnce();
+	});
 });

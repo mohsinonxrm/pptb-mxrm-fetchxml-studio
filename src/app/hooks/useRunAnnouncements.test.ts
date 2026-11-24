@@ -1,5 +1,5 @@
 /**
- * What a run says to screen readers (#186 PR 3): "Running query…", then the first page ("3 rows
+ * What a run says to screen readers (#186 PR 3): "Running the query…", then the first page ("3 rows
  * loaded, more available. Ran in 120 ms."), nothing for a failed run (its bar speaks), Retrieve all
  * progress at most every PROGRESS_EVERY_MS and "…, all loaded." at the end, but not after Stop.
  */
@@ -7,7 +7,7 @@ import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "../../shared/testing/ui";
 import { AnnouncerProvider } from "../../shared/feedback/Announcer";
-import { FLUSH_MS } from "../../shared/feedback/useAnnouncer";
+import { AnnouncerContext, FLUSH_MS } from "../../shared/feedback/useAnnouncer";
 import { PROGRESS_EVERY_MS, useRunAnnouncements } from "./useRunAnnouncements";
 import type { QueryExecution } from "./useQueryExecution";
 
@@ -42,7 +42,7 @@ describe("useRunAnnouncements", () => {
 		await show({});
 		await show({ isExecuting: true });
 		await flushed();
-		expect(said()).toBe("Running query…");
+		expect(said()).toBe("Running the query…");
 		await show({ queryResult: { rows: rows(3), moreRecords: true, executionTimeMs: 120 } });
 		await flushed();
 		expect(said()).toBe("3 rows loaded, more available. Ran in 120 ms.");
@@ -52,21 +52,46 @@ describe("useRunAnnouncements", () => {
 		await show({ isExecuting: true });
 		await show({ queryResult: { rows: rows(1), moreRecords: false } });
 		await flushed();
-		expect(said()).toBe("1 row loaded, all loaded.");
+		expect(said()).toBe("1 row, all loaded.");
 	});
 
-	it("waits for the rows when they arrive after the run stops, and says nothing for a failed run", async () => {
+	it("says nothing for a failed run, and doesn't read 'Running…' after it", async () => {
 		await show({ isExecuting: true });
-		await show({});
-		await show({ queryResult: { rows: rows(2), moreRecords: false } });
-		await flushed();
-		expect(said()).toBe("2 rows loaded, all loaded.");
-
-		await show({ isExecuting: true });
-		await flushed();
 		await show({ executeError: "Dataverse said no" });
 		await flushed();
-		expect(said()).toBe("Running query…");
+		expect(said()).toBe("");
+	});
+
+	it("starts over after a run whose results were cleared (the entity changed)", async () => {
+		await show({ isExecuting: true });
+		await flushed();
+		await show({});
+		await show({ isExecuting: true });
+		await flushed();
+		await show({ queryResult: { rows: rows(2), moreRecords: false } });
+		await flushed();
+		expect(said()).toBe("2 rows, all loaded.");
+		// And the second run said it started
+		await show({ isExecuting: true });
+		await flushed();
+		expect(said()).toBe("Running the query…");
+	});
+
+	it("says the run started once, though the old results clear while it runs", async () => {
+		const spoken = vi.fn();
+		const showSpied = (state: Partial<State>) =>
+			render(
+				createElement(
+					AnnouncerContext.Provider,
+					{ value: spoken },
+					createElement(Probe, { ...idle, ...state }),
+				),
+			);
+		const before = { rows: rows(5), moreRecords: false };
+		await showSpied({ queryResult: before });
+		await showSpied({ isExecuting: true, queryResult: before });
+		await showSpied({ isExecuting: true, queryResult: null });
+		expect(spoken.mock.calls.map(([message]) => message)).toEqual(["Running the query…"]);
 	});
 
 	it("says Retrieve all's progress at most every so often, then all loaded", async () => {
@@ -97,6 +122,21 @@ describe("useRunAnnouncements", () => {
 		await show({ queryResult: { rows: rows(1520), moreRecords: false } });
 		await flushed();
 		expect(said()).toBe("1,520 rows, all loaded.");
+	});
+
+	it("says all loaded even with the 'no paging cookie' note", async () => {
+		await show({ isExecuting: true });
+		await show({
+			isRetrieveAllInProgress: true,
+			queryResult: { rows: rows(50), moreRecords: true },
+		});
+		await flushed();
+		await show({
+			queryResult: { rows: rows(80), moreRecords: false },
+			pagingNotice: { kind: "simple", message: "Paging without a paging cookie" },
+		});
+		await flushed();
+		expect(said()).toBe("80 rows, all loaded.");
 	});
 
 	it("leaves Stop to its own bar: no 'all loaded'", async () => {

@@ -19,7 +19,6 @@ import {
 	Field,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	Option,
 	OptionGroup,
 	ProgressBar,
@@ -28,6 +27,7 @@ import {
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { CheckmarkCircle20Regular } from "@fluentui/react-icons";
 import type { BatchDeleteProgress, BatchDeleteResult } from "../../api/pptbClient";
 import { getEntityStateModel, getRecordStatuses } from "../../api/pptbClient";
@@ -274,7 +274,7 @@ export function SetStateDialog({
 						{plan?.kind === "none" && (
 							<MessageBar intent="warning" layout="multiline">
 								<MessageBarBody>
-									<MessageBarTitle>Nothing to change</MessageBarTitle>
+									<BarTitle>Nothing to change</BarTitle>
 									{plan.reason}
 								</MessageBarBody>
 							</MessageBar>
@@ -352,7 +352,7 @@ export function SetStateDialog({
 					<>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<MessageBarTitle>Updating records...</MessageBarTitle>
+								<BarTitle>Updating records...</BarTitle>
 								{progress &&
 									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
@@ -378,7 +378,7 @@ export function SetStateDialog({
 					<>
 						<MessageBar intent="warning" layout="multiline">
 							<MessageBarBody>
-								<MessageBarTitle>Partly done</MessageBarTitle>
+								<BarTitle>Partly done</BarTitle>
 								{result.succeeded} of {result.succeeded + result.failed} records
 								updated. {result.failed} failed.
 							</MessageBarBody>
@@ -400,7 +400,7 @@ export function SetStateDialog({
 					<>
 						<MessageBar intent="error" layout="multiline">
 							<MessageBarBody>
-								<MessageBarTitle>{verb} failed</MessageBarTitle>
+								<BarTitle>{verb} failed</BarTitle>
 								{error}
 							</MessageBarBody>
 						</MessageBar>

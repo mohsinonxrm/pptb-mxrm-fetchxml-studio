@@ -8,10 +8,10 @@ import {
 	MessageBar,
 	MessageBarActions,
 	MessageBarBody,
-	MessageBarTitle,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../shared/components/BarTitle";
 import { DismissRegular } from "@fluentui/react-icons";
 import type { TreeNoticeInput } from "./hooks/useTreeNotice";
 
@@ -41,7 +41,7 @@ export function TreeNoticeBar({
 		<MessageBar intent={notice.intent} layout="multiline" className={styles.bar}>
 			{/* Focusable, so a long list can be scrolled with the keyboard */}
 			<MessageBarBody className={styles.body} tabIndex={0}>
-				<MessageBarTitle>{notice.title}</MessageBarTitle>
+				<BarTitle>{notice.title}</BarTitle>
 				{notice.body}
 			</MessageBarBody>
 			<MessageBarActions

@@ -1,8 +1,9 @@
 /**
  * What a run does, for screen readers (#186 PR 3, owner decision 6): polite, through the app's
  * announcer, one batch so a newer status replaces a waiting one.
- *  - A run starts: "Running query…".
- *  - The first page arrives: "50 rows loaded, more available. Ran in 160 ms." (or "all loaded").
+ *  - A run starts: "Running the query…" (as Run's reason says while it runs).
+ *  - The first page arrives: "50 rows loaded, more available. Ran in 160 ms." (or "3 rows, all
+ *    loaded.").
  *  - Retrieve all: progress at most every PROGRESS_EVERY_MS ("1,000 rows loaded so far."), not every
  *    page, then "5,000 rows, all loaded." when it's done.
  *  - A failed run, Stop, the Retrieve all limit and a failed page are MessageBars, which announce
@@ -37,28 +38,29 @@ export function useRunAnnouncements(
 		if (isExecuting) {
 			if (awaitingFirstPage.current) return;
 			awaitingFirstPage.current = true;
-			announce("Running query…", { batchId: BATCH });
+			announce("Running the query…", { batchId: BATCH });
 			return;
 		}
 		if (!awaitingFirstPage.current) return;
-		// A failed run's bar says why (it announces itself)
-		if (executeError) {
+		// A failed run's bar says why (it announces itself); a run whose results were cleared (the
+		// entity changed) has nothing to tell. Either way "Running…" isn't read late, after the error.
+		if (executeError || !queryResult) {
 			awaitingFirstPage.current = false;
+			announce("", { batchId: BATCH });
 			return;
 		}
-		if (!queryResult) return;
 		awaitingFirstPage.current = false;
 		const n = queryResult.rows.length;
-		const more = isRetrieveAllInProgress
-			? ", loading the rest"
+		const count = isRetrieveAllInProgress
+			? `${rowsText(n)} loaded, loading the rest`
 			: queryResult.moreRecords
-				? ", more available"
-				: ", all loaded";
+				? `${rowsText(n)} loaded, more available`
+				: `${rowsText(n)}, all loaded`;
 		const time =
 			queryResult.executionTimeMs !== undefined
 				? ` Ran in ${queryResult.executionTimeMs.toLocaleString()} ms.`
 				: "";
-		announce(`${rowsText(n)} loaded${more}.${time}`, { batchId: BATCH });
+		announce(`${count}.${time}`, { batchId: BATCH });
 		lastProgress.current = Date.now();
 	}, [isExecuting, isRetrieveAllInProgress, queryResult, executeError, announce]);
 
@@ -74,7 +76,9 @@ export function useRunAnnouncements(
 			announce(`${rowsText(n)} loaded so far.`, { batchId: BATCH });
 			return;
 		}
-		// Done; Stop, the limit and a failed page say so in their own bar
-		if (before && !pagingNotice) announce(`${rowsText(n)}, all loaded.`, { batchId: BATCH });
+		// Done; Stop, the limit and a failed page say so in their own bar (the "no paging cookie"
+		// note doesn't end anything)
+		const ended = pagingNotice && pagingNotice.kind !== "simple";
+		if (before && !ended) announce(`${rowsText(n)}, all loaded.`, { batchId: BATCH });
 	}, [isRetrieveAllInProgress, queryResult, isExecuting, pagingNotice, announce]);
 }

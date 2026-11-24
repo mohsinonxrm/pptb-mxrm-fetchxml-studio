@@ -10,13 +10,13 @@ import {
 	Input,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	Subtitle2,
 	Textarea,
 	Tooltip,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { Copy20Regular, Flash20Filled } from "@fluentui/react-icons";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import type {
@@ -81,7 +81,7 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 			{spec.notes && spec.notes.length > 0 && (
 				<MessageBar layout="multiline" intent="info">
 					<MessageBarBody>
-						<MessageBarTitle>Notes</MessageBarTitle>
+						<BarTitle>Notes</BarTitle>
 						<ul className={styles.notes}>
 							{spec.notes.map((n, i) => (
 								<li key={i}>{n}</li>

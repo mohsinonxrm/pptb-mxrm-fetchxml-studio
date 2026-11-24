@@ -3,14 +3,18 @@
  * group is most severe first.
  */
 import { createElement } from "react";
+import { AnnounceProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { button, cleanup, click, render } from "../../../../shared/testing/ui";
 import { ResultsTabBars, type ResultsTabBarsProps } from "./ResultsTabBars";
 
 afterEach(() => cleanup());
 
+/** The titles as shown: without BarTitle's visually hidden full stop (#186) */
 const titles = () =>
-	[...document.querySelectorAll(".fui-MessageBarTitle")].map((t) => t.textContent?.trim());
+	[...document.querySelectorAll(".fui-MessageBarTitle")].map((t) =>
+		t.textContent?.trim().replace(/\.$/, ""),
+	);
 const show = (props: Partial<ResultsTabBarsProps>) =>
 	render(createElement(ResultsTabBars, { rowCount: 0, ...props }));
 
@@ -57,6 +61,40 @@ describe("ResultsTabBars", () => {
 		await show({ executeError: "0x80040203: bad value", onDismissExecuteError });
 		await click(document.querySelector('[aria-label="Dismiss"]'));
 		expect(onDismissExecuteError).toHaveBeenCalledTimes(1);
+	});
+
+	describe("the paging bar for screen readers (#186 PR 3)", () => {
+		const heard = vi.fn();
+		afterEach(() => heard.mockReset());
+		const showHeard = (props: Partial<ResultsTabBarsProps>) =>
+			render(
+				createElement(
+					AnnounceProvider,
+					{ value: { announce: heard } },
+					createElement(ResultsTabBars, { rowCount: 50, ...props }),
+				),
+			);
+
+		it("Stop is read politely: the user's own doing", async () => {
+			await showHeard({ pagingNotice: { kind: "stopped", message: "Stopped at 50 rows." } });
+			expect(heard).toHaveBeenCalledOnce();
+			expect(heard.mock.calls[0][1]).toMatchObject({ alert: false, polite: true });
+		});
+
+		it("the limit after a stop is a new bar, so it's read too, assertively", async () => {
+			await showHeard({ pagingNotice: { kind: "stopped", message: "Stopped at 50 rows." } });
+			await showHeard({ pagingNotice: { kind: "limit", message: "100,000 rows." } });
+			expect(heard).toHaveBeenCalledTimes(2);
+			expect(heard.mock.calls[1][0]).toContain("100,000 rows.");
+			expect(heard.mock.calls[1][1]).toMatchObject({ alert: true });
+		});
+
+		it("a failed page after the limit is read too, though it's as urgent", async () => {
+			await showHeard({ pagingNotice: { kind: "limit", message: "100,000 rows." } });
+			await showHeard({ pagingNotice: { kind: "error", message: "Throttled", page: 3 } });
+			expect(heard).toHaveBeenCalledTimes(2);
+			expect(heard.mock.calls[1][0]).toContain("Throttled");
+		});
 	});
 
 	it("most severe first: the failed run, the failed export, paging, exporting", async () => {

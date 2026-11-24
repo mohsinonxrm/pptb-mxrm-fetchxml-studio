@@ -22,7 +22,6 @@ import {
 	Link,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	Option,
 	ProgressBar,
 	SpinButton,
@@ -32,6 +31,7 @@ import {
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { DatePicker } from "@fluentui/react-datepicker-compat";
 import { CheckmarkCircle20Regular } from "@fluentui/react-icons";
 import type {
@@ -283,7 +283,7 @@ export function CloseRecordsDialog({
 			return (
 				<MessageBar intent="warning" layout="multiline">
 					<MessageBarBody>
-						<MessageBarTitle>Nothing to choose</MessageBarTitle>
+						<BarTitle>Nothing to choose</BarTitle>
 						The target Status has no status reasons in metadata.
 					</MessageBarBody>
 				</MessageBar>
@@ -538,7 +538,7 @@ export function CloseRecordsDialog({
 					<>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<MessageBarTitle>Running {action.message}...</MessageBarTitle>
+								<BarTitle>Running {action.message}...</BarTitle>
 								{progress &&
 									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
@@ -564,7 +564,7 @@ export function CloseRecordsDialog({
 					<>
 						<MessageBar intent="warning" layout="multiline">
 							<MessageBarBody>
-								<MessageBarTitle>Partly done</MessageBarTitle>
+								<BarTitle>Partly done</BarTitle>
 								{result.succeeded} of {result.succeeded + result.failed}{" "}
 								{action.nouns[1]} closed. {result.failed} failed.
 							</MessageBarBody>
@@ -588,7 +588,7 @@ export function CloseRecordsDialog({
 					<>
 						<MessageBar intent="error" layout="multiline">
 							<MessageBarBody>
-								<MessageBarTitle>{action.label} failed</MessageBarTitle>
+								<BarTitle>{action.label} failed</BarTitle>
 								{error}
 							</MessageBarBody>
 						</MessageBar>

@@ -367,6 +367,10 @@ function AppContent({
 
 	// Running the query and paging its results (#301). Here, so clearing the results on an entity
 	// change keeps its place among the effects.
+	// The app's announcer (#186); a ref so the editor session's Run can use it before it's declared
+	const announce = useAnnouncer();
+	const announceRef = useRef(announce);
+	announceRef.current = announce;
 	const queryExecution = useQueryExecution({
 		fetchQuery: builder.fetchQuery,
 		fetchXml,
@@ -465,12 +469,14 @@ function AppContent({
 				: undefined,
 		isRunning: queryExecution.isExecuting,
 		isLoadingMore: queryExecution.isLoadingMore,
+		// Ctrl+Enter in the editor while Run can't act says why (#186)
+		onRunBlocked: (reason) => announceRef.current(reason, { batchId: "key-reason" }),
 	});
 	// Undo and Redo (#192): the tree toolbar and Ctrl+Z / Ctrl+Y outside text fields, announced
 	const undoRedo = useUndoRedo(builder.history);
 	// What a run does, for screen readers (#186)
 	useRunAnnouncements(queryExecution);
-	const announce = useAnnouncer();
+
 	// Ctrl+F6 / Ctrl+Shift+F6 between the app bar, the builder (or its rail) and the output (#186)
 	const appBarRef = useRef<HTMLElement>(null);
 	const outputRef = useRef<HTMLElement>(null);
