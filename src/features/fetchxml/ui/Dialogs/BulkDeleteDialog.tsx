@@ -36,6 +36,9 @@ import { openUrl } from "../../api/host";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { defaultBulkDeleteJobName } from "./bulkDeleteJobName";
+import { withReason } from "../../../../shared/components/WithReason";
+import { useTargetConfirmation } from "../../../../shared/hooks/useTargetConfirmation";
+import { useFocusWhen } from "../../../../shared/hooks/useFocusWhen";
 
 const useStyles = makeStyles({
 	// A grid item's min-width is auto, so the long warning text pushed the MessageBar body 1px past the
@@ -128,7 +131,10 @@ export function BulkDeleteDialog({
 	const copy = useCopy();
 	const [confirmAllRecords, setConfirmAllRecords] = useState(false);
 	// Type-to-confirm for Production, more than 100 records or an unknown total (#69)
-	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+	const scope = useTargetConfirmation();
+	// Focus follows the buttons: the running Cancel, then Close (#279)
+	const runningRef = useFocusWhen(state === "submitting");
+	const closeRef = useFocusWhen(state === "success" || state === "error");
 
 	// The dialog stays mounted, so the default name is made each time it opens, for the entity and
 	// time of this job (#182). A name typed while it's open is kept.
@@ -190,7 +196,7 @@ export function BulkDeleteDialog({
 										}
 									: { kind: "records", count: recordCount }
 							}
-							onConfirmationChange={setScopeConfirmed}
+							onConfirmationChange={scope.onConfirmationChange}
 						/>
 
 						{isAllRecords ? (
@@ -339,39 +345,47 @@ export function BulkDeleteDialog({
 		}
 	};
 
+	/** Why Submit can't be pressed yet (#279): what the dialog asks for, in its order */
+	const submitReason = !jobName.trim()
+		? "Enter a job name"
+		: isAllRecords && !confirmAllRecords
+			? "Confirm that this deletes all records"
+			: scope.reason;
+
 	const renderActions = () => {
 		switch (state) {
 			case "confirm":
 				return (
 					<>
-						<Button appearance="secondary" onClick={handleClose}>
+						{/* The safe action is focused first (owner, #279) */}
+						<Button appearance="secondary" onClick={handleClose} autoFocus>
 							Cancel
 						</Button>
-						<Button
-							appearance="primary"
-							onClick={handleConfirm}
-							disabled={
-								!jobName.trim() ||
-								(isAllRecords && !confirmAllRecords) ||
-								!scopeConfirmed
-							}
-						>
-							Submit bulk delete
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={handleConfirm}
+								disabledFocusable={!!submitReason}
+							>
+								Submit bulk delete
+							</Button>,
+							submitReason,
+						)}
 					</>
 				);
 
 			case "submitting":
-				return (
-					<Button appearance="secondary" disabled>
+				return withReason(
+					<Button ref={runningRef} appearance="secondary" disabledFocusable>
 						Cancel
-					</Button>
+					</Button>,
+					"Wait for the job to be submitted",
 				);
 
 			case "success":
 			case "error":
 				return (
-					<Button appearance="primary" onClick={handleClose}>
+					<Button ref={closeRef} appearance="primary" onClick={handleClose}>
 						Close
 					</Button>
 				);

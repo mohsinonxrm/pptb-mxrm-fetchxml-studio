@@ -65,6 +65,7 @@ import {
 } from "@fluentui/react-components";
 import { MoreHorizontal20Filled, MoreHorizontal20Regular, bundleIcon } from "@fluentui/react-icons";
 import type { BarCommand } from "./types";
+import { withReason } from "../WithReason";
 
 const MoreIcon = bundleIcon(MoreHorizontal20Filled, MoreHorizontal20Regular);
 
@@ -512,20 +513,13 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 	const off = isOff(c);
 	const icon = iconOf(c);
 	const className = c.danger && !off ? styles.danger : undefined;
-	const withReason = (element: ReactElement) =>
-		c.disabledReason ? (
-			<Tooltip content={c.disabledReason} relationship="description" positioning="after">
-				{element}
-			</Tooltip>
-		) : (
-			element
-		);
+	const reasoned = (element: ReactElement) => withReason(element, c.disabledReason, "after");
 
 	if (c.kind === "menu" || c.kind === "split") {
 		return (
 			<Menu onOpenChange={menuOpenChange(c)}>
 				<MenuTrigger disableButtonEnhancement>
-					{withReason(
+					{reasoned(
 						<MenuItem icon={icon} className={className} disabled={off} {...nameOf(c)}>
 							{c.label}
 						</MenuItem>,
@@ -540,7 +534,7 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 		);
 	}
 	if (c.kind === "toggle") {
-		return withReason(
+		return reasoned(
 			c.radioName ? (
 				<MenuItemRadio
 					name={checkedNameOf(c)}
@@ -568,7 +562,7 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 	// the focus it moves into itself
 	const onClick =
 		c.kind === "popover" ? () => setTimeout(() => c.onPopoverOpenChange?.(true), 0) : c.onClick;
-	return withReason(
+	return reasoned(
 		<MenuItem
 			icon={icon}
 			className={className}

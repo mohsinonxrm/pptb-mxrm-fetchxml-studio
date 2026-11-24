@@ -38,6 +38,7 @@ import { useAnnouncer } from "../../../../shared/feedback/useAnnouncer";
 import { discardedToast, openViewDisabledReason } from "./appBarRules";
 import { OpenViewPanel } from "./OpenViewPanel";
 import { toLoadedViewInfo, type LoadedViewInfo, type SavedView } from "../../api/pptbClient";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const RunIcon = bundleIcon(Play20Filled, Play20Regular);
 const NewIcon = bundleIcon(Add20Filled, Add20Regular);
@@ -294,13 +295,17 @@ export function AppBar({
 				className={styles.bar}
 				moreExtra={
 					<>
-						<MenuItem
-							icon={<Copy20Regular />}
-							disabled={!getCurrentXml()}
-							onClick={() => void copy(getCurrentXml(), "FetchXML")}
-						>
-							Copy FetchXML
-						</MenuItem>
+						{withReason(
+							<MenuItem
+								icon={<Copy20Regular />}
+								disabled={!getCurrentXml()}
+								onClick={() => void copy(getCurrentXml(), "FetchXML")}
+							>
+								Copy FetchXML
+							</MenuItem>,
+							!getCurrentXml() && "There's no FetchXML to copy",
+							"after",
+						)}
 						{onShowShortcuts && (
 							<MenuItem
 								icon={<Keyboard20Regular />}

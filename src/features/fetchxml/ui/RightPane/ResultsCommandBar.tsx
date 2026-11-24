@@ -61,6 +61,7 @@ import { useEntityWorkflows } from "./useEntityWorkflows";
 import type { CopyValueMode } from "./copyResults";
 import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
 import { resultsBarReasons } from "./resultsBarRules";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const OpenIcon = bundleIcon(Open20Filled, Open20Regular);
 const LinkIcon = bundleIcon(Link20Filled, Link20Regular);
@@ -517,12 +518,16 @@ export function ResultsCommandBar({
 						setCopyMode(data.checkedItems[0] as CopyValueMode)
 					}
 				>
-					<MenuItem
-						disabled={selectedCount === 0}
-						onClick={() => onCopyRows?.("selected", copyMode)}
-					>
-						Selected rows ({selectedCount})
-					</MenuItem>
+					{withReason(
+						<MenuItem
+							disabled={selectedCount === 0}
+							onClick={() => onCopyRows?.("selected", copyMode)}
+						>
+							Selected rows ({selectedCount})
+						</MenuItem>,
+						selectedCount === 0 && "Select rows to copy them",
+						"after",
+					)}
 					<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
 						{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount}
 						)

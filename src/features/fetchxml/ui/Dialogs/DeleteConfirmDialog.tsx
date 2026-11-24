@@ -31,6 +31,9 @@ import type { BatchDeleteProgress, BatchDeleteResult } from "../../api/pptbClien
 import { throttleWaitMessage } from "../../api/throttleRetry";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { TargetScope } from "../../../../shared/components/TargetScope";
+import { withReason } from "../../../../shared/components/WithReason";
+import { useTargetConfirmation } from "../../../../shared/hooks/useTargetConfirmation";
+import { useFocusWhen } from "../../../../shared/hooks/useFocusWhen";
 
 const useStyles = makeStyles({
 	content: {
@@ -118,7 +121,10 @@ export function DeleteConfirmDialog({
 	const [result, setResult] = useState<BatchDeleteResult | null>(null);
 	const [progress, setProgress] = useState<BatchDeleteProgress | null>(null);
 	// Type-to-confirm for Production or many records (#69)
-	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+	const scope = useTargetConfirmation();
+	// Focus follows the buttons: the running Cancel, then Close (#279)
+	const runningRef = useFocusWhen(state === "deleting");
+	const closeRef = useFocusWhen(state === "success" || state === "partial" || state === "error");
 
 	// Update progress from prop
 	useEffect(() => {
@@ -230,7 +236,7 @@ export function DeleteConfirmDialog({
 							entityLogicalName={entityLogicalName}
 							entityDisplayName={entityDisplayName}
 							scope={{ kind: "records", count: recordCount }}
-							onConfirmationChange={setScopeConfirmed}
+							onConfirmationChange={scope.onConfirmationChange}
 						/>
 
 						<div className={styles.warningRow}>
@@ -390,31 +396,36 @@ export function DeleteConfirmDialog({
 			case "confirm":
 				return (
 					<>
-						<Button appearance="secondary" onClick={handleClose}>
+						{/* The safe action is focused first (owner, #279) */}
+						<Button appearance="secondary" onClick={handleClose} autoFocus>
 							Cancel
 						</Button>
-						<Button
-							appearance="primary"
-							onClick={handleConfirm}
-							disabled={!scopeConfirmed}
-						>
-							Delete
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={handleConfirm}
+								disabledFocusable={!scope.confirmed}
+							>
+								Delete
+							</Button>,
+							scope.reason,
+						)}
 					</>
 				);
 
 			case "deleting":
-				return (
-					<Button appearance="secondary" disabled>
+				return withReason(
+					<Button ref={runningRef} appearance="secondary" disabledFocusable>
 						Cancel
-					</Button>
+					</Button>,
+					"Wait for the delete to finish",
 				);
 
 			case "success":
 			case "partial":
 			case "error":
 				return (
-					<Button appearance="primary" onClick={handleClose}>
+					<Button ref={closeRef} appearance="primary" onClick={handleClose}>
 						Close
 					</Button>
 				);
