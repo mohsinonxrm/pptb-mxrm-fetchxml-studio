@@ -16,7 +16,17 @@ beforeAll(() => {
 		get: () => document.body,
 	});
 	HTMLElement.prototype.getBoundingClientRect = () =>
-		({ x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON: () => ({}) }) as DOMRect;
+		({
+			x: 0,
+			y: 0,
+			top: 0,
+			left: 0,
+			right: 100,
+			bottom: 20,
+			width: 100,
+			height: 20,
+			toJSON: () => ({}),
+		}) as DOMRect;
 });
 afterAll(() => {
 	if (originalOffsetParent)

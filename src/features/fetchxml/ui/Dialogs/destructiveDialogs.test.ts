@@ -304,15 +304,17 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		await flush();
 		expect(focused()).toBe("Cancel");
 		const submit = () => button("Submit bulk delete");
-		const jobName = [...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input')].find(
-			(i) => i.placeholder.startsWith("Enter a name"),
-		);
+		const jobName = [
+			...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input'),
+		].find((i) => i.placeholder.startsWith("Enter a name"));
 		await typeInto(jobName, "");
 		expectDisabledWithReason(submit(), "Enter a job name");
 		await typeInto(jobName, "FXS TEST job");
 		expectDisabledWithReason(submit(), "Confirm that this deletes all records");
 		const understand = [
-			...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input[type="checkbox"]'),
+			...document.querySelectorAll<HTMLInputElement>(
+				'[role="dialog"] input[type="checkbox"]',
+			),
 		].find((c) => /I understand/.test(c.closest("label, div")?.textContent ?? ""));
 		await click(understand);
 		expectDisabledWithReason(submit(), "Type contact to confirm");
@@ -355,7 +357,10 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		installHost();
 		const list = deferred<WorkflowInfo[]>();
 		await render(
-			createElement(WorkflowPickerDialog, workflowProps({ onFetchWorkflows: () => list.promise })),
+			createElement(
+				WorkflowPickerDialog,
+				workflowProps({ onFetchWorkflows: () => list.promise }),
+			),
 		);
 		expectDisabledWithReason(button("Run workflow"), "Loading available workflows...");
 		list.resolve([]);

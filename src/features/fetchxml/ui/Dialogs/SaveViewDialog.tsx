@@ -572,7 +572,6 @@ export function SaveViewDialog({
 
 	const canSave = !saveReason;
 
-
 	// One follow-up step for a saved system view (#180)
 	const runViewSaveStep = useCallback(
 		async (step: ViewSaveStep, viewId: string, solution: Solution | null) => {

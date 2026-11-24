@@ -65,3 +65,39 @@ describe("the scope header's pane command", () => {
 		expect(document.activeElement).toBe(action);
 	});
 });
+
+describe("the Entity picker's hint (#279)", () => {
+	it("says why the picker can't be used: no scope chosen yet", async () => {
+		installHost();
+		access.current = {
+			accessSummary: {
+				userId: "u1",
+				canReadPublisher: true,
+				canReadSolution: true,
+				canReadCustomization: true,
+				fullFilterMode: true,
+				solutionsOnlyMode: false,
+				publishersOnlyMode: false,
+				metadataOnlyMode: false,
+				noAccessMode: false,
+			},
+			loading: false,
+			noAccessMode: false,
+			error: null,
+		};
+		await render(
+			createElement(EntitySelector, {
+				selectedEntity: null,
+				onEntityChange: () => {},
+				entityScopeMode: "publisher-solution",
+				onEntityScopeModeChange: () => {},
+				advancedFindOnly: false,
+				onAdvancedFindOnlyChange: () => {},
+			}),
+		);
+		await flush(5);
+		const combo = document.querySelector('[role="combobox"]');
+		const hint = document.getElementById(combo?.getAttribute("aria-describedby") ?? "");
+		expect(hint?.textContent).toBe("Choose a scope to list entities");
+	});
+});

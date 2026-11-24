@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	cleanup,
 	click,
+	expectDisabledWithReason,
 	flush,
 	installHost,
 	removeHost,
@@ -142,13 +143,13 @@ describe("the app bar's commands", () => {
 		]);
 	});
 
-	it("always has Copy FetchXML in More, off without a query", async () => {
+	it("always has Copy FetchXML in More, off without a query, and says why (#279)", async () => {
 		stubOverflowWidths({ container: 3000 });
 		installHost();
 		await renderBar({ getCurrentXml: () => "" });
 		await click(moreByTooltip());
 		const copy = menuItems(menus()[0]).find((i) => i.textContent?.trim() === "Copy FetchXML");
-		expect(copy?.getAttribute("aria-disabled")).toBe("true");
+		expectDisabledWithReason(copy, "There's no FetchXML to copy");
 	});
 
 	it("keeps an unavailable Run and Save focusable, with the reason", async () => {
