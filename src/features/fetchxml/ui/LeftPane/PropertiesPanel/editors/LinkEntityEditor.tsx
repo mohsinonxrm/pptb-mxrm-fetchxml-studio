@@ -427,8 +427,6 @@ export function LinkEntityEditor({
 				<InfoField
 					label="From attribute"
 					validation={fromToAdvice}
-					// Its list is the related entity's attributes (#279)
-					hint={node.name ? undefined : "Enter the related entity first"}
 					info={
 						<Info
 							text={`The ${node.name || "related entity"} attribute that matches the To attribute. Not technically required, but usually set. Both attributes should have the same type.`}

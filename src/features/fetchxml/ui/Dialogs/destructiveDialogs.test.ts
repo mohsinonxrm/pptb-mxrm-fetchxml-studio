@@ -282,6 +282,7 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		await typeInto(dialogInput(), "contact");
 		await click(button("Delete"));
 		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
 		expectDisabledWithReason(button("Cancel"), "Wait for the delete to finish");
 		run.resolve();
 		await flush();
@@ -336,6 +337,7 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		await flush();
 		await click(button("Submit bulk delete"));
 		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
 		expectDisabledWithReason(button("Cancel"), "Wait for the job to be submitted");
 		send.resolve({ asyncOperationId: "job", jobUrl: "" });
 		await flush();
@@ -383,9 +385,27 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		await flush();
 		await click(button("Run workflow"));
 		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Running...");
 		expectDisabledWithReason(button("Running..."), "Wait for the workflow to finish");
 		run.resolve({ succeeded: 1, failed: 0, errors: [] });
 		await flush();
 		expect(focused()).toBe("Close");
+	});
+});
+
+describe("while the connection is read (#279)", () => {
+	it("Delete says it's reading the connection", async () => {
+		installHost();
+		const pending = deferred<null>();
+		(
+			window as unknown as {
+				toolboxAPI: { connections: { getConnection: () => Promise<null> } };
+			}
+		).toolboxAPI.connections.getConnection = () => pending.promise;
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		pending.resolve(null);
+		await flush();
+		expect(isDisabled(button("Delete"))).toBe(false);
 	});
 });

@@ -143,6 +143,7 @@ describe("Close as won: the button says why, and focus stays in the dialog (#279
 		await typeInto(dialogInput(), "opportunity");
 		await click(button("Close as won"));
 		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
 		expectDisabledWithReason(button("Cancel"), "Wait for the change to finish");
 		run.resolve(done(120));
 		await flush();
