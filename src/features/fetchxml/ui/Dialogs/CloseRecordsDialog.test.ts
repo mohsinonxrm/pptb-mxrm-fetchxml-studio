@@ -13,6 +13,7 @@ import {
 	deferred,
 	dialogInput,
 	dialogText,
+	expectDisabledWithReason,
 	flush,
 	installHost,
 	isDisabled,
@@ -118,5 +119,33 @@ describe("Close as won dialog", () => {
 		expect(isDisabled(button("Close as won"))).toBe(true);
 		await typeInto(dialogInput(), "opportunity");
 		expect(isDisabled(button("Close as won"))).toBe(false);
+	});
+});
+
+describe("Close as won: the button says why, and focus stays in the dialog (#279)", () => {
+	it("asks for the typed name; focus moves to the running Cancel, then Close", async () => {
+		installHost();
+		const run = deferred<BatchDeleteResult>();
+		await render(
+			createElement(CloseRecordsDialog, {
+				open: true,
+				action: win,
+				recordIds: ids(120),
+				entityLogicalName: "opportunity",
+				entityDisplayName: "Opportunity",
+				onClose: () => {},
+				onExecute: () => run.promise,
+			}),
+		);
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Cancel");
+		expectDisabledWithReason(button("Close as won"), "Type opportunity to confirm");
+		await typeInto(dialogInput(), "opportunity");
+		await click(button("Close as won"));
+		await flush();
+		expectDisabledWithReason(button("Cancel"), "Wait for the change to finish");
+		run.resolve(done(120));
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Close");
 	});
 });

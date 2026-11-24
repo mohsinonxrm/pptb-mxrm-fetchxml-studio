@@ -132,6 +132,8 @@ export function BulkDeleteDialog({
 	const [confirmAllRecords, setConfirmAllRecords] = useState(false);
 	// Type-to-confirm for Production, more than 100 records or an unknown total (#69)
 	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && state === "confirm");
 	// Focus follows the buttons: the running Cancel, then Close (#279)
 	const runningRef = useFocusWhen(state === "submitting");
 	const closeRef = useFocusWhen(state === "success" || state === "error");
@@ -358,7 +360,7 @@ export function BulkDeleteDialog({
 				return (
 					<>
 						{/* The safe action is focused first (owner, #279) */}
-						<Button appearance="secondary" onClick={handleClose} autoFocus>
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
 						{withReason(

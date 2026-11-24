@@ -766,3 +766,15 @@ describe("OverflowToolbar focus return", () => {
 		expect(document.activeElement).toBe(moreButton);
 	});
 });
+
+describe("OverflowToolbar: a command that becomes unavailable while focused (#279)", () => {
+	it("keeps focus: the new element (a Tooltip now wraps it) gets it, with its reason", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar([button("Export", 10)]);
+		onBar("Export")?.focus();
+		await renderBar([button("Export", 10, { disabledReason: "Export in progress..." })]);
+		const after = onBar("Export");
+		expect(document.activeElement).toBe(after);
+		expect(after?.getAttribute("aria-disabled")).toBe("true");
+	});
+});

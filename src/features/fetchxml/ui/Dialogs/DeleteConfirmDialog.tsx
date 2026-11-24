@@ -122,6 +122,8 @@ export function DeleteConfirmDialog({
 	const [progress, setProgress] = useState<BatchDeleteProgress | null>(null);
 	// Type-to-confirm for Production or many records (#69)
 	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && state === "confirm");
 	// Focus follows the buttons: the running Cancel, then Close (#279)
 	const runningRef = useFocusWhen(state === "deleting");
 	const closeRef = useFocusWhen(state === "success" || state === "partial" || state === "error");
@@ -397,7 +399,7 @@ export function DeleteConfirmDialog({
 				return (
 					<>
 						{/* The safe action is focused first (owner, #279) */}
-						<Button appearance="secondary" onClick={handleClose} autoFocus>
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
 						{withReason(

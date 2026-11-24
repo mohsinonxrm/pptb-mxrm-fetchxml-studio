@@ -76,6 +76,7 @@ import {
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
 import { useNotify } from "../../../../shared/feedback/useNotify";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const useStyles = makeStyles({
 	surface: {
@@ -554,28 +555,23 @@ export function SaveViewDialog({
 		[styles],
 	);
 
-	// Can save check
-	const canSave = useMemo(() => {
-		if (!name.trim()) return false;
-		if (isSaving) return false;
-		if (isOverwriteBlocked || isCheckingAccess) return false;
-		if (viewType === "system") {
-			// System views require canWrite privilege (covers both create and update)
-			if (!canWriteSystem) return false;
-		} else {
-			// Personal views require canWrite privilege
-			if (!canWritePersonal) return false;
-		}
-		return true;
-	}, [
-		name,
-		isSaving,
-		isOverwriteBlocked,
-		isCheckingAccess,
-		viewType,
-		canWriteSystem,
-		canWritePersonal,
-	]);
+	/** Why Save can't be pressed (#279), in the order the dialog shows what's missing */
+	const saveReason = isSaving
+		? "Wait for the save to finish"
+		: !name.trim()
+			? "Enter a name"
+			: isCheckingAccess
+				? "Checking your access to the view..."
+				: isOverwriteBlocked
+					? "This view can't be overwritten. Save a copy instead"
+					: viewType === "system" && !canWriteSystem
+						? "You don't have permission to create system views"
+						: viewType !== "system" && !canWritePersonal
+							? "You don't have permission to create personal views"
+							: undefined;
+
+	const canSave = !saveReason;
+
 
 	// One follow-up step for a saved system view (#180)
 	const runViewSaveStep = useCallback(
@@ -843,8 +839,8 @@ export function SaveViewDialog({
 								appearance="subtle"
 								aria-label="Close"
 								icon={<DismissRegular />}
-								onClick={handleClose}
-								disabled={isSaving}
+								onClick={isSaving ? undefined : handleClose}
+								disabledFocusable={isSaving}
 							/>
 						}
 					>
@@ -1182,34 +1178,44 @@ export function SaveViewDialog({
 						{isOverwriteBlocked && (
 							<Button
 								appearance="secondary"
-								onClick={handleSaveCopy}
-								disabled={isSaving}
+								onClick={isSaving ? undefined : handleSaveCopy}
+								disabledFocusable={isSaving}
 							>
 								Save a copy…
 							</Button>
 						)}
-						<Button appearance="secondary" onClick={handleClose} disabled={isSaving}>
-							{partialSave ? "Close" : "Cancel"}
-						</Button>
-						<Button
-							appearance="primary"
-							onClick={partialSave ? handleRetry : handleSave}
-							disabled={partialSave ? isSaving : !canSave}
-						>
-							{isSaving ? (
-								<Spinner size="tiny" />
-							) : partialSave ? (
-								partialSave.remaining[0] === "solution" ? (
-									"Retry adding to solution"
-								) : (
-									"Retry publishing"
-								)
-							) : shouldPublish && viewType === "system" ? (
-								"Save and publish"
-							) : (
-								"Save"
-							)}
-						</Button>
+						{/* While saving the buttons stay focusable, so focus doesn't drop to the page (#279) */}
+						{withReason(
+							<Button
+								appearance="secondary"
+								onClick={isSaving ? undefined : handleClose}
+								disabledFocusable={isSaving}
+							>
+								{partialSave ? "Close" : "Cancel"}
+							</Button>,
+							isSaving && "Wait for the save to finish",
+						)}
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={partialSave ? handleRetry : handleSave}
+								disabledFocusable={partialSave ? isSaving : !canSave}
+								icon={isSaving ? <Spinner size="tiny" /> : undefined}
+							>
+								{isSaving
+									? "Saving…"
+									: partialSave
+										? partialSave.remaining[0] === "solution"
+											? "Retry adding to solution"
+											: "Retry publishing"
+										: shouldPublish && viewType === "system"
+											? "Save and publish"
+											: "Save"}
+							</Button>,
+							partialSave
+								? isSaving && "Wait for the save to finish"
+								: !canSave && saveReason,
+						)}
 					</DialogActions>
 				</DialogBody>
 			</DialogSurface>

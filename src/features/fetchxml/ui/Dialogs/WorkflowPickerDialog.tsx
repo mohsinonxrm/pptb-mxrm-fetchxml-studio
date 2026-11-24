@@ -146,6 +146,8 @@ export function WorkflowPickerDialog({
 	const [progress, setProgress] = useState<WorkflowBatchProgress | null>(null);
 	// Type-to-confirm for Production or more than 100 records (#69)
 	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && (state === "loading" || state === "select"));
 	// Focus follows the buttons: the running one, then Close (#279)
 	const runningRef = useFocusWhen(state === "executing");
 	const closeRef = useFocusWhen(state === "complete" || state === "error");
@@ -454,7 +456,7 @@ export function WorkflowPickerDialog({
 				return (
 					<>
 						{/* The safe action is focused first (owner, #279); the same buttons while loading */}
-						<Button appearance="secondary" onClick={handleClose} autoFocus>
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
 						{withReason(

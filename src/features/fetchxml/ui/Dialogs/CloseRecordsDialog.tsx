@@ -147,6 +147,8 @@ export function CloseRecordsDialog({
 	const [result, setResult] = useState<BatchDeleteResult | null>(null);
 	// Type-to-confirm for Production or more than 100 records (#69)
 	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && (phase === "loading" || phase === "confirm"));
 	// Focus follows the buttons: the running Cancel, then Close (#279)
 	const runningRef = useFocusWhen(phase === "running");
 	const closeRef = useFocusWhen(phase === "done" || phase === "error");
@@ -618,7 +620,7 @@ export function CloseRecordsDialog({
 				return (
 					<>
 						{/* The safe action is focused first (owner, #279) */}
-						<Button appearance="secondary" onClick={handleClose} autoFocus>
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
 						{withReason(

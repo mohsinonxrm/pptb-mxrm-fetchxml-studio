@@ -12,6 +12,7 @@ import {
 	deferred,
 	dialogInput,
 	dialogText,
+	expectDisabledWithReason,
 	flush,
 	installHost,
 	isDisabled,
@@ -135,5 +136,34 @@ describe("Activate / Deactivate dialog", () => {
 		expect(isDisabled(button("Deactivate"))).toBe(true);
 		await typeInto(dialogInput(), "account");
 		expect(isDisabled(button("Deactivate"))).toBe(false);
+	});
+});
+
+describe("Activate / Deactivate: the button says why, and focus stays in the dialog (#279)", () => {
+	it("asks for the typed name; focus moves to the running Cancel, then Close", async () => {
+		installHost();
+		const run = deferred<BatchDeleteResult>();
+		await render(
+			createElement(SetStateDialog, {
+				open: true,
+				action: "deactivate",
+				recordIds: ids(101),
+				entityLogicalName: "account",
+				entityDisplayName: "Account",
+				primaryIdAttribute: "accountid",
+				onClose: () => {},
+				onExecute: () => run.promise,
+			}),
+		);
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Cancel");
+		expectDisabledWithReason(button("Deactivate"), "Type account to confirm");
+		await typeInto(dialogInput(), "account");
+		await click(button("Deactivate"));
+		await flush();
+		expectDisabledWithReason(button("Cancel"), "Wait for the change to finish");
+		run.resolve(done(101));
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Close");
 	});
 });
