@@ -74,6 +74,18 @@ import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense
 import { formatFetchXml } from "../../model/fetchxmlFormatter";
 import { RUNS_ITSELF_ATTRIBUTE, formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 import { useEditorSync } from "./editorSync";
+import { useAnnouncer } from "../../../../shared/feedback/useAnnouncer";
+
+/** A bar's words, for a screen reader: its title, then its text or findings */
+function problemText(problem: EditorProblem): string {
+	const body =
+		typeof problem.body === "string"
+			? problem.body
+			: problem.body
+					.map((item) => (item.element ? `<${item.element}> ` : "") + item.message)
+					.join(" ");
+	return `${problem.title}. ${body}`;
+}
 import { hasOpenPopup } from "../../../../app/hooks/useShortcuts";
 
 /** It, or an ancestor, is display: none (a hidden tab panel) */
@@ -220,12 +232,27 @@ function FetchXmlEditorImpl(
 	// Get current XML value based on mode
 	const currentXml = isEditorMode ? editedXml : xml;
 
-	// A check replaces the bars for what it checked
-	// A check replaces the bars for what it checked. A bar updated in place isn't announced again:
-	// Fluent announces a MessageBar when it mounts, through the AriaLiveAnnouncer (#186)
-	const report = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
-		setMessages((prev) => applyCheck(prev, checked, found));
-	}, []);
+	// A check replaces the bars for what it checked. A new bar announces itself (Fluent, through the
+	// app's announcer); a bar updated in place doesn't remount, so it's announced here, as politely
+	// as Fluent would: info politely, warnings and errors assertively (#186, #277 note)
+	const announce = useAnnouncer();
+	const shownKeys = useRef(new Set<EditorProblemKey>());
+	useEffect(() => {
+		shownKeys.current = new Set(messages.map((m) => m.key));
+	}, [messages]);
+	const report = useCallback(
+		(checked: EditorProblemKey[], found: EditorProblem[]) => {
+			for (const problem of found) {
+				if (!shownKeys.current.has(problem.key)) continue;
+				announce(problemText(problem), {
+					politeness: problem.intent === "info" ? "polite" : "assertive",
+					batchId: `editor-${problem.key}`,
+				});
+			}
+			setMessages((prev) => applyCheck(prev, checked, found));
+		},
+		[announce],
+	);
 	const drop = useCallback(
 		(key: EditorProblemKey, source: NonNullable<EditorProblem["source"]>) => {
 			setMessages((prev) => prev.filter((m) => !(m.key === key && m.source === source)));

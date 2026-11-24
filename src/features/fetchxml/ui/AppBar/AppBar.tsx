@@ -34,6 +34,7 @@ import {
 import { useReturnFetchXmlCommand } from "../Toolbar/useReturnFetchXmlCommand";
 import { DiscardChangesDialog } from "../Dialogs/DiscardChangesDialog";
 import { useNotify } from "../../../../shared/feedback/useNotify";
+import { useAnnouncer } from "../../../../shared/feedback/useAnnouncer";
 import { discardedToast, openViewDisabledReason } from "./appBarRules";
 import { OpenViewPanel } from "./OpenViewPanel";
 import { toLoadedViewInfo, type LoadedViewInfo, type SavedView } from "../../api/pptbClient";
@@ -137,6 +138,7 @@ export function AppBar({
 	const styles = useStyles();
 	const copy = useCopy();
 	const { notify } = useNotify();
+	const announce = useAnnouncer();
 	// New and Open view with unsaved changes ask first (#278). "Save and start new" / "Save and open"
 	// continue once their own save is done, never after a later one.
 	const [confirm, setConfirm] = useState<
@@ -164,8 +166,10 @@ export function AppBar({
 	// Ctrl+S presses Save as it is now (#186)
 	useEffect(() => {
 		if (!saveShortcutRef) return;
-		saveShortcutRef.current = save.command.disabledReason
-			? null
+		// Save can't be pressed: Ctrl+S says why, as Save's tooltip does (#186)
+		const reason = save.command.disabledReason;
+		saveShortcutRef.current = reason
+			? () => announce(reason, { batchId: "key-reason" })
 			: (save.command.onClick ?? null);
 	});
 	useEffect(

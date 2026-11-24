@@ -106,6 +106,16 @@ describe("Ctrl+Enter", () => {
 		expect(onButton.defaultPrevented).toBe(false);
 	});
 
+	it("while Run has a reason, says the reason instead (#186 PR 3), not when held", async () => {
+		const onBlocked = vi.fn();
+		const h = await setup({ runDisabledReason: "Enter a quick find value first", onBlocked });
+		await ctrlEnter(byId("tree"));
+		await ctrlEnter(byId("tree"), { repeat: true });
+		expect(onBlocked).toHaveBeenCalledOnce();
+		expect(onBlocked).toHaveBeenCalledWith("Enter a quick find value first");
+		expect(h.run).not.toHaveBeenCalled();
+	});
+
 	it("held down, or while Run has a reason, runs nothing but still takes the key", async () => {
 		const h = await setup({ runDisabledReason: "The query is running" });
 		const seenByTree = vi.fn();

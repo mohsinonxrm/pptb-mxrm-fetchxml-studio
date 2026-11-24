@@ -64,6 +64,8 @@ export interface ShortcutHandlers {
 	/** Run (Ctrl+Enter); nothing happens while `runDisabledReason` is set */
 	run: () => void;
 	runDisabledReason?: string;
+	/** A key that can't act now, with the reason (Run has one): announced (#186 PR 3) */
+	onBlocked?: (reason: string) => void;
 	/** Save (Ctrl+S): the same as selecting Save */
 	save: () => void;
 	undo: () => void;
@@ -99,7 +101,13 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
 				const target = event.target as Element | null;
 				if (target?.closest?.(OWN_ENTER) || target?.closest?.(OWN_CTRL_ENTER)) return;
 				if (hasOpenPopup()) return;
-				act(event.repeat || h.runDisabledReason ? () => {} : h.run);
+				act(
+					event.repeat
+						? () => {}
+						: h.runDisabledReason
+							? () => h.onBlocked?.(h.runDisabledReason!)
+							: h.run,
+				);
 			} else if (matches(event, "save")) {
 				if (event.repeat || hasOpenPopup()) return;
 				act(h.save);
