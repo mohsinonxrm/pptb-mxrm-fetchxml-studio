@@ -2,13 +2,8 @@
  * "Couldn't load columns for account" with Dataverse's reason and Retry (#201), at the top of a
  * property editor whose entity metadata failed to load. The editor keeps working with free text.
  */
-import {
-	Button,
-	MessageBar,
-	MessageBarActions,
-	MessageBarBody,
-	MessageBarTitle,
-} from "@fluentui/react-components";
+import { Button, MessageBar, MessageBarActions, MessageBarBody } from "@fluentui/react-components";
+import { BarTitle } from "../../../../../shared/components/BarTitle";
 import { retryMetadataLoads, useMetadataLoadError } from "./metadataLoadErrors";
 
 export function MetadataLoadWarning({ entityName }: { entityName: string | undefined }) {
@@ -18,7 +13,7 @@ export function MetadataLoadWarning({ entityName }: { entityName: string | undef
 	return (
 		<MessageBar intent="warning" layout="multiline">
 			<MessageBarBody>
-				<MessageBarTitle>{`Couldn't load ${what} for ${entityName}`}</MessageBarTitle>
+				<BarTitle>{`Couldn't load ${what} for ${entityName}`}</BarTitle>
 				{failure.message}
 			</MessageBarBody>
 			<MessageBarActions>

@@ -20,8 +20,8 @@ import {
 	ProgressBar,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import {
 	Warning20Regular,
 	CheckmarkCircle20Regular,
@@ -253,7 +253,7 @@ export function DeleteConfirmDialog({
 					<div className={styles.progressSection}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<MessageBarTitle>Deleting records...</MessageBarTitle>
+								<BarTitle>Deleting records...</BarTitle>
 								{progress && (
 									<>
 										Processing batch {progress.batchesCompleted} of{" "}
@@ -322,7 +322,7 @@ export function DeleteConfirmDialog({
 					<>
 						<MessageBar intent="warning">
 							<MessageBarBody>
-								<MessageBarTitle>Partial success</MessageBarTitle>
+								<BarTitle>Partial success</BarTitle>
 								{result && (
 									<>
 										{result.succeeded} of {result.succeeded + result.failed}{" "}

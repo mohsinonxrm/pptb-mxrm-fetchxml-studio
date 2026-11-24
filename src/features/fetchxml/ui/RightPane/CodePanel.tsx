@@ -19,11 +19,11 @@ import {
 	MessageBar,
 	MessageBarActions,
 	MessageBarBody,
-	MessageBarTitle,
 	Text,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import {
 	ArrowClockwise20Regular,
 	Copy20Filled,
@@ -327,7 +327,7 @@ export function CodePanel({
 				<div className={styles.bar}>
 					<MessageBar intent="error" layout="multiline">
 						<MessageBarBody>
-							<MessageBarTitle>Couldn&apos;t generate {label}</MessageBarTitle>
+							<BarTitle>Couldn&apos;t generate {label}</BarTitle>
 							{error}
 						</MessageBarBody>
 						<MessageBarActions>
@@ -436,7 +436,7 @@ export function CodePanel({
 					<div className={styles.bar}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<MessageBarTitle>SQL is a preview</MessageBarTitle>
+								<BarTitle>SQL is a preview</BarTitle>
 								It comes from FetchXMLToSQL, which isn&apos;t documented and can
 								change.{" "}
 								<Link href={SQL_LEARN_MORE} target="_blank" rel="noreferrer" inline>

@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { AnnouncementScope } from "../../../../shared/feedback/Announcer";
 import { makeStyles, ProgressBar, tokens } from "@fluentui/react-components";
 import { FetchXmlEditor } from "./FetchXmlEditor";
 import { CodePanel, type CodeLanguage } from "./CodePanel";
@@ -506,31 +507,34 @@ export function PreviewTabs({
 							/>
 						</PaneErrorBoundary>
 					</div>
-					{selectedTab === "advisories" && (
-						<PaneErrorBoundary
-							where="Advisories panel"
-							title="The advisories couldn't be shown"
-							resetKey={advisorySubject.key}
-						>
-							<AdvisoriesPanel
-								advisories={advisories}
-								noQuery={!fetchQuery}
-								editorInvalid={advisorySubject.editorInvalid}
-								inTree={advisorySubject.inTree}
-								selectedNodeId={selectedNodeId}
-								onSelectNode={onSelectNode}
-								onFix={handleAdvisoryFix}
-								checking={dataverseCheck.checking}
-								checkedAt={checkResult?.checkedAt}
-								stale={checkStale}
-								added={added}
-								checkError={dataverseCheck.error}
-								onDismissCheckError={dataverseCheck.dismissError}
-								onCheck={handleCheckWithDataverse}
-								checkDisabledReason={checkDisabledReason}
-							/>
-						</PaneErrorBoundary>
-					)}
+					{/* Its bars announce once per change, not on every visit (#186) */}
+					<AnnouncementScope shown={selectedTab === "advisories"}>
+						{selectedTab === "advisories" && (
+							<PaneErrorBoundary
+								where="Advisories panel"
+								title="The advisories couldn't be shown"
+								resetKey={advisorySubject.key}
+							>
+								<AdvisoriesPanel
+									advisories={advisories}
+									noQuery={!fetchQuery}
+									editorInvalid={advisorySubject.editorInvalid}
+									inTree={advisorySubject.inTree}
+									selectedNodeId={selectedNodeId}
+									onSelectNode={onSelectNode}
+									onFix={handleAdvisoryFix}
+									checking={dataverseCheck.checking}
+									checkedAt={checkResult?.checkedAt}
+									stale={checkStale}
+									added={added}
+									checkError={dataverseCheck.error}
+									onDismissCheckError={dataverseCheck.dismissError}
+									onCheck={handleCheckWithDataverse}
+									checkDisabledReason={checkDisabledReason}
+								/>
+							</PaneErrorBoundary>
+						)}
+					</AnnouncementScope>
 					{selectedTab === "layout" && (
 						<div className={styles.codeCard}>
 							<PaneErrorBoundary
@@ -542,195 +546,205 @@ export function PreviewTabs({
 							</PaneErrorBoundary>
 						</div>
 					)}
-					{selectedTab === "code" && (
-						<div className={styles.codeCard}>
-							<PaneErrorBoundary
-								where="Code panel"
-								title="The code couldn't be generated"
-								resetKey={xml}
-							>
-								<CodePanel
-									fetchXml={xml}
-									language={codeLanguage}
-									onLanguageChange={setCodeLanguage}
-									cache={codeConversions}
-								/>
-							</PaneErrorBoundary>
-						</div>
-					)}
-					{selectedTab === "results" && (
-						<PaneErrorBoundary
-							where="Results panel"
-							title="The results couldn't be shown"
-							resetKey={result}
-						>
-							<div className={styles.resultsLayout}>
-								<div className={styles.toolbarCard}>
-									<ResultsCommandBar
-										selectedCount={toolbarSelectedCount}
-										density={normalizeGridDensity(displaySettings?.gridDensity)}
-										onDensityChange={onGridDensityChange}
-										onOpen={() => {
-											const ids = getSelectedIds();
-											if (ids?.length && onOpenRecord) {
-												onOpenRecord(ids);
-											}
-										}}
-										onCopyUrl={() => {
-											const ids = getSelectedIds();
-											if (ids?.length && onCopyRecordUrl) {
-												onCopyRecordUrl(ids);
-											}
-										}}
-										onActivate={
-											onActivateRecords &&
-											(() => {
-												const ids = getSelectedIds();
-												if (ids?.length && onActivateRecords) {
-													onActivateRecords(ids);
-												}
-											})
-										}
-										onDeactivate={
-											onDeactivateRecords &&
-											(() => {
-												const ids = getSelectedIds();
-												if (ids?.length && onDeactivateRecords) {
-													onDeactivateRecords(ids);
-												}
-											})
-										}
-										activateDisabledReason={activateDisabledReason}
-										deactivateDisabledReason={deactivateDisabledReason}
-										closeActions={closeActions}
-										closeDisabledReason={closeDisabledReason}
-										onCloseAction={
-											onCloseRecords &&
-											((key) => {
-												const ids = getSelectedIds();
-												if (ids?.length) onCloseRecords(key, ids);
-											})
-										}
-										onDelete={() => {
-											const ids = getSelectedIds();
-											// For delete, we allow empty selection to trigger "delete all" dialog
-											if (onDeleteRecords) {
-												onDeleteRecords(ids || []);
-											}
-										}}
-										onBulkDelete={() => {
-											const ids = getSelectedIds();
-											if (onBulkDeleteRecords) {
-												onBulkDeleteRecords(ids || []);
-											}
-										}}
-										canDelete={canDelete}
-										canBulkDelete={canBulkDelete}
-										deleteDisabledReason={deleteDisabledReason}
-										canChangeState={canChangeState}
-										onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
-											const ids = getSelectedIds();
-											if (ids?.length && onRunSpecificWorkflow) {
-												onRunSpecificWorkflow(workflow, ids);
-											}
-										}}
-										canRunWorkflow={canRunWorkflow}
-										workflowDisabledReason={workflowDisabledReason}
-										recordActionsDisabledReason={recordActionsDisabledReason}
-										deleteAllDisabledReason={deleteAllDisabledReason}
-										onFetchWorkflows={onFetchWorkflows}
-										onExport={onExport}
-										onExportLocal={onExportLocal}
-										loadedCount={
-											searchText.trim()
-												? visibleRowCount
-												: (result?.rows.length ?? 0)
-										}
-										searchText={searchText}
-										onCopyRows={(scope, mode) =>
-											resultsGridRef.current?.copyRows(scope, mode)
-										}
-										canExport={canExport}
-										isExporting={isExporting}
-										exportDisabledReason={exportDisabledReason}
-										entityName={result?.entityLogicalName}
-										entityDisplayName={entityDisplayName}
-										columns={columnConfig?.columns}
-										onReorderColumns={onReorderColumns}
-										onRemoveColumns={onRemoveColumns}
-										availableAttributes={
-											// Root entity attributes to offer, per "Advanced Find only" (#57)
-											attributeMetadata && fetchQuery?.entity?.name
-												? Array.from(
-														attributeMetadata
-															.get(fetchQuery.entity.name)
-															?.values() || [],
-													).filter((a) =>
-														isAttributeInScope(a, advancedFindOnly),
-													)
-												: undefined
-										}
-										selectedAttributes={fetchQuery?.entity.attributes.map(
-											(a) => a.name,
-										)}
-										onAddColumn={onAddColumn}
-										onAddRelatedColumns={onAddRelatedColumns}
-										lookupRelationships={lookupRelationships}
-										oneToManyRelationships={oneToManyRelationships}
-										isLoadingRelationships={isLoadingRelationships}
-										onLoadRelatedAttributes={onLoadRelatedAttributes}
-										onResetToDefault={onResetToDefault}
-										addColumnsDisabledReason={
-											isAggregateQuery
-												? "Aggregate queries only return Group by and aggregate attributes, with aliases: add them in the tree."
-												: undefined
-										}
-										existingRelatedColumns={existingRelatedColumns}
-										isRetrieveAllInProgress={isRetrieveAllInProgress}
-										onStopRetrieveAll={onStopRetrieveAll}
+					{/* Its bars announce once per change, not on every visit (#186) */}
+					<AnnouncementScope shown={selectedTab === "code"}>
+						{selectedTab === "code" && (
+							<div className={styles.codeCard}>
+								<PaneErrorBoundary
+									where="Code panel"
+									title="The code couldn't be generated"
+									resetKey={xml}
+								>
+									<CodePanel
+										fetchXml={xml}
+										language={codeLanguage}
+										onLanguageChange={setCodeLanguage}
+										cache={codeConversions}
 									/>
-								</div>
-								<ResultsTabBars
-									executeError={executeError}
-									onRetryRun={run}
-									onDismissExecuteError={onDismissExecuteError}
-									isExporting={isExporting}
-									exportError={exportError}
-									onRetryExport={onRetryExport}
-									onDismissExportError={onDismissExportError}
-									pagingNotice={pagingNotice}
-									rowCount={result?.rows.length ?? 0}
-									onRetryPaging={onRetryPaging}
-									onDismissPagingNotice={onDismissPagingNotice}
-								/>
-								<div className={styles.gridCard}>
-									<ResultsGrid
-										ref={resultsGridRef}
-										result={result}
-										isLoading={isExecuting}
-										isLoadingMore={isLoadingMore}
-										throttleWaitSeconds={pagingWaitSeconds}
-										attributeMetadata={attributeMetadata}
-										fetchQuery={fetchQuery}
-										primaryIdAttribute={primaryIdAttribute}
-										onSelectedCountChange={setToolbarSelectedCount}
-										onSelectionChange={handleSelectionChange}
-										columnConfig={columnConfig}
-										onColumnResize={onColumnResize}
-										onSortChange={onSortChange}
-										onLoadMore={onLoadMore}
-										displaySettings={displaySettings}
-										searchText={searchText}
-										onSearchTextChange={setSearchText}
-										columnFilters={columnFilters}
-										onAddColumnFilter={onAddColumnFilter}
-										onRemoveColumnFilters={onRemoveColumnFilters}
-										onVisibleCountChange={setVisibleRowCount}
-									/>
-								</div>
+								</PaneErrorBoundary>
 							</div>
-						</PaneErrorBoundary>
-					)}
+						)}
+					</AnnouncementScope>
+					{/* Its bars announce once per change, not on every visit (#186) */}
+					<AnnouncementScope shown={selectedTab === "results"}>
+						{selectedTab === "results" && (
+							<PaneErrorBoundary
+								where="Results panel"
+								title="The results couldn't be shown"
+								resetKey={result}
+							>
+								<div className={styles.resultsLayout}>
+									<div className={styles.toolbarCard}>
+										<ResultsCommandBar
+											selectedCount={toolbarSelectedCount}
+											density={normalizeGridDensity(
+												displaySettings?.gridDensity,
+											)}
+											onDensityChange={onGridDensityChange}
+											onOpen={() => {
+												const ids = getSelectedIds();
+												if (ids?.length && onOpenRecord) {
+													onOpenRecord(ids);
+												}
+											}}
+											onCopyUrl={() => {
+												const ids = getSelectedIds();
+												if (ids?.length && onCopyRecordUrl) {
+													onCopyRecordUrl(ids);
+												}
+											}}
+											onActivate={
+												onActivateRecords &&
+												(() => {
+													const ids = getSelectedIds();
+													if (ids?.length && onActivateRecords) {
+														onActivateRecords(ids);
+													}
+												})
+											}
+											onDeactivate={
+												onDeactivateRecords &&
+												(() => {
+													const ids = getSelectedIds();
+													if (ids?.length && onDeactivateRecords) {
+														onDeactivateRecords(ids);
+													}
+												})
+											}
+											activateDisabledReason={activateDisabledReason}
+											deactivateDisabledReason={deactivateDisabledReason}
+											closeActions={closeActions}
+											closeDisabledReason={closeDisabledReason}
+											onCloseAction={
+												onCloseRecords &&
+												((key) => {
+													const ids = getSelectedIds();
+													if (ids?.length) onCloseRecords(key, ids);
+												})
+											}
+											onDelete={() => {
+												const ids = getSelectedIds();
+												// For delete, we allow empty selection to trigger "delete all" dialog
+												if (onDeleteRecords) {
+													onDeleteRecords(ids || []);
+												}
+											}}
+											onBulkDelete={() => {
+												const ids = getSelectedIds();
+												if (onBulkDeleteRecords) {
+													onBulkDeleteRecords(ids || []);
+												}
+											}}
+											canDelete={canDelete}
+											canBulkDelete={canBulkDelete}
+											deleteDisabledReason={deleteDisabledReason}
+											canChangeState={canChangeState}
+											onRunSpecificWorkflow={(workflow: WorkflowInfo) => {
+												const ids = getSelectedIds();
+												if (ids?.length && onRunSpecificWorkflow) {
+													onRunSpecificWorkflow(workflow, ids);
+												}
+											}}
+											canRunWorkflow={canRunWorkflow}
+											workflowDisabledReason={workflowDisabledReason}
+											recordActionsDisabledReason={
+												recordActionsDisabledReason
+											}
+											deleteAllDisabledReason={deleteAllDisabledReason}
+											onFetchWorkflows={onFetchWorkflows}
+											onExport={onExport}
+											onExportLocal={onExportLocal}
+											loadedCount={
+												searchText.trim()
+													? visibleRowCount
+													: (result?.rows.length ?? 0)
+											}
+											searchText={searchText}
+											onCopyRows={(scope, mode) =>
+												resultsGridRef.current?.copyRows(scope, mode)
+											}
+											canExport={canExport}
+											isExporting={isExporting}
+											exportDisabledReason={exportDisabledReason}
+											entityName={result?.entityLogicalName}
+											entityDisplayName={entityDisplayName}
+											columns={columnConfig?.columns}
+											onReorderColumns={onReorderColumns}
+											onRemoveColumns={onRemoveColumns}
+											availableAttributes={
+												// Root entity attributes to offer, per "Advanced Find only" (#57)
+												attributeMetadata && fetchQuery?.entity?.name
+													? Array.from(
+															attributeMetadata
+																.get(fetchQuery.entity.name)
+																?.values() || [],
+														).filter((a) =>
+															isAttributeInScope(a, advancedFindOnly),
+														)
+													: undefined
+											}
+											selectedAttributes={fetchQuery?.entity.attributes.map(
+												(a) => a.name,
+											)}
+											onAddColumn={onAddColumn}
+											onAddRelatedColumns={onAddRelatedColumns}
+											lookupRelationships={lookupRelationships}
+											oneToManyRelationships={oneToManyRelationships}
+											isLoadingRelationships={isLoadingRelationships}
+											onLoadRelatedAttributes={onLoadRelatedAttributes}
+											onResetToDefault={onResetToDefault}
+											addColumnsDisabledReason={
+												isAggregateQuery
+													? "Aggregate queries only return Group by and aggregate attributes, with aliases: add them in the tree."
+													: undefined
+											}
+											existingRelatedColumns={existingRelatedColumns}
+											isRetrieveAllInProgress={isRetrieveAllInProgress}
+											onStopRetrieveAll={onStopRetrieveAll}
+										/>
+									</div>
+									<ResultsTabBars
+										executeError={executeError}
+										onRetryRun={run}
+										onDismissExecuteError={onDismissExecuteError}
+										isExporting={isExporting}
+										exportError={exportError}
+										onRetryExport={onRetryExport}
+										onDismissExportError={onDismissExportError}
+										pagingNotice={pagingNotice}
+										rowCount={result?.rows.length ?? 0}
+										onRetryPaging={onRetryPaging}
+										onDismissPagingNotice={onDismissPagingNotice}
+									/>
+									<div className={styles.gridCard}>
+										<ResultsGrid
+											ref={resultsGridRef}
+											result={result}
+											isLoading={isExecuting}
+											isLoadingMore={isLoadingMore}
+											throttleWaitSeconds={pagingWaitSeconds}
+											attributeMetadata={attributeMetadata}
+											fetchQuery={fetchQuery}
+											primaryIdAttribute={primaryIdAttribute}
+											onSelectedCountChange={setToolbarSelectedCount}
+											onSelectionChange={handleSelectionChange}
+											columnConfig={columnConfig}
+											onColumnResize={onColumnResize}
+											onSortChange={onSortChange}
+											onLoadMore={onLoadMore}
+											displaySettings={displaySettings}
+											searchText={searchText}
+											onSearchTextChange={setSearchText}
+											columnFilters={columnFilters}
+											onAddColumnFilter={onAddColumnFilter}
+											onRemoveColumnFilters={onRemoveColumnFilters}
+											onVisibleCountChange={setVisibleRowCount}
+										/>
+									</div>
+								</div>
+							</PaneErrorBoundary>
+						)}
+					</AnnouncementScope>
 					{bodyOverlay}
 				</div>
 			</div>

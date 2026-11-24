@@ -22,9 +22,9 @@ import {
 	Field,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	Checkbox,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import {
 	Warning20Regular,
 	CheckmarkCircle20Regular,
@@ -197,7 +197,7 @@ export function BulkDeleteDialog({
 							<>
 								<MessageBar intent="error">
 									<MessageBarBody className={styles.messageBarBody}>
-										<MessageBarTitle>Danger zone</MessageBarTitle>
+										<BarTitle>Danger zone</BarTitle>
 										This will delete ALL records matching your current FetchXML
 										query!
 									</MessageBarBody>

@@ -12,12 +12,12 @@ import {
 	MessageBar,
 	MessageBarActions,
 	MessageBarBody,
-	MessageBarTitle,
 	Text,
 	Textarea,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "./BarTitle";
 import {
 	Add20Regular,
 	ArrowClockwise20Regular,
@@ -107,7 +107,7 @@ export function PaneErrorFallback({
 		<div className={styles.pane}>
 			<MessageBar intent="error" layout="multiline">
 				<MessageBarBody>
-					<MessageBarTitle>{title}</MessageBarTitle>
+					<BarTitle>{title}</BarTitle>
 					Something went wrong while showing this panel. The rest of FetchXML Studio still
 					works. <Caption1 className={styles.muted}>({message})</Caption1>
 				</MessageBarBody>
@@ -137,7 +137,7 @@ export function ToolErrorFallback({
 			<div className={styles.page}>
 				<MessageBar intent="error" layout="multiline">
 					<MessageBarBody>
-						<MessageBarTitle>FetchXML Studio hit a problem</MessageBarTitle>
+						<BarTitle>FetchXML Studio hit a problem</BarTitle>
 						{fetchXml
 							? "Your query is kept. Restart to continue where you left off, or copy the FetchXML first."
 							: "Start again to keep working."}

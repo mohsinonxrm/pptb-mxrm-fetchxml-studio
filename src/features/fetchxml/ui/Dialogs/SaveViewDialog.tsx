@@ -24,7 +24,6 @@ import {
 	Radio,
 	RadioGroup,
 	MessageBar,
-	MessageBarTitle,
 	MessageBarBody,
 	Spinner,
 	makeStyles,
@@ -33,6 +32,7 @@ import {
 	Text,
 	Checkbox,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import {
 	DismissRegular,
 	InfoRegular,
@@ -953,9 +953,7 @@ export function SaveViewDialog({
 								{isReadOnlyShare && loadedView && (
 									<MessageBar intent="error" layout="multiline">
 										<MessageBarBody>
-											<MessageBarTitle>
-												Can't overwrite this view
-											</MessageBarTitle>
+											<BarTitle>Can't overwrite this view</BarTitle>
 											{loadedView.ownerName
 												? `${loadedView.ownerName} shared "${loadedView.name}" with you without write access. Save a copy instead.`
 												: `"${loadedView.name}" was shared with you without write access. Save a copy instead.`}
@@ -1066,10 +1064,8 @@ export function SaveViewDialog({
 								{isNotCustomizable && loadedView && (
 									<MessageBar intent="error" className={styles.overwriteWarning}>
 										<MessageBarBody>
-											<MessageBarTitle>
-												Can't overwrite this view
-											</MessageBarTitle>
-											"{loadedView.name}" isn't customizable. Save a copy
+											<BarTitle>Can't overwrite this view</BarTitle>"
+											{loadedView.name}" isn't customizable. Save a copy
 											instead.
 										</MessageBarBody>
 									</MessageBar>
@@ -1085,7 +1081,7 @@ export function SaveViewDialog({
 										className={styles.overwriteWarning}
 									>
 										<MessageBarBody>
-											<MessageBarTitle>Managed view</MessageBarTitle>
+											<BarTitle>Managed view</BarTitle>
 											{managedSolution
 												? `"${loadedView.name}" comes from the managed solution ${managedSolution.friendlyName} (${managedSolution.uniqueName}).`
 												: `"${loadedView.name}" comes from a managed solution.`}{" "}
@@ -1103,10 +1099,9 @@ export function SaveViewDialog({
 										className={styles.overwriteWarning}
 									>
 										<MessageBarBody>
-											<MessageBarTitle>Overwrite warning</MessageBarTitle>"
-											{loadedView.name}" belongs to{" "}
-											{loadedView.ownerName || "another user"}. Saving changes
-											it for everyone it's shared with.
+											<BarTitle>Overwrite warning</BarTitle>"{loadedView.name}
+											" belongs to {loadedView.ownerName || "another user"}.
+											Saving changes it for everyone it's shared with.
 										</MessageBarBody>
 									</MessageBar>
 								)}
@@ -1121,7 +1116,7 @@ export function SaveViewDialog({
 											className={styles.overwriteWarning}
 										>
 											<MessageBarBody>
-												<MessageBarTitle>Overwrite warning</MessageBarTitle>
+												<BarTitle>Overwrite warning</BarTitle>
 												This will overwrite the existing view "
 												{loadedView.name}".
 											</MessageBarBody>
@@ -1149,7 +1144,7 @@ export function SaveViewDialog({
 						{saveError && (
 							<MessageBar intent="error">
 								<MessageBarBody>
-									<MessageBarTitle>Save failed</MessageBarTitle>
+									<BarTitle>Save failed</BarTitle>
 									{saveError}
 								</MessageBarBody>
 							</MessageBar>
@@ -1161,9 +1156,9 @@ export function SaveViewDialog({
 								<MessageBarBody>
 									{partialSave.remaining[0] === "solution" ? (
 										<>
-											<MessageBarTitle>
+											<BarTitle>
 												Saved, but not added to the solution
-											</MessageBarTitle>
+											</BarTitle>
 											{`The view "${partialSave.name}" was created, but adding it to "${
 												partialSave.solution?.friendlyname ??
 												partialSave.solution?.uniquename ??
@@ -1172,9 +1167,7 @@ export function SaveViewDialog({
 										</>
 									) : (
 										<>
-											<MessageBarTitle>
-												Saved, but not published
-											</MessageBarTitle>
+											<BarTitle>Saved, but not published</BarTitle>
 											{`The view was saved, but publishing ${entityDisplayName || entityLogicalName} failed: ${asSentence(
 												partialSave.error,
 											)} Users see the change once it's published.`}

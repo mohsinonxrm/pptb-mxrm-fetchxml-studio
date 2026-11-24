@@ -32,9 +32,9 @@ describe("useTreeNotice", () => {
 		await show("root-1");
 		await act(async () => latest.show(changed, "root-1"));
 		expect(latest.notice).toEqual(changed);
-		// MessageBarTitle's space before the body is CSS (::after), not text
+		// The title ends with a visually hidden full stop, so it isn't read into the text (BarTitle, #186)
 		expect(bars()).toEqual([
-			'View loaded with changesThe tree can\'t represent everything in "My accounts".',
+			'View loaded with changes. The tree can\'t represent everything in "My accounts".',
 		]);
 		await show("root-1");
 		expect(latest.notice).toEqual(changed);

@@ -46,7 +46,9 @@ import { useLaunchContext } from "../shared/hooks/useLaunchContext";
 import { useSendToTools } from "../shared/hooks/useSendToTools";
 import { TreeView } from "../features/fetchxml/ui/LeftPane/TreeView";
 import { TreeToolbar } from "../features/fetchxml/ui/LeftPane/TreeToolbar";
-import { LiveRegion } from "../shared/components/LiveRegion";
+import { AnnouncerProvider, SilentAnnouncements } from "../shared/feedback/Announcer";
+import { useAnnouncer } from "../shared/feedback/useAnnouncer";
+import { useRunAnnouncements } from "./hooks/useRunAnnouncements";
 import { PropertiesPanel } from "../features/fetchxml/ui/LeftPane/PropertiesPanel";
 import { clearMetadataLoadErrors } from "../features/fetchxml/ui/LeftPane/PropertiesPanel/metadataLoadErrors";
 import { BuilderProvider } from "../features/fetchxml/state/builderStore";
@@ -139,22 +141,25 @@ export function AppShell() {
 				    details still toasts; above the remount, so a new session or a restart clears
 				    toasts whose actions point at the old builder */}
 				{/* F2 goes to the newest toast (#186, as in model-driven apps) */}
-				<NotifyProvider
-					resetKey={`${session}-${restarts}`}
-					focusShortcut={(event) => matches(event, "toasts") && !hasOpenPopup()}
-				>
-					<ToolErrorBoundary
-						readFetchXml={() => carryOver.current.readFetchXml?.()}
-						onRestart={restart}
+				{/* Screen reader announcements (#186): ours, and Fluent's MessageBars through it */}
+				<AnnouncerProvider>
+					<NotifyProvider
+						resetKey={`${session}-${restarts}`}
+						focusShortcut={(event) => matches(event, "toasts") && !hasOpenPopup()}
 					>
-						<BuilderProvider key={`${session}-${restarts}`}>
-							<AppContent
-								carryOver={carryOver.current}
-								connectionKey={connectionKey}
-							/>
-						</BuilderProvider>
-					</ToolErrorBoundary>
-				</NotifyProvider>
+						<ToolErrorBoundary
+							readFetchXml={() => carryOver.current.readFetchXml?.()}
+							onRestart={restart}
+						>
+							<BuilderProvider key={`${session}-${restarts}`}>
+								<AppContent
+									carryOver={carryOver.current}
+									connectionKey={connectionKey}
+								/>
+							</BuilderProvider>
+						</ToolErrorBoundary>
+					</NotifyProvider>
+				</AnnouncerProvider>
 			</ThemeProvider>
 		</FluentProvider>
 	);
@@ -362,6 +367,10 @@ function AppContent({
 
 	// Running the query and paging its results (#301). Here, so clearing the results on an entity
 	// change keeps its place among the effects.
+	// The app's announcer (#186); a ref so the editor session's Run can use it before it's declared
+	const announce = useAnnouncer();
+	const announceRef = useRef(announce);
+	announceRef.current = announce;
 	const queryExecution = useQueryExecution({
 		fetchQuery: builder.fetchQuery,
 		fetchXml,
@@ -460,9 +469,14 @@ function AppContent({
 				: undefined,
 		isRunning: queryExecution.isExecuting,
 		isLoadingMore: queryExecution.isLoadingMore,
+		// Ctrl+Enter in the editor while Run can't act says why (#186)
+		onRunBlocked: (reason) => announceRef.current(reason, { batchId: "key-reason" }),
 	});
 	// Undo and Redo (#192): the tree toolbar and Ctrl+Z / Ctrl+Y outside text fields, announced
 	const undoRedo = useUndoRedo(builder.history);
+	// What a run does, for screen readers (#186)
+	useRunAnnouncements(queryExecution);
+
 	// Ctrl+F6 / Ctrl+Shift+F6 between the app bar, the builder (or its rail) and the output (#186)
 	const appBarRef = useRef<HTMLElement>(null);
 	const outputRef = useRef<HTMLElement>(null);
@@ -509,6 +523,8 @@ function AppContent({
 	useShortcuts({
 		run: editorSession.run,
 		runDisabledReason: editorSession.runDisabledReason,
+		// A key that can't act says why, as its button's tooltip does (#186)
+		onBlocked: (reason) => announce(reason, { batchId: "key-reason" }),
 		save: () => saveShortcutRef.current?.(),
 		showShortcuts: () => setShortcutsOpen(true),
 		nextArea: () => leavingPeek(areas.next),
@@ -638,19 +654,20 @@ function AppContent({
 			title="The properties couldn't be shown"
 			resetKey={builder.selectedNodeId}
 		>
-			<PropertiesPanel
-				selectedNode={builder.selectedNode}
-				fetchQuery={builder.fetchQuery}
-				onNodeUpdate={builder.updateNode}
-			/>
+			{/* Its bars would announce again on every node selection (#186, owner decision) */}
+			<SilentAnnouncements>
+				<PropertiesPanel
+					selectedNode={builder.selectedNode}
+					fetchQuery={builder.fetchQuery}
+					onNodeUpdate={builder.updateNode}
+				/>
+			</SilentAnnouncements>
 		</PaneErrorBoundary>
 	);
 
 	return (
 		<EditorSyncContext.Provider value={editorSession.syncValue}>
 			<div className={styles.shell}>
-				{/* "Undone: {step}" for screen readers (#192) */}
-				<LiveRegion message={undoRedo.announcement} />
 				{/* The app bar is the page's banner landmark (#186) */}
 				<header ref={appBarRef} className={styles.appBar}>
 					<AppBar

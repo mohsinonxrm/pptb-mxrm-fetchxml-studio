@@ -19,6 +19,7 @@ import {
 import { AppBar, type AppBarProps } from "./AppBar";
 import { NO_QUERY_REASON } from "../Toolbar/useSaveViewCommand";
 import { EditorSyncContext } from "../RightPane/editorSync";
+import { AnnouncerContext } from "../../../../shared/feedback/useAnnouncer";
 
 const XML = "<fetch><entity name='account'/></fetch>";
 const tools = [{ id: "other", name: "Other" }];
@@ -165,6 +166,26 @@ describe("the app bar's commands", () => {
 		const save = onBar("Save");
 		expect(save?.getAttribute("aria-disabled")).toBe("true");
 		expect(description(save)).toBe("Choose an entity first");
+	});
+
+	it("Ctrl+S on an unavailable Save says why, for screen readers (#186 PR 3)", async () => {
+		stubOverflowWidths({ container: 3000 });
+		const spoken = vi.fn();
+		const saveShortcutRef: { current: (() => void) | null } = { current: null };
+		await render(
+			createElement(
+				AnnouncerContext.Provider,
+				{ value: spoken },
+				createElement(
+					AppBar,
+					barProps({ saveView: saveView({ disabled: true }), saveShortcutRef }),
+				),
+			),
+		);
+		saveShortcutRef.current?.();
+		expect(spoken).toHaveBeenCalledExactlyOnceWith("Choose an entity first", {
+			batchId: "key-reason",
+		});
 	});
 
 	it("runs, and says Ctrl+Enter runs it too", async () => {

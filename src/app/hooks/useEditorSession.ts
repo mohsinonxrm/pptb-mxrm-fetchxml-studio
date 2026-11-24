@@ -50,6 +50,8 @@ export interface EditorSessionInputs {
 	runDisabledReason?: string;
 	isRunning?: boolean;
 	isLoadingMore?: boolean;
+	/** Ctrl+Enter in the editor while Run can't act: the reason, to announce (#186 PR 3) */
+	onRunBlocked?: (reason: string) => void;
 }
 
 export interface PendingSync {
@@ -100,6 +102,7 @@ export function useEditorSession({
 	runDisabledReason: treeRunReason,
 	isRunning = false,
 	isLoadingMore = false,
+	onRunBlocked,
 }: EditorSessionInputs): EditorSession {
 	const [selectedTab, setSelectedTab] = useState<PreviewTab>("xml");
 	// isEditorModeActive in state controls renders; the ref holds the latest XML without a render
@@ -324,7 +327,8 @@ export function useEditorSession({
 						: NO_QUERY_REASON));
 	useEffect(() => {
 		runShortcut.current = () => {
-			if (!runDisabledReason) run();
+			if (runDisabledReason) onRunBlocked?.(runDisabledReason);
+			else run();
 		};
 	});
 

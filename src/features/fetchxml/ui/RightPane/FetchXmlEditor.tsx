@@ -23,10 +23,10 @@ import {
 	Switch,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 	MessageBarActions,
 	MessageBarGroup,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import {
 	Copy20Filled,
 	Copy20Regular,
@@ -74,7 +74,26 @@ import { attachFetchXmlLanguageFeatures } from "../../model/fetchxmlIntellisense
 import { formatFetchXml } from "../../model/fetchxmlFormatter";
 import { RUNS_ITSELF_ATTRIBUTE, formatKeys, getEntry } from "../../../../app/shortcuts/registry";
 import { useEditorSync } from "./editorSync";
+import { useAnnouncer } from "../../../../shared/feedback/useAnnouncer";
+
 import { hasOpenPopup } from "../../../../app/hooks/useShortcuts";
+
+/** Ends a sentence with a full stop unless it has its own */
+const withStop = (text: string) => (/[.!?…]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
+/** A bar's words, for a screen reader: its title, then its text or findings */
+function problemText(problem: EditorProblem): string {
+	const body =
+		typeof problem.body === "string"
+			? problem.body
+			: problem.body
+					.map(
+						(item) =>
+							(item.element ? `<${item.element}> ` : "") + withStop(item.message),
+					)
+					.join(" ");
+	return `${problem.title}. ${body}`;
+}
 
 /** It, or an ancestor, is display: none (a hidden tab panel) */
 function isHidden(el: HTMLElement): boolean {
@@ -220,12 +239,32 @@ function FetchXmlEditorImpl(
 	// Get current XML value based on mode
 	const currentXml = isEditorMode ? editedXml : xml;
 
-	// A check replaces the bars for what it checked
-	// A check replaces the bars for what it checked. A bar updated in place isn't announced again:
-	// Fluent announces a MessageBar when it mounts, through the AriaLiveAnnouncer (#186)
-	const report = useCallback((checked: EditorProblemKey[], found: EditorProblem[]) => {
-		setMessages((prev) => applyCheck(prev, checked, found));
-	}, []);
+	// A check replaces the bars for what it checked. A new bar announces itself (Fluent, through the
+	// app's announcer); a bar updated in place doesn't remount, so it's announced here, as politely
+	// as Fluent would: info politely, warnings and errors assertively (#186, #277 note)
+	const announce = useAnnouncer();
+	// What each shown bar says now: an update in place is read only when its words change, and
+	// "tree changed" never (its words don't change, and the tree changes on every keystroke in
+	// Properties while editor mode is on)
+	const shownText = useRef(new Map<EditorProblemKey, string>());
+	useEffect(() => {
+		shownText.current = new Map(messages.map((m) => [m.key, problemText(m)]));
+	}, [messages]);
+	const report = useCallback(
+		(checked: EditorProblemKey[], found: EditorProblem[]) => {
+			for (const problem of found) {
+				const before = shownText.current.get(problem.key);
+				if (before === undefined || problem.key === "tree-changed") continue;
+				if (before === problemText(problem)) continue;
+				announce(problemText(problem), {
+					politeness: problem.intent === "info" ? "polite" : "assertive",
+					batchId: `editor-${problem.key}`,
+				});
+			}
+			setMessages((prev) => applyCheck(prev, checked, found));
+		},
+		[announce],
+	);
 	const drop = useCallback(
 		(key: EditorProblemKey, source: NonNullable<EditorProblem["source"]>) => {
 			setMessages((prev) => prev.filter((m) => !(m.key === key && m.source === source)));
@@ -649,7 +688,7 @@ function FetchXmlEditorImpl(
 								layout={typeof msg.body === "string" ? "auto" : "multiline"}
 							>
 								<MessageBarBody>
-									<MessageBarTitle>{msg.title}</MessageBarTitle>
+									<BarTitle>{msg.title}</BarTitle>
 									{typeof msg.body === "string" ? (
 										msg.body
 									) : (

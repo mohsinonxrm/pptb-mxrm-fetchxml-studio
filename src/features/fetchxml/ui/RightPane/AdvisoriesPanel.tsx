@@ -11,13 +11,13 @@ import {
 	MessageBar,
 	MessageBarActions,
 	MessageBarBody,
-	MessageBarTitle,
 	Text,
 	Tooltip,
 	makeStyles,
 	mergeClasses,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { OverflowToolbar, type BarCommand } from "../../../../shared/components/commandBar";
 import {
 	CloudCheckmark20Filled,
@@ -317,7 +317,7 @@ export function AdvisoriesPanel(props: AdvisoriesPanelProps) {
 				<div className={s.messageBar}>
 					<MessageBar intent="error" layout="multiline">
 						<MessageBarBody>
-							<MessageBarTitle>Couldn't check with Dataverse</MessageBarTitle>
+							<BarTitle>Couldn't check with Dataverse</BarTitle>
 							{props.checkError}
 						</MessageBarBody>
 						<MessageBarActions

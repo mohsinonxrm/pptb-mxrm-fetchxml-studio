@@ -9,10 +9,10 @@ import {
 	MessageBarActions,
 	MessageBarBody,
 	MessageBarGroup,
-	MessageBarTitle,
 	makeStyles,
 	tokens,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { ArrowClockwise16Regular, Copy16Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import type { PagingNotice } from "../../api/paging";
@@ -84,7 +84,7 @@ export function ResultsTabBars({
 		bars.push(
 			<MessageBar key="run" intent="error" layout="multiline">
 				<MessageBarBody>
-					<MessageBarTitle>The query didn't run</MessageBarTitle>
+					<BarTitle>The query didn't run</BarTitle>
 					{executeError}
 				</MessageBarBody>
 				<MessageBarActions
@@ -110,7 +110,7 @@ export function ResultsTabBars({
 		bars.push(
 			<MessageBar key="export-error" intent="error">
 				<MessageBarBody>
-					<MessageBarTitle>Export failed</MessageBarTitle>
+					<BarTitle>Export failed</BarTitle>
 					{exportError.message}
 				</MessageBarBody>
 				<MessageBarActions
@@ -130,7 +130,10 @@ export function ResultsTabBars({
 		const kind = pagingNotice.kind;
 		bars.push(
 			<MessageBar
-				key="paging"
+				// A new kind is a new bar, so it's announced (stopped, then the limit)
+				key={`paging-${kind}`}
+				// Stop is the user's own doing: read it when they pause, not over them (#186)
+				politeness={kind === "stopped" ? "polite" : undefined}
 				intent={
 					kind === "error"
 						? "error"
@@ -141,7 +144,7 @@ export function ResultsTabBars({
 				layout="multiline"
 			>
 				<MessageBarBody>
-					<MessageBarTitle>
+					<BarTitle>
 						{kind === "error"
 							? "Couldn't load all records"
 							: kind === "stopped"
@@ -149,7 +152,7 @@ export function ResultsTabBars({
 								: kind === "limit"
 									? `Retrieve all stopped at ${rowCount.toLocaleString()} rows`
 									: "Paging without a paging cookie"}
-					</MessageBarTitle>
+					</BarTitle>
 					{pagingNotice.kind === "error"
 						? `Loaded ${rowCount} rows; ${pagingNotice.page ? `page ${pagingNotice.page}` : "the next page"} failed: ${pagingNotice.message}`
 						: pagingNotice.kind === "stopped"
@@ -171,7 +174,7 @@ export function ResultsTabBars({
 		bars.push(
 			<MessageBar key="exporting" intent="info">
 				<MessageBarBody>
-					<MessageBarTitle>Exporting</MessageBarTitle>
+					<BarTitle>Exporting</BarTitle>
 					Exporting view to Excel…
 				</MessageBarBody>
 			</MessageBar>,

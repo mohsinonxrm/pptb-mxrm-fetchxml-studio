@@ -21,8 +21,8 @@ import {
 	tokens,
 	MessageBar,
 	MessageBarBody,
-	MessageBarTitle,
 } from "@fluentui/react-components";
+import { BarTitle } from "../../../../shared/components/BarTitle";
 import { Play20Regular, CheckmarkCircle20Regular, Warning20Regular } from "@fluentui/react-icons";
 import type { WorkflowInfo, WorkflowBatchProgress } from "../../api/pptbClient";
 import { throttleWaitMessage } from "../../api/throttleRetry";
@@ -326,7 +326,7 @@ export function WorkflowPickerDialog({
 					<div className={styles.progressSection}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<MessageBarTitle>Running workflow...</MessageBarTitle>
+								<BarTitle>Running workflow...</BarTitle>
 								Executing <strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
 								records
 								{progress &&
@@ -400,7 +400,7 @@ export function WorkflowPickerDialog({
 								{result.errors.length > 0 && (
 									<MessageBar intent="error">
 										<MessageBarBody>
-											<MessageBarTitle>Errors:</MessageBarTitle>
+											<BarTitle>Errors:</BarTitle>
 											{result.errors.slice(0, 5).map((err, i) => (
 												<Text key={i} size={200} block>
 													{err}
@@ -423,7 +423,7 @@ export function WorkflowPickerDialog({
 				return (
 					<MessageBar intent="error">
 						<MessageBarBody>
-							<MessageBarTitle>Error</MessageBarTitle>
+							<BarTitle>Error</BarTitle>
 							{error}
 						</MessageBarBody>
 					</MessageBar>
