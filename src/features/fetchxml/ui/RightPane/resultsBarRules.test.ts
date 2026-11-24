@@ -107,4 +107,20 @@ describe("resultsBarReasons", () => {
 	it("has nothing to copy without rows", () => {
 		expect(resultsBarReasons(state({ loadedCount: 0 })).copy).toBe("There are no rows to copy");
 	});
+
+	it("while a run waits for its first page, the commands that change records wait too, before any other reason (#279)", () => {
+		const reasons = resultsBarReasons(
+			state({ isRunning: true, recordActionsDisabledReason: "No record IDs" }),
+		);
+		expect(reasons).toMatchObject({
+			activate: "Wait for the query to finish",
+			deactivate: "Wait for the query to finish",
+			close: "Wait for the query to finish",
+			delete: "Wait for the query to finish",
+			runWorkflow: "Wait for the query to finish",
+		});
+		// Open, Copy URL and Copy only read: they keep their own reasons
+		expect(reasons.open).toBe("No record IDs");
+		expect(resultsBarReasons(state({ isRunning: true })).copy).toBeUndefined();
+	});
 });

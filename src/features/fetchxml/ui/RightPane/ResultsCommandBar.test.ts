@@ -5,7 +5,13 @@
  */
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, click, render, stubOverflowWidths } from "../../../../shared/testing/ui";
+import {
+	cleanup,
+	click,
+	expectDisabledWithReason,
+	render,
+	stubOverflowWidths,
+} from "../../../../shared/testing/ui";
 import { ResultsCommandBar, type CommandBarProps } from "./ResultsCommandBar";
 
 const renderBar = (props: Partial<CommandBarProps> = {}) =>
@@ -215,6 +221,35 @@ describe("unavailable commands say why", () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ loadedCount: 0 });
 		expect(description(onBar("Copy"))).toBe("There are no rows to copy");
+	});
+});
+
+describe("while a run waits for its first page (#279)", () => {
+	it("the commands that change records, and Export, wait for it", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({ isRunning: true });
+		for (const name of [
+			"Activate selected records",
+			"Deactivate selected records",
+			"Delete selected records",
+			"Run workflow on selected records",
+			"Export to Excel",
+		])
+			expectDisabledWithReason(onBar(name), "Wait for the query to finish");
+		// Reading commands don't wait
+		expect(onBar("Open record")?.getAttribute("aria-disabled")).not.toBe("true");
+	});
+});
+
+describe("Copy's menu (#279)", () => {
+	it("Selected rows says to select rows first", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({ selectedCount: 0 });
+		await click(onBar("Copy"));
+		const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((i) =>
+			i.textContent?.startsWith("Selected rows"),
+		);
+		expectDisabledWithReason(item, "Select rows to copy them");
 	});
 });
 

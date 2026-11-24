@@ -576,6 +576,7 @@ export function PreviewTabs({
 								<div className={styles.resultsLayout}>
 									<div className={styles.toolbarCard}>
 										<ResultsCommandBar
+											isRunning={isExecuting}
 											selectedCount={toolbarSelectedCount}
 											density={normalizeGridDensity(
 												displaySettings?.gridDensity,
