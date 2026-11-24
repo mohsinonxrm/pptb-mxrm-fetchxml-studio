@@ -298,6 +298,14 @@ function ScopeEditor({
 	);
 	const selectedSolutions = solutions.filter((s) => selectedSolutionIds.includes(s.solutionid));
 	const needsPublisher = mode === "publisher-solution" && selectedPublisherIds.length === 0;
+	const modeHint =
+		[
+			!canUsePublisherSolution &&
+				"Publisher → solution needs prvReadPublisher and prvReadSolution.",
+			!canUseSolutionOnly && "Solution only needs prvReadSolution.",
+		]
+			.filter(Boolean)
+			.join(" ") || undefined;
 	const solutionOption = (s: Solution) => (
 		<TagPickerOption
 			key={s.solutionid}
@@ -311,37 +319,22 @@ function ScopeEditor({
 
 	return (
 		<>
-			<Field label="Show entities from">
+			{/* A disabled radio can't be reached by keyboard: the Field's hint says why (#279) */}
+			<Field label="Show entities from" hint={modeHint}>
 				<RadioGroup
 					value={mode}
 					onChange={(_, d) => onModeChange(d.value as EntityScopeMode)}
 				>
-					<Tooltip
-						content={
-							canUsePublisherSolution
-								? ""
-								: "Requires prvReadPublisher and prvReadSolution"
-						}
-						relationship="description"
-						positioning="before"
-					>
-						<Radio
-							value="publisher-solution"
-							label="Publisher → solution (default)"
-							disabled={!canUsePublisherSolution}
-						/>
-					</Tooltip>
-					<Tooltip
-						content={canUseSolutionOnly ? "" : "Requires prvReadSolution"}
-						relationship="description"
-						positioning="before"
-					>
-						<Radio
-							value="solution-only"
-							label="Solution only"
-							disabled={!canUseSolutionOnly}
-						/>
-					</Tooltip>
+					<Radio
+						value="publisher-solution"
+						label="Publisher → solution (default)"
+						disabled={!canUsePublisherSolution}
+					/>
+					<Radio
+						value="solution-only"
+						label="Solution only"
+						disabled={!canUseSolutionOnly}
+					/>
 					<Radio value="all" label="All entities" />
 				</RadioGroup>
 			</Field>

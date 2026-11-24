@@ -452,9 +452,17 @@ export function EntitySelector({
 					)}
 				</Combobox>
 				<Text id={entityHintId} className={styles.note}>
-					{!entityLoading && availableEntities.length > 0
-						? `${availableEntities.length.toLocaleString()} ${availableEntities.length === 1 ? "entity" : "entities"} in scope`
-						: ""}
+					{/* While the picker can't be used, the hint says why (#279) */}
+					{entityLoading
+						? "Loading entities…"
+						: availableEntities.length > 0
+							? `${availableEntities.length.toLocaleString()} ${availableEntities.length === 1 ? "entity" : "entities"} in scope`
+							: !hasScope
+								? "Choose a scope to list entities"
+								: // A failed load says so below
+									entityError
+									? ""
+									: "No entities in this scope"}
 				</Text>
 				{entityError && <div className={styles.errorText}>{entityError}</div>}
 			</div>

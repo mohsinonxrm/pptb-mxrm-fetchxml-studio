@@ -1813,13 +1813,16 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							</Text>
 							<div className={styles.filterActions}>
 								<Button onClick={() => setFilterFor(null)}>Cancel</Button>
-								<Button
-									appearance="primary"
-									disabled={!hasRequiredValue(draftCondition)}
-									onClick={applyFilter}
-								>
-									Apply
-								</Button>
+								{withReason(
+									<Button
+										appearance="primary"
+										disabledFocusable={!hasRequiredValue(draftCondition)}
+										onClick={applyFilter}
+									>
+										Apply
+									</Button>,
+									!hasRequiredValue(draftCondition) && "Enter a value",
+								)}
 							</div>
 						</>
 					)}

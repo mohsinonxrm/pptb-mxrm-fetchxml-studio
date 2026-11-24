@@ -30,6 +30,7 @@ import {
 } from "@fluentui/react-icons";
 import type { LayoutColumn } from "../../model/layoutxml";
 import { mergeColumns } from "./mergeColumns";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const AddIcon = bundleIcon(Add20Filled, Add20Regular);
 const ResetIcon = bundleIcon(ArrowReset20Filled, ArrowReset20Regular);
@@ -370,30 +371,40 @@ export function EditColumnsPanel({
 										{column.displayName || column.name}
 									</span>
 									<div className={styles.columnActions}>
-										<Button
-											appearance="subtle"
-											size="small"
-											icon={<ArrowUp20Regular />}
-											disabled={index === 0}
-											onClick={(e) => {
-												e.stopPropagation();
-												moveColumn(index, "up");
-											}}
-											title="Move up"
-											aria-label="Move up"
-										/>
-										<Button
-											appearance="subtle"
-											size="small"
-											icon={<ArrowDown20Regular />}
-											disabled={index === localColumns.length - 1}
-											onClick={(e) => {
-												e.stopPropagation();
-												moveColumn(index, "down");
-											}}
-											title="Move down"
-											aria-label="Move down"
-										/>
+										{/* At the ends they stay focusable, so moving a column to the top keeps focus (#279) */}
+										{withReason(
+											<Button
+												appearance="subtle"
+												size="small"
+												icon={<ArrowUp20Regular />}
+												disabledFocusable={index === 0}
+												onClick={(e) => {
+													e.stopPropagation();
+													moveColumn(index, "up");
+												}}
+												title="Move up"
+												aria-label="Move up"
+											/>,
+											index === 0 && "It's already the first column",
+										)}
+										{withReason(
+											<Button
+												appearance="subtle"
+												size="small"
+												icon={<ArrowDown20Regular />}
+												disabledFocusable={
+													index === localColumns.length - 1
+												}
+												onClick={(e) => {
+													e.stopPropagation();
+													moveColumn(index, "down");
+												}}
+												title="Move down"
+												aria-label="Move down"
+											/>,
+											index === localColumns.length - 1 &&
+												"It's already the last column",
+										)}
 										<Button
 											appearance="subtle"
 											size="small"
@@ -423,13 +434,18 @@ export function EditColumnsPanel({
 					<Button appearance="secondary" onClick={onClose}>
 						Cancel
 					</Button>
-					<Button
-						appearance="primary"
-						onClick={handleApply}
-						disabled={columns.length > 0 && localColumns.length === 0}
-					>
-						Apply
-					</Button>
+					{withReason(
+						<Button
+							appearance="primary"
+							onClick={handleApply}
+							disabledFocusable={columns.length > 0 && localColumns.length === 0}
+						>
+							Apply
+						</Button>,
+						columns.length > 0 &&
+							localColumns.length === 0 &&
+							"Keep at least one column",
+					)}
 				</div>
 			</DrawerBody>
 		</OverlayDrawer>

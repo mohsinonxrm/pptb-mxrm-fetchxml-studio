@@ -158,9 +158,18 @@ export function ValueOfPicker({
 				required
 				validation={
 					validation ??
-					(!parsed.attribute
-						? { state: "error", message: "Choose the attribute to compare to." }
-						: undefined)
+					// While the picker can't be used, say why rather than ask for a choice (#279)
+					(compatibleTypes.length === 0
+						? {
+								state: "error",
+								message:
+									"Dataverse can't compare this attribute with another attribute.",
+							}
+						: !current.entityName
+							? { state: "error", message: "Choose an entity first." }
+							: !parsed.attribute
+								? { state: "error", message: "Choose the attribute to compare to." }
+								: undefined)
 				}
 				info={
 					<Info
