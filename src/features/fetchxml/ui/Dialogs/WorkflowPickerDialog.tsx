@@ -334,11 +334,15 @@ export function WorkflowPickerDialog({
 					<div className={styles.progressSection}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Running workflow…</BarTitle>
-								Running <strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
+								<BarTitle>Running the workflow…</BarTitle>
+								<strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
 								{recordCount === 1 ? "record" : "records"}
-								{progress &&
-									` · Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
+								{progress && (
+									<>
+										<br />
+										Batch {progress.batchesCompleted} of {progress.totalBatches}
+									</>
+								)}
 							</MessageBarBody>
 						</MessageBar>
 						{progress ? (

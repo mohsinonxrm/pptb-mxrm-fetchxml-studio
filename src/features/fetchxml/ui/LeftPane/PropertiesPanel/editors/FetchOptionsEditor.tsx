@@ -160,7 +160,7 @@ export function FetchOptionsEditor({ node, findings, onUpdate }: FetchOptionsEdi
 			{/* Metadata that couldn't load, with Retry (#201) */}
 			<MetadataLoadWarning entityName={node.entity.name} />
 			<div className={styles.section}>
-				<SectionHeading>Execution</SectionHeading>
+				<SectionHeading>Run options</SectionHeading>
 				<TeachingPopover
 					open={showTeachingPopover}
 					onOpenChange={(_, data) => setShowTeachingPopover(data.open)}

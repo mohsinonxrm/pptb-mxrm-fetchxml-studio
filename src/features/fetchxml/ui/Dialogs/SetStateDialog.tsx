@@ -376,7 +376,7 @@ export function SetStateDialog({
 						) : (
 							<div className={styles.row}>
 								<Spinner size="small" />
-								<Text>Updating…</Text>
+								<Text>Updating records…</Text>
 							</div>
 						)}
 					</>

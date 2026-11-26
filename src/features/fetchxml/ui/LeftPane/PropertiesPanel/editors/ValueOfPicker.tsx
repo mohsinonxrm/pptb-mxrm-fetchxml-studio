@@ -189,7 +189,7 @@ export function ValueOfPicker({
 				label="Attribute"
 				required
 				// While the attribute's type is read, say so rather than ask for a choice (#279)
-				hint={typeStatus === "loading" ? "Reading the attribute…" : undefined}
+				hint={typeStatus === "loading" ? "Loading the attribute…" : undefined}
 				validation={
 					validation ??
 					(typeStatus === "loading"

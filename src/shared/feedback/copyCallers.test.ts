@@ -183,7 +183,7 @@ describe("copy buttons", () => {
 		await flush(5);
 		await click(button("Copy link"));
 		expect(copied).toEqual(["https://test.crm.dynamics.com/job-1"]);
-		expect(toasts()).toEqual(["Copied the job URL."]);
+		expect(toasts()).toEqual(["Copied the job link."]);
 		expect(button("Copy link")).toBeDefined();
 	});
 });

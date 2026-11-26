@@ -546,7 +546,7 @@ export function CloseRecordsDialog({
 					<>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Running {action.message}…</BarTitle>
+								<BarTitle>Closing {action.nouns[1]}…</BarTitle>
 								{progress &&
 									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
@@ -562,7 +562,7 @@ export function CloseRecordsDialog({
 						) : (
 							<div className={styles.row}>
 								<Spinner size="small" />
-								<Text>Closing…</Text>
+								<Text>Closing {action.nouns[1]}…</Text>
 							</div>
 						)}
 					</>

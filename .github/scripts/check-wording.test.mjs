@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
 	formatFinding,
 	loadAllowlist,
@@ -107,16 +107,24 @@ describe("allowlist", () => {
 	});
 });
 
+// Scanning all of src/ takes seconds on a busy runner: one scan, and room for it (#231 review)
+const TREE_TIMEOUT = 60_000;
+
 describe("the tool's own strings (#231)", () => {
+	/** Every finding in src/, before the allowlist */
+	let raw = [];
+	let allowlist = [];
+	beforeAll(() => {
+		allowlist = loadAllowlist();
+		raw = scan(sourceFiles());
+	}, TREE_TIMEOUT);
+	const allowed = (f) => allowlist.some((a) => a.file === f.file && a.text === f.text);
+
 	it("follow the wording rules: no findings in src/", () => {
-		const findings = scan(sourceFiles(), { allowlist: loadAllowlist() });
-		expect(findings.map(formatFinding)).toEqual([]);
+		expect(raw.filter((f) => !allowed(f)).map(formatFinding)).toEqual([]);
 	});
 
 	it("every allowlist entry still matches a string, and says why", () => {
-		const allowlist = loadAllowlist();
-		// One scan without the allowlist: each entry must still answer a finding
-		const raw = scan(sourceFiles());
 		const unused = allowlist.filter(
 			(entry) => !raw.some((f) => f.file === entry.file && f.text === entry.text),
 		);
@@ -128,7 +136,13 @@ describe("the tool's own strings (#231)", () => {
 		expect(titleCaseWords("Raw (GUIDs, numbers, ISO dates)")).toEqual([]);
 	});
 
-	it("doesn't read test infrastructure (src/shared/testing) as UI text", () => {
-		expect(sourceFiles().some((file) => /[\\/]testing[\\/]/.test(file))).toBe(false);
-	});
+	it(
+		"skips only src/shared/testing (test infrastructure), not other folders named testing",
+		() => {
+			const files = sourceFiles();
+			expect(files.some((file) => /[\\/]shared[\\/]testing[\\/]/.test(file))).toBe(false);
+			expect(files.some((file) => /[\\/]features[\\/]/.test(file))).toBe(true);
+		},
+		TREE_TIMEOUT,
+	);
 });

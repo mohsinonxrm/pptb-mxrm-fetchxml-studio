@@ -265,8 +265,8 @@ export function generatePowerAutomateSpec(
 			},
 		],
 		notes: [
-			"Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-			"Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+			"Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+			"Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
 			"The Table name must be the entity set name (plural), not the logical name.",
 		],
 	};

@@ -210,7 +210,7 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 						<Text className={styles.settingLabel}>Tree icons</Text>
 						<Text className={styles.settingDescription} block>
 							Each node type has its own icon and color, by what it does: entities,
-							columns, criteria, sort
+							attributes, criteria and sort
 						</Text>
 						<RadioGroup
 							value={settings.treeIconStyle}

@@ -168,3 +168,18 @@ describe("getOperatorsForAttribute: attribute types shown with Advanced Find onl
 		expect(ops("Virtual", "MultiSelectPicklistType")).not.toContain("like");
 	});
 });
+
+describe("operator labels: the model-driven app's words (#231)", () => {
+	const label = (value: string) => ALL_OPERATORS.find((op) => op.value === value)?.label;
+	it("null and not-null read as the app reads them", () => {
+		expect(label("null")).toBe("Does not contain data");
+		expect(label("not-null")).toBe("Contains data");
+	});
+	it("uses the app's lowercase x, and Like keeps its pattern", () => {
+		expect(label("last-x-days")).toBe("Last x days");
+		expect(label("olderthan-x-hours")).toBe("Older than x hours");
+		expect(label("like")).toBe("Like (pattern)");
+		expect(label("ne")).toBe("Does not equal");
+		expect(label("ge")).toBe("Is greater than or equal to");
+	});
+});

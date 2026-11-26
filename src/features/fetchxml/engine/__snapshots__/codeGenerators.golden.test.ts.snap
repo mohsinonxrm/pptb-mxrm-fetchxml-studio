@@ -60,8 +60,8 @@ exports[`Power Automate List rows spec > aggregate-data #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -119,8 +119,8 @@ exports[`Power Automate List rows spec > aggregate-data #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -196,8 +196,8 @@ exports[`Power Automate List rows spec > aggregate-data #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -251,8 +251,8 @@ exports[`Power Automate List rows spec > aggregate-data #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -306,8 +306,8 @@ exports[`Power Automate List rows spec > aggregate-data #5 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -359,8 +359,8 @@ exports[`Power Automate List rows spec > aggregate-data #6 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -412,8 +412,8 @@ exports[`Power Automate List rows spec > aggregate-data (fragment) #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -469,8 +469,8 @@ exports[`Power Automate List rows spec > attribute #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -524,8 +524,8 @@ exports[`Power Automate List rows spec > condition #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -577,8 +577,8 @@ exports[`Power Automate List rows spec > entity #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -625,8 +625,8 @@ exports[`Power Automate List rows spec > fetch #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -687,8 +687,8 @@ exports[`Power Automate List rows spec > filter-rows #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -746,8 +746,8 @@ exports[`Power Automate List rows spec > filter-rows #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -806,8 +806,8 @@ exports[`Power Automate List rows spec > filter-rows #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -861,8 +861,8 @@ exports[`Power Automate List rows spec > filter-rows #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -924,8 +924,8 @@ exports[`Power Automate List rows spec > filter-rows #5 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -989,8 +989,8 @@ exports[`Power Automate List rows spec > filter-rows #6 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1051,8 +1051,8 @@ exports[`Power Automate List rows spec > filter-rows #7 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1113,8 +1113,8 @@ exports[`Power Automate List rows spec > filter-rows #8 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1175,8 +1175,8 @@ exports[`Power Automate List rows spec > filter-rows #9 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1226,8 +1226,8 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1278,8 +1278,8 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1332,8 +1332,8 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1389,8 +1389,8 @@ exports[`Power Automate List rows spec > join-tables #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1445,8 +1445,8 @@ exports[`Power Automate List rows spec > join-tables #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1507,8 +1507,8 @@ exports[`Power Automate List rows spec > join-tables #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1564,8 +1564,8 @@ exports[`Power Automate List rows spec > join-tables #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1625,8 +1625,8 @@ exports[`Power Automate List rows spec > join-tables #5 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1685,8 +1685,8 @@ exports[`Power Automate List rows spec > join-tables #6 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1745,8 +1745,8 @@ exports[`Power Automate List rows spec > join-tables #7 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1802,8 +1802,8 @@ exports[`Power Automate List rows spec > join-tables #8 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1858,8 +1858,8 @@ exports[`Power Automate List rows spec > link-entity #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1919,8 +1919,8 @@ exports[`Power Automate List rows spec > link-entity #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -1985,8 +1985,8 @@ exports[`Power Automate List rows spec > link-entity #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2038,8 +2038,8 @@ exports[`Power Automate List rows spec > link-entity #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2093,8 +2093,8 @@ exports[`Power Automate List rows spec > operators #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2150,8 +2150,8 @@ exports[`Power Automate List rows spec > operators #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2205,8 +2205,8 @@ exports[`Power Automate List rows spec > operators #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2259,8 +2259,8 @@ exports[`Power Automate List rows spec > operators #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2314,8 +2314,8 @@ exports[`Power Automate List rows spec > operators #5 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2372,8 +2372,8 @@ exports[`Power Automate List rows spec > operators #6 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2452,8 +2452,8 @@ exports[`Power Automate List rows spec > optimize-performance #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2507,8 +2507,8 @@ exports[`Power Automate List rows spec > order-rows #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2559,8 +2559,8 @@ exports[`Power Automate List rows spec > order-rows #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2623,8 +2623,8 @@ exports[`Power Automate List rows spec > order-rows #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2688,8 +2688,8 @@ exports[`Power Automate List rows spec > order-rows #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2740,8 +2740,8 @@ exports[`Power Automate List rows spec > order-rows (fragment) #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2790,8 +2790,8 @@ exports[`Power Automate List rows spec > overview #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2842,8 +2842,8 @@ exports[`Power Automate List rows spec > page-results #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2894,8 +2894,8 @@ exports[`Power Automate List rows spec > page-results #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -2947,8 +2947,8 @@ exports[`Power Automate List rows spec > page-results #3 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3000,8 +3000,8 @@ exports[`Power Automate List rows spec > page-results #4 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3053,8 +3053,8 @@ exports[`Power Automate List rows spec > page-results #5 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3106,8 +3106,8 @@ exports[`Power Automate List rows spec > page-results #6 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3158,8 +3158,8 @@ exports[`Power Automate List rows spec > query-antipatterns (fragment) #1 1`] = 
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3213,8 +3213,8 @@ exports[`Power Automate List rows spec > query-hierarchical-data #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3294,8 +3294,8 @@ exports[`Power Automate List rows spec > quick-find #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3347,8 +3347,8 @@ exports[`Power Automate List rows spec > select-columns #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3400,8 +3400,8 @@ exports[`Power Automate List rows spec > select-columns #2 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -3455,8 +3455,8 @@ exports[`Power Automate List rows spec > value (fragment) #1 1`] = `
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }
@@ -10485,8 +10485,8 @@ exports[`with the entity set name from metadata > Power Automate uses it as the 
     },
   ],
   "notes": [
-    "Fetch Xml Query is mutually exclusive with Select Columns / Filter Rows / Sort By — leave those empty.",
-    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Top Count.",
+    "Fetch Xml Query is mutually exclusive with Select columns / Filter rows / Sort by — leave those empty.",
+    "Maximum Pagination Size enables auto-iteration of pages — set it if you need all rows without a Row count.",
     "The Table name must be the entity set name (plural), not the logical name.",
   ],
 }

@@ -40,7 +40,7 @@ describe("ValueOfPicker and the attribute's type", () => {
 	it("while the type is read: says so, no error, and waits", async () => {
 		installHost();
 		await show("loading");
-		expect(text()).toContain("Reading the attribute…");
+		expect(text()).toContain("Loading the attribute…");
 		expect(text()).not.toContain("can't compare");
 		expect(pickerOff()).toBe(true);
 	});

@@ -81,7 +81,7 @@ export function deleteSelectionUnavailableReason(
 ): string | undefined {
 	if (selectedCount <= MAX_DIRECT_DELETE || canBulkDelete) return undefined;
 	return (
-		`Deleting more than ${MAX_DIRECT_DELETE} records submits a Bulk Delete job, which needs the Bulk Delete ` +
+		`Deleting more than ${MAX_DIRECT_DELETE} records submits a bulk delete job, which needs the Bulk Delete ` +
 		`privilege (prvBulkDelete). Select ${MAX_DIRECT_DELETE} or fewer, or ask your administrator for the privilege.`
 	);
 }

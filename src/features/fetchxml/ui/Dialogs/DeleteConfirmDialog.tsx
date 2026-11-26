@@ -149,7 +149,7 @@ export function DeleteConfirmDialog({
 					setState("success");
 				} else if (res.succeeded === 0) {
 					setState("error");
-					setError(`All ${res.failed} delete(s) failed`);
+					setError(`All ${res.failed} ${res.failed === 1 ? "delete" : "deletes"} failed`);
 				} else {
 					setState("partial");
 				}
@@ -158,10 +158,17 @@ export function DeleteConfirmDialog({
 				setState("success");
 			}
 		} catch (err) {
-			setError(formatDataverseError(err, "Failed to delete record(s)")); // (#96)
+			setError(
+				formatDataverseError(
+					err,
+					recordCount === 1
+						? "Couldn't delete the record"
+						: "Couldn't delete the records",
+				),
+			); // (#96)
 			setState("error");
 		}
-	}, [onConfirm]);
+	}, [onConfirm, recordCount]);
 
 	const handleClose = useCallback(() => {
 		if (state !== "deleting") {
@@ -304,7 +311,7 @@ export function DeleteConfirmDialog({
 								}}
 							>
 								<Spinner size="small" />
-								<Text>Deleting…</Text>
+								<Text>Deleting records…</Text>
 							</div>
 						)}
 					</div>
@@ -352,7 +359,7 @@ export function DeleteConfirmDialog({
 								))}
 								{result.errors.length > 5 && (
 									<Text size={200} className={styles.errorMessage}>
-										…and {result.errors.length - 5} more errors
+										…and {result.errors.length - 5} more
 									</Text>
 								)}
 							</div>
@@ -382,7 +389,7 @@ export function DeleteConfirmDialog({
 								))}
 								{result.errors.length > 5 && (
 									<Text size={200} className={styles.errorMessage}>
-										…and {result.errors.length - 5} more errors
+										…and {result.errors.length - 5} more
 									</Text>
 								)}
 							</div>

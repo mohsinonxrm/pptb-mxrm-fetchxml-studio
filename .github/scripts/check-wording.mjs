@@ -175,15 +175,16 @@ function scanSource(file, text, allowlist) {
 	return findings;
 }
 
-/** Non-test .ts and .tsx files under `root`/src, skipping __fixtures__, testing/ and .d.ts */
+/** Non-test .ts and .tsx files under `root`/src, skipping __fixtures__, src/shared/testing and .d.ts */
 export function sourceFiles(root = repoRoot) {
+	const TESTING_DIR = path.join(root, "src", "shared", "testing");
 	const out = [];
 	const walk = (dir) => {
 		for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
 			const p = path.join(dir, e.name);
 			if (e.isDirectory()) {
-				// Test infrastructure (src/shared/testing: fake metadata, harnesses) isn't UI text
-				if (e.name !== "__fixtures__" && e.name !== "testing") walk(p);
+				// Test infrastructure (fake metadata, harnesses) isn't UI text
+				if (e.name !== "__fixtures__" && p !== TESTING_DIR) walk(p);
 			} else if (
 				/\.(ts|tsx)$/.test(e.name) &&
 				!/\.test\.(ts|tsx)$/.test(e.name) &&
