@@ -7,6 +7,7 @@ import {
 	Fragment,
 	useState,
 	useEffect,
+	useLayoutEffect,
 	useCallback,
 	useMemo,
 	useRef,
@@ -347,6 +348,21 @@ export function TreeView({
 	const [openItems, setOpenItems] = useState<Set<NodeId>>(
 		new Set([fetchQuery.id, fetchQuery.entity.id]),
 	);
+	// The query and root entity nodes the user collapsed: a query that comes back (Undo, Redo) keeps
+	// them collapsed (#375 review)
+	const collapsedByUser = useRef<Set<NodeId>>(new Set());
+	// A query that replaces this one (Open view, Parse to tree, Change entity, the editor's sync) brings
+	// new node ids: open its root as a fresh launch does, so its columns, filters and orders show
+	// (#375). Edits in the tree keep the ids, so a root the user collapsed stays collapsed. Before paint,
+	// so the new root never shows a frame collapsed.
+	useLayoutEffect(() => {
+		const roots = [fetchQuery.id, fetchQuery.entity.id].filter(
+			(id) => !collapsedByUser.current.has(id),
+		);
+		setOpenItems((prev) =>
+			roots.every((id) => prev.has(id)) ? prev : new Set([...prev, ...roots]),
+		);
+	}, [fetchQuery.id, fetchQuery.entity.id]);
 
 	// The Add menus render in a portal inside the row, and React events bubble through portals: a
 	// menu click reached the row's onClick and re-selected the row, so the node the menu had just
@@ -507,6 +523,12 @@ export function TreeView({
 		// data.openItems is already the updated Set from Fluent UI
 		// Use it directly to respect user's expand/collapse actions
 		setOpenItems(data.openItems as Set<NodeId>);
+		// Remember a root the user collapsed (or opened again), for a query that comes back (#375)
+		const value = data.value as NodeId;
+		if (value === fetchQuery.id || value === fetchQuery.entity.id) {
+			if (data.open) collapsedByUser.current.delete(value);
+			else collapsedByUser.current.add(value);
+		}
 	};
 
 	// ============ ADD / DELETE (#24) ============
