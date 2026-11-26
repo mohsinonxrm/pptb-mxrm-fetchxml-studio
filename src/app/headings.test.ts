@@ -107,7 +107,12 @@ describe("app: headings and names", () => {
 			const app = await renderApp({ launch: { fetchXml: QUERY } });
 			await ready(app);
 			const chip = named(/^(Choose scope|Entity scope)/);
-			expect(chip?.className).not.toMatch(/fui-Button--primary|primary/);
+			// Run is the only button with the brand background (Griffel styles resolve in jsdom)
+			const brand = [...document.querySelectorAll<HTMLElement>("button")].filter(
+				(b) => getComputedStyle(b).backgroundColor === "var(--colorBrandBackground)",
+			);
+			expect(brand.map((b) => b.textContent?.trim())).toEqual(["Run"]);
+			expect(brand).not.toContain(chip);
 			await click(chip);
 			const surface = () =>
 				[...document.querySelectorAll('[role="dialog"]')].find((d) =>
@@ -116,6 +121,38 @@ describe("app: headings and names", () => {
 			await app.waitFor(() => !!surface());
 			expect(labelOf(surface())).toBe("Entity scope");
 			expect(texts("h2", surface())).toContain("Entity scope");
+			app.expectClean();
+		},
+		FLOW_TIMEOUT,
+	);
+});
+
+describe("app: the column filter popover (#279)", () => {
+	it(
+		"is named by its h2 title",
+		async () => {
+			stubOverflowWidths({ container: 4000 });
+			const app = await renderApp({ launch: { fetchXml: QUERY } });
+			await ready(app);
+			await click(named("Run"));
+			await app.waitFor(() => /Rows: \d/.test(app.status()));
+			const header = [
+				...document.querySelectorAll<HTMLElement>('[role="columnheader"]'),
+			].find((h) => /Account Name|name/.test(h.textContent ?? ""));
+			await click(header?.querySelector("button") ?? header);
+			const filterItem = () =>
+				[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((i) =>
+					i.textContent?.startsWith("Filter by"),
+				);
+			await app.waitFor(() => !!filterItem());
+			await click(filterItem());
+			const surface = () =>
+				[...document.querySelectorAll('[role="dialog"]')].find((d) =>
+					d.textContent?.includes("Filter by"),
+				);
+			await app.waitFor(() => !!surface());
+			expect(labelOf(surface())).toMatch(/^Filter by (Account Name|name)$/);
+			expect(texts("h2", surface())).toEqual([labelOf(surface())]);
 			app.expectClean();
 		},
 		FLOW_TIMEOUT,

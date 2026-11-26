@@ -1801,16 +1801,18 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 					className={styles.filterSurface}
 					aria-labelledby={filterFor ? filterTitleId : undefined}
 				>
+					{filterFor && (
+						<Text
+							as="h2"
+							id={filterTitleId}
+							weight="semibold"
+							className={styles.filterTitle}
+						>
+							Filter by {filterFor.header}
+						</Text>
+					)}
 					{filterFor && draftCondition && fetchQuery && (
 						<>
-							<Text
-								as="h2"
-								id={filterTitleId}
-								weight="semibold"
-								className={styles.filterTitle}
-							>
-								Filter by {filterFor.header}
-							</Text>
 							<ConditionEditor
 								columnFilter
 								node={draftCondition}

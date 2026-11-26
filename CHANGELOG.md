@@ -57,7 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔧 Fixed
 
 - **The Settings switch and dropdown have names (#390).** "Use logical names" and "Value display mode" were read without a name; each control is now named by its label and described by the text under it.
-
 - **Focus comes back to the command after a record dialog closes (#393).** After a delete the query runs again behind the dialog, and a command that gained or lost a hint or a reason (Delete waiting for the query) was replaced on the bar, so closing the dialog left focus on the page. Bar commands now keep their element whatever their tooltip, so focus returns to them.
 - **Record commands no longer follow the previous entity's privileges for a moment (#391).** Right after the entity changed, Delete, Bulk delete and Run workflow could show for one render with the previous entity's privileges. Privileges now count only for the entity they were checked for.
 

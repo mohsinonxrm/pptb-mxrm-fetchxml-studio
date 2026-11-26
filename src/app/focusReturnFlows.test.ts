@@ -75,6 +75,14 @@ const opensAndReturns = async (app: App, name: string) => {
 	opener?.focus();
 	await click(opener);
 	await app.waitFor(() => !!popup());
+	// Focus must be in what opened, or "back on the opener" proves nothing. A popover that traps focus
+	// doesn't move it there in jsdom: move it to its first control, as Tab would
+	if (!popup()!.contains(active())) {
+		popup()!
+			.querySelector<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])")
+			?.focus();
+	}
+	expect(popup()!.contains(active()), `focus in what ${name} opened`).toBe(true);
 	await escape();
 	await app.waitFor(() => !popup());
 	await settle(200);

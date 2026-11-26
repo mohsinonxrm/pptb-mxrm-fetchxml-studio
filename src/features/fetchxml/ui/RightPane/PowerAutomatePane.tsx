@@ -62,7 +62,7 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 		<div className={styles.root}>
 			<div className={styles.heading}>
 				<Flash20Filled className={styles.headingIcon} />
-				<Subtitle2 as="h3">{spec.actionName}</Subtitle2>
+				<Subtitle2 as="h2">{spec.actionName}</Subtitle2>
 				<Caption1 className={styles.connector}>
 					{spec.connector} · labels match the connector
 				</Caption1>
