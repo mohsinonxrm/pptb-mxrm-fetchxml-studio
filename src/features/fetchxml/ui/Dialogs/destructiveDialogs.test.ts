@@ -78,7 +78,7 @@ describe("Delete record dialog", () => {
 
 		run.resolve();
 		await flush();
-		expect(dialogText()).toMatch(/Record deleted./);
+		expect(dialogText()).toMatch(/Record deleted\./);
 		expect(onConfirm).toHaveBeenCalledTimes(1);
 	});
 
