@@ -9,7 +9,7 @@ import { retryMetadataLoads, useMetadataLoadError } from "./metadataLoadErrors";
 export function MetadataLoadWarning({ entityName }: { entityName: string | undefined }) {
 	const failure = useMetadataLoadError(entityName);
 	if (!failure || !entityName) return null;
-	const what = failure.kind === "columns" ? "columns" : "entity details";
+	const what = failure.kind === "columns" ? "attributes" : "entity details";
 	return (
 		<MessageBar intent="warning" layout="multiline">
 			<MessageBarBody>

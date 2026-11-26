@@ -223,7 +223,7 @@ describe("planStateChange", () => {
 			"This entity has no inactive state.",
 		);
 		expect(stateActionUnavailableReason(null, "activate")).toBe(
-			"This entity has no Status (statecode) column.",
+			"This entity has no Status (statecode) attribute.",
 		);
 		expect(stateActionUnavailableReason(account, "activate")).toBeUndefined();
 	});

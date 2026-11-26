@@ -274,7 +274,7 @@ export function WorkflowPickerDialog({
 				return (
 					<div className={styles.loadingState}>
 						<Spinner size="small" />
-						<Text>Loading available workflows...</Text>
+						<Text>Loading workflows…</Text>
 					</div>
 				);
 
@@ -334,11 +334,15 @@ export function WorkflowPickerDialog({
 					<div className={styles.progressSection}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Running workflow...</BarTitle>
-								Executing <strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
-								records
-								{progress &&
-									` (batch ${progress.batchesCompleted} of ${progress.totalBatches})`}
+								<BarTitle>Running the workflow…</BarTitle>
+								<strong>{selectedWorkflow?.name}</strong> on {recordCount}{" "}
+								{recordCount === 1 ? "record" : "records"}
+								{progress && (
+									<>
+										<br />
+										Batch {progress.batchesCompleted} of {progress.totalBatches}
+									</>
+								)}
 							</MessageBarBody>
 						</MessageBar>
 						{progress ? (
@@ -350,7 +354,7 @@ export function WorkflowPickerDialog({
 								/>
 								<div className={styles.progressStats}>
 									<Text size={200}>
-										{progress.completed} of {progress.total} completed (
+										{progress.completed} of {progress.total} (
 										{progress.succeeded} succeeded, {progress.failed} failed)
 									</Text>
 									{/* While Dataverse throttles, the wait instead of the estimate (#183) */}
@@ -377,7 +381,7 @@ export function WorkflowPickerDialog({
 								}}
 							>
 								<Spinner size="small" />
-								<Text>Starting workflow execution...</Text>
+								<Text>Starting the workflow…</Text>
 							</div>
 						)}
 					</div>
@@ -416,7 +420,7 @@ export function WorkflowPickerDialog({
 											))}
 											{result.errors.length > 5 && (
 												<Text size={200}>
-													...and {result.errors.length - 5} more
+													…and {result.errors.length - 5} more
 												</Text>
 											)}
 										</MessageBarBody>
@@ -442,7 +446,7 @@ export function WorkflowPickerDialog({
 	/** Why Run workflow can't be pressed yet (#279) */
 	const runReason =
 		state === "loading"
-			? "Loading available workflows..."
+			? "Loading workflows…"
 			: workflows.length === 0
 				? "There are no workflows to run"
 				: !selectedWorkflowId
@@ -476,7 +480,7 @@ export function WorkflowPickerDialog({
 			case "executing":
 				return withReason(
 					<Button ref={runningRef} appearance="secondary" disabledFocusable>
-						Running...
+						Running…
 					</Button>,
 					"Wait for the workflow to finish",
 				);

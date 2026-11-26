@@ -346,7 +346,7 @@ export function useQueryExecution({
 			setExecuteError(
 				formatDataverseError(
 					error,
-					"An unexpected error occurred while executing the query.",
+					"An unexpected error occurred while running the query.",
 				),
 			);
 			setQueryResult({ query, rows: [] });

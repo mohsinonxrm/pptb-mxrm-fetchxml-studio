@@ -81,7 +81,7 @@ describe("OverflowToolbar layout", () => {
 		const commands = [
 			button("Open", 50),
 			button("Delete", 20),
-			button("Copy URL", 30),
+			button("Copy link", 30),
 			button("Export", 10),
 		];
 		await renderBar(commands);
@@ -89,17 +89,17 @@ describe("OverflowToolbar layout", () => {
 
 		// Room for 3 items and More: Export (10) goes first
 		await layout.resize({ container: fits(3 * 80 + 40) });
-		expect(visibleOnBar(["Open", "Delete", "Copy URL", "Export"])).toEqual([
+		expect(visibleOnBar(["Open", "Delete", "Copy link", "Export"])).toEqual([
 			"Open",
 			"Delete",
-			"Copy URL",
+			"Copy link",
 		]);
 
 		// Room for 2 and More: then Delete (20)
 		await layout.resize({ container: fits(2 * 80 + 40) });
-		expect(visibleOnBar(["Open", "Delete", "Copy URL", "Export"])).toEqual([
+		expect(visibleOnBar(["Open", "Delete", "Copy link", "Export"])).toEqual([
 			"Open",
-			"Copy URL",
+			"Copy link",
 		]);
 
 		await click(more());
@@ -108,7 +108,7 @@ describe("OverflowToolbar layout", () => {
 
 		// Wider again: everything comes back and More goes
 		await layout.resize({ container: 1000 });
-		expect(visibleOnBar(["Open", "Delete", "Copy URL", "Export"])).toHaveLength(4);
+		expect(visibleOnBar(["Open", "Delete", "Copy link", "Export"])).toHaveLength(4);
 		expect(more()).toBeNull();
 	});
 
@@ -773,7 +773,7 @@ describe("OverflowToolbar: a command that gains or loses a reason keeps its elem
 		await renderBar([button("Export", 10)]);
 		const before = onBar("Export");
 		before?.focus();
-		await renderBar([button("Export", 10, { disabledReason: "Export in progress..." })]);
+		await renderBar([button("Export", 10, { disabledReason: "Exporting…" })]);
 		expect(onBar("Export")).toBe(before);
 		expect(document.activeElement).toBe(before);
 		expect(before?.getAttribute("aria-disabled")).toBe("true");

@@ -1,1 +1,32 @@
-[]
+[
+	{
+		"file": "src/features/fetchxml/engine/fetchxmlCodeGenerators.ts",
+		"text": "Fetch Xml Query",
+		"reason": "Power Automate's List rows field, quoted as the connector shows it (Learn: List rows; #231 decision 2)"
+	},
+	{
+		"file": "src/features/fetchxml/ui/RightPane/AddColumnsPanel.tsx",
+		"text": "Lookups (N:1)",
+		"reason": "Relationship notation (N:1), not Title Case"
+	},
+	{
+		"file": "src/features/fetchxml/ui/RightPane/AddColumnsPanel.tsx",
+		"text": "Related (1:N)",
+		"reason": "Relationship notation (1:N), not Title Case"
+	},
+	{
+		"file": "src/features/fetchxml/ui/RightPane/FetchXmlEditor.tsx",
+		"text": "View all in Advisories",
+		"reason": "Advisories is the tab's name"
+	},
+	{
+		"file": "src/features/fetchxml/ui/RightPane/ResultsGrid.tsx",
+		"text": "Select Run to see results",
+		"reason": "Run is the button's name (Style Guide: refer to a control by its label)"
+	},
+	{
+		"file": "src/features/fetchxml/ui/Toolbar/ScopeChip.tsx",
+		"text": "Not used in Solution only mode",
+		"reason": "Solution only is the scope option's name"
+	}
+]

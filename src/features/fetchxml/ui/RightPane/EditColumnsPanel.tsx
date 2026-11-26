@@ -334,7 +334,9 @@ export function EditColumnsPanel({
 				{localColumns.length === 0 ? (
 					<div className={styles.emptyState}>
 						<Text>No columns selected</Text>
-						<Text size={200}>Click "Add columns" to add columns to the view</Text>
+						<Text size={200}>
+							Select <strong>Add columns</strong> to add columns to the view
+						</Text>
 					</div>
 				) : (
 					<div className={styles.columnList}>

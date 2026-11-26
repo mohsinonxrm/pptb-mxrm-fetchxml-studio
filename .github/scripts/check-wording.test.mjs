@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { formatFinding, scan, titleCaseWords } from "./check-wording.mjs";
+import { beforeAll, describe, expect, it } from "vitest";
+import {
+	formatFinding,
+	loadAllowlist,
+	scan,
+	sourceFiles,
+	titleCaseWords,
+} from "./check-wording.mjs";
 
-// Fixture tests only. There is deliberately NO test that scans the real src/ tree here: today's
-// strings would fail it. The #231 wording sweep PR fixes them, fills wording-allowlist.json and
-// adds that "no findings in src/" assertion.
+// The fixture tests below, and one on the real src/ tree: it blocks CI (#231 decision 3). A
+// justified exception goes in wording-allowlist.json with its reason.
 
 const rules = (src, options) => scan(src, options).map((f) => f.rule);
 
@@ -100,4 +105,44 @@ describe("allowlist", () => {
 		).toHaveLength(1);
 		expect(scan(src, { file: "src/A.tsx", allowlist: [entry] })).toEqual([]);
 	});
+});
+
+// Scanning all of src/ takes seconds on a busy runner: one scan, and room for it (#231 review)
+const TREE_TIMEOUT = 60_000;
+
+describe("the tool's own strings (#231)", () => {
+	/** Every finding in src/, before the allowlist */
+	let raw = [];
+	let allowlist = [];
+	beforeAll(() => {
+		allowlist = loadAllowlist();
+		raw = scan(sourceFiles());
+	}, TREE_TIMEOUT);
+	const allowed = (f) => allowlist.some((a) => a.file === f.file && a.text === f.text);
+
+	it("follow the wording rules: no findings in src/", () => {
+		expect(raw.filter((f) => !allowed(f)).map(formatFinding)).toEqual([]);
+	});
+
+	it("every allowlist entry still matches a string, and says why", () => {
+		const unused = allowlist.filter(
+			(entry) => !raw.some((f) => f.file === entry.file && f.text === entry.text),
+		);
+		expect(unused.map((e) => `${e.file}: ${e.text}`)).toEqual([]);
+		expect(allowlist.filter((e) => !e.reason?.trim())).toEqual([]);
+	});
+
+	it("plural acronyms aren't Title Case", () => {
+		expect(titleCaseWords("Raw (GUIDs, numbers, ISO dates)")).toEqual([]);
+	});
+
+	it(
+		"skips only src/shared/testing (test infrastructure), not other folders named testing",
+		() => {
+			const files = sourceFiles();
+			expect(files.some((file) => /[\\/]shared[\\/]testing[\\/]/.test(file))).toBe(false);
+			expect(files.some((file) => /[\\/]features[\\/]/.test(file))).toBe(true);
+		},
+		TREE_TIMEOUT,
+	);
 });

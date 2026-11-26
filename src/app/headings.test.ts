@@ -67,9 +67,9 @@ describe("app: headings and names", () => {
 			await click(fetchRow?.querySelector(".fui-TreeItemLayout"));
 			await settle(200);
 			// The fetch options editor's sections
-			await app.waitFor(() => texts("h3").includes("Execution"));
+			await app.waitFor(() => texts("h3").includes("Run options"));
 			expect(texts("h3")).toEqual(
-				expect.arrayContaining(["Execution", "Query", "Paging and limits"]),
+				expect.arrayContaining(["Run options", "Query", "Paging and limits"]),
 			);
 			app.expectClean();
 		},

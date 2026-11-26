@@ -478,7 +478,7 @@ export function useRecordActions({
 		if (isDistinctQuery) {
 			return "Distinct query results don't contain record IDs (Dataverse doesn't return the primary key for distinct queries), so record actions aren't available.";
 		}
-		return "These results don't include the table's primary key, so record actions aren't available.";
+		return "These results don't include the entity's primary key, so record actions aren't available.";
 	}, [queryResult, primaryIdAttribute, isAggregateQuery, isDistinctQuery]);
 
 	// "Delete all" (no selection) deletes what the query on screen matches (#174): the results must
@@ -543,8 +543,8 @@ export function useRecordActions({
 				notify.error({
 					title:
 						recordIds.length === 1
-							? "Couldn't copy the record URL"
-							: "Couldn't copy the record URLs",
+							? "Couldn't copy the record link"
+							: "Couldn't copy the record links",
 					body: "The connection's environment URL isn't available.",
 				});
 				return;
@@ -552,7 +552,7 @@ export function useRecordActions({
 
 			const urls = recordIds.map((id) => buildRecordUrl(entityLogicalName, id, envUrl));
 			const textToCopy = urls.join("\n");
-			const what = urls.length === 1 ? "the record URL" : `${urls.length} record URLs`;
+			const what = urls.length === 1 ? "the record link" : `${urls.length} record links`;
 
 			if (await copy(textToCopy, what)) {
 				debugLog("app", `📋 Copied ${urls.length} record URL(s) to clipboard`);

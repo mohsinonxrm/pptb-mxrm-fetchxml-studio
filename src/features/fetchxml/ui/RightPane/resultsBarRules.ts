@@ -55,7 +55,7 @@ export function resultsBarReasons(state: ResultsBarState): ResultsBarReasons {
 		noIds ?? (n === 0 ? none : n > 1 ? many : undefined);
 	return {
 		open: one("Select a row to open it", "Select only one row to open it"),
-		copyUrl: one("Select a row to copy its URL", "Select only one row to copy its URL"),
+		copyUrl: one("Select a row to copy its link", "Select only one row to copy its link"),
 		activate: running ?? noIds ?? state.activateDisabledReason ?? pick("activate them"),
 		deactivate: running ?? noIds ?? state.deactivateDisabledReason ?? pick("deactivate them"),
 		close: running ?? noIds ?? state.closeDisabledReason ?? pick("close them"),

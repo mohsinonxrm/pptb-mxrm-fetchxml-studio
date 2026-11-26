@@ -192,7 +192,7 @@ export function CloseRecordsDialog({
 		getEntityStateModel(entityLogicalName)
 			.then((model) => {
 				if (!current) return;
-				if (!model) throw new Error("This entity has no Status (statecode) column.");
+				if (!model) throw new Error("This entity has no Status (statecode) attribute.");
 				const next = closeStatusChoices(model, action);
 				setChoices(next);
 				setStatus(next.preselected);
@@ -299,7 +299,8 @@ export function CloseRecordsDialog({
 		if (choices.choices.length === 1) {
 			return (
 				<Text>
-					Sets Status to <strong>{stateLabel}</strong> and {statusLabel} to{" "}
+					Sets the status to <strong>{stateLabel}</strong> and the{" "}
+					{statusLabel.charAt(0).toLowerCase() + statusLabel.slice(1)} to{" "}
 					<strong>{choices.choices[0].label}</strong>.
 				</Text>
 			);
@@ -366,7 +367,7 @@ export function CloseRecordsDialog({
 						<DatePicker
 							value={date}
 							onSelectDate={(d) => setDate(d ?? null)}
-							placeholder="Select a date..."
+							placeholder="Select a date…"
 							allowTextInput
 						/>
 					</Field>
@@ -392,7 +393,7 @@ export function CloseRecordsDialog({
 						hint="Optional. Naming a competitor selects Out-Sold unless you chose a status reason."
 					>
 						<Combobox
-							placeholder="Search competitors..."
+							placeholder="Search competitors…"
 							value={competitorText}
 							selectedOptions={competitor ? [competitor.id] : []}
 							freeform
@@ -410,7 +411,7 @@ export function CloseRecordsDialog({
 						>
 							{competitorsLoading && competitors.length === 0 ? (
 								<Option disabled value="__loading__" text="">
-									Searching...
+									Searching…
 								</Option>
 							) : competitors.length === 0 ? (
 								<Option disabled value="__none__" text="">
@@ -489,7 +490,7 @@ export function CloseRecordsDialog({
 				))}
 				{result.errors.length > 5 && (
 					<Text size={200} className={styles.errorText}>
-						...and {result.errors.length - 5} more
+						…and {result.errors.length - 5} more
 					</Text>
 				)}
 			</div>
@@ -501,7 +502,7 @@ export function CloseRecordsDialog({
 				return (
 					<div className={styles.row}>
 						<Spinner size="small" />
-						<Text>Reading the status options...</Text>
+						<Text>Loading the status options…</Text>
 					</div>
 				);
 			case "confirm":
@@ -545,7 +546,7 @@ export function CloseRecordsDialog({
 					<>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Running {action.message}...</BarTitle>
+								<BarTitle>Closing {action.nouns[1]}…</BarTitle>
 								{progress &&
 									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
@@ -561,7 +562,7 @@ export function CloseRecordsDialog({
 						) : (
 							<div className={styles.row}>
 								<Spinner size="small" />
-								<Text>Closing...</Text>
+								<Text>Closing {action.nouns[1]}…</Text>
 							</div>
 						)}
 					</>
@@ -608,7 +609,7 @@ export function CloseRecordsDialog({
 	/** Why the action can't run yet (#279): the first field to fix, then the confirmation */
 	const runReason =
 		phase !== "confirm"
-			? "Reading the status options..."
+			? "Loading the status options…"
 			: !values
 				? `Choose a ${statusLabel.charAt(0).toLowerCase()}${statusLabel.slice(1)}`
 				: (Object.values(errors).find(Boolean) ?? scope.reason);

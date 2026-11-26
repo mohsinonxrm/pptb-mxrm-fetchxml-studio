@@ -17,14 +17,14 @@ describe("resultsBarReasons", () => {
 		expect(resultsBarReasons(state())).toEqual({});
 	});
 
-	it("asks for one row to open it or copy its URL", () => {
+	it("asks for one row to open it or copy its link", () => {
 		expect(resultsBarReasons(state({ selectedCount: 0 }))).toMatchObject({
 			open: "Select a row to open it",
-			copyUrl: "Select a row to copy its URL",
+			copyUrl: "Select a row to copy its link",
 		});
 		expect(resultsBarReasons(state({ selectedCount: 2 }))).toMatchObject({
 			open: "Select only one row to open it",
-			copyUrl: "Select only one row to copy its URL",
+			copyUrl: "Select only one row to copy its link",
 		});
 	});
 

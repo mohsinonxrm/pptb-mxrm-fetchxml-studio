@@ -151,7 +151,7 @@ export function useResultsExport({
 				error: {
 					kind: "server",
 					message:
-						"Export to Excel requires a saved view. Please save your query as a view first.",
+						"Export to Excel requires a saved view. Save your query as a view first.",
 					retryable: false,
 				},
 			}));
@@ -211,10 +211,7 @@ export function useResultsExport({
 				isExporting: false,
 				error: {
 					kind: "server",
-					message: formatDataverseError(
-						error,
-						"Export to Excel failed. Please try again.",
-					), // (#96)
+					message: formatDataverseError(error, "Export to Excel failed. Try again."), // (#96)
 					retryable: true,
 				},
 			}));
@@ -349,9 +346,7 @@ export function useResultsExport({
 				error: {
 					kind: "local",
 					message:
-						error instanceof Error
-							? error.message
-							: "Local export failed. Please try again.",
+						error instanceof Error ? error.message : "Local export failed. Try again.",
 					retryable: true,
 				},
 			}));

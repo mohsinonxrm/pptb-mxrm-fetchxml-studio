@@ -72,7 +72,7 @@ describe("the results command bar", () => {
 		await renderBar();
 		expect(names()).toEqual([
 			"Open record",
-			"Copy record URL",
+			"Copy record link",
 			"Activate selected records",
 			"Deactivate selected records",
 			"Delete selected records",
@@ -92,7 +92,7 @@ describe("the results command bar", () => {
 		await layout.resize({ container: 24 + 3 * 80 + 2 * 24 + 40 });
 		expect(names()).toEqual([
 			"Open record",
-			"Copy record URL",
+			"Copy record link",
 			"Delete selected records",
 			"More commands",
 		]);
@@ -137,7 +137,7 @@ describe("unavailable commands say why", () => {
 		expect(onBar("Record actions unavailable")).toBeUndefined();
 		for (const name of [
 			"Open record",
-			"Copy record URL",
+			"Copy record link",
 			"Activate selected records",
 			"Deactivate selected records",
 			"Delete selected records",
@@ -158,6 +158,14 @@ describe("unavailable commands say why", () => {
 		expect(description(del)).toBe("Run the query first.");
 	});
 
+	it("Copy link reads as the style table says (#231), and asks for one row", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({ selectedCount: 0 });
+		const copyLink = onBar("Copy record link");
+		expect(copyLink?.textContent?.trim()).toBe("Copy link");
+		expect(description(copyLink)).toBe("Select a row to copy its link");
+	});
+
 	it("Open asks for exactly one row", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ selectedCount: 2 });
@@ -168,7 +176,7 @@ describe("unavailable commands say why", () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ isExporting: true });
 		const exp = onBar("Export to Excel");
-		expect(exp?.textContent?.trim()).toBe("Exporting...");
+		expect(exp?.textContent?.trim()).toBe("Exporting…");
 		expect(exp?.getAttribute("aria-disabled")).toBe("true");
 	});
 
@@ -214,7 +222,7 @@ describe("unavailable commands say why", () => {
 	it("Export says why while it exports", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ isExporting: true });
-		expect(description(onBar("Export to Excel"))).toBe("Export in progress...");
+		expect(description(onBar("Export to Excel"))).toBe("Exporting…");
 	});
 
 	it("Copy has nothing to copy without rows", async () => {

@@ -21,7 +21,7 @@ const spec = {
 		{ label: "Fetch Xml Query", value: "<fetch>\n</fetch>", multiline: true },
 		{ label: "Row count", value: "" },
 	],
-	notes: ["Top Count comes only from top."],
+	notes: ["Row count comes only from top."],
 };
 
 describe("the Power Automate pane", () => {
@@ -36,7 +36,7 @@ describe("the Power Automate pane", () => {
 			"Microsoft Dataverse connector · labels match the connector",
 		);
 		expect(document.body.textContent).toContain(spec.banner);
-		expect(document.body.textContent).toContain("Top Count comes only from top.");
+		expect(document.body.textContent).toContain("Row count comes only from top.");
 	});
 
 	it("labels each value as the connector does, with its hint", async () => {

@@ -170,7 +170,7 @@ export function BulkDeleteDialog({
 
 	const handleCopyUrl = useCallback(async () => {
 		// The ToolBox clipboard first, then the browser's (#70); says so in a toast (#277)
-		if (result?.jobUrl) await copy(result.jobUrl, "the job URL");
+		if (result?.jobUrl) await copy(result.jobUrl, "the job link");
 	}, [result, copy]);
 
 	const handleOpenJob = useCallback(() => {
@@ -264,7 +264,7 @@ export function BulkDeleteDialog({
 						</Field>
 
 						<Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-							You can track the progress of the job in the System Jobs area.
+							You can follow the job's progress in Dataverse's system jobs.
 						</Text>
 					</>
 				);
@@ -280,7 +280,7 @@ export function BulkDeleteDialog({
 							}}
 						>
 							<Spinner size="small" />
-							<Text>Submitting bulk delete job...</Text>
+							<Text>Submitting the bulk delete job…</Text>
 						</div>
 					</div>
 				);
@@ -290,7 +290,7 @@ export function BulkDeleteDialog({
 					<>
 						<div className={styles.successRow}>
 							<CheckmarkCircle20Regular />
-							<Text weight="semibold">Bulk delete job submitted successfully!</Text>
+							<Text weight="semibold">Bulk delete job submitted.</Text>
 						</div>
 
 						<div className={styles.infoBox}>
@@ -308,7 +308,7 @@ export function BulkDeleteDialog({
 										icon={<Copy20Regular />}
 										onClick={handleCopyUrl}
 									>
-										Copy URL
+										Copy link
 									</Button>
 								</div>
 							)}
@@ -339,7 +339,7 @@ export function BulkDeleteDialog({
 						<Text className={styles.errorMessage}>{error}</Text>
 
 						<Text size={200}>
-							Please check your permissions and try again. You need the prvBulkDelete
+							Check your permissions and try again. You need the prvBulkDelete
 							privilege to submit bulk delete jobs.
 						</Text>
 					</>
