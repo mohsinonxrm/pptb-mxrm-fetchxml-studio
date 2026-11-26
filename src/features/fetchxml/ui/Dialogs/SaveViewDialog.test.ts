@@ -260,3 +260,87 @@ describe("Save view while your permissions are checked (#279 review)", () => {
 		expect(isDisabled(button("Save"))).toBe(false);
 	});
 });
+
+describe("Save view: replacing the default public view (#371)", () => {
+	const DEFAULT = { id: VIEW, name: "Active contacts" };
+	const systemView = (extra: Record<string, unknown> = {}) => ({
+		id: VIEW,
+		type: "system" as const,
+		name: "Active contacts",
+		queryType: 0,
+		isCustomizable: true,
+		isManaged: false,
+		isDefault: true,
+		...extra,
+	});
+	const hint = () => dialogText();
+
+	beforeEach(async () => {
+		const { getDefaultPublicView } = await import("../../api/pptbClient");
+		vi.mocked(getDefaultPublicView).mockResolvedValue(DEFAULT);
+	});
+
+	it("Save as a new system view from the default view says it replaces it", async () => {
+		installHost();
+		await render(
+			createElement(SaveViewDialog, { ...props(systemView()), mode: "saveAs" as const }),
+		);
+		await flush();
+		await click(
+			[...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find(
+				(r) => r.value === "system",
+			),
+		);
+		await flush(5);
+		expect(hint()).toContain(
+			'Replaces "Active contacts" as the default public view for Contact.',
+		);
+	});
+
+	it("overwriting another public view still says it replaces the default", async () => {
+		installHost();
+		const other = "55555555-5555-5555-5555-555555555555";
+		await render(
+			createElement(
+				SaveViewDialog,
+				props(systemView({ id: other, name: "Inactive contacts", isDefault: false })),
+			),
+		);
+		await flush(5);
+		expect(hint()).toContain(
+			'Replaces "Active contacts" as the default public view for Contact.',
+		);
+	});
+
+	it("overwriting a view that became the default after it was loaded doesn't say it replaces itself", async () => {
+		installHost();
+		// Loaded before someone made it the default: its isDefault is stale
+		await render(createElement(SaveViewDialog, props(systemView({ isDefault: false }))));
+		await flush(5);
+		expect(hint()).not.toContain("Replaces");
+	});
+
+	it("overwriting the default view itself says it's the default, not that it replaces itself", async () => {
+		installHost();
+		await render(createElement(SaveViewDialog, props(systemView())));
+		await flush(5);
+		expect(hint()).toContain("This is the default view.");
+		expect(hint()).not.toContain("Replaces");
+	});
+	it("Save a copy of the default view as a system view says it replaces it (review)", async () => {
+		installHost();
+		// A default view that can't be customized: Save offers only a copy (#93)
+		await render(createElement(SaveViewDialog, props(systemView({ isCustomizable: false }))));
+		await flush(5);
+		await click(button("Save a copy…"));
+		await click(
+			[...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find(
+				(r) => r.value === "system",
+			),
+		);
+		await flush(5);
+		expect(hint()).toContain(
+			'Replaces "Active contacts" as the default public view for Contact.',
+		);
+	});
+});
