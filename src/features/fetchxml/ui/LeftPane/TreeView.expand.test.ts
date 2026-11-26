@@ -58,7 +58,7 @@ const CONTACT = `<fetch><entity name="contact"><attribute name="fullname" /><ord
 const row = (id: NodeId) =>
 	container.querySelector<HTMLElement>(`[data-fui-tree-item-value="${CSS.escape(id)}"]`);
 const expanded = (id: NodeId) => row(id)?.getAttribute("aria-expanded");
-/** Collapse a row the way a click on its chevron does */
+/** Toggle a row the way a click on its chevron does (collapses an open row, opens a closed one) */
 const collapse = (id: NodeId) =>
 	act(async () => {
 		row(id)
@@ -92,12 +92,42 @@ describe("the tree's root after a query replaces the open one (#375)", () => {
 		expect(expanded(again.entity.id)).toBe("true");
 	});
 
-	it("opens a new root entity in the same query", async () => {
+	it("opens a new root entity (Change entity gives a new query)", async () => {
 		const first = parse(ACCOUNT);
 		await show(first);
-		const contact = parse(CONTACT).entity;
-		await show({ ...first, entity: contact });
-		expect(expanded(contact.id)).toBe("true");
+		const changed = parse(CONTACT);
+		await show({ ...changed, entity: { ...changed.entity, attributes: [] } });
+		expect(expanded(changed.entity.id)).toBe("true");
+	});
+
+	it("keeps a root the user collapsed collapsed when Undo brings its query back (review)", async () => {
+		const account = parse(ACCOUNT);
+		await show(account);
+		await collapse(account.entity.id);
+		const contact = parse(CONTACT);
+		await show(contact);
+		expect(expanded(contact.entity.id)).toBe("true");
+		// Undo: the earlier snapshot, with its ids
+		await show(account);
+		expect(expanded(account.entity.id)).toBe("false");
+	});
+
+	it("and when Redo brings it back, until the user opens it again (review)", async () => {
+		const account = parse(ACCOUNT);
+		await show(account);
+		const contact = parse(CONTACT);
+		await show(contact);
+		await collapse(contact.entity.id);
+		await show(account); // Undo
+		await show(contact); // Redo
+		expect(expanded(contact.entity.id)).toBe("false");
+		// Opened again by the user, it opens on the next return too
+		await collapse(contact.entity.id); // the chevron toggles: open
+		expect(expanded(contact.entity.id)).toBe("true");
+		await show(account);
+		await collapse(account.entity.id);
+		await show(contact);
+		expect(expanded(contact.entity.id)).toBe("true");
 	});
 
 	it("keeps a root the user collapsed collapsed while they edit (same ids)", async () => {

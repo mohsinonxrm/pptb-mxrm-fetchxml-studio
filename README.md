@@ -16,7 +16,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 ## ✨ Features
 
 ### 🔧 Visual Query Builder
-- **Tree-based hierarchy** — Build FetchXML queries visually with entities, attributes, filters, orders, and link-entities. The root entity opens whenever a query is loaded (at launch, Open view or Parse to tree), so its nodes show straight away
+- **Tree-based hierarchy** — Build FetchXML queries visually with entities, attributes, filters, orders, and link-entities. The root entity opens whenever a query is loaded (at launch, Open view, Parse to tree or Change entity), so its nodes show straight away; one you collapse stays collapsed, also across Undo and Redo
   - **Icons by node type and column type** — Color shows what a node does: entities blue, attributes teal, criteria orange, sort grape, the query in the brand color. The icon shows what it is; attributes show their Dataverse column type (text, number, currency, date, choice, lookup, owner, key for the primary key…), and calculated, rollup and formula columns get a badge. **Settings › Tree icons** switches between tinted icons (default) and Fluent's multicolor Color icons
   - **Selected node** — The node shown in the properties panel is highlighted (selected background and indicator bar, `aria-selected`; in Windows high contrast, the system highlight colours). Click a row or press Enter to select it; arrow keys move between rows and expand or collapse branches
   - **Add menus and right-click** — Each row's + menu offers All attributes, Select attributes…, Blank attribute, Order by, Filter and Link-entity, with the tree's icons. Right-click (or Shift+F10) a row for the same items plus **Delete**. Deleting a node with items inside asks first.
