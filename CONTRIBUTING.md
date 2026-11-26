@@ -93,7 +93,7 @@ messages, empty and progress text) follows these rules. They come from the
 [Microsoft Writing Style Guide](https://learn.microsoft.com/style-guide/) it builds on. Where a
 rule comes from model-driven apps, Microsoft Learn or this project instead, the table says so.
 `npm run check:wording` ([`.github/scripts/check-wording.mjs`](.github/scripts/check-wording.mjs))
-checks the first two rules; it isn't enforced in CI yet (#231).
+checks the first two rules, and `npm test` runs it, so a finding fails CI (#231).
 
 | Rule | Use | Not | Source |
 |---|---|---|---|

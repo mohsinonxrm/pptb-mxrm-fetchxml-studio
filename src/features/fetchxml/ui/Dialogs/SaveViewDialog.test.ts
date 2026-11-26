@@ -253,7 +253,7 @@ describe("Save view while your permissions are checked (#279 review)", () => {
 			document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]'),
 			"FXS TEST view",
 		);
-		expectDisabledWithReason(button("Save"), "Checking your permissions...");
+		expectDisabledWithReason(button("Save"), "Checking your permissions…");
 		expect(dialogText()).not.toContain("You don't have permission");
 		check.resolve({ canWrite: true });
 		await flush();

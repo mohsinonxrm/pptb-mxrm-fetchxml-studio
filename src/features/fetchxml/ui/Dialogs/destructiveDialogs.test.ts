@@ -78,7 +78,7 @@ describe("Delete record dialog", () => {
 
 		run.resolve();
 		await flush();
-		expect(dialogText()).toMatch(/deleted successfully/i);
+		expect(dialogText()).toMatch(/Record deleted./);
 		expect(onConfirm).toHaveBeenCalledTimes(1);
 	});
 
@@ -361,13 +361,13 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 				workflowProps({ onFetchWorkflows: () => list.promise }),
 			),
 		);
-		expectDisabledWithReason(button("Run workflow"), "Loading available workflows...");
+		expectDisabledWithReason(button("Run workflow"), "Loading workflows…");
 		list.resolve([]);
 		await flush();
 		expectDisabledWithReason(button("Run workflow"), "There are no workflows to run");
 	});
 
-	it("Run workflow: focus moves to Running..., then Close", async () => {
+	it("Run workflow: focus moves to Running…, then Close", async () => {
 		installHost();
 		const run = deferred<{ succeeded: number; failed: number; errors: string[] }>();
 		await render(
@@ -382,8 +382,8 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		await flush();
 		await click(button("Run workflow"));
 		await flush();
-		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Running...");
-		expectDisabledWithReason(button("Running..."), "Wait for the workflow to finish");
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Running…");
+		expectDisabledWithReason(button("Running…"), "Wait for the workflow to finish");
 		run.resolve({ succeeded: 1, failed: 0, errors: [] });
 		await flush();
 		expect(focused()).toBe("Close");
@@ -400,7 +400,7 @@ describe("while the connection is read (#279)", () => {
 			}
 		).toolboxAPI.connections.getConnection = () => pending.promise;
 		await render(createElement(DeleteConfirmDialog, deleteProps()));
-		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		expectDisabledWithReason(button("Delete"), "Checking the connection…");
 		pending.resolve(null);
 		await flush();
 		expect(isDisabled(button("Delete"))).toBe(false);
@@ -422,7 +422,7 @@ describe("a record dialog that opens again (#279 review)", () => {
 			}
 		).toolboxAPI.connections.getConnection = () => pending.promise;
 		await render(createElement(DeleteConfirmDialog, deleteProps()));
-		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		expectDisabledWithReason(button("Delete"), "Checking the connection…");
 		pending.resolve(null);
 		await flush();
 	});

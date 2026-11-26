@@ -1,11 +1,11 @@
 /**
  * What a write confirmation's TargetScope says (#69, #279): whether the action may run, and why not
- * ("Reading the connection...", "Type account to confirm"), for the primary button's reason.
+ * ("Checking the connection…", "Type account to confirm"), for the primary button's reason.
  */
 import { useCallback, useState } from "react";
 
 /** Until TargetScope has read the connection (also its first render) (#279) */
-export const READING_CONNECTION = "Reading the connection...";
+export const READING_CONNECTION = "Checking the connection…";
 
 export interface TargetConfirmation {
 	confirmed: boolean;

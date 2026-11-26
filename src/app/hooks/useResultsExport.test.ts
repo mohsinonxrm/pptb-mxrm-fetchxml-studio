@@ -266,7 +266,7 @@ describe("useResultsExport: the local export", () => {
 		excel.downloadExcelFile.mockRejectedValue("nope");
 		await show();
 		await run(latest.exportLocal);
-		expect(latest.exportStatus.error?.message).toBe("Local export failed. Please try again.");
+		expect(latest.exportStatus.error?.message).toBe("Local export failed. Try again.");
 	});
 });
 
@@ -324,8 +324,7 @@ describe("useResultsExport: the server export of a loaded view", () => {
 		await run(latest.exportToExcel);
 		expect(latest.exportStatus.error).toEqual({
 			kind: "server",
-			message:
-				"Export to Excel requires a saved view. Please save your query as a view first.",
+			message: "Export to Excel requires a saved view. Save your query as a view first.",
 			retryable: false,
 		});
 		expect(api.exportToExcel).not.toHaveBeenCalled();
@@ -349,7 +348,7 @@ describe("useResultsExport: the server export of a loaded view", () => {
 		await run(latest.exportToExcel);
 		expect(latest.exportStatus.error).toEqual({
 			kind: "server",
-			message: formatDataverseError(error, "Export to Excel failed. Please try again."),
+			message: formatDataverseError(error, "Export to Excel failed. Try again."),
 			retryable: true,
 		});
 		expect(latest.exportStatus.isExporting).toBe(false);

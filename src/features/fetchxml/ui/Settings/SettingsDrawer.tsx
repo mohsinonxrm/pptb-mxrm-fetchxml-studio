@@ -209,7 +209,7 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 					<div className={styles.settingItem}>
 						<Text className={styles.settingLabel}>Tree icons</Text>
 						<Text className={styles.settingDescription} block>
-							Each node type has its own icon, coloured by what it does: tables,
+							Each node type has its own icon and color, by what it does: entities,
 							columns, criteria, sort
 						</Text>
 						<RadioGroup
@@ -220,10 +220,7 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 							aria-label="Tree icons"
 						>
 							<Radio value="tinted" label="Tinted icons" />
-							<Radio
-								value="color"
-								label="Color icons (multicolour where available)"
-							/>
+							<Radio value="color" label="Color icons (multicolor where available)" />
 						</RadioGroup>
 					</div>
 				</div>

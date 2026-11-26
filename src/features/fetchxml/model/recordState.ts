@@ -411,7 +411,7 @@ export function stateActionUnavailableReason(
 	model: EntityStateModel | null,
 	action: StateAction,
 ): string | undefined {
-	if (!model) return "This entity has no Status (statecode) column.";
+	if (!model) return "This entity has no Status (statecode) attribute.";
 	if (targetStates(model, action).length === 0) {
 		return action === "activate"
 			? "This entity has no active state (statecode 0)."

@@ -189,7 +189,7 @@ describe("Activate / Deactivate with nothing to change (#279)", () => {
 		await flush();
 		expectDisabledWithReason(
 			button("Deactivate"),
-			"This entity has no Status (statecode) column.",
+			"This entity has no Status (statecode) attribute.",
 		);
 	});
 });

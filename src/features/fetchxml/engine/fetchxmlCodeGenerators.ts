@@ -230,7 +230,7 @@ export function generatePowerAutomateSpec(
 	return {
 		actionName: "List rows",
 		connector: "Microsoft Dataverse connector",
-		banner: 'Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.',
+		banner: 'Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.',
 		fields: [
 			{
 				label: "Table name",
@@ -238,22 +238,22 @@ export function generatePowerAutomateSpec(
 				hint: "Entity set name — plural (e.g. accounts, contacts)",
 			},
 			{
-				label: "Select Columns",
+				label: "Select columns",
 				value: "",
 				hint: "Leave empty — FetchXML controls column selection",
 			},
 			{
-				label: "Filter Rows",
+				label: "Filter rows",
 				value: "",
 				hint: "Leave empty — FetchXML controls filtering",
 			},
 			{
-				label: "Sort By",
+				label: "Sort by",
 				value: "",
 				hint: "Leave empty — FetchXML controls ordering",
 			},
 			{
-				label: "Top Count",
+				label: "Row count",
 				value: topCount,
 				hint: "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
 			},

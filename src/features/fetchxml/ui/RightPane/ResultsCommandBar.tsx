@@ -358,8 +358,8 @@ export function ResultsCommandBar({
 		},
 		{
 			id: "copy-url",
-			label: "Copy URL",
-			ariaLabel: "Copy record URL",
+			label: "Copy link",
+			ariaLabel: "Copy record link",
 			icon: LinkIcon,
 			group: "record",
 			priority: 40,
@@ -410,7 +410,7 @@ export function ResultsCommandBar({
 										onClick={() => onCloseAction(item.key)}
 										disabled={!!reasons.close}
 									>
-										{item.label}...
+										{item.label}…
 									</MenuItem>
 								</Fragment>
 							))}
@@ -486,7 +486,7 @@ export function ResultsCommandBar({
 			},
 			menu: (
 				<MenuList>
-					{isLoadingWorkflows && <MenuItem disabled>Loading workflows...</MenuItem>}
+					{isLoadingWorkflows && <MenuItem disabled>Loading workflows…</MenuItem>}
 					{!isLoadingWorkflows && workflows.length === 0 && workflowsLoaded && (
 						<MenuItem disabled>No workflows available</MenuItem>
 					)}
@@ -551,7 +551,7 @@ export function ResultsCommandBar({
 		},
 		{
 			id: "export",
-			label: isExporting ? "Exporting..." : "Export to Excel",
+			label: isExporting ? "Exporting…" : "Export to Excel",
 			ariaLabel: "Export to Excel",
 			icon: ExcelIcon,
 			group: "data",
@@ -559,7 +559,7 @@ export function ResultsCommandBar({
 			kind: "menu",
 			busy: isExporting,
 			disabledReason: isExporting
-				? "Export in progress..."
+				? "Exporting…"
 				: isRunning
 					? QUERY_RUNNING_REASON
 					: undefined,
@@ -576,11 +576,11 @@ export function ResultsCommandBar({
 						positioning="before"
 					>
 						<MenuItem onClick={onExport} disabled={!canExport || isExporting}>
-							Export (Server)
+							Excel from Dataverse (every record)
 						</MenuItem>
 					</Tooltip>
 					<MenuItem onClick={onExportLocal} disabled={isExporting}>
-						Export (Local)
+						Excel in the browser
 					</MenuItem>
 				</MenuList>
 			),

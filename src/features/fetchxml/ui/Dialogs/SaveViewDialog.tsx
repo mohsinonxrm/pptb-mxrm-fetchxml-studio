@@ -265,7 +265,7 @@ const formSnapshot = (form: {
 /** While saving, every button waits (#279) */
 const SAVING_REASON = "Wait for the save to finish";
 /** While the view privileges are checked: neither "allowed" nor "no permission" yet (#279 review) */
-const CHECKING_PERMISSIONS = "Checking your permissions...";
+const CHECKING_PERMISSIONS = "Checking your permissions…";
 
 export function SaveViewDialog({
 	open,
@@ -566,7 +566,7 @@ export function SaveViewDialog({
 		: !name.trim()
 			? "Enter a name"
 			: isCheckingAccess
-				? "Checking your access to the view..."
+				? "Checking your access to the view…"
 				: isOverwriteBlocked
 					? "This view can't be overwritten. Save a copy instead"
 					: (viewType === "system" ? systemPrivileges : personalPrivileges) === null
@@ -883,7 +883,7 @@ export function SaveViewDialog({
 								{validation.status === "validating" && (
 									<>
 										<Spinner size="tiny" />
-										<Text>Validating FetchXML...</Text>
+										<Text>Validating FetchXML…</Text>
 									</>
 								)}
 								{validation.status === "valid" && (
@@ -1033,7 +1033,7 @@ export function SaveViewDialog({
 									<>
 										{solutionsLoading ? (
 											<div className={styles.solutionInfo}>
-												<Spinner size="tiny" label="Loading solutions..." />
+												<Spinner size="tiny" label="Loading solutions…" />
 											</div>
 										) : (
 											<SolutionPicker

@@ -115,7 +115,7 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 				size="small"
 				align="end"
 				className={styles.toolbar}
-				start={<span className={styles.label}>LayoutXML (Read-only)</span>}
+				start={<span className={styles.label}>LayoutXML (read-only)</span>}
 				commands={[
 					{
 						id: "copy",

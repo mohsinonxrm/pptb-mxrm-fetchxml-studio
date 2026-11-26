@@ -55,6 +55,7 @@ export const PROPER_NOUNS = [
 	"Microsoft Learn",
 	"Web API",
 	"pac CLI",
+	"FetchXML Studio",
 	"FetchXML",
 	"LayoutXML",
 	"Dataverse",
@@ -100,7 +101,9 @@ export function titleCaseWords(text) {
 		if (startsSentence || !word || word.startsWith("§")) continue;
 		if (!/^\p{Lu}/u.test(word)) continue;
 		const letters = word.replace(/[^\p{L}]/gu, "");
-		if (letters.length > 1 && letters === letters.toUpperCase()) continue; // acronym
+		// An acronym, also as a plural (GUIDs, IDs)
+		const core = letters.replace(/s$/, "");
+		if (core.length > 1 && core === core.toUpperCase()) continue;
 		bad.push(word.replace(/[^\p{L}\p{N}]+$/u, ""));
 	}
 	return bad;
@@ -172,14 +175,15 @@ function scanSource(file, text, allowlist) {
 	return findings;
 }
 
-/** Non-test .ts and .tsx files under `root`/src, skipping __fixtures__ and .d.ts */
+/** Non-test .ts and .tsx files under `root`/src, skipping __fixtures__, testing/ and .d.ts */
 export function sourceFiles(root = repoRoot) {
 	const out = [];
 	const walk = (dir) => {
 		for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
 			const p = path.join(dir, e.name);
 			if (e.isDirectory()) {
-				if (e.name !== "__fixtures__") walk(p);
+				// Test infrastructure (src/shared/testing: fake metadata, harnesses) isn't UI text
+				if (e.name !== "__fixtures__" && e.name !== "testing") walk(p);
 			} else if (
 				/\.(ts|tsx)$/.test(e.name) &&
 				!/\.test\.(ts|tsx)$/.test(e.name) &&

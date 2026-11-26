@@ -273,7 +273,7 @@ export const FETCHXML_SCHEMA: { elements: Record<string, ElementDef> } = {
 			children: ["value"],
 		},
 		value: {
-			description: "A value for operators that take several values (in, between, ...)",
+			description: "A value for operators that take several values (in, between, …)",
 			attributes: {
 				uiname: { description: SAVED_VIEW },
 				uitype: { description: SAVED_VIEW },

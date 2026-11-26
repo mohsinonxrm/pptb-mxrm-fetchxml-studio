@@ -936,7 +936,7 @@ export function TreeView({
 	return (
 		<div ref={treeRef} className={styles.container}>
 			<Tree
-				aria-label="FetchXML Query Structure"
+				aria-label="Query tree"
 				size={size}
 				openItems={openItems}
 				onOpenChange={handleOpenChange}

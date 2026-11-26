@@ -164,9 +164,9 @@ describe("intellisense catalogue matches the FetchXML reference (#94)", () => {
 
 describe("code generators (#94)", () => {
 	const pa = (xml: string) =>
-		generatePowerAutomateSpec(xml, "accounts").fields.find((f) => f.label === "Top Count")
+		generatePowerAutomateSpec(xml, "accounts").fields.find((f) => f.label === "Row count")
 			?.value;
-	it("Power Automate Top Count comes from top only, never from count (a page size)", () => {
+	it("Power Automate Row count comes from top only, never from count (a page size)", () => {
 		expect(pa(`<fetch top="25"><entity name="account" /></fetch>`)).toBe("25");
 		expect(pa(`<fetch count="50" page="1"><entity name="account" /></fetch>`)).toBe("");
 		expect(

@@ -261,11 +261,10 @@ export function DeleteConfirmDialog({
 					<div className={styles.progressSection}>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Deleting records...</BarTitle>
+								<BarTitle>Deleting records…</BarTitle>
 								{progress && (
 									<>
-										Processing batch {progress.batchesCompleted} of{" "}
-										{progress.totalBatches}
+										Batch {progress.batchesCompleted} of {progress.totalBatches}
 									</>
 								)}
 							</MessageBarBody>
@@ -305,7 +304,7 @@ export function DeleteConfirmDialog({
 								}}
 							>
 								<Spinner size="small" />
-								<Text>Deleting...</Text>
+								<Text>Deleting…</Text>
 							</div>
 						)}
 					</div>
@@ -318,8 +317,8 @@ export function DeleteConfirmDialog({
 							<CheckmarkCircle20Regular />
 							<Text weight="semibold">
 								{result
-									? `Successfully deleted ${result.succeeded} record(s)!`
-									: "Record(s) deleted successfully!"}
+									? `Deleted ${result.succeeded} ${result.succeeded === 1 ? "record" : "records"}.`
+									: "Record deleted."}
 							</Text>
 						</div>
 					</>
@@ -353,7 +352,7 @@ export function DeleteConfirmDialog({
 								))}
 								{result.errors.length > 5 && (
 									<Text size={200} className={styles.errorMessage}>
-										...and {result.errors.length - 5} more errors
+										…and {result.errors.length - 5} more errors
 									</Text>
 								)}
 							</div>
@@ -383,7 +382,7 @@ export function DeleteConfirmDialog({
 								))}
 								{result.errors.length > 5 && (
 									<Text size={200} className={styles.errorMessage}>
-										...and {result.errors.length - 5} more errors
+										…and {result.errors.length - 5} more errors
 									</Text>
 								)}
 							</div>

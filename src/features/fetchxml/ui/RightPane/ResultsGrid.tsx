@@ -1634,7 +1634,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 						{isLoadingMore &&
 							(throttleWaitSeconds
 								? ` (${throttleWaitMessage(throttleWaitSeconds)})`
-								: " (loading more...)")}
+								: " (loading more…)")}
 						{result.executionTimeMs !== undefined &&
 							` | Ran in ${result.executionTimeMs}ms`}
 						{result.totalRecordCountLimitExceeded && result.entityLogicalName && (

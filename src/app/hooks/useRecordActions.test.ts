@@ -532,7 +532,7 @@ describe("useRecordActions: why record actions are off", () => {
 
 		await show({ queryResult: { query: query("account"), rows } });
 		expect(latest.recordActionsDisabledReason).toBe(
-			"These results don't include the table's primary key, so record actions aren't available.",
+			"These results don't include the entity's primary key, so record actions aren't available.",
 		);
 
 		await show();
@@ -594,11 +594,11 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		await run(() => latest.copyRecordUrl([accountId(1)]));
 		expect(console.error).toHaveBeenCalledTimes(2);
 		expect(toasts()[1]).toMatch(
-			/^Couldn't copy the record URL\. Dismiss.*environment URL isn't available/,
+			/^Couldn't copy the record link\. Dismiss.*environment URL isn't available/,
 		);
 
 		await run(() => latest.copyRecordUrl([accountId(1), accountId(2)]));
-		expect(toasts()[2]).toMatch(/^Couldn't copy the record URLs\. Dismiss/);
+		expect(toasts()[2]).toMatch(/^Couldn't copy the record links\. Dismiss/);
 	});
 
 	it("does nothing with no records", async () => {
@@ -608,7 +608,7 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 		expect(open).not.toHaveBeenCalled();
 	});
 
-	it("copies the record URLs, one per line", async () => {
+	it("copies the record links, one per line", async () => {
 		const copied: string[] = [];
 		const utils = (window as unknown as { toolboxAPI: { utils: Record<string, unknown> } })
 			.toolboxAPI.utils;
@@ -626,10 +626,10 @@ describe("useRecordActions: selection, Open and Copy URL", () => {
 				.join("\n"),
 		]);
 		expect(console.error).not.toHaveBeenCalled();
-		expect(toasts()).toEqual(["Copied 2 record URLs."]);
+		expect(toasts()).toEqual(["Copied 2 record links."]);
 
 		await run(() => latest.copyRecordUrl([accountId(1)]));
-		expect(toasts()).toEqual(["Copied 2 record URLs.", "Copied the record URL."]);
+		expect(toasts()).toEqual(["Copied 2 record links.", "Copied the record link."]);
 	});
 
 	it("says so when the clipboard can't be written", async () => {

@@ -280,7 +280,7 @@ export function BulkDeleteDialog({
 							}}
 						>
 							<Spinner size="small" />
-							<Text>Submitting bulk delete job...</Text>
+							<Text>Submitting the bulk delete job…</Text>
 						</div>
 					</div>
 				);
@@ -290,7 +290,7 @@ export function BulkDeleteDialog({
 					<>
 						<div className={styles.successRow}>
 							<CheckmarkCircle20Regular />
-							<Text weight="semibold">Bulk delete job submitted successfully!</Text>
+							<Text weight="semibold">Bulk delete job submitted.</Text>
 						</div>
 
 						<div className={styles.infoBox}>
@@ -308,7 +308,7 @@ export function BulkDeleteDialog({
 										icon={<Copy20Regular />}
 										onClick={handleCopyUrl}
 									>
-										Copy URL
+										Copy link
 									</Button>
 								</div>
 							)}
@@ -339,7 +339,7 @@ export function BulkDeleteDialog({
 						<Text className={styles.errorMessage}>{error}</Text>
 
 						<Text size={200}>
-							Please check your permissions and try again. You need the prvBulkDelete
+							Check your permissions and try again. You need the prvBulkDelete
 							privilege to submit bulk delete jobs.
 						</Text>
 					</>

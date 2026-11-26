@@ -163,7 +163,7 @@ export function SetStateDialog({
 			if (!model)
 				return {
 					kind: "none",
-					reason: "This entity has no Status (statecode) column.",
+					reason: "This entity has no Status (statecode) attribute.",
 				} as StatePlan;
 			const primaryId = primaryIdRef.current;
 			const statuses =
@@ -233,7 +233,7 @@ export function SetStateDialog({
 				))}
 				{result.errors.length > 5 && (
 					<Text size={200} className={styles.errorText}>
-						...and {result.errors.length - 5} more
+						…and {result.errors.length - 5} more
 					</Text>
 				)}
 			</div>
@@ -245,7 +245,7 @@ export function SetStateDialog({
 				return (
 					<div className={styles.row}>
 						<Spinner size="small" />
-						<Text>Reading the status options...</Text>
+						<Text>Loading the status options…</Text>
 					</div>
 				);
 			case "confirm":
@@ -289,8 +289,8 @@ export function SetStateDialog({
 						)}
 						{plan?.kind === "simple" && (
 							<Text>
-								Sets Status to <strong>{plan.stateLabel}</strong> and Status Reason
-								to <strong>{plan.statusLabel}</strong>.
+								Sets the status to <strong>{plan.stateLabel}</strong> and the status
+								reason to <strong>{plan.statusLabel}</strong>.
 							</Text>
 						)}
 						{plan?.kind === "choose" && (
@@ -360,7 +360,7 @@ export function SetStateDialog({
 					<>
 						<MessageBar intent="info">
 							<MessageBarBody>
-								<BarTitle>Updating records...</BarTitle>
+								<BarTitle>Updating records…</BarTitle>
 								{progress &&
 									`Batch ${progress.batchesCompleted} of ${progress.totalBatches}`}
 							</MessageBarBody>
@@ -376,7 +376,7 @@ export function SetStateDialog({
 						) : (
 							<div className={styles.row}>
 								<Spinner size="small" />
-								<Text>Updating...</Text>
+								<Text>Updating…</Text>
 							</div>
 						)}
 					</>
@@ -421,7 +421,7 @@ export function SetStateDialog({
 	/** Why the action can't run yet (#279) */
 	const runReason =
 		phase !== "confirm"
-			? "Reading the status options..."
+			? "Loading the status options…"
 			: plan?.kind === "none"
 				? plan.reason
 				: !target

@@ -3,7 +3,7 @@
 exports[`Power Automate List rows spec > aggregate-data #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -13,22 +13,22 @@ exports[`Power Automate List rows spec > aggregate-data #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -70,7 +70,7 @@ exports[`Power Automate List rows spec > aggregate-data #1 1`] = `
 exports[`Power Automate List rows spec > aggregate-data #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -80,22 +80,22 @@ exports[`Power Automate List rows spec > aggregate-data #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -129,7 +129,7 @@ exports[`Power Automate List rows spec > aggregate-data #2 1`] = `
 exports[`Power Automate List rows spec > aggregate-data #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -139,22 +139,22 @@ exports[`Power Automate List rows spec > aggregate-data #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -206,7 +206,7 @@ exports[`Power Automate List rows spec > aggregate-data #3 1`] = `
 exports[`Power Automate List rows spec > aggregate-data #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -216,22 +216,22 @@ exports[`Power Automate List rows spec > aggregate-data #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -261,7 +261,7 @@ exports[`Power Automate List rows spec > aggregate-data #4 1`] = `
 exports[`Power Automate List rows spec > aggregate-data #5 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -271,22 +271,22 @@ exports[`Power Automate List rows spec > aggregate-data #5 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "5",
     },
     {
@@ -316,7 +316,7 @@ exports[`Power Automate List rows spec > aggregate-data #5 1`] = `
 exports[`Power Automate List rows spec > aggregate-data #6 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -326,22 +326,22 @@ exports[`Power Automate List rows spec > aggregate-data #6 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -369,7 +369,7 @@ exports[`Power Automate List rows spec > aggregate-data #6 1`] = `
 exports[`Power Automate List rows spec > aggregate-data (fragment) #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -379,22 +379,22 @@ exports[`Power Automate List rows spec > aggregate-data (fragment) #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -422,7 +422,7 @@ exports[`Power Automate List rows spec > aggregate-data (fragment) #1 1`] = `
 exports[`Power Automate List rows spec > attribute #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -432,22 +432,22 @@ exports[`Power Automate List rows spec > attribute #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -479,7 +479,7 @@ exports[`Power Automate List rows spec > attribute #1 1`] = `
 exports[`Power Automate List rows spec > condition #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -489,22 +489,22 @@ exports[`Power Automate List rows spec > condition #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -534,7 +534,7 @@ exports[`Power Automate List rows spec > condition #1 1`] = `
 exports[`Power Automate List rows spec > entity #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -544,22 +544,22 @@ exports[`Power Automate List rows spec > entity #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -587,7 +587,7 @@ exports[`Power Automate List rows spec > entity #1 1`] = `
 exports[`Power Automate List rows spec > fetch #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -597,22 +597,22 @@ exports[`Power Automate List rows spec > fetch #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -635,7 +635,7 @@ exports[`Power Automate List rows spec > fetch #1 1`] = `
 exports[`Power Automate List rows spec > filter-rows #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -645,22 +645,22 @@ exports[`Power Automate List rows spec > filter-rows #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -697,7 +697,7 @@ exports[`Power Automate List rows spec > filter-rows #1 1`] = `
 exports[`Power Automate List rows spec > filter-rows #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -707,22 +707,22 @@ exports[`Power Automate List rows spec > filter-rows #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -756,7 +756,7 @@ exports[`Power Automate List rows spec > filter-rows #2 1`] = `
 exports[`Power Automate List rows spec > filter-rows #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -766,22 +766,22 @@ exports[`Power Automate List rows spec > filter-rows #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -816,7 +816,7 @@ exports[`Power Automate List rows spec > filter-rows #3 1`] = `
 exports[`Power Automate List rows spec > filter-rows #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -826,22 +826,22 @@ exports[`Power Automate List rows spec > filter-rows #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -871,7 +871,7 @@ exports[`Power Automate List rows spec > filter-rows #4 1`] = `
 exports[`Power Automate List rows spec > filter-rows #5 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -881,22 +881,22 @@ exports[`Power Automate List rows spec > filter-rows #5 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -934,7 +934,7 @@ exports[`Power Automate List rows spec > filter-rows #5 1`] = `
 exports[`Power Automate List rows spec > filter-rows #6 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -944,22 +944,22 @@ exports[`Power Automate List rows spec > filter-rows #6 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -999,7 +999,7 @@ exports[`Power Automate List rows spec > filter-rows #6 1`] = `
 exports[`Power Automate List rows spec > filter-rows #7 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1009,22 +1009,22 @@ exports[`Power Automate List rows spec > filter-rows #7 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1061,7 +1061,7 @@ exports[`Power Automate List rows spec > filter-rows #7 1`] = `
 exports[`Power Automate List rows spec > filter-rows #8 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1071,22 +1071,22 @@ exports[`Power Automate List rows spec > filter-rows #8 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1123,7 +1123,7 @@ exports[`Power Automate List rows spec > filter-rows #8 1`] = `
 exports[`Power Automate List rows spec > filter-rows #9 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1133,22 +1133,22 @@ exports[`Power Automate List rows spec > filter-rows #9 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1185,7 +1185,7 @@ exports[`Power Automate List rows spec > filter-rows #9 1`] = `
 exports[`Power Automate List rows spec > filter-rows (fragment) #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1195,22 +1195,22 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1236,7 +1236,7 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #1 1`] = `
 exports[`Power Automate List rows spec > filter-rows (fragment) #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1246,22 +1246,22 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1288,7 +1288,7 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #2 1`] = `
 exports[`Power Automate List rows spec > filter-rows (fragment) #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1298,22 +1298,22 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1342,7 +1342,7 @@ exports[`Power Automate List rows spec > filter-rows (fragment) #3 1`] = `
 exports[`Power Automate List rows spec > join-tables #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1352,22 +1352,22 @@ exports[`Power Automate List rows spec > join-tables #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "5",
     },
     {
@@ -1399,7 +1399,7 @@ exports[`Power Automate List rows spec > join-tables #1 1`] = `
 exports[`Power Automate List rows spec > join-tables #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1409,22 +1409,22 @@ exports[`Power Automate List rows spec > join-tables #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "5",
     },
     {
@@ -1455,7 +1455,7 @@ exports[`Power Automate List rows spec > join-tables #2 1`] = `
 exports[`Power Automate List rows spec > join-tables #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1465,22 +1465,22 @@ exports[`Power Automate List rows spec > join-tables #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "2",
     },
     {
@@ -1517,7 +1517,7 @@ exports[`Power Automate List rows spec > join-tables #3 1`] = `
 exports[`Power Automate List rows spec > join-tables #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1527,22 +1527,22 @@ exports[`Power Automate List rows spec > join-tables #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1574,7 +1574,7 @@ exports[`Power Automate List rows spec > join-tables #4 1`] = `
 exports[`Power Automate List rows spec > join-tables #5 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1584,22 +1584,22 @@ exports[`Power Automate List rows spec > join-tables #5 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1635,7 +1635,7 @@ exports[`Power Automate List rows spec > join-tables #5 1`] = `
 exports[`Power Automate List rows spec > join-tables #6 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1645,22 +1645,22 @@ exports[`Power Automate List rows spec > join-tables #6 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1695,7 +1695,7 @@ exports[`Power Automate List rows spec > join-tables #6 1`] = `
 exports[`Power Automate List rows spec > join-tables #7 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1705,22 +1705,22 @@ exports[`Power Automate List rows spec > join-tables #7 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1755,7 +1755,7 @@ exports[`Power Automate List rows spec > join-tables #7 1`] = `
 exports[`Power Automate List rows spec > join-tables #8 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1765,22 +1765,22 @@ exports[`Power Automate List rows spec > join-tables #8 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1812,7 +1812,7 @@ exports[`Power Automate List rows spec > join-tables #8 1`] = `
 exports[`Power Automate List rows spec > link-entity #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1822,22 +1822,22 @@ exports[`Power Automate List rows spec > link-entity #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1868,7 +1868,7 @@ exports[`Power Automate List rows spec > link-entity #1 1`] = `
 exports[`Power Automate List rows spec > link-entity #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1878,22 +1878,22 @@ exports[`Power Automate List rows spec > link-entity #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -1929,7 +1929,7 @@ exports[`Power Automate List rows spec > link-entity #2 1`] = `
 exports[`Power Automate List rows spec > link-entity #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -1939,22 +1939,22 @@ exports[`Power Automate List rows spec > link-entity #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "2",
     },
     {
@@ -1995,7 +1995,7 @@ exports[`Power Automate List rows spec > link-entity #3 1`] = `
 exports[`Power Automate List rows spec > link-entity #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2005,22 +2005,22 @@ exports[`Power Automate List rows spec > link-entity #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "2",
     },
     {
@@ -2048,7 +2048,7 @@ exports[`Power Automate List rows spec > link-entity #4 1`] = `
 exports[`Power Automate List rows spec > operators #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2058,22 +2058,22 @@ exports[`Power Automate List rows spec > operators #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2103,7 +2103,7 @@ exports[`Power Automate List rows spec > operators #1 1`] = `
 exports[`Power Automate List rows spec > operators #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2113,22 +2113,22 @@ exports[`Power Automate List rows spec > operators #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2160,7 +2160,7 @@ exports[`Power Automate List rows spec > operators #2 1`] = `
 exports[`Power Automate List rows spec > operators #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2170,22 +2170,22 @@ exports[`Power Automate List rows spec > operators #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2215,7 +2215,7 @@ exports[`Power Automate List rows spec > operators #3 1`] = `
 exports[`Power Automate List rows spec > operators #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2225,22 +2225,22 @@ exports[`Power Automate List rows spec > operators #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2269,7 +2269,7 @@ exports[`Power Automate List rows spec > operators #4 1`] = `
 exports[`Power Automate List rows spec > operators #5 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2279,22 +2279,22 @@ exports[`Power Automate List rows spec > operators #5 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2324,7 +2324,7 @@ exports[`Power Automate List rows spec > operators #5 1`] = `
 exports[`Power Automate List rows spec > operators #6 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2334,22 +2334,22 @@ exports[`Power Automate List rows spec > operators #6 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2382,7 +2382,7 @@ exports[`Power Automate List rows spec > operators #6 1`] = `
 exports[`Power Automate List rows spec > optimize-performance #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2392,22 +2392,22 @@ exports[`Power Automate List rows spec > optimize-performance #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2462,7 +2462,7 @@ exports[`Power Automate List rows spec > optimize-performance #1 1`] = `
 exports[`Power Automate List rows spec > order-rows #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2472,22 +2472,22 @@ exports[`Power Automate List rows spec > order-rows #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2517,7 +2517,7 @@ exports[`Power Automate List rows spec > order-rows #1 1`] = `
 exports[`Power Automate List rows spec > order-rows #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2527,22 +2527,22 @@ exports[`Power Automate List rows spec > order-rows #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2569,7 +2569,7 @@ exports[`Power Automate List rows spec > order-rows #2 1`] = `
 exports[`Power Automate List rows spec > order-rows #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2579,22 +2579,22 @@ exports[`Power Automate List rows spec > order-rows #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2633,7 +2633,7 @@ exports[`Power Automate List rows spec > order-rows #3 1`] = `
 exports[`Power Automate List rows spec > order-rows #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2643,22 +2643,22 @@ exports[`Power Automate List rows spec > order-rows #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2698,7 +2698,7 @@ exports[`Power Automate List rows spec > order-rows #4 1`] = `
 exports[`Power Automate List rows spec > order-rows (fragment) #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2708,22 +2708,22 @@ exports[`Power Automate List rows spec > order-rows (fragment) #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2750,7 +2750,7 @@ exports[`Power Automate List rows spec > order-rows (fragment) #1 1`] = `
 exports[`Power Automate List rows spec > overview #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2760,22 +2760,22 @@ exports[`Power Automate List rows spec > overview #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "5",
     },
     {
@@ -2800,7 +2800,7 @@ exports[`Power Automate List rows spec > overview #1 1`] = `
 exports[`Power Automate List rows spec > page-results #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2810,22 +2810,22 @@ exports[`Power Automate List rows spec > page-results #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2852,7 +2852,7 @@ exports[`Power Automate List rows spec > page-results #1 1`] = `
 exports[`Power Automate List rows spec > page-results #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2862,22 +2862,22 @@ exports[`Power Automate List rows spec > page-results #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2904,7 +2904,7 @@ exports[`Power Automate List rows spec > page-results #2 1`] = `
 exports[`Power Automate List rows spec > page-results #3 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2914,22 +2914,22 @@ exports[`Power Automate List rows spec > page-results #3 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -2957,7 +2957,7 @@ exports[`Power Automate List rows spec > page-results #3 1`] = `
 exports[`Power Automate List rows spec > page-results #4 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -2967,22 +2967,22 @@ exports[`Power Automate List rows spec > page-results #4 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3010,7 +3010,7 @@ exports[`Power Automate List rows spec > page-results #4 1`] = `
 exports[`Power Automate List rows spec > page-results #5 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3020,22 +3020,22 @@ exports[`Power Automate List rows spec > page-results #5 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3063,7 +3063,7 @@ exports[`Power Automate List rows spec > page-results #5 1`] = `
 exports[`Power Automate List rows spec > page-results #6 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3073,22 +3073,22 @@ exports[`Power Automate List rows spec > page-results #6 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3116,7 +3116,7 @@ exports[`Power Automate List rows spec > page-results #6 1`] = `
 exports[`Power Automate List rows spec > query-antipatterns (fragment) #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3126,22 +3126,22 @@ exports[`Power Automate List rows spec > query-antipatterns (fragment) #1 1`] = 
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3168,7 +3168,7 @@ exports[`Power Automate List rows spec > query-antipatterns (fragment) #1 1`] = 
 exports[`Power Automate List rows spec > query-hierarchical-data #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3178,22 +3178,22 @@ exports[`Power Automate List rows spec > query-hierarchical-data #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3223,7 +3223,7 @@ exports[`Power Automate List rows spec > query-hierarchical-data #1 1`] = `
 exports[`Power Automate List rows spec > quick-find #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3233,22 +3233,22 @@ exports[`Power Automate List rows spec > quick-find #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3304,7 +3304,7 @@ exports[`Power Automate List rows spec > quick-find #1 1`] = `
 exports[`Power Automate List rows spec > select-columns #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3314,22 +3314,22 @@ exports[`Power Automate List rows spec > select-columns #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "3",
     },
     {
@@ -3357,7 +3357,7 @@ exports[`Power Automate List rows spec > select-columns #1 1`] = `
 exports[`Power Automate List rows spec > select-columns #2 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3367,22 +3367,22 @@ exports[`Power Automate List rows spec > select-columns #2 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -3410,7 +3410,7 @@ exports[`Power Automate List rows spec > select-columns #2 1`] = `
 exports[`Power Automate List rows spec > value (fragment) #1 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -3420,22 +3420,22 @@ exports[`Power Automate List rows spec > value (fragment) #1 1`] = `
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "",
     },
     {
@@ -10449,7 +10449,7 @@ $response.value"
 exports[`with the entity set name from metadata > Power Automate uses it as the table name 1`] = `
 {
   "actionName": "List rows",
-  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select Columns, Filter Rows, Sort By, Expand Query) empty when using FetchXML.",
+  "banner": "Open the "List rows" action → Show advanced options → paste the FetchXML into the "Fetch Xml Query" field. Leave the OData fields (Select columns, Filter rows, Sort by, Expand query) empty when using FetchXML.",
   "connector": "Microsoft Dataverse connector",
   "fields": [
     {
@@ -10459,22 +10459,22 @@ exports[`with the entity set name from metadata > Power Automate uses it as the 
     },
     {
       "hint": "Leave empty — FetchXML controls column selection",
-      "label": "Select Columns",
+      "label": "Select columns",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls filtering",
-      "label": "Filter Rows",
+      "label": "Filter rows",
       "value": "",
     },
     {
       "hint": "Leave empty — FetchXML controls ordering",
-      "label": "Sort By",
+      "label": "Sort by",
       "value": "",
     },
     {
       "hint": "Optional total rows cap (from the FetchXML top attribute; count is a page size, not a limit)",
-      "label": "Top Count",
+      "label": "Row count",
       "value": "5",
     },
     {
