@@ -158,6 +158,14 @@ describe("unavailable commands say why", () => {
 		expect(description(del)).toBe("Run the query first.");
 	});
 
+	it("Copy link reads as the style table says (#231), and asks for one row", async () => {
+		stubOverflowWidths({ container: 3000 });
+		await renderBar({ selectedCount: 0 });
+		const copyLink = onBar("Copy record link");
+		expect(copyLink?.textContent?.trim()).toBe("Copy link");
+		expect(description(copyLink)).toBe("Select a row to copy its link");
+	});
+
 	it("Open asks for exactly one row", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar({ selectedCount: 2 });
