@@ -9,6 +9,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { NotifyProvider } from "../feedback/NotifyProvider";
+import { expect } from "vitest";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -299,6 +300,35 @@ export function isDisabled(element: HTMLElement | undefined): boolean {
 	return (
 		(element as HTMLButtonElement).disabled || element.getAttribute("aria-disabled") === "true"
 	);
+}
+
+/** The text of what describes an element (aria-describedby): a description Tooltip's content */
+export function describedBy(element: Element | null | undefined): string | undefined {
+	const ids = element?.getAttribute("aria-describedby");
+	if (!ids) return undefined;
+	return ids
+		.split(/\s+/)
+		.map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
+		.filter(Boolean)
+		.join(" ");
+}
+
+/**
+ * A control that can't be used and says why (#279): aria-disabled but not natively disabled, so it
+ * still takes focus, and described by its reason (WithReason's Tooltip).
+ */
+export function expectDisabledWithReason(
+	element: HTMLElement | null | undefined,
+	reason: string | RegExp,
+): void {
+	if (!element) throw new Error("expectDisabledWithReason: element not found");
+	expect(element.getAttribute("aria-disabled"), "aria-disabled").toBe("true");
+	expect(element.hasAttribute("disabled"), "natively disabled").toBe(false);
+	element.focus();
+	expect(document.activeElement, "takes focus").toBe(element);
+	const text = describedBy(element);
+	if (typeof reason === "string") expect(text, "reason").toBe(reason);
+	else expect(text, "reason").toMatch(reason);
 }
 
 /** The first text input in the open dialog */

@@ -328,6 +328,8 @@ export function AttributeEditor({
 					label="Role"
 					required
 					validation={roleValidation}
+					// Why Group by or Aggregate can't be chosen (#279); a validation message takes its place
+					hint={!canGroup || !canAggregate ? caps?.reason : undefined}
 					info={
 						<Info
 							text="Group by makes a group per distinct value. Aggregate calculates a value for each group."

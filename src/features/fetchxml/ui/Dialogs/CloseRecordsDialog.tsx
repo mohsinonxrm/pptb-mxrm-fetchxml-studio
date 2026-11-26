@@ -55,6 +55,9 @@ import {
 } from "../../model/closeActions";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
+import { withReason } from "../../../../shared/components/WithReason";
+import { useTargetConfirmation } from "../../../../shared/hooks/useTargetConfirmation";
+import { useFocusWhen } from "../../../../shared/hooks/useFocusWhen";
 
 const useStyles = makeStyles({
 	surface: {
@@ -143,7 +146,12 @@ export function CloseRecordsDialog({
 	const [progress, setProgress] = useState<BatchDeleteProgress | null>(null);
 	const [result, setResult] = useState<BatchDeleteResult | null>(null);
 	// Type-to-confirm for Production or more than 100 records (#69)
-	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && (phase === "loading" || phase === "confirm"));
+	// Focus follows the buttons: the running Cancel, then Close (#279)
+	const runningRef = useFocusWhen(phase === "running");
+	const closeRef = useFocusWhen(phase === "done" || phase === "error");
 
 	// Values
 	const [status, setStatus] = useState<number | undefined>();
@@ -246,7 +254,6 @@ export function CloseRecordsDialog({
 		[status, revenue, date, description, competitor, resolution, billable],
 	);
 	const errors = action && values ? validateCloseValues(action, values) : {};
-	const valid = !!values && Object.keys(errors).length === 0;
 
 	const handleRun = useCallback(async () => {
 		if (!values || !action) return;
@@ -505,7 +512,7 @@ export function CloseRecordsDialog({
 							entityLogicalName={entityLogicalName}
 							entityDisplayName={entityDisplayName}
 							scope={{ kind: "records", count }}
-							onConfirmationChange={setScopeConfirmed}
+							onConfirmationChange={scope.onConfirmationChange}
 						/>
 						{/* The way back (#69): Activate reopens closed opportunities, cases and orders (verified,
 						    see CLOSE_MESSAGE_ENTITIES); it doesn't apply to quotes */}
@@ -598,34 +605,47 @@ export function CloseRecordsDialog({
 		}
 	};
 
+	/** Why the action can't run yet (#279): the first field to fix, then the confirmation */
+	const runReason =
+		phase !== "confirm"
+			? "Reading the status options..."
+			: !values
+				? `Choose a ${statusLabel.charAt(0).toLowerCase()}${statusLabel.slice(1)}`
+				: (Object.values(errors).find(Boolean) ?? scope.reason);
+
 	const renderActions = () => {
 		switch (phase) {
 			case "loading":
 			case "confirm":
 				return (
 					<>
-						<Button appearance="secondary" onClick={handleClose}>
+						{/* The safe action is focused first (owner, #279) */}
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button
-							appearance="primary"
-							onClick={handleRun}
-							disabled={phase !== "confirm" || !valid || !scopeConfirmed}
-						>
-							{action.label}
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={handleRun}
+								disabledFocusable={!!runReason || !scope.confirmed}
+							>
+								{action.label}
+							</Button>,
+							runReason,
+						)}
 					</>
 				);
 			case "running":
-				return (
-					<Button appearance="secondary" disabled>
+				return withReason(
+					<Button ref={runningRef} appearance="secondary" disabledFocusable>
 						Cancel
-					</Button>
+					</Button>,
+					"Wait for the change to finish",
 				);
 			case "done":
 			case "error":
 				return (
-					<Button appearance="primary" onClick={handleClose}>
+					<Button ref={closeRef} appearance="primary" onClick={handleClose}>
 						Close
 					</Button>
 				);

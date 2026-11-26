@@ -47,7 +47,13 @@ import { MetadataLoadWarning } from "../MetadataLoadWarning";
 import { findingFor, worst } from "../ruleFindings";
 import { convertWildcardValue, isWildcardOperator } from "../../../../model/wildcards";
 import { isGuid } from "../../../../api/recordSearch";
-import { ValueOfPicker } from "./ValueOfPicker";
+import { ValueOfPicker, type ValueOfTypeStatus } from "./ValueOfPicker";
+
+/**
+ * Types Dataverse is known not to compare with another attribute (#279): multi-select choices run
+ * eq / ne on their stored text, not the choices, and gt..le fail (attributeCapabilities.ts)
+ */
+const NOT_COMPARABLE_TYPES = new Set(["MultiSelectPicklist"]);
 import { WildcardValueField } from "./WildcardValueField";
 import { HierarchyValueField } from "./HierarchyValueField";
 
@@ -94,6 +100,8 @@ export function ConditionEditor({
 }: ConditionEditorProps) {
 	const styles = useEditorStyles();
 	const [selectedAttribute, setSelectedAttribute] = useState<AttributeMetadata | null>(null);
+	// Which attribute's metadata has been read (found or not), so loading is told apart from failing
+	const [attributeReadFor, setAttributeReadFor] = useState<string | null>(null);
 
 	const linkEntityReferences = useMemo(
 		() => collectLinkEntityReferences(fetchQuery),
@@ -164,11 +172,13 @@ export function ConditionEditor({
 				}
 				if (cancelled) return;
 				setSelectedAttribute(detailed ?? null);
+				setAttributeReadFor(`${effectiveEntityName}|${node.attribute}`);
 			})
 			.catch((error) => {
 				console.error("Failed to load attribute metadata for operator filtering:", error);
 				if (cancelled) return;
 				setSelectedAttribute(null);
+				setAttributeReadFor(`${effectiveEntityName}|${node.attribute}`);
 			});
 		return () => {
 			cancelled = true;
@@ -189,6 +199,20 @@ export function ConditionEditor({
 	const operatorComparesAttributes = VALUEOF_OPERATORS.has(node.operator);
 	// Only type pairs verified to work are offered (getValueOfCompatibleTypes)
 	const canCompareToAttribute = operatorComparesAttributes && compatibleTypes.length > 0;
+	// What's known about the type, for Compare to › Another attribute (#279)
+	const attributeTypeLabel =
+		selectedAttribute?.AttributeTypeName?.Value?.replace(/Type$/, "") ??
+		selectedAttribute?.AttributeType;
+	const valueofTypeStatus: ValueOfTypeStatus =
+		attributeReadFor !== `${effectiveEntityName}|${node.attribute}`
+			? "loading"
+			: !selectedAttribute?.AttributeType
+				? "unknown"
+				: compatibleTypes.length > 0
+					? "ok"
+					: NOT_COMPARABLE_TYPES.has(selectedAttribute.AttributeType)
+						? "incomparable"
+						: "unverified";
 	const valueofFinding = findingFor(findings, "valueof");
 	// Query Advisor advice on the value (leading wildcards, #97); value-shape findings are shown inline
 	const valueAdvice = findingFor(
@@ -636,6 +660,8 @@ export function ConditionEditor({
 							sameAlias={isInRootFilter ? node.entityname : valueofScope?.selfAlias}
 							valueof={node.valueof ?? ""}
 							compatibleTypes={compatibleTypes}
+							typeStatus={valueofTypeStatus}
+							typeLabel={attributeTypeLabel}
 							onChange={(valueof) => onUpdate({ valueof: valueof ?? "" })}
 						/>
 					) : usesWildcardField ? (

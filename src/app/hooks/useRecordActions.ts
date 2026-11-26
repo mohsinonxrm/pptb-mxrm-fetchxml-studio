@@ -106,16 +106,25 @@ export interface RecordActionAvailability {
  * (#143, #149, #179). Checked again when the entity changes; a check for an earlier entity that
  * finishes last is dropped.
  */
+/** Before a check has finished for the entity: nothing is allowed (#179) */
+const NO_PRIVILEGES: RecordActionPrivileges = {
+	canDelete: false,
+	canBulkDelete: false,
+	canRunWorkflow: false,
+	privilegesChecked: false,
+};
+
 export function useRecordActionAvailability(
 	entityLogicalName: string | undefined,
 ): RecordActionAvailability {
-	// Record action privileges state
-	const [recordActionPrivileges, setRecordActionPrivileges] = useState<RecordActionPrivileges>({
-		canDelete: false,
-		canBulkDelete: false,
-		canRunWorkflow: false,
-		privilegesChecked: false,
-	});
+	// Record action privileges, keyed by the entity they were checked for (#391): on the render right
+	// after the entity changes, before the effect below runs, the previous entity's must not count
+	const [privilegeCheck, setPrivilegeCheck] = useState<{
+		entity?: string;
+		privileges: RecordActionPrivileges;
+	}>({ privileges: NO_PRIVILEGES });
+	const recordActionPrivileges =
+		privilegeCheck.entity === entityLogicalName ? privilegeCheck.privileges : NO_PRIVILEGES;
 
 	// Why Activate / Deactivate are off for the root entity, per action (#143)
 	const [stateActionReasons, setStateActionReasons] = useState<{
@@ -136,13 +145,7 @@ export function useRecordActionAvailability(
 	// Check record action privileges when entity changes
 	useEffect(() => {
 		// Until this entity's checks finish, nothing is allowed: keeping the previous entity's
-		// privileges would enable Delete where it isn't allowed, or the other way round (#179)
-		setRecordActionPrivileges({
-			canDelete: false,
-			canBulkDelete: false,
-			canRunWorkflow: false,
-			privilegesChecked: false,
-		});
+		// privileges would enable Delete where it isn't allowed, or the other way round (#179, #391)
 		if (!entityLogicalName || !isDataverseAvailable()) return;
 
 		// A check for an entity that's no longer selected can finish last; its result is dropped (#179)
@@ -157,11 +160,14 @@ export function useRecordActionAvailability(
 				]);
 				if (cancelled) return;
 
-				setRecordActionPrivileges({
-					canDelete,
-					canBulkDelete,
-					canRunWorkflow,
-					privilegesChecked: true,
+				setPrivilegeCheck({
+					entity: entityLogicalName,
+					privileges: {
+						canDelete,
+						canBulkDelete,
+						canRunWorkflow,
+						privilegesChecked: true,
+					},
 				});
 
 				debugLog("app", `🔐 Record action privileges for ${entityLogicalName}:`, {
@@ -172,11 +178,9 @@ export function useRecordActionAvailability(
 			} catch (error) {
 				if (cancelled) return;
 				console.error("Failed to check record action privileges:", error);
-				setRecordActionPrivileges({
-					canDelete: false,
-					canBulkDelete: false,
-					canRunWorkflow: false,
-					privilegesChecked: true,
+				setPrivilegeCheck({
+					entity: entityLogicalName,
+					privileges: { ...NO_PRIVILEGES, privilegesChecked: true },
 				});
 			}
 		};

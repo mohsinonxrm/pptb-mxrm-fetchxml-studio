@@ -37,6 +37,7 @@ import {
 	type AdvisoryLevel,
 } from "../../model/advisories";
 import type { NodeId } from "../../model/nodes";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const useStyles = makeStyles({
 	// Flat on the tab (#233), like the other tabs
@@ -164,16 +165,19 @@ function AdvisoryRow({ a, props }: { a: Advisory; props: AdvisoriesPanelProps })
 				</Text>
 			</Tooltip>
 		);
-	const fixButton = a.fix && (
-		<Button
-			size="small"
-			icon={<Wrench16Regular />}
-			disabled={!inTree || !onFix}
-			onClick={() => onFix?.(a)}
-		>
-			Add {a.fix.attribute} as the last order
-		</Button>
-	);
+	const fixButton =
+		a.fix &&
+		withReason(
+			<Button
+				size="small"
+				icon={<Wrench16Regular />}
+				disabledFocusable={!inTree}
+				onClick={() => onFix?.(a)}
+			>
+				Add {a.fix.attribute} as the last order
+			</Button>,
+			!inTree && NOT_IN_TREE,
+		);
 	return (
 		<div
 			className={mergeClasses(

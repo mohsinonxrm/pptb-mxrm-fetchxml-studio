@@ -16,6 +16,7 @@ import {
 	deferred,
 	dialogInput,
 	dialogText,
+	expectDisabledWithReason,
 	flush,
 	installHost,
 	isDisabled,
@@ -259,5 +260,170 @@ describe("Run workflow dialog", () => {
 		expect(isDisabled(button("Run workflow"))).toBe(true);
 		await typeInto(dialogInput(), "contact");
 		expect(isDisabled(button("Run workflow"))).toBe(false);
+	});
+});
+
+/** The focused element's text, for "focus is on Cancel" */
+const focused = () => (document.activeElement?.textContent ?? "").trim();
+
+describe("the buttons say why, and focus stays in the dialog (#279)", () => {
+	it("Delete: Cancel first; Delete says what's missing; focus moves to the running Cancel, then Close", async () => {
+		installHost();
+		const run = deferred<void>();
+		await render(
+			createElement(
+				DeleteConfirmDialog,
+				deleteProps({ recordCount: 101, onConfirm: () => run.promise }),
+			),
+		);
+		await flush();
+		expect(focused()).toBe("Cancel");
+		expectDisabledWithReason(button("Delete"), "Type contact to confirm");
+		await typeInto(dialogInput(), "contact");
+		await click(button("Delete"));
+		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
+		expectDisabledWithReason(button("Cancel"), "Wait for the delete to finish");
+		run.resolve();
+		await flush();
+		expect(focused()).toBe("Close");
+	});
+
+	it("Bulk delete: the job name, then the I understand box, then the typed name", async () => {
+		installHost();
+		await render(
+			createElement(BulkDeleteDialog, {
+				open: true,
+				recordCount: 0,
+				entityDisplayName: "Contact",
+				entityLogicalName: "contact",
+				isAllRecords: true,
+				onClose: () => {},
+				onConfirm: async () => ({ asyncOperationId: "job", jobUrl: "" }),
+			}),
+		);
+		await flush();
+		expect(focused()).toBe("Cancel");
+		const submit = () => button("Submit bulk delete");
+		const jobName = [
+			...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input'),
+		].find((i) => i.placeholder.startsWith("Enter a name"));
+		await typeInto(jobName, "");
+		expectDisabledWithReason(submit(), "Enter a job name");
+		await typeInto(jobName, "FXS TEST job");
+		expectDisabledWithReason(submit(), "Confirm that this deletes all records");
+		const understand = [
+			...document.querySelectorAll<HTMLInputElement>(
+				'[role="dialog"] input[type="checkbox"]',
+			),
+		].find((c) => /I understand/.test(c.closest("label, div")?.textContent ?? ""));
+		await click(understand);
+		expectDisabledWithReason(submit(), "Type contact to confirm");
+	});
+
+	it("Bulk delete: focus moves to the running Cancel while the job is sent, then Close", async () => {
+		installHost();
+		const send = deferred<{ asyncOperationId: string; jobUrl: string }>();
+		await render(
+			createElement(BulkDeleteDialog, {
+				open: true,
+				recordCount: 3,
+				entityDisplayName: "Contact",
+				entityLogicalName: "contact",
+				onClose: () => {},
+				onConfirm: () => send.promise,
+			}),
+		);
+		await flush();
+		await click(button("Submit bulk delete"));
+		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
+		expectDisabledWithReason(button("Cancel"), "Wait for the job to be submitted");
+		send.resolve({ asyncOperationId: "job", jobUrl: "" });
+		await flush();
+		expect(focused()).toBe("Close");
+	});
+
+	it("Run workflow: Cancel first; it asks for a workflow", async () => {
+		installHost();
+		await render(createElement(WorkflowPickerDialog, workflowProps()));
+		await flush();
+		expect(focused()).toBe("Cancel");
+		expectDisabledWithReason(button("Run workflow"), "Choose a workflow");
+	});
+
+	it("Run workflow: says while loading, and when there's nothing to run", async () => {
+		installHost();
+		const list = deferred<WorkflowInfo[]>();
+		await render(
+			createElement(
+				WorkflowPickerDialog,
+				workflowProps({ onFetchWorkflows: () => list.promise }),
+			),
+		);
+		expectDisabledWithReason(button("Run workflow"), "Loading available workflows...");
+		list.resolve([]);
+		await flush();
+		expectDisabledWithReason(button("Run workflow"), "There are no workflows to run");
+	});
+
+	it("Run workflow: focus moves to Running..., then Close", async () => {
+		installHost();
+		const run = deferred<{ succeeded: number; failed: number; errors: string[] }>();
+		await render(
+			createElement(
+				WorkflowPickerDialog,
+				workflowProps({
+					preSelectedWorkflow: workflow("w1", "Reset Security Stamp"),
+					onExecute: () => run.promise,
+				}),
+			),
+		);
+		await flush();
+		await click(button("Run workflow"));
+		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Running...");
+		expectDisabledWithReason(button("Running..."), "Wait for the workflow to finish");
+		run.resolve({ succeeded: 1, failed: 0, errors: [] });
+		await flush();
+		expect(focused()).toBe("Close");
+	});
+});
+
+describe("while the connection is read (#279)", () => {
+	it("Delete says it's reading the connection", async () => {
+		installHost();
+		const pending = deferred<null>();
+		(
+			window as unknown as {
+				toolboxAPI: { connections: { getConnection: () => Promise<null> } };
+			}
+		).toolboxAPI.connections.getConnection = () => pending.promise;
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		pending.resolve(null);
+		await flush();
+		expect(isDisabled(button("Delete"))).toBe(false);
+	});
+});
+
+describe("a record dialog that opens again (#279 review)", () => {
+	it("isn't confirmed from last time: it reads the connection again first", async () => {
+		installHost();
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		await flush();
+		expect(isDisabled(button("Delete"))).toBe(false);
+		await render(createElement(DeleteConfirmDialog, deleteProps({ open: false })));
+		await flush();
+		const pending = deferred<null>();
+		(
+			window as unknown as {
+				toolboxAPI: { connections: { getConnection: () => Promise<null> } };
+			}
+		).toolboxAPI.connections.getConnection = () => pending.promise;
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		pending.resolve(null);
+		await flush();
 	});
 });

@@ -104,6 +104,7 @@ import {
 } from "./copyResults";
 import { debugLog } from "../../../../shared/utils/debug";
 import { useCopy } from "../../../../shared/feedback/useCopy";
+import { withReason } from "../../../../shared/components/WithReason";
 
 /** Sort change event data passed to parent */
 export interface SortChangeData {
@@ -1702,12 +1703,16 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							<MenuItem onClick={() => copyRecords([cellMenuContent.item], "shown")}>
 								Copy row
 							</MenuItem>
-							<MenuItem
-								disabled={selectedItems.size === 0}
-								onClick={() => copyRecords(selectedRecords(), "shown")}
-							>
-								Copy selected rows ({selectedItems.size})
-							</MenuItem>
+							{withReason(
+								<MenuItem
+									disabled={selectedItems.size === 0}
+									onClick={() => copyRecords(selectedRecords(), "shown")}
+								>
+									Copy selected rows ({selectedItems.size})
+								</MenuItem>,
+								selectedItems.size === 0 && "Select rows to copy them",
+								"after",
+							)}
 							<MenuItem
 								onClick={() =>
 									void copy(
@@ -1808,13 +1813,16 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 							</Text>
 							<div className={styles.filterActions}>
 								<Button onClick={() => setFilterFor(null)}>Cancel</Button>
-								<Button
-									appearance="primary"
-									disabled={!hasRequiredValue(draftCondition)}
-									onClick={applyFilter}
-								>
-									Apply
-								</Button>
+								{withReason(
+									<Button
+										appearance="primary"
+										disabledFocusable={!hasRequiredValue(draftCondition)}
+										onClick={applyFilter}
+									>
+										Apply
+									</Button>,
+									!hasRequiredValue(draftCondition) && "Enter a value",
+								)}
 							</div>
 						</>
 					)}

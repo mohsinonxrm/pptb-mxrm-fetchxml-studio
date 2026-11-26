@@ -33,6 +33,7 @@ import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import type { AttributeMetadata, RelationshipMetadata } from "../../api/pptbClient";
 import { metadataCache } from "../../state/cache";
 import { relationshipKey } from "../../model/manyToMany";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const useStyles = makeStyles({
 	drawer: {
@@ -989,13 +990,16 @@ export function AddColumnsPanel({
 					<Button appearance="secondary" onClick={onClose}>
 						Close
 					</Button>
-					<Button
-						appearance="primary"
-						onClick={handleApply}
-						disabled={totalSelected === 0}
-					>
-						Add
-					</Button>
+					{withReason(
+						<Button
+							appearance="primary"
+							onClick={handleApply}
+							disabledFocusable={totalSelected === 0}
+						>
+							Add
+						</Button>,
+						totalSelected === 0 && "Select columns to add",
+					)}
 				</div>
 			</DrawerBody>
 		</OverlayDrawer>

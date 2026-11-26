@@ -65,6 +65,9 @@ import {
 } from "@fluentui/react-components";
 import { MoreHorizontal20Filled, MoreHorizontal20Regular, bundleIcon } from "@fluentui/react-icons";
 import type { BarCommand } from "./types";
+import { withReason } from "../WithReason";
+import { StableTooltip } from "../StableTooltip";
+import { useOverflowContext } from "@fluentui/react-overflow";
 
 const MoreIcon = bundleIcon(MoreHorizontal20Filled, MoreHorizontal20Regular);
 
@@ -289,13 +292,9 @@ const PopoverControl = forwardRef<
 			}
 		>
 			<PopoverTrigger disableButtonEnhancement>
-				{tooltip ? (
-					<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-						{button}
-					</Tooltip>
-				) : (
-					button
-				)}
+				<StableTooltip content={tooltip?.content} relationship={tooltip?.relationship}>
+					{button}
+				</StableTooltip>
 			</PopoverTrigger>
 			<PopoverSurface aria-label={c.label} className={styles.popoverSurface}>
 				{c.popover}
@@ -319,14 +318,13 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 	const tooltip = barTooltip(c);
 	const children = c.iconOnly ? undefined : c.label;
 	const appearance = c.appearance ?? "subtle";
-	const withTooltip = (element: ReactElement) =>
-		tooltip ? (
-			<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-				{element}
-			</Tooltip>
-		) : (
-			element
-		);
+	// Always the same wrapper, so a command keeps its element when it gains or loses a hint or a
+	// reason: a dialog it opened returns focus to it (#393)
+	const withTooltip = (element: ReactElement) => (
+		<StableTooltip content={tooltip?.content} relationship={tooltip?.relationship}>
+			{element}
+		</StableTooltip>
+	);
 	const common = { icon, className, disabledFocusable: off, ...restoreFocus, ...barNameOf(c) };
 
 	if (c.kind === "popover") {
@@ -380,15 +378,14 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 		return (
 			<Menu onOpenChange={menuOpenChange(c)}>
 				<MenuTrigger disableButtonEnhancement>
-					{(menuButton: MenuButtonProps) =>
-						tooltip ? (
-							<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-								{(primary) => split(menuButton, primary as Record<string, unknown>)}
-							</Tooltip>
-						) : (
-							split(menuButton)
-						)
-					}
+					{(menuButton: MenuButtonProps) => (
+						<StableTooltip
+							content={tooltip?.content}
+							relationship={tooltip?.relationship}
+						>
+							{(primary) => split(menuButton, primary as Record<string, unknown>)}
+						</StableTooltip>
+					)}
 				</MenuTrigger>
 				<MenuPopover>{c.menu}</MenuPopover>
 			</Menu>
@@ -442,15 +439,15 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 });
 
 /**
- * The tree shape a command renders: a change here swaps the element under OverflowItem (a Tooltip
- * added or removed, Button for ToolbarButton, radio for toggle). Fluent's OverflowItem registers its
+ * The tree shape a command renders: a change here swaps the element under OverflowItem (Button for
+ * ToolbarButton, radio for toggle). A Tooltip is always there (StableTooltip, #393), so gaining or
+ * losing a hint or a reason isn't a new shape. Fluent's OverflowItem registers its
  * element only when id, priority, groupId or pinned change, so it would keep measuring the old,
  * detached element. Keying the OverflowItem by shape remounts it, and it registers the new one.
  */
 const shapeOf = (command: BarCommand) =>
 	[
 		command.kind,
-		barTooltip(command) ? "tip" : "",
 		command.kind === "button" && command.appearance === "secondary" ? "secondary" : "",
 		command.radioName ? "radio" : "",
 	].join(".");
@@ -490,6 +487,24 @@ function GroupPrimer({ groups }: { groups: string[] }) {
 	));
 }
 
+/**
+ * Lays the bar out again when a command's text changes (#393 review). Fluent's overflow manager
+ * only watches the container's size; a command used to be remounted (and so measured again) when
+ * its tooltip came or went, and now keeps its element, so "Delete" becoming "Delete all" needs this.
+ */
+function RelayoutOnChange({ signature }: { signature: string }) {
+	const updateOverflow = useOverflowContext((context) => context.updateOverflow);
+	const first = useRef(true);
+	useEffect(() => {
+		if (first.current) {
+			first.current = false;
+			return;
+		}
+		updateOverflow();
+	}, [signature, updateOverflow]);
+	return null;
+}
+
 /** A split's menu with its primary action first */
 function splitMenu(command: BarCommand, icon: ReactElement | undefined): ReactElement {
 	const primary = (
@@ -512,20 +527,13 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 	const off = isOff(c);
 	const icon = iconOf(c);
 	const className = c.danger && !off ? styles.danger : undefined;
-	const withReason = (element: ReactElement) =>
-		c.disabledReason ? (
-			<Tooltip content={c.disabledReason} relationship="description" positioning="after">
-				{element}
-			</Tooltip>
-		) : (
-			element
-		);
+	const reasoned = (element: ReactElement) => withReason(element, c.disabledReason, "after");
 
 	if (c.kind === "menu" || c.kind === "split") {
 		return (
 			<Menu onOpenChange={menuOpenChange(c)}>
 				<MenuTrigger disableButtonEnhancement>
-					{withReason(
+					{reasoned(
 						<MenuItem icon={icon} className={className} disabled={off} {...nameOf(c)}>
 							{c.label}
 						</MenuItem>,
@@ -540,7 +548,7 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 		);
 	}
 	if (c.kind === "toggle") {
-		return withReason(
+		return reasoned(
 			c.radioName ? (
 				<MenuItemRadio
 					name={checkedNameOf(c)}
@@ -568,7 +576,7 @@ function MoreEntry({ command: c }: { command: BarCommand }) {
 	// the focus it moves into itself
 	const onClick =
 		c.kind === "popover" ? () => setTimeout(() => c.onPopoverOpenChange?.(true), 0) : c.onClick;
-	return withReason(
+	return reasoned(
 		<MenuItem
 			icon={icon}
 			className={className}
@@ -709,8 +717,9 @@ export function OverflowToolbar({
 		else pendingFocus.current = true;
 	};
 
-	// A command whose shape changed (see shapeOf) is a new element: if the old one had focus, give
-	// focus to the new one rather than leave it on the body
+	// A command whose shape changed (see shapeOf: its kind, a secondary appearance, a radio) is a new
+	// element: if the old one had focus, give focus to the new one rather than leave it on the body. A
+	// fallback: no bar changes those while a command shows today (a tooltip no longer does, #393)
 	useLayoutEffect(() => {
 		const focused = lastFocused.current;
 		if (!focused?.id || focused.element.isConnected) return;
@@ -780,6 +789,11 @@ export function OverflowToolbar({
 					}}
 				>
 					<GroupPrimer groups={[...known.current.groups]} />
+					<RelayoutOnChange
+						signature={commands
+							.map((c) => `${c.id}:${c.label}:${!!c.iconOnly}:${!!c.busy}`)
+							.join("|")}
+					/>
 					<MoreAnchorContext.Provider value={moreRef}>
 						{barCommands.map((c, i) => (
 							<Fragment key={c.id}>

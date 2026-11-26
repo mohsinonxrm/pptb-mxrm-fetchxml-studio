@@ -29,6 +29,9 @@ import { throttleWaitMessage } from "../../api/throttleRetry";
 import { formatDataverseError } from "../../api/dataverseErrors";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
+import { withReason } from "../../../../shared/components/WithReason";
+import { useTargetConfirmation } from "../../../../shared/hooks/useTargetConfirmation";
+import { useFocusWhen } from "../../../../shared/hooks/useFocusWhen";
 
 const useStyles = makeStyles({
 	content: {
@@ -142,7 +145,12 @@ export function WorkflowPickerDialog({
 	const [error, setError] = useState<string | null>(null);
 	const [progress, setProgress] = useState<WorkflowBatchProgress | null>(null);
 	// Type-to-confirm for Production or more than 100 records (#69)
-	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && (state === "loading" || state === "select"));
+	// Focus follows the buttons: the running one, then Close (#279)
+	const runningRef = useFocusWhen(state === "executing");
+	const closeRef = useFocusWhen(state === "complete" || state === "error");
 	const [result, setResult] = useState<{
 		succeeded: number;
 		failed: number;
@@ -290,7 +298,7 @@ export function WorkflowPickerDialog({
 							entityLogicalName={entityLogicalName}
 							entityDisplayName={entityDisplayName}
 							scope={{ kind: "records", count: recordCount }}
-							onConfirmationChange={setScopeConfirmed}
+							onConfirmationChange={scope.onConfirmationChange}
 						/>
 						<UndoNote undo="none">
 							There's no undo: whatever the workflow changes stays changed.
@@ -431,45 +439,52 @@ export function WorkflowPickerDialog({
 		}
 	};
 
+	/** Why Run workflow can't be pressed yet (#279) */
+	const runReason =
+		state === "loading"
+			? "Loading available workflows..."
+			: workflows.length === 0
+				? "There are no workflows to run"
+				: !selectedWorkflowId
+					? "Choose a workflow"
+					: scope.reason;
+
 	const renderActions = () => {
 		switch (state) {
 			case "loading":
-				return (
-					<Button appearance="secondary" onClick={handleClose}>
-						Cancel
-					</Button>
-				);
-
 			case "select":
 				return (
 					<>
-						<Button appearance="secondary" onClick={handleClose}>
+						{/* The safe action is focused first (owner, #279); the same buttons while loading */}
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button
-							appearance="primary"
-							icon={<Play20Regular />}
-							onClick={handleExecute}
-							disabled={
-								!selectedWorkflowId || workflows.length === 0 || !scopeConfirmed
-							}
-						>
-							Run workflow
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								icon={<Play20Regular />}
+								onClick={handleExecute}
+								disabledFocusable={!!runReason || !scope.confirmed}
+							>
+								Run workflow
+							</Button>,
+							runReason,
+						)}
 					</>
 				);
 
 			case "executing":
-				return (
-					<Button appearance="secondary" disabled>
+				return withReason(
+					<Button ref={runningRef} appearance="secondary" disabledFocusable>
 						Running...
-					</Button>
+					</Button>,
+					"Wait for the workflow to finish",
 				);
 
 			case "complete":
 			case "error":
 				return (
-					<Button appearance="primary" onClick={handleClose}>
+					<Button ref={closeRef} appearance="primary" onClick={handleClose}>
 						Close
 					</Button>
 				);

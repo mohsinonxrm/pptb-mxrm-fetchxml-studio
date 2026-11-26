@@ -30,6 +30,8 @@ import {
 	type TargetScopeKind,
 } from "./targetScopeRules";
 
+import { READING_CONNECTION } from "../hooks/useTargetConfirmation";
+
 const useStyles = makeStyles({
 	root: {
 		display: "flex",
@@ -72,9 +74,10 @@ export interface TargetScopeProps {
 	scope: TargetScopeKind;
 	/**
 	 * Enables the type-to-confirm rule (requiresTypedConfirmation): called with whether the action
-	 * may run. False while the connection is being read. Omit to never ask.
+	 * may run, and why not (#279: the primary button's reason). False while the connection is being
+	 * read. Omit to never ask.
 	 */
-	onConfirmationChange?: (confirmed: boolean) => void;
+	onConfirmationChange?: (confirmed: boolean, reason?: string) => void;
 	disabled?: boolean;
 }
 
@@ -118,9 +121,19 @@ export function TargetScope({
 	const confirmed =
 		state.status === "ready" && (!askToType || isTypedConfirmation(typed, expected));
 
+	const reason = confirmed
+		? undefined
+		: state.status === "loading"
+			? READING_CONNECTION
+			: `Type ${expected} to confirm`;
 	useEffect(() => {
-		onConfirmationChange?.(confirmed);
-	}, [confirmed, onConfirmationChange]);
+		onConfirmationChange?.(confirmed, reason);
+	}, [confirmed, reason, onConfirmationChange]);
+	// Gone (the dialog closed): a dialog that opens again isn't confirmed until it reads again (#279)
+	useEffect(
+		() => () => onConfirmationChange?.(false, READING_CONNECTION),
+		[onConfirmationChange],
+	);
 
 	return (
 		<div className={styles.root}>
@@ -136,7 +149,7 @@ export function TargetScope({
 				<Text className={styles.label}>Environment</Text>
 				<div className={styles.value}>
 					{state.status === "loading" ? (
-						<Text>Reading the connection...</Text>
+						<Text>{READING_CONNECTION}</Text>
 					) : connection ? (
 						<>
 							<Text weight="semibold">{connection.name}</Text>

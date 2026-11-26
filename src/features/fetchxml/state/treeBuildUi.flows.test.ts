@@ -13,7 +13,15 @@ import { generateFetchXml } from "../model/fetchxml";
 import { metadataCache } from "../state/cache";
 import { clearMetadataCache } from "../api/dataverseMetadata";
 import type { EntityMetadata, RelationshipMetadata } from "../api/pptbClient";
-import { cleanup, click, flush, installHost, removeHost, render } from "../../../shared/testing/ui";
+import {
+	cleanup,
+	click,
+	expectDisabledWithReason,
+	flush,
+	installHost,
+	removeHost,
+	render,
+} from "../../../shared/testing/ui";
 
 afterEach(() => {
 	cleanup();
@@ -329,11 +337,28 @@ describe("UI: the Add menus of link-entities inside filters", { timeout: 30_000 
 			["All attributes", "Select attributes…", "Blank attribute", "Order by"].map(disabled),
 		).toEqual([true, true, true, true]);
 		expect([disabled("Filter"), disabled("Link-entity")]).toEqual([false, false]);
+		// Each says why, and stays focusable (#279)
+		expectDisabledWithReason(
+			anyMenu.get("Order by"),
+			'This "any" link returns no attributes, so it can\x27t have attributes or sorts',
+		);
 		await click(anyMenu.get("Link-entity"));
 		// The nested link-entity is joined (inner), so the menu offers attributes: what Dataverse does
 		// with them inside an any link-entity is a live check (see the report)
 		const nestedMenu = await contextMenu(selectedId());
 		expect(nestedMenu.get("Blank attribute")?.getAttribute("aria-disabled")).not.toBe("true");
+	});
+
+	it("an entity that has a filter offers no second one, and says why (#279)", async () => {
+		await startUi("account");
+		const root = builder!.fetchQuery!.entity.id;
+		await chooseFromContextMenu(root, "Filter");
+		const menu = await contextMenu(root);
+		expectDisabledWithReason(
+			menu.get("Filter"),
+			"This entity already has a filter. Add conditions to it, or add a sub-filter",
+		);
+		expect(menu.get("Order by")?.getAttribute("aria-disabled")).not.toBe("true");
 	});
 
 	it("the link type dropdown of a filter link-entity offers only any / not any / all / not all", async () => {

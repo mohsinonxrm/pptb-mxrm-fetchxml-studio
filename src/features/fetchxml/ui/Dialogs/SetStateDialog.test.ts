@@ -12,6 +12,7 @@ import {
 	deferred,
 	dialogInput,
 	dialogText,
+	expectDisabledWithReason,
 	flush,
 	installHost,
 	isDisabled,
@@ -44,6 +45,7 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 
 // Imported after the mock is declared (vi.mock is hoisted, so this order is for readers)
 const { SetStateDialog } = await import("./SetStateDialog");
+const { getEntityStateModel } = await import("../../api/pptbClient");
 
 const ids = (n: number) =>
 	Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`);
@@ -135,5 +137,59 @@ describe("Activate / Deactivate dialog", () => {
 		expect(isDisabled(button("Deactivate"))).toBe(true);
 		await typeInto(dialogInput(), "account");
 		expect(isDisabled(button("Deactivate"))).toBe(false);
+	});
+});
+
+describe("Activate / Deactivate: the button says why, and focus stays in the dialog (#279)", () => {
+	it("asks for the typed name; focus moves to the running Cancel, then Close", async () => {
+		installHost();
+		const run = deferred<BatchDeleteResult>();
+		await render(
+			createElement(SetStateDialog, {
+				open: true,
+				action: "deactivate",
+				recordIds: ids(101),
+				entityLogicalName: "account",
+				entityDisplayName: "Account",
+				primaryIdAttribute: "accountid",
+				onClose: () => {},
+				onExecute: () => run.promise,
+			}),
+		);
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Cancel");
+		expectDisabledWithReason(button("Deactivate"), "Type account to confirm");
+		await typeInto(dialogInput(), "account");
+		await click(button("Deactivate"));
+		await flush();
+		expect(document.activeElement?.textContent?.trim(), "focus moved to it").toBe("Cancel");
+		expectDisabledWithReason(button("Cancel"), "Wait for the change to finish");
+		run.resolve(done(101));
+		await flush();
+		expect(document.activeElement?.textContent?.trim()).toBe("Close");
+	});
+});
+
+describe("Activate / Deactivate with nothing to change (#279)", () => {
+	it("the button gives the reason", async () => {
+		installHost();
+		vi.mocked(getEntityStateModel).mockResolvedValueOnce(null);
+		await render(
+			createElement(SetStateDialog, {
+				open: true,
+				action: "deactivate",
+				recordIds: ids(1),
+				entityLogicalName: "account",
+				entityDisplayName: "Account",
+				primaryIdAttribute: "accountid",
+				onClose: () => {},
+				onExecute: async () => done(1),
+			}),
+		);
+		await flush();
+		expectDisabledWithReason(
+			button("Deactivate"),
+			"This entity has no Status (statecode) column.",
+		);
 	});
 });

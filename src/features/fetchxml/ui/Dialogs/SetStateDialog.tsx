@@ -43,6 +43,9 @@ import {
 import { planCloseStateChange, type CloseStateAction } from "../../model/closeActions";
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
+import { withReason } from "../../../../shared/components/WithReason";
+import { useTargetConfirmation } from "../../../../shared/hooks/useTargetConfirmation";
+import { useFocusWhen } from "../../../../shared/hooks/useFocusWhen";
 
 const useStyles = makeStyles({
 	content: {
@@ -120,7 +123,12 @@ export function SetStateDialog({
 	const [progress, setProgress] = useState<BatchDeleteProgress | null>(null);
 	const [result, setResult] = useState<BatchDeleteResult | null>(null);
 	// Type-to-confirm for Production or more than 100 records (#69)
-	const [scopeConfirmed, setScopeConfirmed] = useState(false);
+	const scope = useTargetConfirmation();
+	// Cancel first (owner, #279): after Fluent's own first focus, which a parent's effect follows
+	const cancelRef = useFocusWhen(open && (phase === "loading" || phase === "confirm"));
+	// Focus follows the buttons: the running Cancel, then Close (#279)
+	const runningRef = useFocusWhen(phase === "running");
+	const closeRef = useFocusWhen(phase === "done" || phase === "error");
 
 	// Read when planning, so a metadata reload while the result shows doesn't plan again
 	const primaryIdRef = useRef(primaryIdAttribute);
@@ -248,7 +256,7 @@ export function SetStateDialog({
 							entityLogicalName={entityLogicalName}
 							entityDisplayName={entityDisplayName}
 							scope={{ kind: "records", count }}
-							onConfirmationChange={setScopeConfirmed}
+							onConfirmationChange={scope.onConfirmationChange}
 						/>
 						{plan &&
 							plan.kind !== "none" &&
@@ -410,39 +418,49 @@ export function SetStateDialog({
 		}
 	};
 
+	/** Why the action can't run yet (#279) */
+	const runReason =
+		phase !== "confirm"
+			? "Reading the status options..."
+			: plan?.kind === "none"
+				? plan.reason
+				: !target
+					? "Choose a status reason"
+					: scope.reason;
+
 	const renderActions = () => {
 		switch (phase) {
 			case "loading":
 			case "confirm":
 				return (
 					<>
-						<Button appearance="secondary" onClick={handleClose}>
+						{/* The safe action is focused first (owner, #279) */}
+						<Button appearance="secondary" ref={cancelRef} onClick={handleClose}>
 							Cancel
 						</Button>
-						<Button
-							appearance="primary"
-							onClick={handleRun}
-							disabled={
-								phase !== "confirm" ||
-								!target ||
-								plan?.kind === "none" ||
-								!scopeConfirmed
-							}
-						>
-							{verb}
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={handleRun}
+								disabledFocusable={!!runReason || !scope.confirmed}
+							>
+								{verb}
+							</Button>,
+							runReason,
+						)}
 					</>
 				);
 			case "running":
-				return (
-					<Button appearance="secondary" disabled>
+				return withReason(
+					<Button ref={runningRef} appearance="secondary" disabledFocusable>
 						Cancel
-					</Button>
+					</Button>,
+					"Wait for the change to finish",
 				);
 			case "done":
 			case "error":
 				return (
-					<Button appearance="primary" onClick={handleClose}>
+					<Button ref={closeRef} appearance="primary" onClick={handleClose}>
 						Close
 					</Button>
 				);

@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Checkbox, Input, Radio, RadioGroup, makeStyles } from "@fluentui/react-components";
+import { Input, Radio, RadioGroup, makeStyles } from "@fluentui/react-components";
 import {
 	LIKE_OPERATORS,
 	buildWildcardValue,
@@ -19,7 +19,7 @@ import {
 	type WildcardValue,
 } from "../../../../model/wildcards";
 import { DOCS } from "../docLinks";
-import { Info, InfoField, type Validation } from "../fields";
+import { Info, InfoCheckbox, InfoField, type Validation } from "../fields";
 import { worst } from "../ruleFindings";
 
 const useStyles = makeStyles({
@@ -141,11 +141,17 @@ export function WildcardValueField({ operator, value, advice, onChange }: Wildca
 					onChange={(_, data) => update({ text: data.value })}
 				/>
 			</InfoField>
-			<Checkbox
+			<InfoCheckbox
 				label="Match literally (% _ [ are text, not wildcards)"
 				checked={state.literal && !custom}
 				disabled={custom}
-				onChange={(_, data) => update({ literal: data.checked === true })}
+				// Why it can't be ticked (#279)
+				hint={
+					custom
+						? "A custom pattern is sent as written: put a wildcard in [ ] to match it as text."
+						: undefined
+				}
+				onChange={(checked) => update({ literal: checked })}
 			/>
 		</>
 	);

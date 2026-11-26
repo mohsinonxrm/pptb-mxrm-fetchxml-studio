@@ -60,7 +60,8 @@ import type { AttributeMetadata, RelationshipMetadata, WorkflowInfo } from "../.
 import { useEntityWorkflows } from "./useEntityWorkflows";
 import type { CopyValueMode } from "./copyResults";
 import { GRID_DENSITY_LABELS, type GridDensity } from "../../model/displaySettings";
-import { resultsBarReasons } from "./resultsBarRules";
+import { QUERY_RUNNING_REASON, resultsBarReasons } from "./resultsBarRules";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const OpenIcon = bundleIcon(Open20Filled, Open20Regular);
 const LinkIcon = bundleIcon(Link20Filled, Link20Regular);
@@ -142,6 +143,8 @@ export interface CommandBarProps {
 	canExport?: boolean;
 	/** Whether export is in progress */
 	isExporting?: boolean;
+	/** A run is waiting for its first page: commands that change records, and Export, wait (#279) */
+	isRunning?: boolean;
 	/** Tooltip text to show when server export is disabled */
 	exportDisabledReason?: string;
 	/** Entity logical name */
@@ -232,6 +235,7 @@ export function ResultsCommandBar({
 	onDensityChange,
 	canExport = false,
 	isExporting = false,
+	isRunning = false,
 	exportDisabledReason,
 	entityName,
 	entityDisplayName,
@@ -255,6 +259,7 @@ export function ResultsCommandBar({
 	const styles = useStyles();
 	const hasSelection = selectedCount > 0;
 	const reasons = resultsBarReasons({
+		isRunning,
 		selectedCount,
 		loadedCount,
 		recordActionsDisabledReason,
@@ -517,12 +522,16 @@ export function ResultsCommandBar({
 						setCopyMode(data.checkedItems[0] as CopyValueMode)
 					}
 				>
-					<MenuItem
-						disabled={selectedCount === 0}
-						onClick={() => onCopyRows?.("selected", copyMode)}
-					>
-						Selected rows ({selectedCount})
-					</MenuItem>
+					{withReason(
+						<MenuItem
+							disabled={selectedCount === 0}
+							onClick={() => onCopyRows?.("selected", copyMode)}
+						>
+							Selected rows ({selectedCount})
+						</MenuItem>,
+						selectedCount === 0 && "Select rows to copy them",
+						"after",
+					)}
 					<MenuItem onClick={() => onCopyRows?.("all", copyMode)}>
 						{searchText.trim() ? "All matching rows" : "All loaded rows"} ({loadedCount}
 						)
@@ -549,7 +558,11 @@ export function ResultsCommandBar({
 			priority: 15,
 			kind: "menu",
 			busy: isExporting,
-			disabledReason: isExporting ? "Export in progress..." : undefined,
+			disabledReason: isExporting
+				? "Export in progress..."
+				: isRunning
+					? QUERY_RUNNING_REASON
+					: undefined,
 			menu: (
 				<MenuList>
 					<Tooltip

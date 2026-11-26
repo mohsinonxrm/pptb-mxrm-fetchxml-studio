@@ -168,7 +168,8 @@ export function DateTimeInputPicker({
 					className={styles.datePicker}
 				/>
 				<TimePicker
-					placeholder="Select time"
+					// Without a date it can't be used: its placeholder says why (#279)
+					placeholder={selectedDate ? "Select time" : "Pick a date first"}
 					freeform
 					dateAnchor={TIME_PICKER_ANCHOR}
 					selectedTime={selectedTime}

@@ -10,6 +10,9 @@ import {
 	cleanup,
 	click,
 	dialogText,
+	deferred,
+	expectDisabledWithReason,
+	typeInto,
 	flush,
 	installHost,
 	isDisabled,
@@ -23,6 +26,7 @@ const OTHER = "22222222-2222-2222-2222-222222222222";
 const VIEW = "33333333-3333-3333-3333-333333333333";
 
 const writeAccess = vi.fn(async (_id: string) => false as boolean | undefined);
+const userQueryUpdate = vi.fn(async (_id: string, _data: unknown) => undefined as void);
 
 vi.mock("../../api/pptbClient", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../api/pptbClient")>()),
@@ -36,12 +40,14 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 	getSolutionLabel: vi.fn(async () => null),
 	validateSavedQuery: vi.fn(async () => undefined),
 	updateSavedQuery: vi.fn(async () => undefined),
+	updateUserQuery: (id: string, data: unknown) => userQueryUpdate(id, data),
 	clearOtherDefaultPublicViews: vi.fn(async () => [
 		{ id: "44444444-4444-4444-4444-444444444444", name: "Old default", error: "Access denied" },
 	]),
 }));
 
 const { SaveViewDialog } = await import("./SaveViewDialog");
+const { checkUserQueryPrivileges } = await import("../../api/pptbClient");
 
 const FETCH = "<fetch><entity name='contact'><attribute name='fullname'/></entity></fetch>";
 const LAYOUT =
@@ -65,6 +71,7 @@ const props = (loadedView: Parameters<typeof SaveViewDialog>[0]["loadedView"]) =
 beforeEach(() => {
 	vi.spyOn(console, "warn").mockImplementation(() => {});
 	writeAccess.mockReset();
+	userQueryUpdate.mockReset();
 });
 
 afterEach(() => {
@@ -95,7 +102,10 @@ describe("Save view: a personal view shared read-only (#142)", () => {
 		expect(text).toContain(
 			'Amy Alberts shared "Amy\'s contacts" with you without write access.',
 		);
-		expect(isDisabled(button("Save"))).toBe(true);
+		expectDisabledWithReason(
+			button("Save"),
+			"This view can't be overwritten. Save a copy instead",
+		);
 		expect(writeAccess).toHaveBeenCalledWith(VIEW);
 
 		await click(button("Save a copy…"));
@@ -178,5 +188,75 @@ describe("Save view: a default view that couldn't be cleared (#307, #277)", () =
 			expect.stringMatching(/^Another view is still a default view\. Dismiss.*Old default/),
 		]);
 		expect(host.notifications).toEqual([]);
+	});
+});
+
+describe("Save view: the buttons say why, and keep focus while saving (#279)", () => {
+	it("Save asks for a name", async () => {
+		installHost();
+		await render(
+			createElement(
+				SaveViewDialog,
+				props({ id: VIEW, type: "personal", name: "My contacts", ownerId: ME }),
+			),
+		);
+		await flush();
+		await typeInto(
+			document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]'),
+			"  ",
+		);
+		expectDisabledWithReason(button("Save"), "Enter a name");
+	});
+
+	it("while saving: Save reads Saving… and keeps focus; Cancel says to wait", async () => {
+		installHost();
+		const saving = deferred<void>();
+		userQueryUpdate.mockImplementation(() => saving.promise);
+		await render(
+			createElement(
+				SaveViewDialog,
+				props({ id: VIEW, type: "personal", name: "My contacts", ownerId: ME }),
+			),
+		);
+		await flush();
+		const save = button("Save");
+		save?.focus();
+		await click(save);
+		await flush();
+		const busy = button("Saving…");
+		expect(busy).toBe(save);
+		expect(document.activeElement).toBe(busy);
+		expectDisabledWithReason(busy, "Wait for the save to finish");
+		expectDisabledWithReason(button("Cancel"), "Wait for the save to finish");
+		expectDisabledWithReason(
+			document.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]'),
+			"Wait for the save to finish",
+		);
+		saving.resolve();
+		await flush();
+	});
+});
+
+describe("Save view while your permissions are checked (#279 review)", () => {
+	it("Save says it's checking, not that you lack the permission", async () => {
+		installHost();
+		const check = deferred<{ canWrite: boolean }>();
+		vi.mocked(checkUserQueryPrivileges).mockImplementationOnce(() => check.promise);
+		await render(
+			createElement(SaveViewDialog, {
+				...props(null),
+				mode: "saveAs" as const,
+			}),
+		);
+		await flush();
+		await typeInto(
+			document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]'),
+			"FXS TEST view",
+		);
+		expectDisabledWithReason(button("Save"), "Checking your permissions...");
+		expect(dialogText()).not.toContain("You don't have permission");
+		check.resolve({ canWrite: true });
+		await flush();
+		expect(isDisabled(button("Save"))).toBe(false);
 	});
 });

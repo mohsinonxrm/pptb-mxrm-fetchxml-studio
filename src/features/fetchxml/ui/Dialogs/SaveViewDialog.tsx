@@ -76,6 +76,7 @@ import {
 import { TargetScope } from "../../../../shared/components/TargetScope";
 import { UndoNote } from "../../../../shared/components/UndoNote";
 import { useNotify } from "../../../../shared/feedback/useNotify";
+import { withReason } from "../../../../shared/components/WithReason";
 
 const useStyles = makeStyles({
 	surface: {
@@ -260,6 +261,11 @@ const formSnapshot = (form: {
 	viewType: string;
 	makeDefault: boolean;
 }) => JSON.stringify([form.name, form.description, form.viewType, form.makeDefault]);
+
+/** While saving, every button waits (#279) */
+const SAVING_REASON = "Wait for the save to finish";
+/** While the view privileges are checked: neither "allowed" nor "no permission" yet (#279 review) */
+const CHECKING_PERMISSIONS = "Checking your permissions...";
 
 export function SaveViewDialog({
 	open,
@@ -554,28 +560,24 @@ export function SaveViewDialog({
 		[styles],
 	);
 
-	// Can save check
-	const canSave = useMemo(() => {
-		if (!name.trim()) return false;
-		if (isSaving) return false;
-		if (isOverwriteBlocked || isCheckingAccess) return false;
-		if (viewType === "system") {
-			// System views require canWrite privilege (covers both create and update)
-			if (!canWriteSystem) return false;
-		} else {
-			// Personal views require canWrite privilege
-			if (!canWritePersonal) return false;
-		}
-		return true;
-	}, [
-		name,
-		isSaving,
-		isOverwriteBlocked,
-		isCheckingAccess,
-		viewType,
-		canWriteSystem,
-		canWritePersonal,
-	]);
+	/** Why Save can't be pressed (#279), in the order the dialog shows what's missing */
+	const saveReason = isSaving
+		? SAVING_REASON
+		: !name.trim()
+			? "Enter a name"
+			: isCheckingAccess
+				? "Checking your access to the view..."
+				: isOverwriteBlocked
+					? "This view can't be overwritten. Save a copy instead"
+					: (viewType === "system" ? systemPrivileges : personalPrivileges) === null
+						? CHECKING_PERMISSIONS
+						: viewType === "system" && !canWriteSystem
+							? "You don't have permission to save system views"
+							: viewType !== "system" && !canWritePersonal
+								? "You don't have permission to save personal views"
+								: undefined;
+
+	const canSave = !saveReason;
 
 	// One follow-up step for a saved system view (#180)
 	const runViewSaveStep = useCallback(
@@ -838,15 +840,16 @@ export function SaveViewDialog({
 			<DialogSurface className={styles.surface}>
 				<DialogBody>
 					<DialogTitle
-						action={
+						action={withReason(
 							<Button
 								appearance="subtle"
 								aria-label="Close"
 								icon={<DismissRegular />}
 								onClick={handleClose}
-								disabled={isSaving}
-							/>
-						}
+								disabledFocusable={isSaving}
+							/>,
+							isSaving && SAVING_REASON,
+						)}
 					>
 						{dialogTitle}
 					</DialogTitle>
@@ -1004,7 +1007,9 @@ export function SaveViewDialog({
 													? "Only visible to you. FetchXML Studio couldn't check your privileges: Dataverse decides when you save."
 													: canWritePersonal
 														? "Only visible to you"
-														: "You don't have permission to create personal views"}
+														: personalPrivileges === null
+															? CHECKING_PERMISSIONS
+															: "You don't have permission to create personal views"}
 											</div>
 											<Radio
 												value="system"
@@ -1016,7 +1021,9 @@ export function SaveViewDialog({
 													? "Visible to all users with access to this entity. FetchXML Studio couldn't check your privileges: Dataverse decides when you save."
 													: canWriteSystem
 														? "Visible to all users with access to this entity"
-														: "You don't have permission to create system views"}
+														: systemPrivileges === null
+															? CHECKING_PERMISSIONS
+															: "You don't have permission to create system views"}
 											</div>
 										</RadioGroup>
 									</Field>
@@ -1179,37 +1186,47 @@ export function SaveViewDialog({
 					</DialogContent>
 					<DialogActions>
 						{/* A view that can't be overwritten can be saved as a copy (#142) */}
-						{isOverwriteBlocked && (
+						{isOverwriteBlocked &&
+							withReason(
+								<Button
+									appearance="secondary"
+									onClick={handleSaveCopy}
+									disabledFocusable={isSaving}
+								>
+									Save a copy…
+								</Button>,
+								isSaving && SAVING_REASON,
+							)}
+						{/* While saving the buttons stay focusable, so focus doesn't drop to the page (#279) */}
+						{withReason(
 							<Button
 								appearance="secondary"
-								onClick={handleSaveCopy}
-								disabled={isSaving}
+								onClick={handleClose}
+								disabledFocusable={isSaving}
 							>
-								Save a copy…
-							</Button>
+								{partialSave ? "Close" : "Cancel"}
+							</Button>,
+							isSaving && SAVING_REASON,
 						)}
-						<Button appearance="secondary" onClick={handleClose} disabled={isSaving}>
-							{partialSave ? "Close" : "Cancel"}
-						</Button>
-						<Button
-							appearance="primary"
-							onClick={partialSave ? handleRetry : handleSave}
-							disabled={partialSave ? isSaving : !canSave}
-						>
-							{isSaving ? (
-								<Spinner size="tiny" />
-							) : partialSave ? (
-								partialSave.remaining[0] === "solution" ? (
-									"Retry adding to solution"
-								) : (
-									"Retry publishing"
-								)
-							) : shouldPublish && viewType === "system" ? (
-								"Save and publish"
-							) : (
-								"Save"
-							)}
-						</Button>
+						{withReason(
+							<Button
+								appearance="primary"
+								onClick={partialSave ? handleRetry : handleSave}
+								disabledFocusable={partialSave ? isSaving : !canSave}
+								icon={isSaving ? <Spinner size="tiny" /> : undefined}
+							>
+								{isSaving
+									? "Saving…"
+									: partialSave
+										? partialSave.remaining[0] === "solution"
+											? "Retry adding to solution"
+											: "Retry publishing"
+										: shouldPublish && viewType === "system"
+											? "Save and publish"
+											: "Save"}
+							</Button>,
+							partialSave ? isSaving && SAVING_REASON : !canSave && saveReason,
+						)}
 					</DialogActions>
 				</DialogBody>
 			</DialogSurface>

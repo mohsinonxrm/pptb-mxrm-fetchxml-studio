@@ -52,8 +52,8 @@ vi.mock("../../features/fetchxml/api/pptbClient", async (importOriginal) => {
 
 let latest: RecordActions;
 let availability: RecordActionAvailability;
-/** When set, every render's entity and canChangeState */
-let renderLog: [string | undefined, boolean][] | null = null;
+/** When set, every render's entity, canChangeState and canDelete */
+let renderLog: [string | undefined, boolean, boolean][] | null = null;
 
 type ProbeProps = Omit<RecordActionsInputs, "entityLogicalName" | "availability"> & {
 	/** The selected entity; the query's root by default */
@@ -64,7 +64,7 @@ function Probe({ entityLogicalName: entity, ...props }: ProbeProps) {
 	const entityLogicalName = entity ?? props.fetchQuery?.entity.name;
 	availability = useRecordActionAvailability(entityLogicalName);
 	latest = useRecordActions({ ...props, entityLogicalName, availability });
-	renderLog?.push([entityLogicalName, latest.canChangeState]);
+	renderLog?.push([entityLogicalName, latest.canChangeState, latest.canDelete]);
 	return null;
 }
 
@@ -312,6 +312,24 @@ describe("useRecordActionAvailability: privileges (#179)", () => {
 		gate.resolve();
 		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
 		expect(latest.canDelete).toBe(true);
+	});
+
+	it("never allows Delete for the new entity with the previous entity's privileges, not even for one render (#391)", async () => {
+		cleanup();
+		connect({ privileges: new Set(["prvDeleteAccount", "prvBulkDelete"]) });
+		await show();
+		await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
+		expect(latest.canDelete).toBe(true);
+		renderLog = [];
+		try {
+			await show({ fetchQuery: query("contact") });
+			await waitFor(() => availability.recordActionPrivileges.privilegesChecked);
+			const forContact = renderLog.filter(([entity]) => entity === "contact");
+			expect(forContact.length).toBeGreaterThan(0);
+			expect(forContact.every(([, , canDelete]) => !canDelete)).toBe(true);
+		} finally {
+			renderLog = null;
+		}
 	});
 
 	it("drops a check for an entity that's no longer selected", async () => {

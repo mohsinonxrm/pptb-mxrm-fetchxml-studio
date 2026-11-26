@@ -4,6 +4,7 @@
  */
 
 import {
+	Fragment,
 	useState,
 	useEffect,
 	useCallback,
@@ -68,6 +69,7 @@ import {
 } from "../../model/treeLabels";
 import { debugLog, debugWarn } from "../../../../shared/utils/debug";
 import { SelectAttributesDialog } from "../Dialogs/SelectAttributesDialog";
+import { withReason } from "../../../../shared/components/WithReason";
 import { metadataCache } from "../../state/cache";
 import type { AttributeMetadata } from "../../api/pptbClient";
 import {
@@ -185,7 +187,8 @@ interface AddItem {
 	key: string;
 	label: string;
 	icon: ReactElement;
-	disabled?: boolean;
+	/** Why it can't be added here: the item is shown disabled, with this in its Tooltip (#279) */
+	disabledReason?: string;
 	onClick: () => void;
 }
 
@@ -538,40 +541,46 @@ export function TreeView({
 			entity.type === "entity" || !NON_RETURNING_LINK_TYPES.has(entity.linkType);
 		// Only one top-level filter per entity / link-entity
 		const hasFilter = entity.filters.length > 0;
+		const noAttributes = canHaveAttributes
+			? undefined
+			: `This ${entity.type === "link-entity" ? `"${entity.linkType}" ` : ""}link returns no attributes, so it can't have attributes or sorts`;
+		const oneFilter = hasFilter
+			? `This ${entity.type === "link-entity" ? "link-entity" : "entity"} already has a filter. Add conditions to it, or add a sub-filter`
+			: undefined;
 		return [
 			{
 				key: "all",
 				label: "All attributes",
 				icon: <ColumnTriple20Regular />,
-				disabled: !canHaveAttributes,
+				disabledReason: noAttributes,
 				onClick: () => onAddAllAttributes(entity.id),
 			},
 			{
 				key: "select",
 				label: "Select attributes…",
 				icon: <CheckboxChecked20Regular />,
-				disabled: !canHaveAttributes,
+				disabledReason: noAttributes,
 				onClick: () => void handleOpenSelectAttributes(entity),
 			},
 			{
 				key: "blank",
 				label: "Blank attribute",
 				icon: <TextAdd20Regular />,
-				disabled: !canHaveAttributes,
+				disabledReason: noAttributes,
 				onClick: () => onAddAttribute(entity.id),
 			},
 			{
 				key: "order",
 				label: "Order by",
 				icon: <ArrowSort20Regular />,
-				disabled: !canHaveAttributes,
+				disabledReason: noAttributes,
 				onClick: () => onAddOrder(entity.id),
 			},
 			{
 				key: "filter",
 				label: "Filter",
 				icon: <Filter20Regular />,
-				disabled: hasFilter,
+				disabledReason: oneFilter,
 				onClick: () => onAddFilter(entity.id),
 			},
 			{
@@ -606,14 +615,19 @@ export function TreeView({
 
 	const renderMenuItems = (items: AddItem[]) =>
 		items.map((item) => (
-			<MenuItem
-				key={item.key}
-				icon={item.icon}
-				disabled={item.disabled}
-				onClick={item.onClick}
-			>
-				{item.label}
-			</MenuItem>
+			<Fragment key={item.key}>
+				{withReason(
+					<MenuItem
+						icon={item.icon}
+						disabled={!!item.disabledReason}
+						onClick={item.onClick}
+					>
+						{item.label}
+					</MenuItem>,
+					item.disabledReason,
+					"after",
+				)}
+			</Fragment>
 		));
 
 	/** Opens the row's context menu at a point (right-click, Shift+F10 or the context-menu key) */
