@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowReply20Filled, ArrowReply20Regular, bundleIcon } from "@fluentui/react-icons";
 import { returnFetchXmlToInvokingTool } from "../../api/invocation";
+import { isClosePrevented } from "../../api/host";
 import { useNotify } from "../../../../shared/feedback/useNotify";
 import { useCopy } from "../../../../shared/feedback/useCopy";
 import type { BarCommand } from "../../../../shared/components/commandBar";
@@ -18,8 +19,9 @@ const ReturnIcon = bundleIcon(ArrowReply20Filled, ArrowReply20Regular);
 /**
  * How long FetchXML Studio waits, after returnData() resolves, for Power Platform ToolBox to close
  * it. PPTB closes the callee as soon as the caller has the data; when the caller was closed first,
- * returnData() resolves all the same and nothing closes (#363, verified in PPTB 1.2.9: the pending
- * invocation is dropped with the caller, and the return is ignored without an error).
+ * returnData() resolves all the same and nothing closes (#363; PPTB's toolWindowManager since 1.2.6,
+ * checked in 1.2.9: the pending invocation is dropped with the caller, and the return is ignored
+ * without an error).
  */
 export const NOT_DELIVERED_AFTER_MS = 2000;
 
@@ -28,6 +30,8 @@ export function useReturnFetchXmlCommand(getCurrentXml: () => string): BarComman
 	const { notify } = useNotify();
 	const copy = useCopy();
 	const notDeliveredTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// One return at a time: Try again on an older failure toast can't start a second one (#363 review)
+	const inFlight = useRef(false);
 	useEffect(
 		() => () => {
 			if (notDeliveredTimer.current) clearTimeout(notDeliveredTimer.current);
@@ -38,10 +42,16 @@ export function useReturnFetchXmlCommand(getCurrentXml: () => string): BarComman
 	// A failure is a sticky error toast with Try again and Copy FetchXML, so the query isn't lost
 	// (#277, owner decision 4)
 	const handleReturn = useCallback(async () => {
+		if (inFlight.current) return;
+		inFlight.current = true;
 		setIsReturning(true);
 		const xml = getCurrentXml();
 		try {
 			await returnFetchXmlToInvokingTool(xml);
+			// While FetchXML Studio holds the close warning (a Retrieve All), PPTB asks before it closes
+			// a delivered callee, so staying open doesn't mean the caller was closed: say nothing (owner
+			// decision on the #363 review; PPTB's own prompt says the return happened)
+			if (isClosePrevented()) return;
 			// Delivered: PPTB closes this window. Still here after a moment: the caller had closed, so
 			// the FetchXML went nowhere (owner decision on #363: detect it here). Trying again can't
 			// help, so the toast offers only Copy FetchXML.
@@ -66,6 +76,7 @@ export function useReturnFetchXmlCommand(getCurrentXml: () => string): BarComman
 				},
 			});
 		} finally {
+			inFlight.current = false;
 			setIsReturning(false);
 		}
 	}, [getCurrentXml, notify, copy]);

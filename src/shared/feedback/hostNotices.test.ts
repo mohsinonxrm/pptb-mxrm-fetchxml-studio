@@ -21,13 +21,14 @@ import {
 	NOT_DELIVERED_AFTER_MS,
 	useReturnFetchXmlCommand,
 } from "../../features/fetchxml/ui/Toolbar/useReturnFetchXmlCommand";
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { holdClose } from "../../features/fetchxml/api/host";
 import {
 	useSendToToolCommand,
 	type SendToToolCommandOptions,
 } from "../../features/fetchxml/ui/Toolbar/useSendToToolCommand";
 import { OverflowToolbar } from "../components/commandBar";
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 vi.mock("@monaco-editor/react", async () => {
 	const React = await import("react");
@@ -171,10 +172,46 @@ describe("Return FetchXML after the tool that opened FetchXML Studio closed (#36
 		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
 		await click(button("Return FetchXML"));
 		await flush(5);
-		// PPTB closes the window: the tool unmounts before the wait ends
-		cleanup();
+		// PPTB closes the window: the command goes before the wait ends (the toasts stay mounted, so a
+		// stray "not delivered" toast would show)
+		await render(createElement("div"));
 		await wait(NOT_DELIVERED_AFTER_MS + 100);
 		expect(toasts()).toEqual([]);
+	});
+
+	it("says nothing while FetchXML Studio holds the close (a Retrieve All): PPTB asks first (review)", async () => {
+		const toolbox = (window as unknown as { toolboxAPI: Record<string, unknown> }).toolboxAPI;
+		toolbox.preventClose = async () => undefined;
+		toolbox.releasePreventClose = async () => undefined;
+		const release = holdClose();
+		try {
+			invocation.returnData.mockImplementationOnce(async () => undefined);
+			await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+			await click(button("Return FetchXML"));
+			await wait(NOT_DELIVERED_AFTER_MS + 100);
+			expect(toasts()).toEqual([]);
+			expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBeNull();
+		} finally {
+			release();
+		}
+	});
+
+	it("one return at a time: Try again on an older toast during a return does nothing (review)", async () => {
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+		// A first return fails: its toast offers Try again
+		await click(button("Return FetchXML"));
+		await flush(5);
+		// The next return is delivered nowhere (the caller closed); press Try again while it waits
+		invocation.returnData.mockImplementation(async () => undefined);
+		await click(button("Return FetchXML"));
+		await flush(5);
+		await click(toastButton("Try again"));
+		await flush(5);
+		expect(invocation.returnData).toHaveBeenCalledTimes(2);
+		await wait(NOT_DELIVERED_AFTER_MS + 100);
+		expect(
+			toasts().filter((t) => t.includes("The tool that opened FetchXML Studio is closed")),
+		).toHaveLength(1);
 	});
 });
 
