@@ -67,23 +67,36 @@ export const versionRef = (pkg) => `refs/tags/v${pkg.version}`;
 export const badgeUrl = (pkg, file) =>
 	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${versionRef(pkg)}/assets/badges/${file}`;
 
+/** "1.6.3" → "1.6" */
+const lineOf = (pkg) => String(pkg.version).split(".").slice(0, 2).join(".");
+
+/** The release branch of a version's line: release/X.Y */
+export const releaseBranchOf = (pkg) => `release/${lineOf(pkg)}`;
+
+/** The support branch of a version's line: support/X.Y */
+export const supportBranchOf = (pkg) => `support/${lineOf(pkg)}`;
+
 /**
  * The git ref of the README Power Platform ToolBox's details page shows (`configurations.readmeUrl`,
  * #379). `pptb-validate` fetches it in CI and in the release build, before the version's tag exists,
- * so it can't be the tag: a prerelease reads its release branch (`release/X.Y`, which holds the
- * beta's README while it's tested), and a stable release reads main, which holds exactly that
- * release's README. The same rule as Dataverse Request Studio.
+ * so it can't be the tag. It's the branch the version is released from, which holds that version's
+ * README, and which is kept (frozen) after the line moves on (owner decisions on #379):
+ * - a prerelease: its release branch, release/X.Y;
+ * - a support release (`support: true`, released from support/X.Y): that branch;
+ * - any other stable release: main.
+ * @param {{ support?: boolean }} [options]
  */
-export const readmeRef = (pkg) => {
-	const [major, minor] = String(pkg.version).split(".");
-	return String(pkg.version).includes("-")
-		? `refs/heads/release/${major}.${minor}`
-		: "refs/heads/main";
+export const readmeRef = (pkg, { support = false } = {}) => {
+	if (String(pkg.version).includes("-")) return `refs/heads/${releaseBranchOf(pkg)}`;
+	return support ? `refs/heads/${supportBranchOf(pkg)}` : "refs/heads/main";
 };
 
-/** package.json `configurations.readmeUrl` for this version */
-export const readmeUrlFor = (pkg) =>
-	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${readmeRef(pkg)}/README.md`;
+/**
+ * package.json `configurations.readmeUrl` for this version
+ * @param {{ support?: boolean }} [options]
+ */
+export const readmeUrlFor = (pkg, options) =>
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${readmeRef(pkg, options)}/README.md`;
 
 /**
  * Every README badge, from package.json: the file name, its alt text and the SVG. The order is the

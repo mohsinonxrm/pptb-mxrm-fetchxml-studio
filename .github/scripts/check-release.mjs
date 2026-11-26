@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Fails when the release metadata doesn't match package.json's version (RELEASING.md): the
 // version's shape, package-lock.json, the CHANGELOG section, the README badges (at the version's
-// tag), configurations.readmeUrl and, with --dist, the bundled icon. With --notes, writes the GitHub Release notes built from the CHANGELOG.
+// tag), configurations.readmeUrl and, with --dist, the bundled icon. With --notes, writes the
+// GitHub Release notes built from the CHANGELOG.
 //
 // Usage:
 //   node .github/scripts/check-release.mjs                       # before the build
 //   node .github/scripts/check-release.mjs --dist                # after the build
+//   node .github/scripts/check-release.mjs --branch support/1.6  # as if merging into that branch
 //   node .github/scripts/check-release.mjs --dist --notes notes.md --dist-tag beta --repository owner/repo
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { badges } from "./badges.mjs";
@@ -25,12 +27,19 @@ const badgeFiles = Object.fromEntries(
 		existsSync(`assets/badges/${file}`) ? read(`assets/badges/${file}`) : undefined,
 	]),
 );
+// The branch a PR merges into, or the branch pushed to (a tag build has none): a stable release on
+// main or support/X.Y must point readmeUrl at that branch (#379)
+const branch =
+	option("--branch") ??
+	(process.env.GITHUB_BASE_REF ||
+		(process.env.GITHUB_REF_TYPE === "branch" ? process.env.GITHUB_REF_NAME : undefined));
 const problems = checkReleaseFiles({
 	pkg,
 	lock: JSON.parse(read("package-lock.json")),
 	changelog: read("CHANGELOG.md"),
 	readme: read("README.md"),
 	badgeFiles,
+	branch,
 });
 
 if (args.includes("--dist")) {

@@ -148,7 +148,8 @@ Before promoting a beta to `latest`:
    `[1.4.2]`), and `npm run badges`.
 2. PR `release/1.5` → `main`, merged with a merge commit.
 3. Check the release build in PPTB (*Before every tag*), then tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
-4. Run *After every release*, then merge `main` into `dev` (merge commit) and delete `release/1.5`.
+4. Run *After every release*, then merge `main` into `dev` (merge commit). **Keep `release/1.5`**,
+   frozen (no new commits): every 1.5 beta's `readmeUrl` reads its README from it (#379).
 
 ## Hotfixes (to the current stable release)
 
@@ -166,7 +167,10 @@ Before promoting a beta to `latest`:
   available for users who can't update PPTB yet. When such a fix is needed, create
   `support/1.4` from the last `v1.4.*` tag
   (`git switch -c support/1.4 v1.4.2 && git push -u origin support/1.4`), PR the fix into
-  it, and tag `v1.4.4` there. It publishes to the npm `support-1.4` tag, never `latest`,
+  it with the version, its CHANGELOG section and `npm run badges -- --support` (automatic when
+  run on `support/1.4`; the release check on PRs into `support/1.4` requires it), and tag
+  `v1.4.4` there. When the support window ends, keep `support/1.4`, frozen: its releases'
+  `readmeUrl` reads from it (#379). It publishes to the npm `support-1.4` tag, never `latest`,
   and isn't marked as the latest GitHub Release.
 - Older versions aren't supported. `SECURITY.md` lists the supported versions.
 
@@ -253,12 +257,16 @@ version, and ToolBox's details page reads `configurations.readmeUrl`, so neither
   tag is immutable. Between release prep and tagging the images don't load on GitHub, which only
   affects the release-prep PR's preview; the tag exists before npm and ToolBox show the package.
 - **`readmeUrl`** can't be the tag: `pptb-validate` fetches it in CI and in the release build,
-  before the tag exists. A prerelease reads its release branch
-  (`refs/heads/release/X.Y/README.md`), and a stable release reads `main`, which holds exactly that
-  release's README.
+  before the tag exists. It reads the branch the version is released from, which holds its README:
+  a prerelease its release branch (`refs/heads/release/X.Y/README.md`), a support release its
+  support branch (`refs/heads/support/X.Y/README.md`, `npm run badges -- --support`), and any other
+  stable release `main`. Release and support branches are **kept, frozen**, after their line moves
+  on, so those URLs keep working. A stable release on `main` shows `main`'s README, which is the
+  newer stable's once one ships.
 
 `npm run badges` writes both for the version in `package.json`, and `check-release.mjs` fails when
-either is out of date. Screenshots are still read from `main`.
+either is out of date: on a PR into (or a push to) `main` or `support/X.Y`, `readmeUrl` must be that
+branch's; elsewhere either is accepted. Screenshots are still read from `main`.
 
 ## One-time setup
 

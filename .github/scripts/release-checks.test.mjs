@@ -7,8 +7,10 @@ import {
 	missingBadgeLines,
 	readmeRef,
 	readmeUrlFor,
+	releaseBranchOf,
 	rewriteBadgeLines,
 	rewriteReadmeUrl,
+	supportBranchOf,
 	versionRef,
 } from "./badges.mjs";
 import {
@@ -371,5 +373,53 @@ describe("each version's README: badges at its tag, readmeUrl that exists before
 		expect(checkReleaseFiles({ ...files, pkg: missing }).join(" ")).toMatch(
 			/package\.json has no configurations\.readmeUrl: add it as https:\/\/raw\.githubusercontent\.com\/owner\/tool\/refs\/heads\/release\/1\.5\/README\.md\./,
 		);
+	});
+
+	it("reads a support release's README from its support branch (owner decision on #379)", () => {
+		expect(supportBranchOf(at("1.6.3"))).toBe("support/1.6");
+		expect(releaseBranchOf(at("1.7.0-beta.1"))).toBe("release/1.7");
+		expect(readmeRef(at("1.6.3"), { support: true })).toBe("refs/heads/support/1.6");
+		expect(readmeRef(at("1.6.3"))).toBe("refs/heads/main");
+		// A prerelease always reads its release branch
+		expect(readmeRef(at("1.7.0-beta.1"), { support: true })).toBe("refs/heads/release/1.7");
+	});
+
+	it("on main or support/X.Y, a stable release must point readmeUrl at that branch; elsewhere either", () => {
+		const stable = (readmeRefPath) => {
+			const p = {
+				...pkg,
+				version: "1.6.3",
+				configurations: { readmeUrl: `${REPO}/${readmeRefPath}/README.md` },
+			};
+			const lockAt = { version: "1.6.3", packages: { "": { version: "1.6.3" } } };
+			const changelogAt =
+				"# Changelog\n\n## [Unreleased]\n\n## [1.6.3] - 2026-12-01\n\n- **A fix.**\n";
+			const readmeAt = `# Tool\n\n${badgeMarkdown(p).join("\n")}\n`;
+			const badgeFilesAt = Object.fromEntries(badges(p).map((b) => [b.file, b.svg]));
+			return (branch) =>
+				checkReleaseFiles({
+					pkg: p,
+					lock: lockAt,
+					changelog: changelogAt,
+					readme: readmeAt,
+					badgeFiles: badgeFilesAt,
+					branch,
+				});
+		};
+		const onSupport = stable("refs/heads/support/1.6");
+		const onMain = stable("refs/heads/main");
+		expect(onSupport("support/1.6")).toEqual([]);
+		expect(onSupport(undefined)).toEqual([]);
+		expect(onSupport("dev")).toEqual([]);
+		expect(onSupport("main").join(" ")).toMatch(
+			/readmeUrl isn't .*refs\/heads\/main\/README\.md/,
+		);
+		expect(onMain("main")).toEqual([]);
+		expect(onMain(undefined)).toEqual([]);
+		expect(onMain("support/1.6").join(" ")).toMatch(
+			/readmeUrl isn't .*refs\/heads\/support\/1\.6\/README\.md: run `npm run badges` \(with `-- --support` for a support release\)/,
+		);
+		// Another line's support branch doesn't make it a support release
+		expect(onMain("support/1.5")).toEqual([]);
 	});
 });
