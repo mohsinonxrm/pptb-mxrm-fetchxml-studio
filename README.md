@@ -106,7 +106,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
   - While FetchXML Studio is still checking your privileges, Save offers a new view only; if a check fails, the overwrite is still offered, with a note that Dataverse decides when you save.
   - Before overwriting a shared personal view, your write access is checked; without it you get **Save a copy…**.
   - Overwriting a managed system view warns first.
-  - Public system views can be **set as the default view**. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise (saving a view that's already the default clears any other default too); if one can't be cleared, a warning names it. After saving, a toast names the view, and says when a system view isn't published yet.
+  - Public system views can be **set as the default view**; the option names the default it replaces, also when you save a new view from the default view itself. The entity's previous default view is cleared, since Dataverse keeps the old default otherwise (saving a view that's already the default clears any other default too); if one can't be cleared, a warning names it. After saving, a toast names the view, and says when a system view isn't published yet.
   - The description is pre-filled.
 - **Solution-aware** — Add views to solutions during save
 

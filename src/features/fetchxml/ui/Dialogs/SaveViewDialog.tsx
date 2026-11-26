@@ -377,6 +377,10 @@ export function SaveViewDialog({
 		!isOverwriteBlocked &&
 		(isOverwriteMode && loadedView ? canSetDefaultView(loadedView) : viewType === "system");
 	const isAlreadyDefault = isOverwriteMode && loadedView?.isDefault === true;
+	// The view this save writes over: the loaded view only when overwriting it. Save as (or a copy)
+	// makes a new view, so a default that is the loaded view is still replaced, and the hint says so
+	// (#371).
+	const overwrittenViewId = isOverwriteMode ? loadedView?.id : undefined;
 	const hasQuickFindPlaceholders = useMemo(
 		() => countQuickFindPlaceholders(fetchXml) > 0,
 		[fetchXml],
@@ -1052,7 +1056,7 @@ export function SaveViewDialog({
 											isAlreadyDefault
 												? "This is the default view. To change the default, set another public view as default."
 												: currentDefaultView &&
-													  currentDefaultView.id !== loadedView?.id
+													  currentDefaultView.id !== overwrittenViewId
 													? `Replaces "${currentDefaultView.name}" as the default public view for ${entityDisplayName || entityLogicalName}.`
 													: undefined
 										}
