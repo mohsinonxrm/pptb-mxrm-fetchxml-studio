@@ -23,9 +23,12 @@ export function useSolutionEntities(selectedSolutionIds: string[]) {
 	const [entitiesError, setEntitiesError] = useState<string | null>(null);
 
 	useEffect(() => {
+		// A new selection starts clean: an earlier request may have stopped mid-way (its cleanup ran
+		// before its finally), and its error belongs to the earlier selection
+		setEntitiesLoading(false);
+		setEntitiesError(null);
 		if (!selectedSolutionIds.length) {
 			setEntities([]);
-			setEntitiesError(null);
 			return;
 		}
 

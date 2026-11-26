@@ -1432,6 +1432,8 @@ export async function getAllEntitiesForScopes(): Promise<EntityMetadata[]> {
  * gave an empty picker), and costs nothing once it's cached.
  */
 export async function getEntitiesByNames(logicalNames: string[]): Promise<EntityMetadata[]> {
+	// Nothing to look up: don't wait for (or fail with) the every-entity list
+	if (logicalNames.length === 0) return [];
 	const allEntities = await getAllEntitiesForScopes();
 	const nameSet = new Set(logicalNames);
 	const filtered = allEntities.filter((entity: EntityMetadata) =>
