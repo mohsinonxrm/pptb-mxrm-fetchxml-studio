@@ -31,7 +31,7 @@ export function useAccessMode() {
 					setAccessSummary(summary);
 
 					// Preload the entity metadata cache so publisher-solution and solution-only
-					// modes have instant access via filterCachedEntitiesByNames (the picker
+					// modes get their entities without waiting (getEntitiesByNames awaits it if not, #358; the picker
 					// applies "Advanced Find only" locally, #57).
 					// The "All Entities" cache is loaded lazily by EntitySelector when that
 					// scope mode is actually selected — no need to fetch it unconditionally.

@@ -4,15 +4,9 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import {
-	getAllSolutionsWithEntities,
-	getSolutionComponents,
-	filterCachedEntitiesByNames,
-	type Solution,
-	type EntityMetadata,
-} from "../../features/fetchxml/api/pptbClient";
+import { getAllSolutionsWithEntities, type Solution } from "../../features/fetchxml/api/pptbClient";
 import { metadataCache } from "../../features/fetchxml/state/cache";
-import { debugLog } from "../utils/debug";
+import { useSolutionEntities } from "./useSolutionEntities";
 
 export function useSolutionFilter() {
 	// Solutions
@@ -24,11 +18,6 @@ export function useSolutionFilter() {
 
 	// Selected solutions
 	const [selectedSolutionIds, setSelectedSolutionIds] = useState<string[]>([]);
-
-	// Entities
-	const [entities, setEntities] = useState<EntityMetadata[]>([]);
-	const [entitiesLoading, setEntitiesLoading] = useState(false);
-	const [entitiesError, setEntitiesError] = useState<string | null>(null);
 
 	// Load all solutions on mount (no publisher filter)
 	useEffect(() => {
@@ -74,90 +63,11 @@ export function useSolutionFilter() {
 		};
 	}, []);
 
-	// Load entities when solutions are selected
-	useEffect(() => {
-		if (!selectedSolutionIds.length) {
-			setEntities([]);
-			setEntitiesError(null);
-			return;
-		}
-
-		let mounted = true;
-		const abortController = new AbortController();
-
-		async function loadEntities() {
-			// Check cache
-			const cached = metadataCache.getFilteredEntities(selectedSolutionIds);
-			if (cached) {
-				setEntities(cached);
-				return;
-			}
-
-			try {
-				setEntitiesLoading(true);
-				setEntitiesError(null);
-
-				debugLog(
-					"entityFilters",
-					"[useSolutionFilter] Loading entities for solutions:",
-					selectedSolutionIds,
-				);
-
-				// Get solution components (entities only) - cached per solution
-				const components = await getSolutionComponents(selectedSolutionIds);
-				debugLog("entityFilters", "[useSolutionFilter] Solution components received:", {
-					solutionIds: selectedSolutionIds,
-					componentCount: components.length,
-					components: components.slice(0, 10),
-				});
-
-				// Extract unique entity logical names
-				const logicalNames = Array.from(
-					new Set(components.map((c) => c.msdyn_name).filter(Boolean)),
-				);
-
-				debugLog(
-					"entityFilters",
-					"[useSolutionFilter] Unique entity logical names extracted:",
-					{
-						count: logicalNames.length,
-						names: logicalNames,
-					},
-				);
-
-				// Filter from global cached metadata (instant, no API call)
-				const data = filterCachedEntitiesByNames(logicalNames);
-				debugLog("entityFilters", "[useSolutionFilter] Filtered entities from cache:", {
-					count: data.length,
-					entities: data.map((e) => e.LogicalName),
-				});
-
-				if (mounted) {
-					setEntities(data);
-					metadataCache.setFilteredEntities(selectedSolutionIds, data);
-				}
-			} catch (err) {
-				if (mounted && !abortController.signal.aborted) {
-					setEntitiesError(err instanceof Error ? err.message : String(err));
-				}
-			} finally {
-				if (mounted) {
-					setEntitiesLoading(false);
-				}
-			}
-		}
-
-		loadEntities();
-
-		return () => {
-			mounted = false;
-			abortController.abort();
-		};
-	}, [selectedSolutionIds]);
-
 	const updateSelectedSolutions = useCallback((ids: string[]) => {
 		setSelectedSolutionIds(ids);
 	}, []);
+
+	const { entities, entitiesLoading, entitiesError } = useSolutionEntities(selectedSolutionIds);
 
 	return {
 		// Solutions
