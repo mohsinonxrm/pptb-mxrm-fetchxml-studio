@@ -35,7 +35,7 @@
 	],
 	"features": {
 		"connections": 1,
-		"minAPI": "1.2.7"
+		"minAPI": "1.2.8"
 	},
 	"bugs": {
 		"url": "https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/issues"
@@ -88,7 +88,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.36.0",
-		"@pptb/types": "1.2.7",
+		"@pptb/types": "1.2.8",
 		"@types/node": "^24.10.4",
 		"@types/react": "^18.3.27",
 		"@types/react-dom": "^18.3.7",

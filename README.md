@@ -4,8 +4,8 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 
 ![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/version.svg)
 ![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)
-![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb.svg)
-![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb-types.svg)
+![Power Platform ToolBox 1.2.8 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb.svg)
+![@pptb/types 1.2.8](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb-types.svg)
 ![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/react.svg)
 ![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/typescript.svg)
 ![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/fluent-ui.svg)
@@ -40,7 +40,7 @@ A powerful, modern FetchXML query builder and data explorer for [Power Platform 
 - **Copy results** — Right-click a cell to copy its value, its raw value (GUID, number, ISO date or option value), the row, the selected rows or the column. **Ctrl+C** copies the selected rows, or the focused cell. The command bar's **Copy** menu copies the selected or all loaded rows, as shown or as raw values. Rows copy as tab-separated values with a header row, so they paste into Excel as cells. In copied rows, text that a spreadsheet would run as a formula (starting with `=`, `+`, `-` or `@`) gets a leading apostrophe, so it pastes as text; a single cell or a column is copied exactly. A toast at the bottom of the window says what was copied, as for every Copy in the tool.
 - **Total record count** — With *Return total record count*, the info bar shows "Rows: 50 of 1,234 total", or "5,000+ total" when Dataverse caps the count. **Count all {entity} records** then gets the entity's unfiltered total (`RetrieveTotalRecordCount`, a snapshot that ignores the query's filters)
 - **Row count on the Results tab** — After a run, the tab shows how many rows are loaded ("48,213", in your locale), and a screen reader hears "Results, 48,213 rows". It counts the loaded rows, so it grows as pages load; quick search in the grid doesn't change it
-- **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, up to 100,000 rows, with **Stop** to keep what's loaded so far. Throttled pages during Retrieve All wait about 4.5 minutes in all before giving up, and the status line shows the wait. Deletes of 4 records or more, workflows, Activate / Deactivate and Close on many records wait the same way; the Delete and Run workflow dialogs show the wait. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. Every page, the first included, is retried after Dataverse's service protection limits and requested again with a smaller `count` when it's over the ToolBox's 16 MB response limit. A failed page shows how many rows loaded, with **Retry**
+- **Paging and Retrieve All** — Scrolling to the end loads the next page; **Retrieve All** loads every page, up to 100,000 rows, with **Stop** to keep what's loaded so far. Throttled pages during Retrieve All wait about 4.5 minutes in all before giving up, and the status line shows the wait. Deletes of 4 records or more, workflows, Activate / Deactivate and Close on many records wait the same way; the Delete and Run workflow dialogs show the wait. Pages use the documented paging cookie and the query's own `count` and starting `page`. Queries Dataverse returns no cookie for (sorted by a link-entity attribute, or distinct) page by page number, with a note. Views follow `@odata.nextLink`. Every page, the first included, is retried after Dataverse's service protection limits and requested again with a smaller `count` when it's over the ToolBox's response size limit. A failed page shows how many rows loaded, with **Retry**
 - **Rich cell rendering** — Power Apps-style display for lookups, option sets, dates, currency, and more
 - **Column header menu** — Click a header for **Sort** (A to Z, smallest to largest or oldest to newest, by type), **Filter by…** and **Clear filter**. Shift+click a header still adds it to a multi-column sort.
 - **Column filters** — **Filter by…** adds a `<condition>` to the query and runs it again, so the filter covers every record, not just the loaded ones. Operators and value pickers follow the attribute's metadata, as in the property panel. Column filters are kept in their own `<filter type="and">` inside the root filter, apart from the conditions you built. An `or` root filter is wrapped so the column filters narrow the results; it's unwrapped again when the last column filter goes. Link-entity columns use `entityname`, which filters after the join. Active filters show as removable tags above the grid, and filtered columns show a filter icon
@@ -233,7 +233,7 @@ Nothing else writes to Dataverse:
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application, **version 1.2.7 or later**. FetchXML Studio 1.5 and later target PPTB 1.2.7 (`minAPI` 1.2.7); 1.4.x, which is no longer supported, works with 1.2.2 or later
+- [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app) desktop application, **version 1.2.8 or later**. FetchXML Studio 1.7 and later target PPTB 1.2.8 (`minAPI` 1.2.8); 1.5 and 1.6 target 1.2.7; 1.4.x, which is no longer supported, works with 1.2.2 or later
 - Connection to a Dataverse environment
 
 ### Installation
@@ -344,7 +344,7 @@ disableAllDebug();
 | **Monaco Editor** | 0.54 | VS Code XML editor for FetchXML authoring |
 | **react-window** | 2 | Virtualized list rendering for large datasets |
 | **ExcelJS** | 4.4 | Native `.xlsx` generation with typed cells |
-| **@pptb/types** | 1.2.3 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
+| **@pptb/types** | 1.2.8 | Power Platform ToolBox host API types (`window.dataverseAPI`, `window.toolboxAPI`) |
 | **Vitest** | 5 | Unit tests (jsdom) |
 
 ## 📁 Project Structure

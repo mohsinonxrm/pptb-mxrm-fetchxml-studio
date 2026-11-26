@@ -259,9 +259,9 @@ export function useQueryExecution({
 				);
 				// The first page gets the same recovery as later pages (#183): retried after service
 				// protection errors (#96), and requested again with half the count when it's over the
-				// PPTB host's 16 MB response limit (#68). That is the common case: a 5,000-row first page
-				// of a wide Entity. Without a count, Dataverse's default page size (5,000) is the starting
-				// point; queries with top or aggregate can't take a count, so they only get the retry.
+				// PPTB host's response size limit (#68): a 5,000-row first page of a very wide Entity.
+				// Without a count, Dataverse's default page size (5,000) is the starting point; queries
+				// with top or aggregate can't take a count, so they only get the retry.
 				const canShrink = !hasTopLimit && query?.options?.aggregate !== true;
 				const firstPageState: PagingState = {
 					mode: "fetchxml",
@@ -324,7 +324,7 @@ export function useQueryExecution({
 				mode: useViewExecution ? "view" : "fetchxml",
 				xml: xmlToExecute,
 				pageSize: firstPageShrunkTo?.pageSize ?? options.count,
-				// Dataverse's default page size, for a smaller page after the 16 MB limit (#68)
+				// Dataverse's default page size, for a smaller page after the host's size limit (#68)
 				fullPageSize:
 					options.count === undefined && moreRecords ? result.records.length : undefined,
 				// After a smaller first page (#183), paging continues from the page it was fetched as
@@ -369,7 +369,7 @@ export function useQueryExecution({
 		state: PagingState,
 		retry?: ThrottleRetryOptions,
 	): Promise<{ result: FetchXmlResult; next: PagingState }> => {
-		// Retried after service protection errors (#96); a page over the host's 16 MB limit is
+		// Retried after service protection errors (#96); a page over the host's size limit is
 		// requested again with half the count, which later pages keep (#68)
 		const { result, state: fetched } = await fetchPageWithRecovery(
 			state,

@@ -1,12 +1,13 @@
 /**
- * Fetching the next page despite throttling and the PPTB host's 16 MB response limit (#68, #96).
+ * Fetching the next page despite throttling and the PPTB host's response size limit (#68, #96).
  *
- * PPTB 1.2.7 rejects any Dataverse response over 16 MB with "Dataverse response exceeds the maximum
- * size" (dataverseManager.ts makeHttpRequest, MAX_DATAVERSE_BATCH_RESPONSE_BYTES). A 5,000-row page
- * of a wide Entity with all annotations can exceed it (verified on the sandbox: Learn's
- * all-attributes account example). When a page fails that way, the same page is requested again
- * with half the count, and paging continues at that size.
- * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.7/src/main/managers/dataverseManager.ts
+ * PPTB rejects a Dataverse response over its limit with "Dataverse response exceeds the maximum
+ * size" (dataverseManager.ts makeHttpRequest). PPTB 1.2.7 allowed 16 MB, which a 5,000-row page of a
+ * wide Entity with all annotations can exceed (verified on the sandbox: Learn's all-attributes
+ * account example); since 1.2.8 a query page may be 128 MB (MAX_DATAVERSE_RESPONSE_BYTES), so this
+ * is rare now. When a page fails that way, the same page is requested again with half the count,
+ * and paging continues at that size.
+ * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/managers/dataverseManager.ts
  * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/page-results
  *
  * Only FetchXML paging can change its page size; saved views follow @odata.nextLink, whose page

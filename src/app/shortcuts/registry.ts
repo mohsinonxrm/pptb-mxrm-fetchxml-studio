@@ -10,7 +10,7 @@
  * F2 goes to the newest notification. They type no text, so they work in fields too. F2 also works
  * inside Monaco: Monaco binds it to "rename symbol" only where a rename provider exists, and
  * FetchXML (XML) has none, so the key reaches the Toaster's document listener.
- * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB 1.2.7 owns
+ * Not included on purpose: Ctrl+B (decided no), F5 (decided no) and anything PPTB's menu owns
  * (PPTB_RESERVED). PPTB's Edit menu also has Undo and Redo (Ctrl+Z / Ctrl+Y). Checked in PPTB 1.2.7:
  * the keys reach the tool, and one press is one builder undo; choosing them from the menu doesn't
  * undo the query (#192).
@@ -149,7 +149,10 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 	},
 ];
 
-/** Combinations the PPTB 1.2.7 host menu owns; no global shortcut may use one. */
+/**
+ * Combinations the PPTB host menu owns; no global shortcut may use one. The same in 1.2.7, 1.2.8 and
+ * 1.2.9 (src/main/index.ts menu accelerators, #346).
+ */
 export const PPTB_RESERVED: readonly string[] = [
 	"Ctrl+R",
 	"Ctrl+H",

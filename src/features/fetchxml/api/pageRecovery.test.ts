@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DATAVERSE_DEFAULT_PAGE_SIZE, fetchPageWithRecovery, halvePageSize } from "./pageRecovery";
 import type { PagingState } from "./paging";
 
-// #68: a page over the PPTB host's 16 MB limit is fetched again with half the count.
+// #68: a page over the PPTB host's response size limit is fetched again with half the count.
 
 const TOO_LARGE = new Error("Dataverse response exceeds the maximum size");
 
