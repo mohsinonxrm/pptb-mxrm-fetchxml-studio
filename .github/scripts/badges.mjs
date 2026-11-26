@@ -158,8 +158,9 @@ export const badgeMarkdown = (pkg) =>
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * The README with each badge line, whatever ref it points at now, replaced by this version's line
- * (#379). Only whole lines that are one of the badge images change.
+ * The README with every badge line, whatever ref it points at now, replaced by this version's line
+ * (#379). Only lines that are one of the badge images change (every copy; spaces around the image
+ * are dropped, as the release check ignores them).
  * @param {string} readme
  * @param {{ repository: string, files: string[], lines: string[] }} badgeSet the badge files and
  *   their lines, in the same order (badges() and badgeMarkdown())
@@ -168,13 +169,25 @@ export function rewriteBadgeLines(readme, { repository, files, lines }) {
 	const repo = escapeRegExp(repository);
 	return files.reduce((text, file, i) => {
 		const line = new RegExp(
-			String.raw`^!\[[^\]\r\n]*\]\(https://raw\.githubusercontent\.com/${repo}/[^)\s]*/assets/badges/${escapeRegExp(file)}\)$`,
-			"m",
+			String.raw`^[ \t]*!\[[^\]\r\n]*\]\(https://raw\.githubusercontent\.com/${repo}/[^)\s]*/assets/badges/${escapeRegExp(file)}\)[ \t]*$`,
+			"gm",
 		);
 		return text.replace(line, () => lines[i]);
 	}, readme);
 }
 
-/** package.json's text with only the readmeUrl value changed, so the file keeps its formatting */
+/** The badge lines the README doesn't show, each on a line of its own (as the release check reads it) */
+export const missingBadgeLines = (readme, lines) => {
+	const present = new Set(readme.split(/\r?\n/).map((l) => l.trim()));
+	return lines.filter((line) => !present.has(line));
+};
+
+/**
+ * package.json's text with only `configurations.readmeUrl`'s value changed, so the file keeps its
+ * formatting. Unchanged when there's no such key.
+ */
 export const rewriteReadmeUrl = (pkgText, readmeUrl) =>
-	pkgText.replace(/("readmeUrl":\s*)"[^"]*"/, (_, key) => `${key}${JSON.stringify(readmeUrl)}`);
+	pkgText.replace(
+		/("configurations"\s*:\s*\{[^{}]*?"readmeUrl"\s*:\s*)"[^"]*"/,
+		(_, key) => `${key}${JSON.stringify(readmeUrl)}`,
+	);

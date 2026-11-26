@@ -25,7 +25,7 @@ jobs:
           cache: npm
       # Like the release build (#188): only esbuild and fsevents have install scripts, and neither needs them
       - run: npm ci --ignore-scripts
-      # The version, package-lock.json, the CHANGELOG section and the README badge agree (RELEASING.md)
+      # The version, package-lock.json, the CHANGELOG section, the README badges and readmeUrl agree (RELEASING.md)
       - name: Check the release metadata
         run: node .github/scripts/check-release.mjs
       - name: Audit runtime dependencies (no high or critical findings)

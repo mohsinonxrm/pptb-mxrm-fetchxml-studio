@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fails when the release metadata doesn't match package.json's version (RELEASING.md): the
-// version's shape, package-lock.json, the CHANGELOG section, the README badges and, with --dist,
-// the bundled icon. With --notes, writes the GitHub Release notes built from the CHANGELOG.
+// version's shape, package-lock.json, the CHANGELOG section, the README badges (at the version's
+// tag), configurations.readmeUrl and, with --dist, the bundled icon. With --notes, writes the GitHub Release notes built from the CHANGELOG.
 //
 // Usage:
 //   node .github/scripts/check-release.mjs                       # before the build

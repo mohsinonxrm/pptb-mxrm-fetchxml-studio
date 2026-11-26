@@ -3,7 +3,7 @@
 // and the bundled icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by
 // check-release.mjs; pure functions, so they're unit tested (release-checks.test.mjs).
 
-import { badgeMarkdown, badges, readmeUrlFor } from "./badges.mjs";
+import { badgeMarkdown, badges, missingBadgeLines, readmeUrlFor } from "./badges.mjs";
 
 /** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N: the shapes release.yml publishes */
 export const VERSION_PATTERN =
@@ -79,15 +79,16 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) 
 			`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`,
 		);
 	// Each badge on a line of its own: an image inside a link shows as raw Markdown in PPTB (#348)
-	const readmeLines = new Set(readme.split(/\r?\n/).map((l) => l.trim()));
-	const missing = badgeMarkdown(pkg).filter((line) => !readmeLines.has(line));
+	const missing = missingBadgeLines(readme, badgeMarkdown(pkg));
 	if (missing.length > 0)
 		problems.push(
 			`README.md doesn't show these badges, each on a line of its own: ${missing.join(" ")}`,
 		);
 	// PPTB's details page reads configurations.readmeUrl: this version's README (#379)
 	const readmeUrl = readmeUrlFor(pkg);
-	if (pkg.configurations?.readmeUrl !== readmeUrl)
+	if (!pkg.configurations?.readmeUrl)
+		problems.push(`package.json has no configurations.readmeUrl: add it as ${readmeUrl}.`);
+	else if (pkg.configurations.readmeUrl !== readmeUrl)
 		problems.push(
 			`package.json configurations.readmeUrl isn't ${readmeUrl}: run \`npm run badges\`.`,
 		);

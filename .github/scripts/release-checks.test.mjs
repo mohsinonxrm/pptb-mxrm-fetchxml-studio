@@ -4,6 +4,7 @@ import {
 	badges,
 	badgeSvg,
 	badgeUrl,
+	missingBadgeLines,
 	readmeRef,
 	readmeUrlFor,
 	rewriteBadgeLines,
@@ -336,6 +337,39 @@ describe("each version's README: badges at its tag, readmeUrl that exists before
 		const text = `{\n\t"name": "x",\n\t"configurations": {\n\t\t"readmeUrl": "${REPO}/refs/heads/main/README.md",\n\t\t"repository": "y"\n\t}\n}\n`;
 		expect(rewriteReadmeUrl(text, `${REPO}/refs/heads/release/1.7/README.md`)).toBe(
 			text.replace("refs/heads/main", "refs/heads/release/1.7"),
+		);
+	});
+
+	it("rewrites badge lines with spaces around them, and every copy (review)", () => {
+		const next = at("1.7.0-beta.1");
+		const set = {
+			repository: "owner/tool",
+			files: badges(next).map((b) => b.file),
+			lines: badgeMarkdown(next),
+		};
+		const [version] = badgeMarkdown(at("1.6.0"));
+		const text = `  ${version}  \n\t${version}\n`;
+		const line = badgeMarkdown(next)[0];
+		expect(rewriteBadgeLines(text, set)).toBe(`${line}\n${line}\n`);
+		// CRLF line endings stay
+		expect(rewriteBadgeLines(`${version}\r\nText\r\n`, set)).toBe(`${line}\r\nText\r\n`);
+	});
+
+	it("lists the badges the README has no line for (review)", () => {
+		const lines = badgeMarkdown(pkg);
+		expect(missingBadgeLines(`# Tool\n\n  ${lines[0]}  \n`, lines.slice(0, 2))).toEqual([
+			lines[1],
+		]);
+	});
+
+	it("rewrites configurations.readmeUrl only, and says when there's none (review)", () => {
+		const text = `{\n\t"a": { "readmeUrl": "keep" },\n\t"configurations": {\n\t\t"website": "w",\n\t\t"readmeUrl": "old"\n\t}\n}\n`;
+		expect(rewriteReadmeUrl(text, "new")).toBe(text.replace('"old"', '"new"'));
+		const none = `{\n\t"configurations": { "website": "w" }\n}\n`;
+		expect(rewriteReadmeUrl(none, "new")).toBe(none);
+		const missing = { ...pkg, configurations: { website: "w" } };
+		expect(checkReleaseFiles({ ...files, pkg: missing }).join(" ")).toMatch(
+			/package\.json has no configurations\.readmeUrl: add it as https:\/\/raw\.githubusercontent\.com\/owner\/tool\/refs\/heads\/release\/1\.5\/README\.md\./,
 		);
 	});
 });

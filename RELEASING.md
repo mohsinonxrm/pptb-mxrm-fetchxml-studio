@@ -44,9 +44,10 @@ locally. The same process is used by Command Bar Studio and Dataverse Request St
 When a forward merge conflicts badly because the code has moved on, re-apply the fix on
 the newer branch in a small companion PR instead.
 
-**Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json`, `package-lock.json` and
-the version badge (`assets/badges/version.svg`), the README's badge lines and `readmeUrl`: keep the **higher** of the two versions (semver), with its lock fields,
-badges, badge lines and `readmeUrl` (`npm run badges`), and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
+**Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json` (with its `readmeUrl`),
+`package-lock.json`, the version badge (`assets/badges/version.svg`) and the README's badge lines:
+keep the **higher** of the two versions (semver), with its lock fields, then run `npm run badges`
+for its badges, badge lines and `readmeUrl`, and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
 version order, highest first. So the newest dated section is always the branch's version, which
 `check-release.mjs` checks. For example, a `1.5.1` hotfix merged into `dev` at `1.5.0` makes
 `dev` `1.5.1`; merged into `dev` at `1.6.0-beta.2`, `dev` stays `1.6.0-beta.2` with `[1.5.1]`

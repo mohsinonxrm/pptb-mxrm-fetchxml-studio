@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import {
 	badgeMarkdown,
 	badges,
+	missingBadgeLines,
 	readmeUrlFor,
 	repositoryOf,
 	rewriteBadgeLines,
@@ -29,8 +30,13 @@ const nextReadme = rewriteBadgeLines(readme, {
 });
 if (nextReadme !== readme) writeFileSync("README.md", nextReadme);
 console.log("README.md badge lines");
+// A new badge has no line to rewrite: say so, rather than let the release check find it later
+for (const line of missingBadgeLines(nextReadme, badgeMarkdown(pkg)))
+	console.warn(`README.md has no line for this badge; add it with the others: ${line}`);
 
 const readmeUrl = readmeUrlFor(pkg);
 const nextPkg = rewriteReadmeUrl(pkgText, readmeUrl);
 if (nextPkg !== pkgText) writeFileSync("package.json", nextPkg);
-console.log(`package.json readmeUrl → ${readmeUrl}`);
+if (JSON.parse(nextPkg).configurations?.readmeUrl === readmeUrl)
+	console.log(`package.json readmeUrl → ${readmeUrl}`);
+else console.warn(`package.json has no configurations.readmeUrl; add it: ${readmeUrl}`);
