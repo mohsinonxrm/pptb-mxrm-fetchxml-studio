@@ -66,6 +66,7 @@ import {
 import { MoreHorizontal20Filled, MoreHorizontal20Regular, bundleIcon } from "@fluentui/react-icons";
 import type { BarCommand } from "./types";
 import { withReason } from "../WithReason";
+import { StableTooltip } from "../StableTooltip";
 
 const MoreIcon = bundleIcon(MoreHorizontal20Filled, MoreHorizontal20Regular);
 
@@ -290,13 +291,9 @@ const PopoverControl = forwardRef<
 			}
 		>
 			<PopoverTrigger disableButtonEnhancement>
-				{tooltip ? (
-					<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-						{button}
-					</Tooltip>
-				) : (
-					button
-				)}
+				<StableTooltip content={tooltip?.content} relationship={tooltip?.relationship}>
+					{button}
+				</StableTooltip>
 			</PopoverTrigger>
 			<PopoverSurface aria-label={c.label} className={styles.popoverSurface}>
 				{c.popover}
@@ -320,14 +317,13 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 	const tooltip = barTooltip(c);
 	const children = c.iconOnly ? undefined : c.label;
 	const appearance = c.appearance ?? "subtle";
-	const withTooltip = (element: ReactElement) =>
-		tooltip ? (
-			<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-				{element}
-			</Tooltip>
-		) : (
-			element
-		);
+	// Always the same wrapper, so a command keeps its element when it gains or loses a hint or a
+	// reason: a dialog it opened returns focus to it (#393)
+	const withTooltip = (element: ReactElement) => (
+		<StableTooltip content={tooltip?.content} relationship={tooltip?.relationship}>
+			{element}
+		</StableTooltip>
+	);
 	const common = { icon, className, disabledFocusable: off, ...restoreFocus, ...barNameOf(c) };
 
 	if (c.kind === "popover") {
@@ -381,15 +377,14 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 		return (
 			<Menu onOpenChange={menuOpenChange(c)}>
 				<MenuTrigger disableButtonEnhancement>
-					{(menuButton: MenuButtonProps) =>
-						tooltip ? (
-							<Tooltip content={tooltip.content} relationship={tooltip.relationship}>
-								{(primary) => split(menuButton, primary as Record<string, unknown>)}
-							</Tooltip>
-						) : (
-							split(menuButton)
-						)
-					}
+					{(menuButton: MenuButtonProps) => (
+						<StableTooltip
+							content={tooltip?.content}
+							relationship={tooltip?.relationship}
+						>
+							{(primary) => split(menuButton, primary as Record<string, unknown>)}
+						</StableTooltip>
+					)}
 				</MenuTrigger>
 				<MenuPopover>{c.menu}</MenuPopover>
 			</Menu>
@@ -443,15 +438,15 @@ const BarControl = forwardRef<HTMLButtonElement, { command: BarCommand }>(functi
 });
 
 /**
- * The tree shape a command renders: a change here swaps the element under OverflowItem (a Tooltip
- * added or removed, Button for ToolbarButton, radio for toggle). Fluent's OverflowItem registers its
+ * The tree shape a command renders: a change here swaps the element under OverflowItem (Button for
+ * ToolbarButton, radio for toggle). A Tooltip is always there (StableTooltip, #393), so gaining or
+ * losing a hint or a reason isn't a new shape. Fluent's OverflowItem registers its
  * element only when id, priority, groupId or pinned change, so it would keep measuring the old,
  * detached element. Keying the OverflowItem by shape remounts it, and it registers the new one.
  */
 const shapeOf = (command: BarCommand) =>
 	[
 		command.kind,
-		barTooltip(command) ? "tip" : "",
 		command.kind === "button" && command.appearance === "secondary" ? "secondary" : "",
 		command.radioName ? "radio" : "",
 	].join(".");

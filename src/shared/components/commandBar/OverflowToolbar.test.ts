@@ -767,14 +767,17 @@ describe("OverflowToolbar focus return", () => {
 	});
 });
 
-describe("OverflowToolbar: a command that becomes unavailable while focused (#279)", () => {
-	it("keeps focus: the new element (a Tooltip now wraps it) gets it, with its reason", async () => {
+describe("OverflowToolbar: a command that gains or loses a reason keeps its element (#279, #393)", () => {
+	it("stays the same element, keeps focus and now says why", async () => {
 		stubOverflowWidths({ container: 3000 });
 		await renderBar([button("Export", 10)]);
-		onBar("Export")?.focus();
+		const before = onBar("Export");
+		before?.focus();
 		await renderBar([button("Export", 10, { disabledReason: "Export in progress..." })]);
-		const after = onBar("Export");
-		expect(document.activeElement).toBe(after);
-		expect(after?.getAttribute("aria-disabled")).toBe("true");
+		expect(onBar("Export")).toBe(before);
+		expect(document.activeElement).toBe(before);
+		expect(before?.getAttribute("aria-disabled")).toBe("true");
+		await renderBar([button("Export", 10)]);
+		expect(onBar("Export")).toBe(before);
 	});
 });

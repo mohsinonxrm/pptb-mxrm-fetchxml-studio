@@ -7,7 +7,7 @@
  * Marked as a Fluent trigger component, like Tooltip itself: a MenuTrigger or OverflowItem around it
  * applies its props and ref to the control inside, not to this wrapper.
  */
-import { useEffect, useState, type FC, type ReactElement } from "react";
+import { useEffect, useState, type FC } from "react";
 import { Tooltip, type TooltipProps } from "@fluentui/react-components";
 
 export interface StableTooltipProps {
@@ -16,7 +16,8 @@ export interface StableTooltipProps {
 	/** How it relates to the control (default: it describes it) */
 	relationship?: "label" | "description";
 	positioning?: TooltipProps["positioning"];
-	children: ReactElement;
+	/** The control, or a render function that applies the trigger props itself (a SplitButton's primary) */
+	children: TooltipProps["children"];
 }
 
 /** Fluent's trigger marker (FluentTriggerComponent in react-utilities) */
