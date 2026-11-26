@@ -110,6 +110,96 @@ describe("planRemoveColumns", () => {
 	});
 });
 
+describe("planRemoveColumns: root entityname references to the link-entity (#357)", () => {
+	const ACCOUNT = (inner: string) =>
+		parse(`<fetch><entity name="account"><attribute name="name" />${inner}</entity></fetch>`);
+	const ids = (...nodes: { id: string }[]) => nodes.map((n) => n.id).sort();
+
+	it.each([
+		["by name, link-entity without an alias", "", "systemuser", "systemuser1.fullname"],
+		["by alias", ` alias="u"`, "u", "u.fullname"],
+		["by name, link-entity with an alias", ` alias="u"`, "systemuser", "u.fullname"],
+	])(
+		"a root order on the removed column goes with the link-entity (%s)",
+		(_label, alias, entityname, key) => {
+			const fetch = ACCOUNT(
+				`${OWN(alias)}<order attribute="fullname" entityname="${entityname}" />`,
+			);
+			const plan = planRemoveColumns(fetch, [key]);
+			expect(plan.removedLinks).toEqual([fetch.entity.links[0]]);
+			expect([...plan.removeNodeIds].sort()).toEqual(
+				ids(fetch.entity.links[0], fetch.entity.orders[0]),
+			);
+		},
+	);
+
+	it("an order inside the link-entity on the removed column goes with it too", () => {
+		const fetch = ACCOUNT(
+			OWN(` alias="u"`, `<attribute name="fullname" /><order attribute="fullname" />`),
+		);
+		const plan = planRemoveColumns(fetch, ["u.fullname"]);
+		expect(plan.removedLinks).toEqual([fetch.entity.links[0]]);
+		// The order is inside the removed link-entity, so it isn't listed on its own
+		expect(plan.removeNodeIds).toEqual([fetch.entity.links[0].id]);
+	});
+
+	it("a root order on another attribute keeps the link-entity, and the order (owner decision 2)", () => {
+		const fetch = ACCOUNT(`${OWN(` alias="u"`)}<order attribute="createdon" entityname="u" />`);
+		const plan = planRemoveColumns(fetch, ["u.fullname"]);
+		expect(plan.removedLinks).toEqual([]);
+		expect(plan.removeNodeIds).toEqual([fetch.entity.links[0].attributes[0].id]);
+	});
+
+	it("an order inside the link-entity on another attribute keeps it", () => {
+		const fetch = ACCOUNT(
+			OWN(` alias="u"`, `<attribute name="fullname" /><order attribute="createdon" />`),
+		);
+		expect(planRemoveColumns(fetch, ["u.fullname"]).removedLinks).toEqual([]);
+	});
+
+	it.each([
+		[
+			"in the root filter",
+			`<filter><condition entityname="u" attribute="fullname" operator="like" value="%a%" /></filter>`,
+		],
+		[
+			"in a nested filter",
+			`<filter type="or"><condition attribute="name" operator="null" /><filter><condition entityname="u" attribute="fullname" operator="like" value="%a%" /></filter></filter>`,
+		],
+		[
+			"by the link-entity's name",
+			`<filter><condition entityname="systemuser" attribute="fullname" operator="not-null" /></filter>`,
+		],
+	])(
+		"a root condition on the link-entity keeps it, so the rows stay filtered (%s)",
+		(_label, filter) => {
+			const fetch = ACCOUNT(
+				`${OWN(` alias="u"`)}${filter}<order attribute="fullname" entityname="u" />`,
+			);
+			const plan = planRemoveColumns(fetch, ["u.fullname"]);
+			expect(plan.removedLinks).toEqual([]);
+			// Only the attribute goes: the link-entity stays, so its order is still valid
+			expect(plan.removeNodeIds).toEqual([fetch.entity.links[0].attributes[0].id]);
+		},
+	);
+
+	it("resolves entityname to an alias before a name, as the order rules do", () => {
+		// The order's entityname is the contact link-entity's alias, not the removed systemuser link-entity
+		const fetch = ACCOUNT(
+			`<link-entity name="contact" from="contactid" to="primarycontactid" link-type="outer" alias="systemuser"><attribute name="fullname" /></link-entity>${OWN(` alias="u"`)}<order attribute="fullname" entityname="systemuser" />`,
+		);
+		const plan = planRemoveColumns(fetch, ["u.fullname"]);
+		expect(plan.removedLinks).toEqual([fetch.entity.links[1]]);
+		expect(plan.removeNodeIds).toEqual([fetch.entity.links[1].id]);
+	});
+
+	it("a root order on a root attribute isn't touched", () => {
+		const fetch = ACCOUNT(`${OWN(` alias="u"`)}<order attribute="fullname" />`);
+		const plan = planRemoveColumns(fetch, ["u.fullname"]);
+		expect(plan.removeNodeIds).toEqual([fetch.entity.links[0].id]);
+	});
+});
+
 describe("planSortByColumn", () => {
 	const fetch = parse(
 		`<fetch><entity name="account"><attribute name="name" alias="n" />${OWN(` alias="o"`, `<attribute name="fullname" alias="owner" />`)}<link-entity name="contact" from="contactid" to="primarycontactid" link-type="outer"><attribute name="fullname" /></link-entity></entity></fetch>`,
