@@ -14,6 +14,7 @@ import {
 	useRef,
 	forwardRef,
 	useImperativeHandle,
+	useId,
 } from "react";
 import {
 	createTableColumn,
@@ -257,6 +258,11 @@ const useStyles = makeStyles({
 		width: "240px",
 		flexShrink: 1,
 	},
+	// The filter popover's title is its heading (#279)
+	filterTitle: {
+		margin: 0,
+		fontSize: tokens.fontSizeBase300,
+	},
 	filterSurface: {
 		display: "flex",
 		flexDirection: "column",
@@ -384,6 +390,7 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 	ref,
 ) {
 	const styles = useStyles();
+	const filterTitleId = useId();
 	// One density for the grid and the tree (#228)
 	const density = normalizeGridDensity(displaySettings?.gridDensity);
 	const { targetDocument } = useFluent();
@@ -1792,11 +1799,18 @@ export const ResultsGrid = forwardRef<ResultsGridHandle, ResultsGridProps>(funct
 			>
 				<PopoverSurface
 					className={styles.filterSurface}
-					aria-label={filterFor ? `Filter by ${filterFor.header}` : undefined}
+					aria-labelledby={filterFor ? filterTitleId : undefined}
 				>
 					{filterFor && draftCondition && fetchQuery && (
 						<>
-							<Text weight="semibold">Filter by {filterFor.header}</Text>
+							<Text
+								as="h2"
+								id={filterTitleId}
+								weight="semibold"
+								className={styles.filterTitle}
+							>
+								Filter by {filterFor.header}
+							</Text>
 							<ConditionEditor
 								columnFilter
 								node={draftCondition}

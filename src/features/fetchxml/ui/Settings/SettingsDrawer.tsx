@@ -3,7 +3,7 @@
  * Contains display preferences for FetchXML Studio
  */
 
-import { useCallback } from "react";
+import { useCallback, useId } from "react";
 import {
 	DrawerBody,
 	DrawerHeader,
@@ -32,6 +32,7 @@ const useStyles = makeStyles({
 		marginBottom: tokens.spacingVerticalL,
 	},
 	sectionTitle: {
+		margin: 0,
 		fontSize: tokens.fontSizeBase400,
 		fontWeight: tokens.fontWeightSemibold,
 		marginBottom: tokens.spacingVerticalM,
@@ -78,6 +79,11 @@ export interface SettingsDrawerProps {
 
 export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: SettingsDrawerProps) {
 	const styles = useStyles();
+	// The controls are named by their visible labels and described by the text under them (#390)
+	const logicalNamesLabelId = useId();
+	const logicalNamesHintId = useId();
+	const valueModeLabelId = useId();
+	const valueModeHintId = useId();
 
 	const handleLogicalNamesChange = useCallback(
 		(checked: boolean) => {
@@ -126,7 +132,9 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 			<DrawerBody>
 				{/* ── Query Scope Section ──────────────────────────────── */}
 				<div className={styles.section}>
-					<Text className={styles.sectionTitle}>Query scope</Text>
+					<Text as="h3" className={styles.sectionTitle}>
+						Query scope
+					</Text>
 
 					<Text className={styles.settingDescription} block>
 						Set where entities come from (publisher, solutions, all entities) and
@@ -138,19 +146,29 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 
 				{/* ── Display Section ──────────────────────────────────── */}
 				<div className={styles.section} style={{ marginTop: tokens.spacingVerticalL }}>
-					<Text className={styles.sectionTitle}>Display</Text>
+					<Text as="h3" className={styles.sectionTitle}>
+						Display
+					</Text>
 
 					{/* Logical Names Toggle */}
 					<div className={styles.settingItem}>
 						<div className={styles.settingRow}>
 							<div>
-								<Text className={styles.settingLabel}>Use logical names</Text>
-								<Text className={styles.settingDescription} block>
+								<Text id={logicalNamesLabelId} className={styles.settingLabel}>
+									Use logical names
+								</Text>
+								<Text
+									id={logicalNamesHintId}
+									className={styles.settingDescription}
+									block
+								>
 									Show attribute logical names in column headers instead of
 									display names
 								</Text>
 							</div>
 							<Switch
+								aria-labelledby={logicalNamesLabelId}
+								aria-describedby={logicalNamesHintId}
 								checked={settings.useLogicalNames}
 								onChange={(_e, data) => handleLogicalNamesChange(data.checked)}
 							/>
@@ -159,11 +177,15 @@ export function SettingsDrawer({ open, settings, onClose, onSettingsChange }: Se
 
 					{/* Value Display Mode */}
 					<div className={styles.settingItem}>
-						<Text className={styles.settingLabel}>Value display mode</Text>
-						<Text className={styles.settingDescription} block>
+						<Text id={valueModeLabelId} className={styles.settingLabel}>
+							Value display mode
+						</Text>
+						<Text id={valueModeHintId} className={styles.settingDescription} block>
 							How to display cell values in the results grid
 						</Text>
 						<Dropdown
+							aria-labelledby={valueModeLabelId}
+							aria-describedby={valueModeHintId}
 							className={styles.dropdown}
 							value={
 								settings.valueDisplayMode === "formatted"

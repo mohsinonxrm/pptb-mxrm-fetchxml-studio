@@ -12,10 +12,11 @@ import {
 	Checkbox,
 	Field,
 	InfoLabel,
-	Label,
 	Link,
 	SpinButton,
 	Text,
+	makeStyles,
+	tokens,
 	type LabelProps,
 } from "@fluentui/react-components";
 import { useEditorStyles } from "./editorStyles";
@@ -40,8 +41,20 @@ export function Info({ text, href }: { text: ReactNode; href?: string }) {
 	);
 }
 
+const useHeadingStyles = makeStyles({
+	// Looks as the semibold Label it was; an h3 under the pane's h2 (#279)
+	sectionHeading: {
+		margin: 0,
+		fontSize: tokens.fontSizeBase300,
+		lineHeight: tokens.lineHeightBase300,
+		fontWeight: tokens.fontWeightSemibold,
+		color: tokens.colorNeutralForeground1,
+	},
+});
+
 export function SectionHeading({ children }: { children: ReactNode }) {
-	return <Label weight="semibold">{children}</Label>;
+	const styles = useHeadingStyles();
+	return <h3 className={styles.sectionHeading}>{children}</h3>;
 }
 
 const infoLabel = (label: Content, info?: Content) =>

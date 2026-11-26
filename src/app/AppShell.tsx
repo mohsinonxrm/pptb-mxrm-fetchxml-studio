@@ -802,7 +802,7 @@ function AppContent({
 									/>
 									<div className={styles.leftPaneBottom}>
 										<div className={styles.toolbar}>
-											<span style={{ fontWeight: 600 }}>Properties</span>
+											<h2 className={styles.paneHeading}>Properties</h2>
 										</div>
 										<div className={styles.propertiesContent}>
 											{propertiesPanel}
@@ -820,7 +820,7 @@ function AppContent({
 						) : layout.peekPart === "props" ? (
 							<div className={styles.leftPaneBottom}>
 								<div className={mergeClasses(styles.toolbar, styles.peekBar)}>
-									<span style={{ fontWeight: 600 }}>Properties</span>
+									<h2 className={styles.paneHeading}>Properties</h2>
 									<span className={styles.peekBarEnd}>
 										<PinButton onClick={dockPane} />
 									</span>

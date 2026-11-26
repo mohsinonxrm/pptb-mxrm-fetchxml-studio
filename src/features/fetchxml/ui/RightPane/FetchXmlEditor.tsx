@@ -752,6 +752,8 @@ function FetchXmlEditorImpl(
 						</div>
 					}
 					options={{
+						// Screen readers name the editor (#279)
+						ariaLabel: isEditorMode ? "FetchXML editor" : "FetchXML editor, read-only",
 						readOnly: !isEditorMode,
 						minimap: { enabled: false },
 						scrollBeyondLastLine: false,

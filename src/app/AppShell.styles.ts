@@ -60,6 +60,13 @@ export const useStyles = makeStyles({
 		boxShadow: tokens.shadow16,
 		borderRight: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
 	},
+	// The pane's title is its heading (#279): an h2 that looks like the bar text it was
+	paneHeading: {
+		margin: 0,
+		fontSize: "inherit",
+		lineHeight: "inherit",
+		fontWeight: tokens.fontWeightSemibold,
+	},
 	peekBar: {
 		paddingBlock: "6px",
 		paddingRight: "8px",

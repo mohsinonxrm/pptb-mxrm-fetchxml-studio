@@ -373,6 +373,7 @@ export function CodePanel({
 						value={text}
 						theme={isDark ? "vs-dark" : "light"}
 						options={{
+							ariaLabel: `Code: ${CODE_LANGUAGE_LABELS[selected]}, read-only`,
 							readOnly: true,
 							minimap: { enabled: false },
 							scrollBeyondLastLine: false,
