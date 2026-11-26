@@ -140,15 +140,6 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		inEditable: true,
 	},
 	{
-		// Monaco's own Toggle Tab Key Moves Focus, in every code editor (#279): Tab leaves the editor
-		id: "tabMovesFocus",
-		label: "Let Tab move focus out of the editor",
-		keys: ["Ctrl+M"],
-		aria: "Control+M",
-		scope: "documented",
-		inEditable: true,
-	},
-	{
 		id: "copyGrid",
 		label: "Copy",
 		keys: ["Ctrl+C"],
