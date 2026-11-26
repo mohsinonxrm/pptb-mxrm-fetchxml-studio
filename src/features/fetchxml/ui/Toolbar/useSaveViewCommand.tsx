@@ -7,7 +7,7 @@
  * More, while the dialog state lives here once.
  */
 
-import { useState, useCallback, useEffect, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { MenuItem, MenuList, Tooltip } from "@fluentui/react-components";
 import {
 	Save20Filled,
@@ -64,8 +64,17 @@ export interface SaveViewCommandOptions {
 	) => void;
 	/** No query to save yet */
 	disabled?: boolean;
-	/** The save dialog closed without saving */
+	/**
+	 * The save dialog closed without saving, or a save waiting for the synced tree was dropped because
+	 * the tree moved on to other FetchXML (#373). A waiting save a newer save replaces isn't reported:
+	 * onSaveStart already says a save started.
+	 */
 	onCancel?: () => void;
+	/**
+	 * A save starts (Save, its menu, Ctrl+S, or a caller's onClick), before anything else happens.
+	 * Called synchronously, so a caller can tell its own save from a later one (#373).
+	 */
+	onSaveStart?: () => void;
 }
 
 export function useSaveViewCommand({
@@ -79,6 +88,7 @@ export function useSaveViewCommand({
 	onSaveComplete,
 	disabled = false,
 	onCancel,
+	onSaveStart,
 }: SaveViewCommandOptions): { command: BarCommand; dialog: ReactNode } {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dialogMode, setDialogMode] = useState<SaveViewDialogMode>("save");
@@ -93,6 +103,8 @@ export function useSaveViewCommand({
 		mode: SaveViewDialogMode;
 		publish: boolean;
 	} | null>(null);
+	// The tree has reached pendingOpen's FetchXML (so FetchXML other than it afterwards means it moved on)
+	const pendingReached = useRef(false);
 	// What Save offers for the view, with its checks (owner decision Q3)
 	const options = useSaveOptions(targetView);
 
@@ -104,6 +116,10 @@ export function useSaveViewCommand({
 
 	const requestOpen = useCallback(
 		async (mode: SaveViewDialogMode, publish: boolean) => {
+			onSaveStart?.();
+			// A save still waiting to open gives way to this one (#373)
+			pendingReached.current = false;
+			setPendingOpen(null);
 			const synced = await sync("save");
 			// Invalid FetchXML, or the user said no to the changes: nothing opens, so it's a cancel
 			if (synced.status === "cancelled") {
@@ -122,17 +138,27 @@ export function useSaveViewCommand({
 				publish,
 			});
 		},
-		[sync, openDialog, onCancel],
+		[sync, openDialog, onCancel, onSaveStart],
 	);
 
 	useEffect(() => {
 		if (!pendingOpen) return;
+		// The tree reached the synced FetchXML, then moved on to other FetchXML before the dialog could
+		// open (its entity's metadata never came): the save is dropped, as a cancel (#373)
+		if (fetchXml === pendingOpen.xml) pendingReached.current = true;
+		else if (pendingReached.current) {
+			pendingReached.current = false;
+			setPendingOpen(null);
+			onCancel?.();
+			return;
+		}
 		const ready =
 			fetchXml === pendingOpen.xml &&
 			entityLogicalName === pendingOpen.entity &&
 			objectTypeCode > 0 &&
 			primaryIdAttribute !== "";
 		if (!ready) return;
+		pendingReached.current = false;
 		setPendingOpen(null);
 		// Another entity's FetchXML isn't the view any more (its identity went): save it as a new view
 		if (pendingOpen.mode === "save" && targetView) openDialog("save", pendingOpen.publish);
@@ -145,6 +171,7 @@ export function useSaveViewCommand({
 		primaryIdAttribute,
 		openDialog,
 		targetView,
+		onCancel,
 	]);
 
 	const run = (action: SaveAction) =>
