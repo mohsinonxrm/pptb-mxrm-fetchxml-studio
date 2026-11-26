@@ -1,9 +1,9 @@
 // What every release must update, checked against package.json's version (RELEASING.md):
-// the version's shape, package-lock.json, the CHANGELOG section, the README badges and the bundled
-// icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by check-release.mjs;
-// pure functions, so they're unit tested (release-checks.test.mjs).
+// the version's shape, package-lock.json, the CHANGELOG section, the README badges, the readmeUrl
+// and the bundled icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by
+// check-release.mjs; pure functions, so they're unit tested (release-checks.test.mjs).
 
-import { badgeMarkdown, badges } from "./badges.mjs";
+import { badgeMarkdown, badges, readmeUrlFor } from "./badges.mjs";
 
 /** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N: the shapes release.yml publishes */
 export const VERSION_PATTERN =
@@ -84,6 +84,12 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) 
 	if (missing.length > 0)
 		problems.push(
 			`README.md doesn't show these badges, each on a line of its own: ${missing.join(" ")}`,
+		);
+	// PPTB's details page reads configurations.readmeUrl: this version's README (#379)
+	const readmeUrl = readmeUrlFor(pkg);
+	if (pkg.configurations?.readmeUrl !== readmeUrl)
+		problems.push(
+			`package.json configurations.readmeUrl isn't ${readmeUrl}: run \`npm run badges\`.`,
 		);
 	// A link whose text is an image or code: PPTB's README viewer shows it as raw Markdown (#348)
 	const formattedLinks = readme.match(/\[(!\[[^\]]*\]\([^)]*\)|`[^`\]]*`)\]\([^)]*\)/g) ?? [];

@@ -55,9 +55,35 @@ export function repositoryOf(pkg) {
 	return match[1];
 }
 
-/** Where the README links a badge: the file on main, as raw.githubusercontent.com serves it */
+/**
+ * The git ref a version's badges are read from: its release tag (#379). npm keeps each version's
+ * README, so the badges in it must be that version's, not main's (a beta's npm page showed the
+ * stable release's version). The tag is immutable; it exists once the release is tagged, before npm
+ * and ToolBox show the package.
+ */
+export const versionRef = (pkg) => `refs/tags/v${pkg.version}`;
+
+/** Where the README links a badge: the file at the version's tag, as raw.githubusercontent.com serves it */
 export const badgeUrl = (pkg, file) =>
-	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/refs/heads/main/assets/badges/${file}`;
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${versionRef(pkg)}/assets/badges/${file}`;
+
+/**
+ * The git ref of the README Power Platform ToolBox's details page shows (`configurations.readmeUrl`,
+ * #379). `pptb-validate` fetches it in CI and in the release build, before the version's tag exists,
+ * so it can't be the tag: a prerelease reads its release branch (`release/X.Y`, which holds the
+ * beta's README while it's tested), and a stable release reads main, which holds exactly that
+ * release's README. The same rule as Dataverse Request Studio.
+ */
+export const readmeRef = (pkg) => {
+	const [major, minor] = String(pkg.version).split(".");
+	return String(pkg.version).includes("-")
+		? `refs/heads/release/${major}.${minor}`
+		: "refs/heads/main";
+};
+
+/** package.json `configurations.readmeUrl` for this version */
+export const readmeUrlFor = (pkg) =>
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${readmeRef(pkg)}/README.md`;
 
 /**
  * Every README badge, from package.json: the file name, its alt text and the SVG. The order is the
@@ -119,12 +145,36 @@ export function badges(pkg) {
 }
 
 /**
- * The README's badge lines, one image per line. The version badge's alt text has no version, so a
- * release changes only the SVG (`npm run badges`), not the README. No badge is a link: Power
- * Platform ToolBox's README renderer shows an image inside a link as raw Markdown (#348).
+ * The README's badge lines, one image per line, at the version's tag (#379), so each release's
+ * `npm run badges` rewrites them. The version badge's alt text has no version. No badge is a link:
+ * Power Platform ToolBox's README renderer shows an image inside a link as raw Markdown (#348).
  */
 export const badgeMarkdown = (pkg) =>
 	badges(pkg).map((b) => {
 		const image = `![${b.alt}](${badgeUrl(pkg, b.file)})`;
 		return b.link ? `[${image}](${b.link})` : image;
 	});
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The README with each badge line, whatever ref it points at now, replaced by this version's line
+ * (#379). Only whole lines that are one of the badge images change.
+ * @param {string} readme
+ * @param {{ repository: string, files: string[], lines: string[] }} badgeSet the badge files and
+ *   their lines, in the same order (badges() and badgeMarkdown())
+ */
+export function rewriteBadgeLines(readme, { repository, files, lines }) {
+	const repo = escapeRegExp(repository);
+	return files.reduce((text, file, i) => {
+		const line = new RegExp(
+			String.raw`^!\[[^\]\r\n]*\]\(https://raw\.githubusercontent\.com/${repo}/[^)\s]*/assets/badges/${escapeRegExp(file)}\)$`,
+			"m",
+		);
+		return text.replace(line, () => lines[i]);
+	}, readme);
+}
+
+/** package.json's text with only the readmeUrl value changed, so the file keeps its formatting */
+export const rewriteReadmeUrl = (pkgText, readmeUrl) =>
+	pkgText.replace(/("readmeUrl":\s*)"[^"]*"/, (_, key) => `${key}${JSON.stringify(readmeUrl)}`);
