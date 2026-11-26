@@ -125,6 +125,14 @@ export function holdClose(): () => void {
 	};
 }
 
+/**
+ * Whether FetchXML Studio is holding the host's close warning now (a Retrieve All, a delete…). The
+ * host then asks before it closes the tool, so a delivered Return FetchXML can leave it open (#363).
+ */
+export function isClosePrevented(): boolean {
+	return closeHolds > 0;
+}
+
 /** Runs an operation while holding the host's close warning (see holdClose). */
 export async function whileHoldingClose<T>(operation: () => Promise<T>): Promise<T> {
 	const release = holdClose();

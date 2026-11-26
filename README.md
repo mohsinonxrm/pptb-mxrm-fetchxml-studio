@@ -471,6 +471,8 @@ When FetchXML Studio is launched by another tool, a **Return FetchXML** command 
 
 The caller receives this as the resolved value of `launchTool(...)`. This is distinct from the host-injected "Return to [Caller]" banner, which simply navigates back and resolves the caller's promise with `null` (no data).
 
+If the tool that opened FetchXML Studio has been closed, the FetchXML can't go back to it. Power Platform ToolBox ignores the return without an error and leaves FetchXML Studio open, so after a moment FetchXML Studio says the FetchXML couldn't be returned, with **Copy FetchXML**. While **Retrieve all records** runs, FetchXML Studio asks ToolBox to confirm before closing it, so ToolBox shows its own prompt after a return, and FetchXML Studio doesn't add a message of its own.
+
 ### Sending a query from another PPTB tool
 
 To launch FetchXML Studio from your own PPTB tool with a pre-loaded query:
