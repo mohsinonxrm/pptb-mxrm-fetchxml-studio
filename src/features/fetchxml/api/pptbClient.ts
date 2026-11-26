@@ -1427,28 +1427,22 @@ export async function getAllEntitiesForScopes(): Promise<EntityMetadata[]> {
 }
 
 /**
- * Filter global entity metadata cache by entity logical names
- * Returns entities from cache (instant, no API call)
+ * The entities with these logical names, from the every-entity list of getAllEntitiesForScopes. Waits
+ * for that list when it's still loading (#358: reading the cache before the startup preload finished
+ * gave an empty picker), and costs nothing once it's cached.
  */
-export function filterCachedEntitiesByNames(logicalNames: string[]): EntityMetadata[] {
-	const allEntities = metadataCache.getAllEntityMetadata();
-	if (!allEntities) {
-		console.warn(
-			"[API] filterCachedEntitiesByNames - Global cache not available, returning empty",
-		);
-		return [];
-	}
-
+export async function getEntitiesByNames(logicalNames: string[]): Promise<EntityMetadata[]> {
+	// Nothing to look up: don't wait for (or fail with) the every-entity list
+	if (logicalNames.length === 0) return [];
+	const allEntities = await getAllEntitiesForScopes();
 	const nameSet = new Set(logicalNames);
 	const filtered = allEntities.filter((entity: EntityMetadata) =>
 		nameSet.has(entity.LogicalName),
 	);
-
 	debugLog(
 		"metadataAPI",
-		`filterCachedEntitiesByNames: ${filtered.length} of ${logicalNames.length} entities`,
+		`getEntitiesByNames: ${filtered.length} of ${logicalNames.length} entities`,
 	);
-
 	return filtered;
 }
 
