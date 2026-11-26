@@ -137,8 +137,30 @@ const useStyles = makeStyles({
 		"@media (forced-colors: active)": {
 			backgroundColor: "Highlight",
 			color: "HighlightText",
+			// Hovering the selected row keeps the highlight (the hover token above becomes Canvas)
+			":hover": {
+				backgroundColor: "Highlight",
+				color: "HighlightText",
+			},
 			"::before": {
 				backgroundColor: "HighlightText",
+			},
+			// #361: forced colours paint a Canvas backplate behind text, in the text's own colour pair,
+			// so HighlightText on it vanished. The label opts out of the backplate and keeps
+			// HighlightText on Highlight. The opt-out is inherited, so everything inside the label (the
+			// "(no attributes)" hint has its own grey) takes HighlightText too.
+			"& .fui-TreeItemLayout__main, & .fui-TreeItemLayout__main *": {
+				forcedColorAdjust: "none",
+				color: "HighlightText",
+			},
+			// The chevron and the node icon too (a tinted icon sets its colour inline)
+			"& .fui-TreeItemLayout__expandIcon, & .fui-TreeItemLayout__iconBefore svg": {
+				color: "HighlightText !important",
+			},
+			// Add and Delete on the highlighted row. Only their colour: Fluent's own forced-colours
+			// hover and focus styles still draw their borders and the hovered icon.
+			"& .actions button": {
+				color: "HighlightText",
 			},
 		},
 	},
