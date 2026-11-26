@@ -344,12 +344,9 @@ describe("the buttons say why, and focus stays in the dialog (#279)", () => {
 		expect(focused()).toBe("Close");
 	});
 
-	it("Run workflow: Cancel first; it asks for a workflow; focus moves to Running..., then Close", async () => {
+	it("Run workflow: Cancel first; it asks for a workflow", async () => {
 		installHost();
-		const run = deferred<{ succeeded: number; failed: number; errors: string[] }>();
-		await render(
-			createElement(WorkflowPickerDialog, workflowProps({ onExecute: () => run.promise })),
-		);
+		await render(createElement(WorkflowPickerDialog, workflowProps()));
 		await flush();
 		expect(focused()).toBe("Cancel");
 		expectDisabledWithReason(button("Run workflow"), "Choose a workflow");
@@ -407,5 +404,26 @@ describe("while the connection is read (#279)", () => {
 		pending.resolve(null);
 		await flush();
 		expect(isDisabled(button("Delete"))).toBe(false);
+	});
+});
+
+describe("a record dialog that opens again (#279 review)", () => {
+	it("isn't confirmed from last time: it reads the connection again first", async () => {
+		installHost();
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		await flush();
+		expect(isDisabled(button("Delete"))).toBe(false);
+		await render(createElement(DeleteConfirmDialog, deleteProps({ open: false })));
+		await flush();
+		const pending = deferred<null>();
+		(
+			window as unknown as {
+				toolboxAPI: { connections: { getConnection: () => Promise<null> } };
+			}
+		).toolboxAPI.connections.getConnection = () => pending.promise;
+		await render(createElement(DeleteConfirmDialog, deleteProps()));
+		expectDisabledWithReason(button("Delete"), "Reading the connection...");
+		pending.resolve(null);
+		await flush();
 	});
 });

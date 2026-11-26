@@ -382,7 +382,6 @@ export function EditColumnsPanel({
 													e.stopPropagation();
 													moveColumn(index, "up");
 												}}
-												title="Move up"
 												aria-label="Move up"
 											/>,
 											index === 0 && "It's already the first column",
@@ -399,7 +398,6 @@ export function EditColumnsPanel({
 													e.stopPropagation();
 													moveColumn(index, "down");
 												}}
-												title="Move down"
 												aria-label="Move down"
 											/>,
 											index === localColumns.length - 1 &&

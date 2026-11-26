@@ -83,6 +83,8 @@ describe("the column drawers", () => {
 		);
 		expectDisabledWithReason(buttons("Move up")[0], "It's already the first column");
 		expectDisabledWithReason(buttons("Move down")[1], "It's already the last column");
+		// Only the reason's tooltip: no native one beside it
+		expect(buttons("Move up")[0].hasAttribute("title")).toBe(false);
 	});
 
 	it("Edit columns: moving a column to the top keeps focus on its Move up", async () => {

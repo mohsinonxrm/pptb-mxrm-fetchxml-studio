@@ -47,6 +47,7 @@ vi.mock("../../api/pptbClient", async (importOriginal) => ({
 }));
 
 const { SaveViewDialog } = await import("./SaveViewDialog");
+const { checkUserQueryPrivileges } = await import("../../api/pptbClient");
 
 const FETCH = "<fetch><entity name='contact'><attribute name='fullname'/></entity></fetch>";
 const LAYOUT =
@@ -227,7 +228,35 @@ describe("Save view: the buttons say why, and keep focus while saving (#279)", (
 		expect(document.activeElement).toBe(busy);
 		expectDisabledWithReason(busy, "Wait for the save to finish");
 		expectDisabledWithReason(button("Cancel"), "Wait for the save to finish");
+		expectDisabledWithReason(
+			document.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]'),
+			"Wait for the save to finish",
+		);
 		saving.resolve();
 		await flush();
+	});
+});
+
+describe("Save view while your permissions are checked (#279 review)", () => {
+	it("Save says it's checking, not that you lack the permission", async () => {
+		installHost();
+		const check = deferred<{ canWrite: boolean }>();
+		vi.mocked(checkUserQueryPrivileges).mockImplementationOnce(() => check.promise);
+		await render(
+			createElement(SaveViewDialog, {
+				...props(null),
+				mode: "saveAs" as const,
+			}),
+		);
+		await flush();
+		await typeInto(
+			document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]'),
+			"FXS TEST view",
+		);
+		expectDisabledWithReason(button("Save"), "Checking your permissions...");
+		expect(dialogText()).not.toContain("You don't have permission");
+		check.resolve({ canWrite: true });
+		await flush();
+		expect(isDisabled(button("Save"))).toBe(false);
 	});
 });

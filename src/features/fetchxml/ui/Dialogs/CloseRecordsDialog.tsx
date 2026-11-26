@@ -627,7 +627,7 @@ export function CloseRecordsDialog({
 							<Button
 								appearance="primary"
 								onClick={handleRun}
-								disabledFocusable={!!runReason}
+								disabledFocusable={!!runReason || !scope.confirmed}
 							>
 								{action.label}
 							</Button>,

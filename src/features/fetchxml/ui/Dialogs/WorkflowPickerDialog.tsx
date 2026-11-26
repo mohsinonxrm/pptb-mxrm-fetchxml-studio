@@ -464,7 +464,7 @@ export function WorkflowPickerDialog({
 								appearance="primary"
 								icon={<Play20Regular />}
 								onClick={handleExecute}
-								disabledFocusable={!!runReason}
+								disabledFocusable={!!runReason || !scope.confirmed}
 							>
 								Run workflow
 							</Button>,

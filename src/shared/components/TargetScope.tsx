@@ -30,6 +30,8 @@ import {
 	type TargetScopeKind,
 } from "./targetScopeRules";
 
+import { READING_CONNECTION } from "../hooks/useTargetConfirmation";
+
 const useStyles = makeStyles({
 	root: {
 		display: "flex",
@@ -60,9 +62,6 @@ const useStyles = makeStyles({
 		wordBreak: "break-all",
 	},
 });
-
-/** While the connection is read: the scope shows it, and the primary button gives it as its reason */
-const READING_CONNECTION = "Reading the connection...";
 
 type ConnectionState = { status: "loading" } | { status: "ready"; connection: Connection | null };
 
@@ -130,6 +129,11 @@ export function TargetScope({
 	useEffect(() => {
 		onConfirmationChange?.(confirmed, reason);
 	}, [confirmed, reason, onConfirmationChange]);
+	// Gone (the dialog closed): a dialog that opens again isn't confirmed until it reads again (#279)
+	useEffect(
+		() => () => onConfirmationChange?.(false, READING_CONNECTION),
+		[onConfirmationChange],
+	);
 
 	return (
 		<div className={styles.root}>

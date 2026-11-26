@@ -367,7 +367,7 @@ export function BulkDeleteDialog({
 							<Button
 								appearance="primary"
 								onClick={handleConfirm}
-								disabledFocusable={!!submitReason}
+								disabledFocusable={!!submitReason || !scope.confirmed}
 							>
 								Submit bulk delete
 							</Button>,

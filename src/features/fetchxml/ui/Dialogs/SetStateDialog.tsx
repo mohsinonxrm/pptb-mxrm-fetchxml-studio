@@ -442,7 +442,7 @@ export function SetStateDialog({
 							<Button
 								appearance="primary"
 								onClick={handleRun}
-								disabledFocusable={!!runReason}
+								disabledFocusable={!!runReason || !scope.confirmed}
 							>
 								{verb}
 							</Button>,

@@ -36,9 +36,19 @@ interface ValueOfPickerProps {
 	valueof: string;
 	/** AttributeTypes Dataverse can compare with the condition's attribute */
 	compatibleTypes: string[];
+	/**
+	 * What's known about the condition's attribute type (#279): its metadata is loading, it couldn't
+	 * be read, it's a type no pairing is verified for, or one Dataverse can't compare. By default,
+	 * from compatibleTypes: some (ok) or none (unverified).
+	 */
+	typeStatus?: ValueOfTypeStatus;
+	/** The condition attribute's type, for the messages ("Image") */
+	typeLabel?: string;
 	validation?: Validation;
 	onChange: (valueof: string | undefined) => void;
 }
+
+export type ValueOfTypeStatus = "ok" | "loading" | "unknown" | "unverified" | "incomparable";
 
 /** "createdon" → same entity; "acct.name" → alias "acct" */
 function parseValueOf(valueof: string): { qualifier: string | undefined; attribute: string } {
@@ -57,9 +67,31 @@ export function ValueOfPicker({
 	sameAlias,
 	valueof,
 	compatibleTypes,
+	typeStatus = compatibleTypes.length > 0 ? "ok" : "unverified",
+	typeLabel,
 	validation,
 	onChange,
 }: ValueOfPickerProps) {
+	// Only a type Dataverse can't compare blocks the picker; one we can't tell about only warns, and
+	// lists every attribute (owner rule: block only known-invalid, warn when undeterminable)
+	const typeValidation: Validation =
+		typeStatus === "incomparable"
+			? {
+					state: "error",
+					message: `Dataverse can't compare ${typeLabel ?? "this"} attributes with another attribute.`,
+				}
+			: typeStatus === "unknown"
+				? {
+						state: "warning",
+						message:
+							"FetchXML Studio couldn't read this attribute's type, so it can't tell which attributes it can be compared with. Dataverse decides when the query runs.",
+					}
+				: typeStatus === "unverified"
+					? {
+							state: "warning",
+							message: `Comparing ${typeLabel ? `${/^[aeiou]/i.test(typeLabel) ? "an" : "a"} ${typeLabel}` : "this"} attribute to another attribute isn't verified to work. Dataverse decides when the query runs.`,
+						}
+					: undefined;
 	const styles = useEditorStyles();
 	const parsed = useMemo(() => parseValueOf(valueof), [valueof]);
 
@@ -156,20 +188,22 @@ export function ValueOfPicker({
 			<InfoField
 				label="Attribute"
 				required
+				// While the attribute's type is read, say so rather than ask for a choice (#279)
+				hint={typeStatus === "loading" ? "Reading the attribute…" : undefined}
 				validation={
 					validation ??
-					// While the picker can't be used, say why rather than ask for a choice (#279)
-					(compatibleTypes.length === 0
-						? {
-								state: "error",
-								message:
-									"Dataverse can't compare this attribute with another attribute.",
-							}
-						: !current.entityName
-							? { state: "error", message: "Choose an entity first." }
-							: !parsed.attribute
-								? { state: "error", message: "Choose the attribute to compare to." }
-								: undefined)
+					(typeStatus === "loading"
+						? undefined
+						: typeStatus === "incomparable"
+							? typeValidation
+							: !current.entityName
+								? { state: "error", message: "Choose an entity first." }
+								: !parsed.attribute
+									? {
+											state: "error",
+											message: "Choose the attribute to compare to.",
+										}
+									: typeValidation)
 				}
 				info={
 					<Info
@@ -198,8 +232,12 @@ export function ValueOfPicker({
 					placeholder={
 						current.entityName ? "Select an attribute" : "Choose an entity first"
 					}
-					disabled={!current.entityName || compatibleTypes.length === 0}
-					filterByTypes={compatibleTypes}
+					disabled={
+						!current.entityName ||
+						typeStatus === "loading" ||
+						typeStatus === "incomparable"
+					}
+					filterByTypes={typeStatus === "ok" ? compatibleTypes : undefined}
 				/>
 			</InfoField>
 		</>

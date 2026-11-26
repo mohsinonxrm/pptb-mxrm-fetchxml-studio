@@ -171,7 +171,7 @@ function AdvisoryRow({ a, props }: { a: Advisory; props: AdvisoriesPanelProps })
 			<Button
 				size="small"
 				icon={<Wrench16Regular />}
-				disabledFocusable={!inTree || !onFix}
+				disabledFocusable={!inTree}
 				onClick={() => onFix?.(a)}
 			>
 				Add {a.fix.attribute} as the last order

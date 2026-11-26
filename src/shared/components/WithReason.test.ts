@@ -1,6 +1,7 @@
 /**
  * withReason (#279): the reason describes the control and shows on hover; without one, nothing
  * shows and nothing describes it, though the wrapper stays (so a focused control isn't remounted).
+ * A hover while there was nothing to say isn't remembered (#279 review).
  */
 import { act, createElement } from "react";
 import { Button } from "@fluentui/react-components";
@@ -10,31 +11,66 @@ import { withReason } from "./WithReason";
 
 afterEach(() => cleanup());
 
-const hover = async (element: Element | null) => {
+const wait = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+/** React makes onPointerEnter / Leave from pointerover / pointerout */
+const pointer = async (type: "pointerover" | "pointerout", element: Element | null) => {
 	await act(async () => {
-		element?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
-		element?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
-		await new Promise((resolve) => setTimeout(resolve, 400));
+		element?.dispatchEvent(
+			new PointerEvent(type, { bubbles: true, relatedTarget: document.body }),
+		);
 	});
+	// Past the Tooltip's show and hide delays (250 ms)
+	await wait(400);
 };
-const tooltip = () => document.querySelector('[role="tooltip"]');
+const shown = () => {
+	const tip = document.querySelector<HTMLElement>('[role="tooltip"]');
+	return !!tip && getComputedStyle(tip).display !== "none";
+};
+const show = (reason: string | undefined) =>
+	render(withReason(createElement(Button, { disabledFocusable: !!reason }, "Save"), reason));
 
 describe("withReason", () => {
 	it("a reason describes the control and shows on hover", async () => {
-		await render(
-			withReason(createElement(Button, { disabledFocusable: true }, "Save"), "Enter a name"),
-		);
+		await show("Enter a name");
 		const button = document.querySelector("button");
 		expect(describedBy(button)).toBe("Enter a name");
-		await hover(button);
-		expect(tooltip()?.textContent).toBe("Enter a name");
+		expect(shown()).toBe(false);
+		await pointer("pointerover", button);
+		expect(shown()).toBe(true);
+		await pointer("pointerout", button);
+		expect(shown()).toBe(false);
 	});
 
 	it("without a reason, no tooltip shows and nothing describes the control", async () => {
-		await render(withReason(createElement(Button, null, "Save"), undefined));
+		await show(undefined);
 		const button = document.querySelector("button");
 		expect(button?.getAttribute("aria-describedby")).toBeNull();
-		await hover(button);
-		expect(tooltip()).toBeNull();
+		await pointer("pointerover", button);
+		expect(shown()).toBe(false);
+	});
+
+	it("a hover while there was nothing to say doesn't pop the reason up later", async () => {
+		await show(undefined);
+		const button = document.querySelector("button");
+		await pointer("pointerover", button);
+		await pointer("pointerout", button);
+		// The control gains a reason with nothing pointing at it
+		await show("Type contact to confirm");
+		expect(document.querySelector("button")).toBe(button);
+		expect(shown()).toBe(false);
+	});
+});
+
+describe("withReason: a reason that goes while hovered (#279 review)", () => {
+	it("doesn't come back on its own after the pointer left", async () => {
+		await show("Enter a name");
+		const button = document.querySelector("button");
+		await pointer("pointerover", button);
+		expect(shown()).toBe(true);
+		// The reason goes while the pointer is still on it, then the pointer leaves
+		await show(undefined);
+		await pointer("pointerout", button);
+		await show("Enter a name");
+		expect(shown()).toBe(false);
 	});
 });
