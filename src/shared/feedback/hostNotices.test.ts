@@ -17,7 +17,12 @@ import {
 	toasts,
 	type HostStub,
 } from "../testing/ui";
-import { useReturnFetchXmlCommand } from "../../features/fetchxml/ui/Toolbar/useReturnFetchXmlCommand";
+import {
+	NOT_DELIVERED_AFTER_MS,
+	useReturnFetchXmlCommand,
+} from "../../features/fetchxml/ui/Toolbar/useReturnFetchXmlCommand";
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 import {
 	useSendToToolCommand,
 	type SendToToolCommandOptions,
@@ -124,7 +129,7 @@ describe("Return FetchXML", () => {
 });
 
 describe("Return FetchXML while it returns", () => {
-	it("can't be pressed again until the caller has it", async () => {
+	it("can't be pressed again until the caller has it, or it's clear it didn't arrive", async () => {
 		const pending = deferred<undefined>();
 		invocation.returnData.mockImplementationOnce(async () => pending.promise);
 		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
@@ -134,7 +139,42 @@ describe("Return FetchXML while it returns", () => {
 		expect(invocation.returnData).toHaveBeenCalledTimes(1);
 		pending.resolve(undefined);
 		await flush(5);
+		// Delivered, PPTB closes this window now; it stays busy while that happens (#363)
+		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBe("true");
+		await wait(NOT_DELIVERED_AFTER_MS + 100);
 		expect(button("Return FetchXML")?.getAttribute("aria-disabled")).toBeNull();
+	});
+});
+
+describe("Return FetchXML after the tool that opened FetchXML Studio closed (#363)", () => {
+	it("says the FetchXML couldn't go back, with Copy FetchXML and no Try again", async () => {
+		// PPTB ignores the return without an error, and doesn't close this window
+		invocation.returnData.mockImplementationOnce(async () => undefined);
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+		await click(button("Return FetchXML"));
+		await flush(5);
+		expect(toasts()).toEqual([]);
+		await wait(NOT_DELIVERED_AFTER_MS + 100);
+		expect(toasts()).toEqual([
+			expect.stringMatching(
+				/^Couldn't return the FetchXML. Dismiss.*The tool that opened FetchXML Studio is closed/,
+			),
+		]);
+		expect(toastButton("Try again")).toBeUndefined();
+		expect(host.notifications).toEqual([]);
+		await click(toastButton("Copy FetchXML"));
+		expect(copied).toEqual([XML]);
+	});
+
+	it("says nothing when PPTB closes the window, as it does once the caller has the FetchXML", async () => {
+		invocation.returnData.mockImplementationOnce(async () => undefined);
+		await render(createElement(ReturnBar, { getCurrentXml: () => XML }));
+		await click(button("Return FetchXML"));
+		await flush(5);
+		// PPTB closes the window: the tool unmounts before the wait ends
+		cleanup();
+		await wait(NOT_DELIVERED_AFTER_MS + 100);
+		expect(toasts()).toEqual([]);
 	});
 });
 
