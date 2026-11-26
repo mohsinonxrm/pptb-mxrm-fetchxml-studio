@@ -137,8 +137,31 @@ const useStyles = makeStyles({
 		"@media (forced-colors: active)": {
 			backgroundColor: "Highlight",
 			color: "HighlightText",
+			// Hovering the selected row keeps the highlight (the hover token above becomes Canvas)
+			":hover": {
+				backgroundColor: "Highlight",
+				color: "HighlightText",
+			},
 			"::before": {
 				backgroundColor: "HighlightText",
+			},
+			// #361: forced colours paint a Canvas backplate behind text, so HighlightText on it was
+			// black on black. The label opts out of the backplate and keeps HighlightText on Highlight.
+			"& .fui-TreeItemLayout__main": {
+				forcedColorAdjust: "none",
+				color: "HighlightText",
+			},
+			// The chevron and the node icon too (a tinted icon sets its colour inline)
+			"& .fui-TreeItemLayout__expandIcon, & .fui-TreeItemLayout__iconBefore svg": {
+				color: "HighlightText !important",
+			},
+			// Add and Delete on the highlighted row (Fluent's own hover colours still apply)
+			"& .actions button": {
+				color: "HighlightText",
+				borderTopColor: "HighlightText",
+				borderRightColor: "HighlightText",
+				borderBottomColor: "HighlightText",
+				borderLeftColor: "HighlightText",
 			},
 		},
 	},
