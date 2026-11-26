@@ -114,7 +114,9 @@ describe("isResponseTooLargeError (#68)", () => {
 		).toBe(true);
 		expect(
 			isResponseTooLargeError(
-				new Error(`${IPC}Dataverse response exceeds the maximum size (128 MB)`),
+				new Error(
+					`${IPC}Dataverse fetchXmlQuery failed: Dataverse response exceeds the maximum size (128 MB)`,
+				),
 			),
 		).toBe(true);
 		expect(

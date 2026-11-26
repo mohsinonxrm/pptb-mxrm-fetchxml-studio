@@ -12,8 +12,9 @@
  *
  * Host behaviour (PPTB dataverseBatch.ts, the same in 1.2.7 and 1.2.8): executeBatch returns one
  * result per operation, but rejects when a batch stopped early (fewer results than operations). A
- * one-operation batch always returns its result. So a chunk that rejects is redone one record per batch: records the
- * stopped batch already deleted then answer 404 "Does Not Exist", which counts as deleted.
+ * one-operation batch always returns its result. So a chunk that rejects is redone one record per
+ * batch: records the stopped batch already deleted then answer 404 "Does Not Exist", which counts
+ * as deleted.
  *
  * The same runner sends Activate / Deactivate PATCHes (#143, updateRecordStatesInBatches). A PATCH
  * of statecode / statuscode to the state a record already has succeeds (verified on a sandbox,

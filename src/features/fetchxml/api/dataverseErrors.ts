@@ -9,9 +9,10 @@
  * - A response over the host's size limit rejects with "Dataverse response exceeds the maximum size
  *   (128 MB)" (metadata requests: "Dataverse metadata response exceeds the maximum size (256 MB)")
  *   (#68). Since 1.2.8 the limit depends on the request: 128 MB for one Web API response (a query
- *   page), 16 MB for a $batch response, 256 MB for $metadata (src/main/constants.ts); 1.2.7 had
- *   16 MB for all of them, and the text had no size.
- * - Electron's IPC layer may prefix "Error invoking remote method '<channel>': Error: ".
+ *   page) and 256 MB for $metadata (src/main/constants.ts), 16 MB for a $batch response
+ *   (src/main/utils/dataverseBatch.ts); 1.2.7 had 16 MB for all of them, and the text had no size.
+ * - The host's IPC handler puts "Dataverse <operation> failed: " in front (src/main/index.ts), and
+ *   Electron's IPC layer may prefix "Error invoking remote method '<channel>': Error: ".
  * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/managers/dataverseManager.ts
  *
  * Only codes documented on Microsoft Learn are mapped; any other error is shown exactly as it
@@ -235,6 +236,7 @@ const TOO_MANY_REQUESTS: KnownError = {
  * (128 MB for a query page, 16 MB for a $batch, 256 MB for $metadata), and the host's own message,
  * shown after this, states it (owner decision on #346).
  * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/constants.ts
+ * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/utils/dataverseBatch.ts
  */
 const RESPONSE_TOO_LARGE: KnownError = {
 	kind: "responseTooLarge",
@@ -265,8 +267,7 @@ const readNumber = (value: unknown): number | undefined => {
 
 /**
  * Retry-After in seconds, if the error object carries one. The host (checked in 1.2.8) doesn't pass
- * an error's headers on;
- * this reads them should a later host (or the OData error) include them.
+ * an error's headers on; this reads them should a later host (or the OData error) include them.
  */
 function readRetryAfter(error: Record<string, unknown>): number | undefined {
 	const headers = (error.headers ??

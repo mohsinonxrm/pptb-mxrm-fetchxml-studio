@@ -150,8 +150,9 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 ];
 
 /**
- * Combinations the PPTB host menu owns; no global shortcut may use one. The same in 1.2.7, 1.2.8 and
- * 1.2.9 (src/main/index.ts menu accelerators, #346).
+ * Combinations the PPTB host menu owns that a tool shortcut might want; no global shortcut may use
+ * one. The menu's keys are the same in 1.2.7, 1.2.8 and the 1.2.9 dev builds (src/main/index.ts,
+ * #346).
  */
 export const PPTB_RESERVED: readonly string[] = [
 	"Ctrl+R",
