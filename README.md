@@ -2,14 +2,14 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/version.svg)
+![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/version.svg)
 ![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)
-![Power Platform ToolBox 1.2.8 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb.svg)
-![@pptb/types 1.2.8](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb-types.svg)
-![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/react.svg)
-![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/typescript.svg)
-![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/fluent-ui.svg)
-![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/license.svg)
+![Power Platform ToolBox 1.2.8 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/pptb.svg)
+![@pptb/types 1.2.8](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/pptb-types.svg)
+![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/react.svg)
+![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/typescript.svg)
+![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/fluent-ui.svg)
+![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.7.0-beta.1/assets/badges/license.svg)
 
 ![FetchXML Studio in Power Platform ToolBox: the query tree and properties on the left, the results grid on the right](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/results-light.png)
 
