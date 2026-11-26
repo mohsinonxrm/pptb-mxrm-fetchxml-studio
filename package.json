@@ -1,6 +1,6 @@
 {
 	"name": "@mohsinonxrm/pptb-fetchxml-studio",
-	"version": "1.6.0",
+	"version": "1.7.0-beta.1",
 	"type": "module",
 	"displayName": "FetchXML Studio",
 	"description": "A powerful, modern FetchXML query builder and data explorer for Microsoft Dataverse and Dynamics 365.",
@@ -43,7 +43,7 @@
 	"configurations": {
 		"repository": "https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio",
 		"website": "https://fetchxml.studio",
-		"readmeUrl": "https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/README.md"
+		"readmeUrl": "https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/release/1.7/README.md"
 	},
 	"files": [
 		"dist",
