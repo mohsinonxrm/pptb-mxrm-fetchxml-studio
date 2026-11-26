@@ -10,7 +10,14 @@
  *   count, link-entities inside filters don't). Documented on the link-entity reference (alias).
  */
 
-import type { AttributeNode, EntityNode, FetchNode, LinkEntityNode, OrderNode } from "./nodes";
+import type {
+	AttributeNode,
+	EntityNode,
+	FetchNode,
+	FilterNode,
+	LinkEntityNode,
+	OrderNode,
+} from "./nodes";
 import { findOrdersUsingAlias } from "./treeUtils";
 import { getOrderMetadataIssue, type AttributeTypeInfo } from "./attributeCapabilities";
 
@@ -98,12 +105,54 @@ export interface RemoveColumnsPlan {
 	removedLinks: LinkEntityNode[];
 }
 
-const isEmptyLink = (link: LinkEntityNode, removed: Set<string>) =>
-	link.attributes.every((a) => removed.has(a.id)) &&
-	!link.allAttributes?.enabled &&
-	link.filters.length === 0 &&
-	link.orders.every((o) => removed.has(o.id)) &&
-	link.links.every((l) => removed.has(l.id));
+/**
+ * The joined link-entity a root `entityname` points at: the one with that alias, else none when it's the
+ * root entity's name, else the one with that name. Verified live (2026-11-26, #401): in a self-join, a
+ * root order with entityname = the root's name sorts the root entity, not the same-named link-entity.
+ */
+function linkByEntityname(fetch: FetchNode, links: LinkEntityNode[], entityname: string) {
+	const aliased = links.find((l) => l.alias === entityname);
+	if (aliased || entityname === fetch.entity.name) return aliased;
+	return links.find((l) => l.name === entityname);
+}
+
+/**
+ * Orders and conditions elsewhere in the query that point at each joined link-entity:
+ * - root orders through `entityname`;
+ * - conditions anywhere (the root's filters, joined link-entities' filters, link-entities inside
+ *   filters, nested filters too) that name it in `entityname`, or compare to it through
+ *   `valueof="alias.attribute"` (a valueof qualifier names an alias only).
+ */
+function references(fetch: FetchNode, links: LinkEntityNode[]) {
+	const orders = new Map<string, OrderNode[]>();
+	const conditions = new Set<string>();
+	for (const order of fetch.entity.orders) {
+		const link = order.entityname
+			? linkByEntityname(fetch, links, order.entityname)
+			: undefined;
+		if (link) orders.set(link.id, [...(orders.get(link.id) ?? []), order]);
+	}
+	const visitFilter = (filter: FilterNode) => {
+		for (const condition of filter.conditions) {
+			const byName = condition.entityname
+				? linkByEntityname(fetch, links, condition.entityname)
+				: undefined;
+			if (byName) conditions.add(byName.id);
+			const dot = condition.valueof?.indexOf(".") ?? -1;
+			const qualifier = dot > 0 ? condition.valueof!.slice(0, dot) : undefined;
+			const compared = qualifier ? links.find((l) => l.alias === qualifier) : undefined;
+			if (compared) conditions.add(compared.id);
+		}
+		filter.subfilters.forEach(visitFilter);
+		filter.links.forEach(visitContainer);
+	};
+	const visitContainer = (container: EntityNode | LinkEntityNode) => {
+		container.filters.forEach(visitFilter);
+		container.links.forEach(visitContainer);
+	};
+	visitContainer(fetch.entity);
+	return { orders, conditions };
+}
 
 /**
  * What removing columns changes in the tree:
@@ -113,6 +162,16 @@ const isEmptyLink = (link: LinkEntityNode, removed: Set<string>) =>
  * - outer link-entities left with nothing in them (no attributes, filters, orders or link-entities):
  *   they would still join, and a one-to-many join keeps multiplying the rows. Inner joins are kept,
  *   because they still filter the rows.
+ *
+ * Orders and conditions can point at a link-entity from elsewhere: `entityname`, or a condition's
+ * `valueof="alias.attribute"` (#357). Owner decisions, recorded on #357:
+ * - a condition that names or compares to the link-entity keeps it, because it still filters the rows;
+ * - an order that sorts by a removed column of the link-entity (root, or inside the link-entity)
+ *   goes with the link-entity, so no order is left pointing at a link-entity that's gone
+ *   (Dataverse rejects that: 0x80041108); an order on another attribute keeps the link-entity.
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/order
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/reference/condition
+ * https://learn.microsoft.com/power-apps/developer/data-platform/fetchxml/filter-rows#cross-table-column-comparisons
  */
 export function planRemoveColumns(fetch: FetchNode, keys: readonly string[]): RemoveColumnsPlan {
 	const removed = new Set<string>();
@@ -126,6 +185,32 @@ export function planRemoveColumns(fetch: FetchNode, keys: readonly string[]): Re
 			);
 		}
 	}
+	const refs = references(fetch, collectQueryColumnsLinks(fetch));
+	/**
+	 * Orders on the link-entity, root ones included, that sort by a removed column's attribute. They only
+	 * matter when every attribute of the link-entity is going (otherwise it isn't empty).
+	 */
+	const columnOrders = (link: LinkEntityNode) => {
+		const removedNames = new Set(
+			link.attributes.filter((a) => removed.has(a.id)).map((a) => a.name),
+		);
+		return [...link.orders, ...(refs.orders.get(link.id) ?? [])].filter(
+			(o) => !removed.has(o.id) && !o.alias && !!o.attribute && removedNames.has(o.attribute),
+		);
+	};
+	const isEmptyLink = (link: LinkEntityNode) => {
+		const going = new Set(columnOrders(link).map((o) => o.id));
+		return (
+			link.attributes.every((a) => removed.has(a.id)) &&
+			!link.allAttributes?.enabled &&
+			link.filters.length === 0 &&
+			!refs.conditions.has(link.id) &&
+			[...link.orders, ...(refs.orders.get(link.id) ?? [])].every(
+				(o) => removed.has(o.id) || going.has(o.id),
+			) &&
+			link.links.every((l) => removed.has(l.id))
+		);
+	};
 	// Innermost first, so a parent left empty by removing its child is removed too
 	const removedLinks: LinkEntityNode[] = [];
 	const visit = (container: EntityNode | LinkEntityNode) =>
@@ -133,9 +218,10 @@ export function planRemoveColumns(fetch: FetchNode, keys: readonly string[]): Re
 			visit(link);
 			if (
 				link.linkType === "outer" &&
-				isEmptyLink(link, removed) &&
-				link.attributes.some((a) => removed.has(a.id))
+				link.attributes.some((a) => removed.has(a.id)) &&
+				isEmptyLink(link)
 			) {
+				columnOrders(link).forEach((o) => removed.add(o.id));
 				removed.add(link.id);
 				removedLinks.push(link);
 			}

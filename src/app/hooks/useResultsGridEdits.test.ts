@@ -230,6 +230,40 @@ describe("columns", () => {
 		expect(xml()).toContain('<attribute name="name"');
 	});
 
+	it("takes the link-entity's sort with it, so no order points at a link-entity that's gone (#357)", async () => {
+		await fresh();
+		await load(WITH_CONTACT);
+		await act_(() =>
+			edits.sortByColumn({
+				columnId: "pc.fullname",
+				direction: "ascending",
+				isMultiSort: false,
+			}),
+		);
+		expect(xml()).toContain('entityname="pc"');
+		await act_(() => edits.removeColumns(["pc.fullname", "pc.hobbies"]));
+		expect(xml()).not.toContain("link-entity");
+		expect(xml()).not.toContain("<order");
+	});
+
+	it("keeps a link-entity a column filter still uses (#357)", async () => {
+		await fresh();
+		await load(WITH_CONTACT);
+		await act_(() =>
+			edits.addColumnFilter({
+				attribute: "fullname",
+				entityname: "pc",
+				operator: "like",
+				value: "%a%",
+			}),
+		);
+		await act_(() => edits.removeColumns(["pc.fullname", "pc.hobbies"]));
+		expect(builder.fetchQuery!.entity.links.map((l) => [l.alias, l.attributes.length])).toEqual(
+			[["pc", 0]],
+		);
+		expect(xml()).toContain('entityname="pc"');
+	});
+
 	it("removes them in one undo step (#192)", async () => {
 		await fresh();
 		await load(WITH_CONTACT);
