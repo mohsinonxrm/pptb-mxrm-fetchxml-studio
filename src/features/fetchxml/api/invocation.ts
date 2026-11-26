@@ -244,7 +244,7 @@ export async function sendFetchXmlToTool(
 	const invocation = getInvocationAPI();
 	if (!invocation) {
 		throw new Error(
-			"PPTB invocation API is not available. Upgrade to PPTB host ≥ 1.2.7 to use Tool-to-Tool invocation.",
+			"PPTB invocation API is not available. Upgrade to PPTB host ≥ 1.2.8 to use Tool-to-Tool invocation.",
 		);
 	}
 

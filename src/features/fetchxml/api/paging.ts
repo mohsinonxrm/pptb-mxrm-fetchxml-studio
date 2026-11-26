@@ -104,7 +104,7 @@ export interface PagingState {
 	xml: string;
 	/**
 	 * The executed query's own count, kept for every page; smaller when a page was too large for the
-	 * PPTB host's 16 MB response limit (#68, pageRecovery.ts)
+	 * PPTB host's response size limit (#68, pageRecovery.ts)
 	 */
 	pageSize?: number;
 	/**

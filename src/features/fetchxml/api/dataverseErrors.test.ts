@@ -108,9 +108,21 @@ describe("formatDataverseError (#96)", () => {
 });
 
 describe("isResponseTooLargeError (#68)", () => {
-	it("detects the host's 16 MB cap messages", () => {
+	it("detects the host's size limit messages, with the size (1.2.8, #346) and without (1.2.7)", () => {
 		expect(
 			isResponseTooLargeError(new Error("Dataverse response exceeds the maximum size")),
+		).toBe(true);
+		expect(
+			isResponseTooLargeError(
+				new Error(
+					`${IPC}Dataverse fetchXmlQuery failed: Dataverse response exceeds the maximum size (128 MB)`,
+				),
+			),
+		).toBe(true);
+		expect(
+			isResponseTooLargeError(
+				new Error("Dataverse metadata response exceeds the maximum size (256 MB)"),
+			),
 		).toBe(true);
 		expect(
 			isResponseTooLargeError(
@@ -122,11 +134,14 @@ describe("isResponseTooLargeError (#68)", () => {
 		).toBe(false);
 	});
 
-	it("explains the cap and keeps the host's text", () => {
-		expect(
-			formatDataverseError(new Error("Dataverse response exceeds the maximum size")),
-		).toMatch(
-			/16 MB limit of Power Platform ToolBox.*Details: Dataverse response exceeds the maximum size$/,
+	it("explains the limit without a size of its own, and keeps the host's text, which has it (#346)", () => {
+		const text = formatDataverseError(
+			new Error("Dataverse response exceeds the maximum size (128 MB)"),
 		);
+		expect(text).toMatch(
+			/^The response is larger than Power Platform ToolBox accepts. .*Details: Dataverse response exceeds the maximum size \(128 MB\)$/,
+		);
+		// The host states the limit: the guidance names none, so it can't contradict it
+		expect(text.split("Details:")[0]).not.toMatch(/\bMB\b/);
 	});
 });

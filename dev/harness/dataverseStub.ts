@@ -2,7 +2,7 @@
  * Browser-side stand-in for PPTB's `window.dataverseAPI`, used only by the dev harness
  * (`npm run dev:harness`). Never shipped: `dev/` is not a build input and not in the package.
  *
- * Request shaping mirrors the PPTB desktop host (PowerPlatformToolBox/desktop-app v1.2.7,
+ * Request shaping mirrors the PPTB desktop host (PowerPlatformToolBox/desktop-app v1.2.8,
  * src/main/managers/dataverseManager.ts), so host behaviour (and host bugs) reproduce here:
  *  - entity-set names come from the host's naive pluralization (getEntitySetName), used by
  *    create / update / delete / fetchXmlQuery and bound execute() operations

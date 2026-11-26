@@ -65,7 +65,7 @@ Query-string options:
       is cached in memory, refreshed about 5 minutes before it expires, and never logged, written
       to disk or sent to the browser.
 - `pptbStub.ts` installs `window.toolboxAPI` and `window.dataverseAPI` with the members FXS uses.
-  `dataverseStub.ts` shapes requests the way the PPTB host does (desktop-app v1.2.7,
+  `dataverseStub.ts` shapes requests the way the PPTB host does (desktop-app v1.2.8,
   `dataverseManager.ts`): the same entity-set pluralization, `execute()` URL and parameter
   encoding, `Prefer: return=representation` (plus `odata.include-annotations="*"` for
   `queryData` / `fetchXmlQuery`) and the same error text, so host behaviour reproduces here.

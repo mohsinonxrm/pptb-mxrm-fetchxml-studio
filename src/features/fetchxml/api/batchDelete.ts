@@ -10,14 +10,19 @@
  * - Without `Prefer: odata.continue-on-error`, the batch stops at the first failing request. We
  *   don't send that header: any additional header makes PPTB ask the user for consent first.
  *
- * Host behaviour (PPTB 1.2.7 dataverseBatch.ts): executeBatch returns one result per operation,
- * but rejects when a batch stopped early (fewer results than operations). A one-operation batch
- * always returns its result. So a chunk that rejects is redone one record per batch: records the
- * stopped batch already deleted then answer 404 "Does Not Exist", which counts as deleted.
+ * Host behaviour (PPTB dataverseBatch.ts, the same in 1.2.7 and 1.2.8): executeBatch returns one
+ * result per operation, but rejects when a batch stopped early (fewer results than operations). A
+ * one-operation batch always returns its result. So a chunk that rejects is redone one record per
+ * batch: records the stopped batch already deleted then answer 404 "Does Not Exist", which counts
+ * as deleted.
  *
  * The same runner sends Activate / Deactivate PATCHes (#143, updateRecordStatesInBatches). A PATCH
  * of statecode / statuscode to the state a record already has succeeds (verified on a sandbox,
  * 2026-10-17), so redoing a stopped chunk one record per batch is safe there too.
+ *
+ * No change sets (BatchRequest.changesetId, PPTB 1.2.8): Dataverse runs a change set all or nothing,
+ * so one record that can't be deleted would roll back the rest of its chunk. Every record that can
+ * go goes, and each failure is reported (owner decision on #346).
  */
 
 import type { BatchDeleteProgress, BatchDeleteResult } from "./pptbClient";

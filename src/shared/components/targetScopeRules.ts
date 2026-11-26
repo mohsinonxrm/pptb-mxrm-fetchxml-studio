@@ -21,7 +21,7 @@ export type TargetScopeKind =
 	/** Anything else, already worded (e.g. the view a Save writes) */
 	| { kind: "text"; text: string };
 
-/** PPTB connection environment types: "Dev" | "Test" | "UAT" | "Production" (@pptb/types 1.2.7) */
+/** PPTB connection environment types: "Dev" | "Test" | "UAT" | "Production" (@pptb/types 1.2.8) */
 export const isProductionEnvironment = (environment: string | undefined): boolean =>
 	environment?.trim().toLowerCase() === "production";
 

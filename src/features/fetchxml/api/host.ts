@@ -2,7 +2,7 @@
  * PPTB host API adapter (#70): one place for feature detection and fallbacks, so FetchXML Studio
  * degrades gracefully on hosts that don't expose a newer API.
  *
- * Source for every API here: the @pptb/types 1.2.7 typings (toolboxAPI.d.ts, dataverseAPI.d.ts)
+ * Source for every API here: the @pptb/types 1.2.8 typings (toolboxAPI.d.ts, dataverseAPI.d.ts)
  * and README. https://docs.powerplatformtoolbox.com/tool-development/api-reference/toolbox-api
  */
 

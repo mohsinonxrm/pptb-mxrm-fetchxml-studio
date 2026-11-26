@@ -3,8 +3,9 @@
  *
  * Microsoft: a 429 from the Web API carries a Retry-After header with the seconds to wait; clients
  * should wait that long and send the request again. Without it, the Learn sample waits 2^attempt
- * seconds. The PPTB v1.2.7 host doesn't retry 429 itself and doesn't pass Retry-After on, so the
- * exponential fallback is what normally applies; a Retry-After on the error is honoured when present.
+ * seconds. The PPTB host (checked in 1.2.8) doesn't retry 429 itself and doesn't pass Retry-After
+ * on, so the exponential fallback is what normally applies; a Retry-After on the error is honoured
+ * when present.
  * https://learn.microsoft.com/power-apps/developer/data-platform/api-limits#retry-operations
  *
  * Only service protection errors are retried: Dataverse rejected those requests without running

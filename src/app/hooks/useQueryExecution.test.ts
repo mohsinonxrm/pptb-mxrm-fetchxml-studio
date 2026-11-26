@@ -1,6 +1,6 @@
 /**
  * useQueryExecution (#301), against the in-memory Dataverse: the first page (as written, by a loaded
- * view's ID, smaller after the 16 MB limit, with a quick find value); paging with and without a
+ * view's ID, smaller after the host's size limit, with a quick find value); paging with and without a
  * paging cookie, and Load more (#58, #60); Retrieve all to the end, with Stop, at the 100,000-row
  * limit, and while Dataverse is throttling (#60, #183); a failed page and Retry; the execute error
  * (#96); clearing the results on an entity change (#60, #102); responses dropped after a newer run or
@@ -88,8 +88,8 @@ const loadedSystemView: LoadedViewState = {
 const QUICK_FIND =
 	"<fetch><entity name='account'><attribute name='name'/><filter><condition attribute='name' operator='like' value='{0}'/></filter></entity></fetch>";
 
-/** Fails like a page over the PPTB host's 16 MB response limit (#68) */
-const TOO_LARGE = "Dataverse response exceeds the maximum size of 16 MB";
+/** Fails like a page over the PPTB host's response size limit (#68; 1.2.8's text, #346) */
+const TOO_LARGE = "Dataverse response exceeds the maximum size (128 MB)";
 
 let dataverse: ReturnType<typeof createFakeDataverse>;
 let closeHolds: { prevented: number; released: number };
@@ -353,14 +353,14 @@ describe("useQueryExecution: the first page", () => {
 		expect(latest.pagingRef.current?.fullPageSize).toBeUndefined();
 	});
 
-	it("asks again with half the count when the first page is over the host's 16 MB limit (#68)", async () => {
+	it("asks again with half the count when the first page is over the host's size limit (#68)", async () => {
 		let failed = false;
 		cleanup();
 		connect({
 			beforePage: () => {
 				if (failed) return;
 				failed = true;
-				throw new Error("Dataverse response exceeds the maximum size of 16 MB");
+				throw new Error(TOO_LARGE);
 			},
 		});
 		await show();

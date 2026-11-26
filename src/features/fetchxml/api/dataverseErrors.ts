@@ -1,15 +1,19 @@
 /**
  * Dataverse errors made actionable (#96, #68). Pure: no host or React dependency.
  *
- * How errors reach FetchXML Studio (PPTB host v1.2.7, src/main/managers/dataverseManager.ts):
+ * How errors reach FetchXML Studio (PPTB host v1.2.8, src/main/managers/dataverseManager.ts):
  * - A Dataverse error response rejects with `new Error(`${error.code}: ${error.message}`)`, from the
  *   OData error JSON, e.g. "0x8004e023: AggregateQueryRecordLimit exceeded. Cannot perform this
  *   operation." The HTTP status and the response headers (including Retry-After) are not passed on.
  * - A response without an OData error body rejects with "HTTP <status>" (and the body, if any).
- * - A response over the host's 16 MB cap rejects with "Dataverse response exceeds the maximum size"
- *   (metadata requests: "Dataverse metadata response exceeds the maximum size") (#68).
- * - Electron's IPC layer may prefix "Error invoking remote method '<channel>': Error: ".
- * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.7/src/main/managers/dataverseManager.ts
+ * - A response over the host's size limit rejects with "Dataverse response exceeds the maximum size
+ *   (128 MB)" (metadata requests: "Dataverse metadata response exceeds the maximum size (256 MB)")
+ *   (#68). Since 1.2.8 the limit depends on the request: 128 MB for one Web API response (a query
+ *   page) and 256 MB for $metadata (src/main/constants.ts), 16 MB for a $batch response
+ *   (src/main/utils/dataverseBatch.ts); 1.2.7 had 16 MB for all of them, and the text had no size.
+ * - The host's IPC handler puts "Dataverse <operation> failed: " in front (src/main/index.ts), and
+ *   Electron's IPC layer may prefix "Error invoking remote method '<channel>': Error: ".
+ * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/managers/dataverseManager.ts
  *
  * Only codes documented on Microsoft Learn are mapped; any other error is shown exactly as it
  * arrived. The mapped text never replaces Dataverse's own message: it's shown before it.
@@ -228,14 +232,17 @@ const TOO_MANY_REQUESTS: KnownError = {
 };
 
 /**
- * The PPTB host's 16 MB response cap (v1.2.7, MAX_DATAVERSE_BATCH_RESPONSE_BYTES) (#68).
- * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.7/src/main/utilities/dataverseBatch.ts#L10
+ * The PPTB host's response size limit (#68). No size here: since 1.2.8 it depends on the request
+ * (128 MB for a query page, 16 MB for a $batch, 256 MB for $metadata), and the host's own message,
+ * shown after this, states it (owner decision on #346).
+ * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/constants.ts
+ * https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/utils/dataverseBatch.ts
  */
 const RESPONSE_TOO_LARGE: KnownError = {
 	kind: "responseTooLarge",
 	guidance:
-		"The response is larger than the 16 MB limit of Power Platform ToolBox. Set a smaller page size (count on fetch), select fewer attributes, or avoid all-attributes.",
-	docUrl: "https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.7/src/main/managers/dataverseManager.ts",
+		"The response is larger than Power Platform ToolBox accepts. Set a smaller page size (count on fetch), select fewer attributes, or avoid all-attributes.",
+	docUrl: "https://github.com/PowerPlatformToolBox/desktop-app/blob/v1.2.8/src/main/managers/dataverseManager.ts",
 };
 
 const IPC_PREFIX = /^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/i;
@@ -243,9 +250,10 @@ const HEX_CODE = /\b0x[0-9a-f]{8}\b/i;
 const HTTP_STATUS = /\bHTTP (\d{3})\b/;
 
 /**
- * Whether an error is the host's "response too large" rejection (#68). The host rejects with exactly
+ * Whether an error is the host's "response too large" rejection (#68). The host rejects with
  * "Dataverse response exceeds the maximum size" (or "Dataverse metadata response exceeds the
- * maximum size" for $metadata), see dataverseManager.ts makeHttpRequest in PPTB v1.2.7.
+ * maximum size" for $metadata), followed since 1.2.8 by the limit, e.g. " (128 MB)"; see
+ * dataverseManager.ts makeHttpRequest in PPTB v1.2.8.
  */
 const RESPONSE_TOO_LARGE_TEXT = /Dataverse (?:metadata )?response exceeds the maximum size/i;
 
@@ -258,8 +266,8 @@ const readNumber = (value: unknown): number | undefined => {
 };
 
 /**
- * Retry-After in seconds, if the error object carries one. The v1.2.7 host doesn't pass headers on;
- * this reads them should a later host (or the OData error) include them.
+ * Retry-After in seconds, if the error object carries one. The host (checked in 1.2.8) doesn't pass
+ * an error's headers on; this reads them should a later host (or the OData error) include them.
  */
 function readRetryAfter(error: Record<string, unknown>): number | undefined {
 	const headers = (error.headers ??
@@ -338,7 +346,7 @@ export function isServiceProtectionError(error: unknown): boolean {
 	return parseDataverseError(error).kind === "serviceProtection";
 }
 
-/** The PPTB host's 16 MB response cap was hit (#68). */
+/** The PPTB host's response size limit was hit (#68). */
 export function isResponseTooLargeError(error: unknown): boolean {
 	return parseDataverseError(error).kind === "responseTooLarge";
 }
