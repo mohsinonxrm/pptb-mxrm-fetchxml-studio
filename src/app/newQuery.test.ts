@@ -148,6 +148,39 @@ describe("Save and start new", () => {
 	);
 
 	it(
+		"a save waiting for metadata that never loads doesn't make a later save start new (#373)",
+		async () => {
+			const app = await renderApp({ launch: { fetchXml: accountQuery } });
+			await app.waitFor(() => treeItems() > 0 && saveReady());
+			// An entity whose metadata never loads: the save waits for it, and its dialog never opens
+			await pasteIntoEditor(
+				"<fetch><entity name='nosuchentity'><attribute name='name'/></entity></fetch>",
+			);
+			await click(button("New", appBar() ?? undefined));
+			await app.waitFor(() => !!alert());
+			await click(alertButton("Save and start new"));
+			await flush(20);
+			expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+			// Later, an ordinary Save of an account query, completed
+			await pasteIntoEditor(accountQuery);
+			await click(button("Save", appBar() ?? undefined));
+			await app.waitFor(() => !!document.querySelector('[role="dialog"]'), 10000);
+			await typeInto(dialogInput(), "Unrelated save");
+			await click(
+				[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+					(b) => b.textContent?.trim() === "Save",
+				),
+			);
+			await app.waitFor(() => !document.querySelector('[role="dialog"]'), 10000);
+			await flush(10);
+			// The query is still there: New didn't run after this unrelated save
+			expect(treeItems()).toBeGreaterThan(0);
+		},
+		FLOW_TIMEOUT,
+	);
+
+	it(
 		"saves, then starts new",
 		async () => {
 			const app = await renderApp({ launch: { fetchXml: accountQuery } });

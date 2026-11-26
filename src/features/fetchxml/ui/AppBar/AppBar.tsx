@@ -146,6 +146,9 @@ export function AppBar({
 		{ intent: "new" } | { intent: "open"; view: LoadedViewInfo } | null
 	>(null);
 	const afterSave = useRef<(() => void) | null>(null);
+	// The save starting now is the one "Save and start new" / "Save and open" asked for: any other
+	// save that starts drops the waiting continuation, so it can't run after an unrelated save (#373)
+	const startingOwnSave = useRef(false);
 	// What the dialog last asked about: its wording stays while it closes
 	const lastConfirm = useRef<NonNullable<typeof confirm>>({ intent: "new" });
 	if (confirm) lastConfirm.current = confirm;
@@ -162,6 +165,10 @@ export function AppBar({
 		onCancel: () => {
 			afterSave.current = null;
 			saveView.onCancel?.();
+		},
+		onSaveStart: () => {
+			if (startingOwnSave.current) startingOwnSave.current = false;
+			else afterSave.current = null;
 		},
 	});
 	// Ctrl+S presses Save as it is now (#186)
@@ -337,7 +344,10 @@ export function AppBar({
 					}
 					setConfirm(null);
 					afterSave.current = () => void proceed(confirm);
+					startingOwnSave.current = true;
 					save.command.onClick?.();
+					// onSaveStart has run (synchronously) if the save started
+					startingOwnSave.current = false;
 				}}
 				onDiscard={() => {
 					if (!confirm) return;
