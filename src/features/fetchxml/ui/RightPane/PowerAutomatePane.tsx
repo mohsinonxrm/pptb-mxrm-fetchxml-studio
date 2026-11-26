@@ -37,6 +37,8 @@ const useStyles = makeStyles({
 		flexWrap: "wrap",
 		columnGap: tokens.spacingHorizontalS,
 	},
+	// An h2 now (#279); the spacing it had as an h3 (the browser's 1em) stays
+	headingTitle: { marginBlock: "1em" },
 	headingIcon: { color: tokens.colorBrandForeground1, alignSelf: "center" },
 	connector: { color: tokens.colorNeutralForeground3 },
 	// Field (label, value, hint) | Copy, lined up with the value
@@ -62,7 +64,9 @@ export function PowerAutomatePane({ spec }: PowerAutomatePaneProps) {
 		<div className={styles.root}>
 			<div className={styles.heading}>
 				<Flash20Filled className={styles.headingIcon} />
-				<Subtitle2 as="h3">{spec.actionName}</Subtitle2>
+				<Subtitle2 as="h2" className={styles.headingTitle}>
+					{spec.actionName}
+				</Subtitle2>
 				<Caption1 className={styles.connector}>
 					{spec.connector} · labels match the connector
 				</Caption1>

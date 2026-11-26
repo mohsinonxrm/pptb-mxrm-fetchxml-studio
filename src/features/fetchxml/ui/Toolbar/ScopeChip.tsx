@@ -4,7 +4,7 @@
  * popover with the entity source, publishers, solutions and Advanced Find only; changes apply right
  * away. On first run without a scope, a teaching popover points at it.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
 	Button,
 	Caption1,
@@ -65,6 +65,10 @@ const useStyles = makeStyles({
 	},
 	tooltipDetail: {
 		whiteSpace: "pre-line",
+	},
+	// The popover's title is its heading (#279)
+	title: {
+		margin: 0,
 	},
 	surface: {
 		width: "380px",
@@ -134,6 +138,7 @@ export function ScopeChip(props: ScopeChipProps) {
 		onTipDismiss,
 	} = props;
 	const styles = useStyles();
+	const titleId = useId();
 	const [open, setOpen] = useState(false);
 	const [chip, setChip] = useState<HTMLElement | null>(null);
 
@@ -165,7 +170,8 @@ export function ScopeChip(props: ScopeChipProps) {
 		<Button
 			ref={setChip}
 			className={styles.chip}
-			appearance={text.configured ? "outline" : "primary"}
+			// Outline always: Run is the screen's one primary (owner decision 3 on #279)
+			appearance="outline"
 			size="small"
 			icon={<Filter20Regular />}
 			aria-label={text.ariaLabel}
@@ -196,8 +202,14 @@ export function ScopeChip(props: ScopeChipProps) {
 						{chipButton}
 					</Tooltip>
 				</PopoverTrigger>
-				<PopoverSurface className={styles.surface} aria-label="Entity scope">
-					<Text weight="semibold" size={400}>
+				<PopoverSurface className={styles.surface} aria-labelledby={titleId}>
+					<Text
+						as="h2"
+						id={titleId}
+						weight="semibold"
+						size={400}
+						className={styles.title}
+					>
 						Entity scope
 					</Text>
 					<ScopeEditor {...props} />

@@ -136,6 +136,7 @@ export function LayoutXmlViewer({ layoutXml }: LayoutXmlViewerProps) {
 					theme={isDark ? "vs-dark" : "vs"}
 					value={formattedXml}
 					options={{
+						ariaLabel: "LayoutXML, read-only",
 						readOnly: true,
 						minimap: { enabled: false },
 						lineNumbers: "on",

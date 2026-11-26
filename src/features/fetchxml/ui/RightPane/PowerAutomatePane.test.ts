@@ -27,8 +27,11 @@ const spec = {
 describe("the Power Automate pane", () => {
 	it("names the action once, with its connector", async () => {
 		await render(createElement(PowerAutomatePane, { spec }));
-		const headings = [...document.querySelectorAll("h3")].map((h) => h.textContent);
-		expect(headings).toEqual(["List rows"]);
+		// The pane's heading: an h2, as the output has none above it (#279)
+		const headings = [...document.querySelectorAll("h2, h3")].map(
+			(h) => `${h.tagName} ${h.textContent}`,
+		);
+		expect(headings).toEqual(["H2 List rows"]);
 		expect(document.body.textContent).toContain(
 			"Microsoft Dataverse connector · labels match the connector",
 		);
