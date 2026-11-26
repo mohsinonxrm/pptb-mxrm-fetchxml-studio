@@ -327,4 +327,20 @@ describe("Save view: replacing the default public view (#371)", () => {
 		expect(hint()).toContain("This is the default view.");
 		expect(hint()).not.toContain("Replaces");
 	});
+	it("Save a copy of the default view as a system view says it replaces it (review)", async () => {
+		installHost();
+		// A default view that can't be customized: Save offers only a copy (#93)
+		await render(createElement(SaveViewDialog, props(systemView({ isCustomizable: false }))));
+		await flush(5);
+		await click(button("Save a copy…"));
+		await click(
+			[...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find(
+				(r) => r.value === "system",
+			),
+		);
+		await flush(5);
+		expect(hint()).toContain(
+			'Replaces "Active contacts" as the default public view for Contact.',
+		);
+	});
 });
