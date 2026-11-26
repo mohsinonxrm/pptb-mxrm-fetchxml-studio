@@ -459,7 +459,7 @@ describe("OverflowToolbar commands that change", () => {
 	it("still overflows a command after it gains a disabled reason", async () => {
 		const layout = stubOverflowWidths({ container: 1000 });
 		await renderBar([button("Open", 50), button("Delete", 10)]);
-		// A Tooltip now wraps Delete, so it's a new element; Overflow must measure that one
+		// Delete gains a reason (and its Tooltip); it's still registered and measured
 		await renderBar([
 			button("Open", 50),
 			button("Delete", 10, { disabledReason: "Select a row to delete it" }),
@@ -779,5 +779,26 @@ describe("OverflowToolbar: a command that gains or loses a reason keeps its elem
 		expect(before?.getAttribute("aria-disabled")).toBe("true");
 		await renderBar([button("Export", 10)]);
 		expect(onBar("Export")).toBe(before);
+	});
+});
+
+describe("OverflowToolbar: a command whose text changes (#393 review)", () => {
+	it("is measured again: Delete becoming Delete all moves it into More when it no longer fits", async () => {
+		// 10 px per character of a command's text
+		stubOverflowWidths({
+			container: fits(4 * 10 + 6 * 10 + 24),
+			item: (element) => (element.textContent?.trim().length ?? 0) * 10,
+		});
+		await renderBar([button("Open", 50), button("Delete", 10)]);
+		expect(overflowed(onBar("Delete"))).toBe(false);
+		await renderBar([
+			button("Open", 50),
+			button("Delete", 10, {
+				label: "Delete all",
+				disabledReason: "Wait for the query to finish",
+			}),
+		]);
+		await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+		expect(overflowed(onBar("Delete all"))).toBe(true);
 	});
 });

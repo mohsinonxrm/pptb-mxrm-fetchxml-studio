@@ -32,9 +32,10 @@ export const StableTooltip: FC<StableTooltipProps> & TriggerComponent = ({
 	const [visible, setVisible] = useState(false);
 	// A hover while there was nothing to say isn't remembered: the control gaining a reason later
 	// mustn't pop its Tooltip up with nothing pointing at it (#279 review)
+	// Also when a show timer started before the content went still turns it on (#393 review)
 	useEffect(() => {
-		if (!content) setVisible(false);
-	}, [content]);
+		if (!content && visible) setVisible(false);
+	}, [content, visible]);
 	return (
 		<Tooltip
 			content={content || ""}

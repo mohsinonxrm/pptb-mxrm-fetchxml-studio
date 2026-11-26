@@ -67,6 +67,7 @@ import { MoreHorizontal20Filled, MoreHorizontal20Regular, bundleIcon } from "@fl
 import type { BarCommand } from "./types";
 import { withReason } from "../WithReason";
 import { StableTooltip } from "../StableTooltip";
+import { useOverflowContext } from "@fluentui/react-overflow";
 
 const MoreIcon = bundleIcon(MoreHorizontal20Filled, MoreHorizontal20Regular);
 
@@ -486,6 +487,24 @@ function GroupPrimer({ groups }: { groups: string[] }) {
 	));
 }
 
+/**
+ * Lays the bar out again when a command's text changes (#393 review). Fluent's overflow manager
+ * only watches the container's size; a command used to be remounted (and so measured again) when
+ * its tooltip came or went, and now keeps its element, so "Delete" becoming "Delete all" needs this.
+ */
+function RelayoutOnChange({ signature }: { signature: string }) {
+	const updateOverflow = useOverflowContext((context) => context.updateOverflow);
+	const first = useRef(true);
+	useEffect(() => {
+		if (first.current) {
+			first.current = false;
+			return;
+		}
+		updateOverflow();
+	}, [signature, updateOverflow]);
+	return null;
+}
+
 /** A split's menu with its primary action first */
 function splitMenu(command: BarCommand, icon: ReactElement | undefined): ReactElement {
 	const primary = (
@@ -698,8 +717,9 @@ export function OverflowToolbar({
 		else pendingFocus.current = true;
 	};
 
-	// A command whose shape changed (see shapeOf) is a new element: if the old one had focus, give
-	// focus to the new one rather than leave it on the body
+	// A command whose shape changed (see shapeOf: its kind, a secondary appearance, a radio) is a new
+	// element: if the old one had focus, give focus to the new one rather than leave it on the body. A
+	// fallback: no bar changes those while a command shows today (a tooltip no longer does, #393)
 	useLayoutEffect(() => {
 		const focused = lastFocused.current;
 		if (!focused?.id || focused.element.isConnected) return;
@@ -769,6 +789,11 @@ export function OverflowToolbar({
 					}}
 				>
 					<GroupPrimer groups={[...known.current.groups]} />
+					<RelayoutOnChange
+						signature={commands
+							.map((c) => `${c.id}:${c.label}:${!!c.iconOnly}:${!!c.busy}`)
+							.join("|")}
+					/>
 					<MoreAnchorContext.Provider value={moreRef}>
 						{barCommands.map((c, i) => (
 							<Fragment key={c.id}>

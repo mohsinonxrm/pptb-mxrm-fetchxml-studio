@@ -74,3 +74,22 @@ describe("withReason: a reason that goes while hovered (#279 review)", () => {
 		expect(shown()).toBe(false);
 	});
 });
+
+describe("withReason: a reason that goes before its tooltip shows (#393 review)", () => {
+	it("doesn't latch the tooltip on and show it when the reason comes back", async () => {
+		await show("Wait for the query to finish");
+		const button = document.querySelector("button");
+		await act(async () => {
+			button?.dispatchEvent(
+				new PointerEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
+			);
+		});
+		// The reason goes within the show delay (250 ms)
+		await wait(100);
+		await show(undefined);
+		await wait(300);
+		await pointer("pointerout", button);
+		await show("Wait for the query to finish");
+		expect(shown()).toBe(false);
+	});
+});
