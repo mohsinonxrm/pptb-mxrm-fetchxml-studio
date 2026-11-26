@@ -347,6 +347,16 @@ export function TreeView({
 	const [openItems, setOpenItems] = useState<Set<NodeId>>(
 		new Set([fetchQuery.id, fetchQuery.entity.id]),
 	);
+	// A query that replaces this one (Open view, Parse to tree, a new root entity) brings new node ids:
+	// open its root as a fresh launch does, so its columns, filters and orders show (#375). Edits keep
+	// the ids, so a root the user collapsed stays collapsed while they work.
+	useEffect(() => {
+		setOpenItems((prev) =>
+			prev.has(fetchQuery.id) && prev.has(fetchQuery.entity.id)
+				? prev
+				: new Set([...prev, fetchQuery.id, fetchQuery.entity.id]),
+		);
+	}, [fetchQuery.id, fetchQuery.entity.id]);
 
 	// The Add menus render in a portal inside the row, and React events bubble through portals: a
 	// menu click reached the row's onClick and re-selected the row, so the node the menu had just
