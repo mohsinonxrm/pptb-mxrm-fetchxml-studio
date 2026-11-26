@@ -64,7 +64,11 @@ export interface SaveViewCommandOptions {
 	) => void;
 	/** No query to save yet */
 	disabled?: boolean;
-	/** The save dialog closed without saving, or a save that was waiting to open was dropped (#373) */
+	/**
+	 * The save dialog closed without saving, or a save waiting for the synced tree was dropped because
+	 * the tree moved on to other FetchXML (#373). A waiting save a newer save replaces isn't reported:
+	 * onSaveStart already says a save started.
+	 */
 	onCancel?: () => void;
 	/**
 	 * A save starts (Save, its menu, Ctrl+S, or a caller's onClick), before anything else happens.
