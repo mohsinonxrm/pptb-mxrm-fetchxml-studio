@@ -55,9 +55,48 @@ export function repositoryOf(pkg) {
 	return match[1];
 }
 
-/** Where the README links a badge: the file on main, as raw.githubusercontent.com serves it */
+/**
+ * The git ref a version's badges are read from: its release tag (#379). npm keeps each version's
+ * README, so the badges in it must be that version's, not main's (a beta's npm page showed the
+ * stable release's version). The tag is immutable; it exists once the release is tagged, before npm
+ * and ToolBox show the package.
+ */
+export const versionRef = (pkg) => `refs/tags/v${pkg.version}`;
+
+/** Where the README links a badge: the file at the version's tag, as raw.githubusercontent.com serves it */
 export const badgeUrl = (pkg, file) =>
-	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/refs/heads/main/assets/badges/${file}`;
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${versionRef(pkg)}/assets/badges/${file}`;
+
+/** "1.6.3" → "1.6" */
+const lineOf = (pkg) => String(pkg.version).split(".").slice(0, 2).join(".");
+
+/** The release branch of a version's line: release/X.Y */
+export const releaseBranchOf = (pkg) => `release/${lineOf(pkg)}`;
+
+/** The support branch of a version's line: support/X.Y */
+export const supportBranchOf = (pkg) => `support/${lineOf(pkg)}`;
+
+/**
+ * The git ref of the README Power Platform ToolBox's details page shows (`configurations.readmeUrl`,
+ * #379). `pptb-validate` fetches it in CI and in the release build, before the version's tag exists,
+ * so it can't be the tag. It's the branch the version is released from, which holds that version's
+ * README, and which is kept (frozen) after the line moves on (owner decisions on #379):
+ * - a prerelease: its release branch, release/X.Y;
+ * - a support release (`support: true`, released from support/X.Y): that branch;
+ * - any other stable release: main.
+ * @param {{ support?: boolean }} [options]
+ */
+export const readmeRef = (pkg, { support = false } = {}) => {
+	if (String(pkg.version).includes("-")) return `refs/heads/${releaseBranchOf(pkg)}`;
+	return support ? `refs/heads/${supportBranchOf(pkg)}` : "refs/heads/main";
+};
+
+/**
+ * package.json `configurations.readmeUrl` for this version
+ * @param {{ support?: boolean }} [options]
+ */
+export const readmeUrlFor = (pkg, options) =>
+	`https://raw.githubusercontent.com/${repositoryOf(pkg)}/${readmeRef(pkg, options)}/README.md`;
 
 /**
  * Every README badge, from package.json: the file name, its alt text and the SVG. The order is the
@@ -119,12 +158,49 @@ export function badges(pkg) {
 }
 
 /**
- * The README's badge lines, one image per line. The version badge's alt text has no version, so a
- * release changes only the SVG (`npm run badges`), not the README. No badge is a link: Power
- * Platform ToolBox's README renderer shows an image inside a link as raw Markdown (#348).
+ * The README's badge lines, one image per line, at the version's tag (#379), so each release's
+ * `npm run badges` rewrites them. The version badge's alt text has no version. No badge is a link:
+ * Power Platform ToolBox's README renderer shows an image inside a link as raw Markdown (#348).
  */
 export const badgeMarkdown = (pkg) =>
 	badges(pkg).map((b) => {
 		const image = `![${b.alt}](${badgeUrl(pkg, b.file)})`;
 		return b.link ? `[${image}](${b.link})` : image;
 	});
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The README with every badge line, whatever ref it points at now, replaced by this version's line
+ * (#379). Only lines that are one of the badge images change (every copy; spaces around the image
+ * are dropped, as the release check ignores them).
+ * @param {string} readme
+ * @param {{ repository: string, files: string[], lines: string[] }} badgeSet the badge files and
+ *   their lines, in the same order (badges() and badgeMarkdown())
+ */
+export function rewriteBadgeLines(readme, { repository, files, lines }) {
+	const repo = escapeRegExp(repository);
+	return files.reduce((text, file, i) => {
+		const line = new RegExp(
+			String.raw`^[ \t]*!\[[^\]\r\n]*\]\(https://raw\.githubusercontent\.com/${repo}/[^)\s]*/assets/badges/${escapeRegExp(file)}\)[ \t]*$`,
+			"gm",
+		);
+		return text.replace(line, () => lines[i]);
+	}, readme);
+}
+
+/** The badge lines the README doesn't show, each on a line of its own (as the release check reads it) */
+export const missingBadgeLines = (readme, lines) => {
+	const present = new Set(readme.split(/\r?\n/).map((l) => l.trim()));
+	return lines.filter((line) => !present.has(line));
+};
+
+/**
+ * package.json's text with only `configurations.readmeUrl`'s value changed, so the file keeps its
+ * formatting. Unchanged when there's no such key.
+ */
+export const rewriteReadmeUrl = (pkgText, readmeUrl) =>
+	pkgText.replace(
+		/("configurations"\s*:\s*\{[^{}]*?"readmeUrl"\s*:\s*)"[^"]*"/,
+		(_, key) => `${key}${JSON.stringify(readmeUrl)}`,
+	);

@@ -94,7 +94,7 @@ jobs:
             echo "latest=$latest"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
-      # The version, package-lock.json, the CHANGELOG section and the README badge (RELEASING.md)
+      # The version, package-lock.json, the CHANGELOG section, the README badges and readmeUrl (RELEASING.md)
       - name: Check the release metadata
         run: node .github/scripts/check-release.mjs
       # Only esbuild (its binary comes from its platform package) and fsevents (macOS) have

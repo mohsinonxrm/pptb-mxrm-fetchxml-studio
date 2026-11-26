@@ -1,9 +1,15 @@
 // What every release must update, checked against package.json's version (RELEASING.md):
-// the version's shape, package-lock.json, the CHANGELOG section, the README badges and the bundled
-// icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by check-release.mjs;
-// pure functions, so they're unit tested (release-checks.test.mjs).
+// the version's shape, package-lock.json, the CHANGELOG section, the README badges, the readmeUrl
+// and the bundled icon. Also builds the GitHub Release notes from the CHANGELOG section. Used by
+// check-release.mjs; pure functions, so they're unit tested (release-checks.test.mjs).
 
-import { badgeMarkdown, badges } from "./badges.mjs";
+import {
+	badgeMarkdown,
+	badges,
+	missingBadgeLines,
+	readmeUrlFor,
+	supportBranchOf,
+} from "./badges.mjs";
 
 /** X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N: the shapes release.yml publishes */
 export const VERSION_PATTERN =
@@ -36,10 +42,11 @@ const isIsoDate = (date) =>
 
 /**
  * Problems with the release metadata, or [] when it's consistent.
- * @param {{ pkg: any, lock: any, changelog: string, readme: string, badgeFiles: Record<string, string | undefined> }} files
- *   badgeFiles: assets/badges/<file> contents by file name (undefined when missing)
+ * @param {{ pkg: any, lock: any, changelog: string, readme: string, badgeFiles: Record<string, string | undefined>, branch?: string }} files
+ *   badgeFiles: assets/badges/<file> contents by file name (undefined when missing); branch: the
+ *   branch being checked or merged into, when known (it decides a stable release's readmeUrl)
  */
-export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) {
+export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles, branch }) {
 	const problems = [];
 	const version = pkg.version;
 	if (!VERSION_PATTERN.test(version ?? "")) {
@@ -79,11 +86,28 @@ export function checkReleaseFiles({ pkg, lock, changelog, readme, badgeFiles }) 
 			`assets/badges/ is out of date (${stale.join(", ")}): run \`npm run badges\`.`,
 		);
 	// Each badge on a line of its own: an image inside a link shows as raw Markdown in PPTB (#348)
-	const readmeLines = new Set(readme.split(/\r?\n/).map((l) => l.trim()));
-	const missing = badgeMarkdown(pkg).filter((line) => !readmeLines.has(line));
+	const missing = missingBadgeLines(readme, badgeMarkdown(pkg));
 	if (missing.length > 0)
 		problems.push(
 			`README.md doesn't show these badges, each on a line of its own: ${missing.join(" ")}`,
+		);
+	// PPTB's details page reads configurations.readmeUrl: this version's README (#379). A stable
+	// release reads main, or support/X.Y for a support release; on those branches only their own
+	// is right, elsewhere (a feature branch, a tag build) either is.
+	const onMain = readmeUrlFor(pkg);
+	const onSupport = readmeUrlFor(pkg, { support: true });
+	const accepted = isPrerelease(version ?? "")
+		? [onMain]
+		: branch === supportBranchOf(pkg)
+			? [onSupport]
+			: branch === "main"
+				? [onMain]
+				: [onMain, onSupport];
+	if (!pkg.configurations?.readmeUrl)
+		problems.push(`package.json has no configurations.readmeUrl: add it as ${accepted[0]}.`);
+	else if (!accepted.includes(pkg.configurations.readmeUrl))
+		problems.push(
+			`package.json configurations.readmeUrl isn't ${accepted.join(" or ")}: run \`npm run badges\` (with \`-- --support\` for a support release).`,
 		);
 	// A link whose text is an image or code: PPTB's README viewer shows it as raw Markdown (#348)
 	const formattedLinks = readme.match(/\[(!\[[^\]]*\]\([^)]*\)|`[^`\]]*`)\]\([^)]*\)/g) ?? [];

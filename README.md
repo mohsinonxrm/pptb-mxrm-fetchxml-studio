@@ -2,14 +2,14 @@
 
 A powerful, modern FetchXML query builder and data explorer for [Power Platform ToolBox](https://github.com/PowerPlatformToolBox/desktop-app). Inspired by the XrmToolBox FetchXML Builder, reimagined with React 18, Fluent UI v9, and seamless Dataverse integration.
 
-![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/version.svg)
+![Version](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/version.svg)
 ![CI](https://github.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/actions/workflows/ci.yml/badge.svg?branch=dev)
-![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb.svg)
-![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/pptb-types.svg)
-![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/react.svg)
-![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/typescript.svg)
-![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/fluent-ui.svg)
-![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/badges/license.svg)
+![Power Platform ToolBox 1.2.7 or later](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb.svg)
+![@pptb/types 1.2.7](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/pptb-types.svg)
+![React 18](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/react.svg)
+![TypeScript 5.9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/typescript.svg)
+![Fluent UI v9](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/fluent-ui.svg)
+![License AGPL-3.0-only](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/tags/v1.6.0/assets/badges/license.svg)
 
 ![FetchXML Studio in Power Platform ToolBox: the query tree and properties on the left, the results grid on the right](https://raw.githubusercontent.com/mohsinonxrm/pptb-mxrm-fetchxml-studio/refs/heads/main/assets/screenshots/results-light.png)
 
@@ -286,7 +286,7 @@ npm run validate
 
 **Asset paths.** The build uses relative asset URLs (`base: "./"` in `vite.config.ts`), so the tool loads both in PPTB Desktop, which serves it at the root of its own origin, and in the PPTB VS Code extension, which serves `dist/` from a sub-path. exceljs, used only by the local Excel export, is loaded on first use.
 
-**README badges.** The badges above are SVG files in `assets/badges/`, generated from `package.json` by `npm run badges`. Power Platform ToolBox shows this README in its own window, which only loads images from GitHub, so they're linked from `raw.githubusercontent.com` rather than `img.shields.io` ([RELEASING.md](RELEASING.md#readme-images)).
+**README badges.** The badges above are SVG files in `assets/badges/`, generated from `package.json` by `npm run badges`. Power Platform ToolBox shows this README in its own window, which only loads images from GitHub, so they're linked from `raw.githubusercontent.com` rather than `img.shields.io`. Each version links the badges at its own release tag, so its npm and ToolBox pages show its own version ([RELEASING.md](RELEASING.md#readme-images)).
 
 **Tool icon.** `package.json` points `icon` at `icons/icon.svg` under `dist/`, where Power Platform ToolBox looks for it. The build bundles `icons/icon-insider.svg` (a two-tone gold corner) for prerelease versions such as `1.4.2-beta.7`, and `icons/icon.svg` for releases.
 

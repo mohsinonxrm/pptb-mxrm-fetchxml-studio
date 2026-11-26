@@ -44,9 +44,10 @@ locally. The same process is used by Command Bar Studio and Dataverse Request St
 When a forward merge conflicts badly because the code has moved on, re-apply the fix on
 the newer branch in a small companion PR instead.
 
-**Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json`, `package-lock.json` and
-the version badge (`assets/badges/version.svg`): keep the **higher** of the two versions (semver), with its lock fields and
-badge (`npm run badges`), and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
+**Resolving forward-merge conflicts** in `CHANGELOG.md`, `package.json` (with its `readmeUrl`),
+`package-lock.json`, the version badge (`assets/badges/version.svg`) and the README's badge lines:
+keep the **higher** of the two versions (semver), with its lock fields, then run `npm run badges`
+for its badges, badge lines and `readmeUrl`, and the target branch's `[Unreleased]` section on top; add the incoming dated sections in
 version order, highest first. So the newest dated section is always the branch's version, which
 `check-release.mjs` checks. For example, a `1.5.1` hotfix merged into `dev` at `1.5.0` makes
 `dev` `1.5.1`; merged into `dev` at `1.6.0-beta.2`, `dev` stays `1.6.0-beta.2` with `[1.5.1]`
@@ -61,7 +62,7 @@ needs a manual edit:
 |---|---|---|
 | **Version** (semver: `X.Y.Z`, `X.Y.Z-beta.N` or `X.Y.Z-rc.N`) in `package.json` and `package-lock.json` | `npm version X.Y.Z[-beta.N] --no-git-tag-version` updates both | `check-release.mjs` (CI and `release.yml`); the tag must match too |
 | **CHANGELOG** | Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add an empty `## [Unreleased]` above it | `check-release.mjs`: the newest section is the version, dated, with entries |
-| **README badges** | `npm run badges` regenerates `assets/badges/*.svg` from `package.json`: the version (yellow for pre-releases), the PPTB `minAPI`, `@pptb/types`, React, TypeScript, Fluent UI and the license. The README links them and doesn't change | `check-release.mjs`: the files are current, the README shows them, and nothing uses `img.shields.io` |
+| **README badges and `readmeUrl`** | `npm run badges` regenerates `assets/badges/*.svg` from `package.json`: the version (yellow for pre-releases), the PPTB `minAPI`, `@pptb/types`, React, TypeScript, Fluent UI and the license. It points the README's badge lines at the version's tag, and sets `configurations.readmeUrl` (see *README images*) | `check-release.mjs`: the files are current, the README shows them at the version's tag, `readmeUrl` is the version's, and nothing uses `img.shields.io` |
 | **Icon** | Nothing to do: the build bundles the gold Insider icon for `-beta.N` / `-rc.N` and the release icon for `X.Y.Z` | `check-release.mjs --dist` compares `dist/icons/icon.svg` with the right source |
 | **npm package** | Published by `release.yml` on the tag, with provenance, to `beta`, `latest` or `support-X.Y` | `release.yml` |
 | **GitHub Release** | Created by `release.yml` on the tag: pre-release for betas, latest for stable on `main`. Its notes are the channel, the PPTB requirement and the CHANGELOG section, then GitHub's PR list | `release.yml` |
@@ -147,7 +148,8 @@ Before promoting a beta to `latest`:
    `[1.4.2]`), and `npm run badges`.
 2. PR `release/1.5` → `main`, merged with a merge commit.
 3. Check the release build in PPTB (*Before every tag*), then tag the merge commit on `main`: `git switch main && git pull && git tag v1.5.0 && git push origin v1.5.0`.
-4. Run *After every release*, then merge `main` into `dev` (merge commit) and delete `release/1.5`.
+4. Run *After every release*, then merge `main` into `dev` (merge commit). **Keep `release/1.5`**,
+   frozen (no new commits): every 1.5 beta's `readmeUrl` reads its README from it (#379).
 
 ## Hotfixes (to the current stable release)
 
@@ -165,7 +167,10 @@ Before promoting a beta to `latest`:
   available for users who can't update PPTB yet. When such a fix is needed, create
   `support/1.4` from the last `v1.4.*` tag
   (`git switch -c support/1.4 v1.4.2 && git push -u origin support/1.4`), PR the fix into
-  it, and tag `v1.4.4` there. It publishes to the npm `support-1.4` tag, never `latest`,
+  it with the version, its CHANGELOG section and `npm run badges -- --support` (automatic when
+  run on `support/1.4`; the release check on PRs into `support/1.4` requires it), and tag
+  `v1.4.4` there. When the support window ends, keep `support/1.4`, frozen: its releases'
+  `readmeUrl` reads from it (#379). It publishes to the npm `support-1.4` tag, never `latest`,
   and isn't marked as the latest GitHub Release.
 - Older versions aren't supported. `SECURITY.md` lists the supported versions.
 
@@ -239,11 +244,29 @@ npm token exchange or provenance signing. A manual run never publishes, even on 
 
 PPTB shows the README in its main window, whose CSP only allows images from GitHub and
 `*.githubusercontent.com`, and escapes raw HTML. So README images are files in the repo, linked
-by absolute `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/main/...` URLs, never
+by absolute `https://raw.githubusercontent.com/<owner>/<repo>/...` URLs, never
 `img.shields.io` or HTML tags. The badges are generated into `assets/badges/` by
 `npm run badges` (`.github/scripts/badges.mjs`), in shields.io's flat style, as Command Bar Studio
-does. They're read from `main`, so they show the current stable release, and new or renamed badges
-appear once they reach `main`.
+does.
+
+**Each version shows its own badges and README (#379).** npm keeps the README of every published
+version, and ToolBox's details page reads `configurations.readmeUrl`, so neither may follow `main`
+(a beta's page used to show the stable release's version and minimum ToolBox):
+
+- **Badge images** are read from the version's tag, `refs/tags/v<version>/assets/badges/...`. The
+  tag is immutable. Between release prep and tagging the images don't load on GitHub, which only
+  affects the release-prep PR's preview; the tag exists before npm and ToolBox show the package.
+- **`readmeUrl`** can't be the tag: `pptb-validate` fetches it in CI and in the release build,
+  before the tag exists. It reads the branch the version is released from, which holds its README:
+  a prerelease its release branch (`refs/heads/release/X.Y/README.md`), a support release its
+  support branch (`refs/heads/support/X.Y/README.md`, `npm run badges -- --support`), and any other
+  stable release `main`. Release and support branches are **kept, frozen**, after their line moves
+  on, so those URLs keep working. A stable release on `main` shows `main`'s README, which is the
+  newer stable's once one ships.
+
+`npm run badges` writes both for the version in `package.json`, and `check-release.mjs` fails when
+either is out of date: on a PR into (or a push to) `main` or `support/X.Y`, `readmeUrl` must be that
+branch's; elsewhere either is accepted. Screenshots are still read from `main`.
 
 ## One-time setup
 

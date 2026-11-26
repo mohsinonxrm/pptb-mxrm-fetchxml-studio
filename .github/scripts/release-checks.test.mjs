@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { badgeMarkdown, badges, badgeSvg, badgeUrl } from "./badges.mjs";
+import {
+	badgeMarkdown,
+	badges,
+	badgeSvg,
+	badgeUrl,
+	missingBadgeLines,
+	readmeRef,
+	readmeUrlFor,
+	releaseBranchOf,
+	rewriteBadgeLines,
+	rewriteReadmeUrl,
+	supportBranchOf,
+	versionRef,
+} from "./badges.mjs";
 import {
 	changelogSections,
 	checkReleaseFiles,
@@ -16,6 +29,9 @@ const pkg = {
 	features: { minAPI: "1.2.7" },
 	dependencies: { react: "^18.3.1", "@fluentui/react-components": "^9.74.9" },
 	devDependencies: { typescript: "~5.9.3", "@pptb/types": "1.2.7" },
+	configurations: {
+		readmeUrl: "https://raw.githubusercontent.com/owner/tool/refs/heads/release/1.5/README.md",
+	},
 };
 const lock = { version: "1.5.0-beta.18", packages: { "": { version: "1.5.0-beta.18" } } };
 const changelog = `# Changelog
@@ -140,7 +156,7 @@ describe("checkReleaseFiles", () => {
 });
 
 describe("badges / expectedIconSource / changelogSections", () => {
-	it("generates every badge from package.json, linked from main on raw.githubusercontent.com", () => {
+	it("generates every badge from package.json, linked from the version's tag on raw.githubusercontent.com (#379)", () => {
 		expect(badges(pkg).map((b) => [b.file, b.alt])).toEqual([
 			["version.svg", "Version"],
 			["pptb.svg", "Power Platform ToolBox 1.2.7 or later"],
@@ -151,12 +167,12 @@ describe("badges / expectedIconSource / changelogSections", () => {
 			["license.svg", "License AGPL-3.0-only"],
 		]);
 		expect(badgeUrl(pkg, "react.svg")).toBe(
-			"https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/react.svg",
+			"https://raw.githubusercontent.com/owner/tool/refs/tags/v1.5.0-beta.18/assets/badges/react.svg",
 		);
-		// The version badge has no version in its alt text, so a release changes only the SVG; and it
-		// isn't a link, which ToolBox's README renderer would show as raw Markdown (#348)
+		// The version badge has no version in its alt text; and it isn't a link, which ToolBox's README
+		// renderer would show as raw Markdown (#348)
 		expect(badgeMarkdown(pkg)[0]).toBe(
-			"![Version](https://raw.githubusercontent.com/owner/tool/refs/heads/main/assets/badges/version.svg)",
+			"![Version](https://raw.githubusercontent.com/owner/tool/refs/tags/v1.5.0-beta.18/assets/badges/version.svg)",
 		);
 	});
 
@@ -249,5 +265,161 @@ See [CHANGELOG.md](https://github.com/o/r/blob/v1.5.0-beta.18/CHANGELOG.md) for 
 				repository: "o/r",
 			}),
 		).toThrow(/no \[9\.9\.9\] section/);
+	});
+});
+
+describe("each version's README: badges at its tag, readmeUrl that exists before the tag (#379)", () => {
+	const REPO = "https://raw.githubusercontent.com/owner/tool";
+	const at = (version) => ({ ...pkg, version });
+
+	it("reads a prerelease's README from its release branch, and a stable release's from main", () => {
+		expect(readmeRef(at("1.7.0-beta.1"))).toBe("refs/heads/release/1.7");
+		expect(readmeRef(at("1.7.0-rc.2"))).toBe("refs/heads/release/1.7");
+		expect(readmeRef(at("1.10.3-beta.4"))).toBe("refs/heads/release/1.10");
+		expect(readmeRef(at("1.7.0"))).toBe("refs/heads/main");
+		expect(readmeUrlFor(at("1.7.0-beta.1"))).toBe(`${REPO}/refs/heads/release/1.7/README.md`);
+		expect(readmeUrlFor(at("1.7.0"))).toBe(`${REPO}/refs/heads/main/README.md`);
+	});
+
+	it("links the badges at the version's own tag", () => {
+		expect(versionRef(at("1.7.0-beta.1"))).toBe("refs/tags/v1.7.0-beta.1");
+		expect(badgeUrl(at("1.7.0"), "pptb.svg")).toBe(
+			`${REPO}/refs/tags/v1.7.0/assets/badges/pptb.svg`,
+		);
+	});
+
+	it("fails the release check when readmeUrl isn't the version's", () => {
+		const onMain = {
+			...pkg,
+			configurations: { readmeUrl: `${REPO}/refs/heads/main/README.md` },
+		};
+		expect(checkReleaseFiles({ ...files, pkg: onMain }).join(" ")).toMatch(
+			/configurations\.readmeUrl isn't https:\/\/raw\.githubusercontent\.com\/owner\/tool\/refs\/heads\/release\/1\.5\/README\.md: run `npm run badges`/,
+		);
+		const missing = { ...pkg, configurations: undefined };
+		expect(checkReleaseFiles({ ...files, pkg: missing }).join(" ")).toMatch(/readmeUrl/);
+	});
+
+	it("fails the release check when the README's badges are still on main", () => {
+		const onMain = readme.replaceAll("refs/tags/v1.5.0-beta.18", "refs/heads/main");
+		expect(checkReleaseFiles({ ...files, readme: onMain }).join(" ")).toMatch(
+			/README\.md doesn't show these badges/,
+		);
+	});
+
+	it("rewrites each badge line, from main or an older tag, and nothing else", () => {
+		const next = at("1.7.0-beta.1");
+		const files = badges(next).map((b) => b.file);
+		const old = badgeMarkdown(at("1.6.0"));
+		const onMain = old.map((l) => l.replace("refs/tags/v1.6.0", "refs/heads/main"));
+		const screenshot = `![The query tree](${REPO}/refs/heads/main/assets/screenshots/tree.png)`;
+		const mention = `Badges live in \`${REPO}/refs/heads/main/assets/badges/version.svg\` and more.`;
+		const readmeText = `# Tool\n\n${onMain.slice(0, 3).join("\n")}\n${old.slice(3).join("\n")}\n\n${screenshot}\n\n${mention}\n`;
+		const rewritten = rewriteBadgeLines(readmeText, {
+			repository: "owner/tool",
+			files,
+			lines: badgeMarkdown(next),
+		});
+		expect(rewritten).toBe(
+			`# Tool\n\n${badgeMarkdown(next).join("\n")}\n\n${screenshot}\n\n${mention}\n`,
+		);
+		// Another repository's badge isn't touched
+		const other =
+			"![Version](https://raw.githubusercontent.com/someone/else/refs/heads/main/assets/badges/version.svg)";
+		expect(
+			rewriteBadgeLines(other, {
+				repository: "owner/tool",
+				files,
+				lines: badgeMarkdown(next),
+			}),
+		).toBe(other);
+	});
+
+	it("changes only readmeUrl's value in package.json's text, keeping its formatting", () => {
+		const text = `{\n\t"name": "x",\n\t"configurations": {\n\t\t"readmeUrl": "${REPO}/refs/heads/main/README.md",\n\t\t"repository": "y"\n\t}\n}\n`;
+		expect(rewriteReadmeUrl(text, `${REPO}/refs/heads/release/1.7/README.md`)).toBe(
+			text.replace("refs/heads/main", "refs/heads/release/1.7"),
+		);
+	});
+
+	it("rewrites badge lines with spaces around them, and every copy (review)", () => {
+		const next = at("1.7.0-beta.1");
+		const set = {
+			repository: "owner/tool",
+			files: badges(next).map((b) => b.file),
+			lines: badgeMarkdown(next),
+		};
+		const [version] = badgeMarkdown(at("1.6.0"));
+		const text = `  ${version}  \n\t${version}\n`;
+		const line = badgeMarkdown(next)[0];
+		expect(rewriteBadgeLines(text, set)).toBe(`${line}\n${line}\n`);
+		// CRLF line endings stay
+		expect(rewriteBadgeLines(`${version}\r\nText\r\n`, set)).toBe(`${line}\r\nText\r\n`);
+	});
+
+	it("lists the badges the README has no line for (review)", () => {
+		const lines = badgeMarkdown(pkg);
+		expect(missingBadgeLines(`# Tool\n\n  ${lines[0]}  \n`, lines.slice(0, 2))).toEqual([
+			lines[1],
+		]);
+	});
+
+	it("rewrites configurations.readmeUrl only, and says when there's none (review)", () => {
+		const text = `{\n\t"a": { "readmeUrl": "keep" },\n\t"configurations": {\n\t\t"website": "w",\n\t\t"readmeUrl": "old"\n\t}\n}\n`;
+		expect(rewriteReadmeUrl(text, "new")).toBe(text.replace('"old"', '"new"'));
+		const none = `{\n\t"configurations": { "website": "w" }\n}\n`;
+		expect(rewriteReadmeUrl(none, "new")).toBe(none);
+		const missing = { ...pkg, configurations: { website: "w" } };
+		expect(checkReleaseFiles({ ...files, pkg: missing }).join(" ")).toMatch(
+			/package\.json has no configurations\.readmeUrl: add it as https:\/\/raw\.githubusercontent\.com\/owner\/tool\/refs\/heads\/release\/1\.5\/README\.md\./,
+		);
+	});
+
+	it("reads a support release's README from its support branch (owner decision on #379)", () => {
+		expect(supportBranchOf(at("1.6.3"))).toBe("support/1.6");
+		expect(releaseBranchOf(at("1.7.0-beta.1"))).toBe("release/1.7");
+		expect(readmeRef(at("1.6.3"), { support: true })).toBe("refs/heads/support/1.6");
+		expect(readmeRef(at("1.6.3"))).toBe("refs/heads/main");
+		// A prerelease always reads its release branch
+		expect(readmeRef(at("1.7.0-beta.1"), { support: true })).toBe("refs/heads/release/1.7");
+	});
+
+	it("on main or support/X.Y, a stable release must point readmeUrl at that branch; elsewhere either", () => {
+		const stable = (readmeRefPath) => {
+			const p = {
+				...pkg,
+				version: "1.6.3",
+				configurations: { readmeUrl: `${REPO}/${readmeRefPath}/README.md` },
+			};
+			const lockAt = { version: "1.6.3", packages: { "": { version: "1.6.3" } } };
+			const changelogAt =
+				"# Changelog\n\n## [Unreleased]\n\n## [1.6.3] - 2026-12-01\n\n- **A fix.**\n";
+			const readmeAt = `# Tool\n\n${badgeMarkdown(p).join("\n")}\n`;
+			const badgeFilesAt = Object.fromEntries(badges(p).map((b) => [b.file, b.svg]));
+			return (branch) =>
+				checkReleaseFiles({
+					pkg: p,
+					lock: lockAt,
+					changelog: changelogAt,
+					readme: readmeAt,
+					badgeFiles: badgeFilesAt,
+					branch,
+				});
+		};
+		const onSupport = stable("refs/heads/support/1.6");
+		const onMain = stable("refs/heads/main");
+		expect(onSupport("support/1.6")).toEqual([]);
+		expect(onSupport(undefined)).toEqual([]);
+		expect(onSupport("dev")).toEqual([]);
+		expect(onSupport("main").join(" ")).toMatch(
+			/readmeUrl isn't .*refs\/heads\/main\/README\.md/,
+		);
+		expect(onMain("main")).toEqual([]);
+		expect(onMain(undefined)).toEqual([]);
+		expect(onMain("support/1.6").join(" ")).toMatch(
+			/readmeUrl isn't .*refs\/heads\/support\/1\.6\/README\.md: run `npm run badges` \(with `-- --support` for a support release\)/,
+		);
+		// Another line's support branch doesn't make it a support release
+		expect(onMain("support/1.5")).toEqual([]);
 	});
 });
